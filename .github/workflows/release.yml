@@ -1,0 +1,52 @@
+name: Release
+
+# Publishes lenz-io to PyPI via OIDC trusted publisher.
+# Trigger: push a tag like `v1.0.0rc1` (or `v1.0.0`, etc.).
+# Required PyPI setup: https://pypi.org/help/#trusted-publishers
+#   Owner: lenzhq, Repo: lenz-io-python, Workflow: release.yml, Env: pypi
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  smoke:
+    name: staging smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Run smoke tests against staging
+        # Tests under -m smoke require LENZ_E2E_KEY; if absent, this step
+        # passes (the marker is skipped).
+        env:
+          LENZ_E2E_KEY: ${{ secrets.LENZ_E2E_KEY }}
+          LENZ_BASE_URL: ${{ vars.LENZ_BASE_URL }}
+        run: pytest -m smoke -q
+
+  publish:
+    name: publish to PyPI
+    needs: smoke
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/lenz-io/
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build
+        run: |
+          python -m pip install --upgrade build
+          python -m build
+      - name: Publish to PyPI (OIDC trusted publisher)
+        uses: pypa/gh-action-pypi-publish@release/v1

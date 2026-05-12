@@ -1,0 +1,1491 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Lenz \u2014 Hallucination Verification API",
+    "version": "1.0.0",
+    "description": "# The fact-check API for your LLM features\n\nTwo primitives:\n\n- **`POST /verify`** \u2014 verify one claim. Get back a truth score, confidence, and the sources behind it.\n- **`POST /extract`** \u2014 pull verifiable claims out of any text (LLM output, article, transcript). Free, capped at 1000 calls/key/day.\n\nUse them together \u2014 extract the claims your model emitted, then verify the ones that matter \u2014 or use either on its own.\n\n## How it fits in your LLM pipeline\n\n1. Your model emits an answer.\n2. `POST /extract` returns the verifiable claims inside it.\n3. `POST /verify` returns a verdict + sources for each claim that matters.\n4. Surface, suppress, or flag the output. Your call.\n\n## What's in the response\n\n- A **`verdict`**: `label` (true / mostly true / false / unverified), `score` (0\u201310), `confidence`.\n- **`sources`** \u2014 the evidence used, each with title, URL, snippet, and stance.\n- An optional **`audit`** block \u2014 adjudication reasoning, debate transcript, panelist breakdowns, panel agreement.\n\n## Why not just better RAG?\n\n- **Independent verification** \u2014 your model can't grade its own output. Lenz is a separate panel with its own retrieval and reasoning.\n- **Out-of-corpus claims** \u2014 RAG only knows what you indexed; we search the live web for current evidence.\n- **Auditability** \u2014 every verdict ships with the sources and reasoning that produced it. Hand it to a compliance reviewer.\n\n## How the API is organized\n\n- **Verify** \u2014 submit a claim and poll status.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on your past verifications.\n- **Follow-up** \u2014 ask follow-up questions on a verification.\n- **Library** \u2014 browse the public catalog. No API key needed.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API Integration](https://lenz.io/api-integration) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact)."
+  },
+  "paths": {
+    "/api/v1/library": {
+      "get": {
+        "operationId": "listLibrary",
+        "summary": "List Library",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "domain",
+            "schema": {
+              "default": "",
+              "title": "Domain",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "entity",
+            "schema": {
+              "default": "",
+              "title": "Entity",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "default": "",
+              "title": "Search",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "schema": {
+              "default": "recent",
+              "title": "Sort",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicLibraryOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Search and browse the public catalog of verified claims.\n\nReturns paginated results from the Lenz Library. Only publicly\npublished verifications are included.\n\n**Sort options:** `recent`, `popular`, `most_true`, `most_untrue`,\n`relevance` (only when `search` is provided).",
+        "tags": [
+          "Library"
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz()  # no api_key needed for the public library\npage = client.library.list(page=1, sort=\"recent\")\nfor v in page.items:\n    print(v.claim, \"\u2192\", v.verdict.label)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz();  // no api_key needed\nconst page = await client.library.listLibrary({ page: 1, sort: \"recent\" });\npage.items.forEach(v => console.log(v.claim, \"\u2192\", v.verdict.label));\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/library/{verification_id}": {
+      "get": {
+        "operationId": "getLibraryItem",
+        "summary": "Get Library Item",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimDetailOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Retrieve the full verification report for a single published item.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and individual assessments.",
+        "tags": [
+          "Library"
+        ]
+      }
+    },
+    "/api/v1/verify": {
+      "post": {
+        "operationId": "submit",
+        "summary": "Verify",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Submit a claim for verification.\n\nReturns a ``task_id`` immediately. Poll ``GET /verify/status/{task_id}``\nor supply ``webhook_url`` in the body for an asynchronous callback when\nthe pipeline terminates.",
+        "tags": [
+          "Verify"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\nprint(v.verdict.label, v.verdict.score)\n# false 2.0\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst v = await client.verifyAndWait({ claim: \"Sharks don't get cancer\" });\nconsole.log(v.verdict.label, v.verdict.score);\n// false 2.0\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/verify/batch": {
+      "post": {
+        "operationId": "batch",
+        "summary": "Verify Batch",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Fan-out wrapper around /verify for multi-claim LLM responses.\n\nBody: ``{claims: [{text, source_url?, webhook_url?, visibility?}, ...]}``\ncapped at 20 items. Server pre-checks total credits, then fans out N\nindependent pipelines \u2014 each with its own ``task_id`` and lifecycle.\nEach claim's webhook (per-item override, or batch ``webhook_url``, or\nper-key default) fires when its pipeline terminates. ``batch_id`` is\npurely for client-side correlation; the server doesn't gate anything\non it.\n\nOn a mid-fan-out enqueue error, the response includes the partial\n``items`` list and a ``partial: true`` flag. Per-claim credit spend\nhappens at each claim's normal persist time \u2014 claims that never\nenqueue are never charged.",
+        "tags": [
+          "Verify"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyBatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nbatch = client.verify_batch(claims=[\n    {\"text\": \"The Eiffel Tower is in Berlin.\"},\n    {\"text\": \"Water boils at 100\u00b0C at sea level.\"},\n])\nfor item in batch.items:\n    print(item.task_id, item.claim_text)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst batch = await client.verifyBatch({\n  claims: [\n    { text: \"The Eiffel Tower is in Berlin.\" },\n    { text: \"Water boils at 100\u00b0C at sea level.\" },\n  ],\n});\nbatch.items.forEach(i => console.log(i.taskId, i.claimText));\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/extract": {
+      "post": {
+        "operationId": "extract",
+        "summary": "Extract",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns only the framing step of the pipeline \u2014 no research, no debate,\nno credit charge. Returns the list of verifiable claims, candidate\ndisambiguations (if the input was ambiguous), domain, key entities,\nsearch queries, and presumed intent.\n\nFree for API-key holders, capped at 1000 calls per key per day\n(resets at 00:00 UTC). Keys with admin-set ``unlimited_extract=True``\nbypass the cap.",
+        "tags": [
+          "Verify"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtractIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nclaims = client.extract(text=\"Coffee causes cancer and the earth is flat.\")\nfor c in claims.identified_claims:\n    print(c)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.extract({\n  text: \"Coffee causes cancer and the earth is flat.\",\n});\nout.identifiedClaims.forEach(c => console.log(c));\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/verify/{task_id}/select": {
+      "post": {
+        "operationId": "select",
+        "summary": "Select Claim",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Resolve a multi-claim interrupt \u2014 pick which claim to verify.",
+        "tags": [
+          "Verify"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SelectIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/verify/status/{task_id}": {
+      "get": {
+        "operationId": "getStatus",
+        "summary": "Get Status",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Poll processing status for a submitted verification.",
+        "tags": [
+          "Verify"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nstatus = client.get_status(\"tsk_abc123\")\nprint(status.status)  # \"processing\" | \"needs_input\" | \"completed\" | \"failed\"\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst s = await client.getStatus(\"tsk_abc123\");\nconsole.log(s.status);\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/me/usage": {
+      "get": {
+        "operationId": "getUsage",
+        "summary": "Me Usage",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Return the calling key's subscription credits and extract usage.\n\nShape::\n\n    {\n        \"plan\": \"free\" | \"plus\" | \"pro\",\n        \"credits_used\": int,\n        \"credits_total\": int,            # 0 if no monthly quota\n        \"credits_resets_at\": iso8601 | null,\n        \"extract_calls_today\": int,      # 0 for unlimited_extract keys\n        \"extract_daily_limit\": int,\n        \"unlimited_extract\": bool,\n    }\n\nSubscription credits track the per-claim quota that ``/verify`` and\n``/verify/batch`` consume. ``extract_calls_today`` tracks the\nper-key Redis counter that powers the daily ``/extract`` limit.",
+        "tags": [
+          "Account"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nu = client.usage()\nprint(u.credits_used, \"/\", u.credits_total)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst u = await client.account.getUsage();\nconsole.log(`${u.creditsUsed} / ${u.creditsTotal}`);\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/verifications": {
+      "get": {
+        "operationId": "listVerifications",
+        "summary": "List Verifications",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "default": 1,
+              "title": "Page",
+              "type": "integer"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "schema": {
+              "default": 20,
+              "title": "Page Size",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "List the authenticated key's verifications (all visibilities).",
+        "tags": [
+          "Verifications"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\npage = client.verifications.list(page=1)\nfor v in page.items:\n    print(v.verification_id, v.verdict.label)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst page = await client.verifications.listVerifications({ page: 1 });\npage.items.forEach(v => console.log(v.verificationId, v.verdict.label));\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/verifications/{verification_id}": {
+      "get": {
+        "operationId": "getVerification",
+        "summary": "Get Verification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Get full detail of an owned verification.",
+        "tags": [
+          "Verifications"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "deleteVerification",
+        "summary": "Delete Verification",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Delete an owned verification.",
+        "tags": [
+          "Verifications"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/verifications/{verification_id}/visibility": {
+      "patch": {
+        "operationId": "setVisibility",
+        "summary": "Set Verification Visibility",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Change the visibility of an owned verification.",
+        "tags": [
+          "Verifications"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisibilityPatchIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/verifications/{verification_id}/follow-up": {
+      "get": {
+        "operationId": "getFollowupHistory",
+        "summary": "Get Followup History",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Get follow-up history and remaining quota for a verification.",
+        "tags": [
+          "Follow-up"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "resetFollowup",
+        "summary": "Reset Followup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Delete all follow-up messages for this user on a verification.",
+        "tags": [
+          "Follow-up"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "sendFollowup",
+        "summary": "Send Followup Message",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Send a follow-up question and get an expert response.",
+        "tags": [
+          "Follow-up"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowUpMessageIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PublicLibraryItemOut": {
+        "description": "Single item in the public library listing.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "domain": {
+            "title": "Domain",
+            "type": "string"
+          },
+          "entities": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "verdict": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VerdictOut"
+              }
+            ],
+            "default": {
+              "label": "",
+              "score": null,
+              "confidence": null
+            }
+          },
+          "executive_summary": {
+            "default": "",
+            "title": "Executive Summary",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "domain"
+        ],
+        "title": "PublicLibraryItemOut",
+        "type": "object"
+      },
+      "PublicLibraryOut": {
+        "description": "Paginated public library response.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicLibraryItemOut"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "PublicLibraryOut",
+        "type": "object"
+      },
+      "VerdictOut": {
+        "description": "The single most-used block on a verification response.",
+        "properties": {
+          "label": {
+            "default": "",
+            "title": "Label",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          }
+        },
+        "title": "VerdictOut",
+        "type": "object"
+      },
+      "AssessmentOut": {
+        "description": "An adjudicator's individual assessment. Nested under ``audit``.",
+        "properties": {
+          "panelist_name": {
+            "default": "",
+            "title": "Panelist Name",
+            "type": "string"
+          },
+          "focus_area": {
+            "default": "",
+            "title": "Focus Area",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "confidence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence Score"
+          },
+          "reasoning": {
+            "default": "",
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "logical_fallacies": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Logical Fallacies",
+            "type": "array"
+          },
+          "missing_context": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Context",
+            "type": "array"
+          }
+        },
+        "title": "AssessmentOut",
+        "type": "object"
+      },
+      "AuditOut": {
+        "description": "Audit / explainability block \u2014 for callers that need to show their work.\n\n``panel_agreement`` is derived from the panel: ``unanimous`` (all agree),\n``majority`` (score spread <= 2), or ``split``.",
+        "properties": {
+          "adjudication_summary": {
+            "default": "",
+            "title": "Adjudication Summary",
+            "type": "string"
+          },
+          "assessments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssessmentOut"
+            },
+            "title": "Assessments",
+            "type": "array"
+          },
+          "debate_pro": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DebateSideOut"
+              }
+            ],
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "debate_con": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DebateSideOut"
+              }
+            ],
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "panel_agreement": {
+            "default": "",
+            "title": "Panel Agreement",
+            "type": "string"
+          }
+        },
+        "title": "AuditOut",
+        "type": "object"
+      },
+      "ClaimDetailOut": {
+        "description": "Full verification report.\n\nSlim top-level for the 80% of callers who only need verdict + sources.\nAudit detail lives under ``audit``.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          },
+          "entities": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "presumed_intent": {
+            "default": "",
+            "title": "Presumed Intent",
+            "type": "string"
+          },
+          "verdict": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VerdictOut"
+              }
+            ],
+            "default": {
+              "label": "",
+              "score": null,
+              "confidence": null
+            }
+          },
+          "executive_summary": {
+            "default": "",
+            "title": "Executive Summary",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "is_time_dependent": {
+            "default": false,
+            "title": "Is Time Dependent",
+            "type": "boolean"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "audit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuditOut"
+              }
+            ],
+            "default": {
+              "adjudication_summary": "",
+              "assessments": [],
+              "debate_pro": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "debate_con": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "panel_agreement": ""
+            }
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim"
+        ],
+        "title": "ClaimDetailOut",
+        "type": "object"
+      },
+      "DebateSideOut": {
+        "description": "One side of the debate (pro or con). Nested under ``audit``.",
+        "properties": {
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "argument": {
+            "default": "",
+            "title": "Argument",
+            "type": "string"
+          },
+          "rebuttal": {
+            "default": "",
+            "title": "Rebuttal",
+            "type": "string"
+          }
+        },
+        "title": "DebateSideOut",
+        "type": "object"
+      },
+      "SourceOut": {
+        "description": "A research source used to evaluate a claim.",
+        "properties": {
+          "source_name": {
+            "default": "",
+            "title": "Source Name",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "stance": {
+            "default": "",
+            "title": "Stance",
+            "type": "string"
+          },
+          "date": {
+            "default": "",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "title": "SourceOut",
+        "type": "object"
+      },
+      "VerifyIn": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "source_url": {
+            "default": "",
+            "title": "Source Url",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "",
+            "title": "Visibility",
+            "type": "string"
+          },
+          "webhook_url": {
+            "default": "",
+            "title": "Webhook Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VerifyIn",
+        "type": "object"
+      },
+      "VerifyBatchIn": {
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/VerifyBatchItemIn"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "webhook_url": {
+            "default": "",
+            "title": "Webhook Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "claims"
+        ],
+        "title": "VerifyBatchIn",
+        "type": "object"
+      },
+      "VerifyBatchItemIn": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "source_url": {
+            "default": "",
+            "title": "Source Url",
+            "type": "string"
+          },
+          "webhook_url": {
+            "default": "",
+            "title": "Webhook Url",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "",
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "VerifyBatchItemIn",
+        "type": "object"
+      },
+      "ExtractIn": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "country": {
+            "default": "",
+            "title": "Country",
+            "type": "string"
+          },
+          "city": {
+            "default": "",
+            "title": "City",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ExtractIn",
+        "type": "object"
+      },
+      "SelectIn": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SelectIn",
+        "type": "object"
+      },
+      "VisibilityPatchIn": {
+        "properties": {
+          "visibility": {
+            "title": "Visibility",
+            "type": "string"
+          }
+        },
+        "required": [
+          "visibility"
+        ],
+        "title": "VisibilityPatchIn",
+        "type": "object"
+      },
+      "FollowUpMessageIn": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "FollowUpMessageIn",
+        "type": "object"
+      },
+      "CandidateClaimOut": {
+        "description": "A single candidate claim surfaced when the framing detects multiple\ndistinct claims in the submitted text. The caller picks one via\n``POST /verify/{task_id}/select``.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CandidateClaimOut",
+        "type": "object"
+      },
+      "NeedsInputOut": {
+        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``), needs disambiguation\n(``clarification_required``), or finds a near-duplicate of an existing\nverification (``duplicate_found``). Only one of ``claims``,\n``candidate_claims``, or ``similar_claims`` is populated per event, keyed\non ``reason``. Resolve by calling ``POST /verify/{task_id}/select``.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "claims": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CandidateClaimOut"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "candidate_claims": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidate Claims",
+            "type": "array"
+          },
+          "similar_claims": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SimilarVerificationOut"
+            },
+            "title": "Similar Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "NeedsInputOut",
+        "type": "object"
+      },
+      "SimilarVerificationOut": {
+        "description": "An existing public verification that semantically resembles the\nsubmitted text. Surfaced when duplicate detection finds a close-enough\nmatch before the pipeline runs. The caller can adopt the existing\nverification, or proceed with a fresh verification via /select.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "verdict_label": {
+            "default": "",
+            "title": "Verdict Label",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Score"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "distance"
+        ],
+        "title": "SimilarVerificationOut",
+        "type": "object"
+      },
+      "WebhookPayload": {
+        "description": "Body the customer's endpoint receives when a verification terminates.\n\nAlways signed with HMAC-SHA256 over the raw body bytes; signature\nrides in the ``X-Lenz-Signature: sha256=<hex>`` header.\n\nThe ``attempt`` field is 1-indexed and includes the initial delivery,\nso values run 1 through 4 (initial + 3 retries).",
+        "properties": {
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "verification_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Verification Id"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Batch Id"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimDetailOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "needs_input": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NeedsInputOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Error"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "delivered_at": {
+            "title": "Delivered At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "task_id",
+          "status",
+          "attempt",
+          "delivered_at"
+        ],
+        "title": "WebhookPayload",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyBearerAuth": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  },
+  "servers": [
+    {
+      "url": "https://lenz.io/api/v1",
+      "description": "Production"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Verify",
+      "description": "Submit a claim for verification and poll status."
+    },
+    {
+      "name": "Verifications",
+      "description": "Manage the verifications tied to your API key."
+    },
+    {
+      "name": "Follow-up",
+      "description": "Ask follow-up questions on a verification."
+    },
+    {
+      "name": "Account",
+      "description": "Subscription credits and rate-limit usage."
+    },
+    {
+      "name": "Library",
+      "description": "Browse the public catalog. No API key required."
+    }
+  ],
+  "webhooks": {
+    "verification.completed": {
+      "post": {
+        "summary": "verification.completed",
+        "description": "Fires when a verification reaches a terminal state with a verdict.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "verification.failed": {
+      "post": {
+        "summary": "verification.failed",
+        "description": "Fires when the verification pipeline failed and no verdict is available.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "verification.needs_input": {
+      "post": {
+        "summary": "verification.needs_input",
+        "description": "Fires when framing detects multiple claims, ambiguity, or a duplicate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    }
+  }
+}
