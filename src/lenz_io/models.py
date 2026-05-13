@@ -163,6 +163,14 @@ class LibraryList(_Lax):
     page_size: int = 20
 
 
+class ExtractedEntity(_Lax):
+    """An entity surfaced by ``/extract``. ``type`` is the framing category
+    (``person`` | ``org`` | ``place`` | ``topic``)."""
+
+    name: str = ""
+    type: str = ""
+
+
 class ExtractedClaims(_Lax):
     """Output of ``POST /extract``."""
 
@@ -171,7 +179,7 @@ class ExtractedClaims(_Lax):
     identified_claims: list[str] = Field(default_factory=list)
     candidate_claims: list[str] = Field(default_factory=list)
     domain: str = ""
-    key_entities: list[str] = Field(default_factory=list)
+    key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
 
