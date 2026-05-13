@@ -280,6 +280,7 @@ class Lenz:
         *,
         source_url: str = "",
         webhook_url: str = "",
+        visibility: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -303,7 +304,13 @@ class Lenz:
         key = idempotency_key
         if key is None and idempotency:
             key = uuid.uuid4().hex
-        accepted = self._verify_submit(claim=claim, source_url=source_url, webhook_url=webhook_url, idempotency_key=key)
+        accepted = self._verify_submit(
+            claim=claim,
+            source_url=source_url,
+            webhook_url=webhook_url,
+            visibility=visibility,
+            idempotency_key=key,
+        )
         task_id = accepted.task_id
         logger.info("Submitted task: %s", task_id)
 
@@ -391,9 +398,14 @@ class Lenz:
         *,
         claims: list[dict[str, Any]],
         webhook_url: str = "",
+        visibility: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
-        payload = {"claims": claims, "webhook_url": webhook_url}
+        # `visibility` (and `webhook_url`) here are batch-wide defaults; any
+        # per-item value on a claim dict overrides them server-side.
+        payload: dict[str, Any] = {"claims": claims, "webhook_url": webhook_url}
+        if visibility:
+            payload["visibility"] = visibility
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
