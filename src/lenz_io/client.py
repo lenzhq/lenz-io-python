@@ -412,8 +412,8 @@ class Lenz:
         body = self._request("POST", "/verify/batch", json=payload, headers=headers)
         return BatchAccepted.model_validate(body)
 
-    def _extract(self, *, text: str, country: str = "", city: str = "") -> ExtractedClaims:
-        body = self._request("POST", "/extract", json={"text": text, "country": country, "city": city})
+    def _extract(self, *, text: str) -> ExtractedClaims:
+        body = self._request("POST", "/extract", json={"text": text})
         return ExtractedClaims.model_validate(body)
 
     def _select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:

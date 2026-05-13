@@ -51,16 +51,20 @@ class DebateSide(_Lax):
 
 
 class Assessment(_Lax):
-    """One panelist's structured assessment."""
+    """One panelist's structured assessment.
+
+    Each panelist emits exactly one category of warnings (logical fallacies
+    for the Logic Examiner, missing context for the Context Analyst, weakest
+    sources for the Source Auditor). The kind is implicit in ``focus_area``;
+    all of them surface under a single ``warnings`` list.
+    """
 
     panelist_name: str = ""
     focus_area: str = ""
     score: float | None = None
     confidence: float | None = None
     reasoning: str = ""
-    weakest_sources: list[str] = Field(default_factory=list)
-    logical_fallacies: list[str] = Field(default_factory=list)
-    missing_context: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class Audit(_Lax):
@@ -78,6 +82,17 @@ class CandidateClaim(_Lax):
 
     text: str = ""
     domain: str = ""
+
+
+class EntityRef(_Lax):
+    """An entity referenced in the claim.
+
+    ``qid`` is the Wikidata Q identifier (e.g. ``Q42``) when the entity
+    was resolved against Lenz's internal catalog; ``None`` otherwise.
+    """
+
+    name: str = ""
+    qid: str | None = None
 
 
 class SimilarVerification(_Lax):
@@ -98,12 +113,11 @@ class Verification(_Lax):
     url: str = ""
     claim: str = ""
     domain: str = ""
-    entities: list[str] = Field(default_factory=list)
+    entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
     verdict: Verdict = Field(default_factory=Verdict)
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
-    is_time_dependent: bool = False
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
@@ -153,7 +167,6 @@ class ExtractedClaims(_Lax):
     domain: str = ""
     key_entities: list[str] = Field(default_factory=list)
     presumed_intent: str = ""
-    is_time_dependent: bool = False
     original_input: str = ""
 
 

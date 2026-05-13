@@ -614,6 +614,31 @@
   },
   "components": {
     "schemas": {
+      "EntityRef": {
+        "description": "An entity (person, place, organization, concept) referenced in the\nsubmitted claim.\n\n``qid`` is the Wikidata Q identifier (e.g. ``Q42`` for Douglas Adams)\nwhen Lenz resolved the entity against its internal catalog; ``null``\notherwise. Customers can join on ``qid`` to their own Wikidata-indexed\ncorpus, or hit the Wikidata API directly for richer metadata.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "qid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qid"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "EntityRef",
+        "type": "object"
+      },
       "PublicLibraryItemOut": {
         "description": "Single item in the public library listing.",
         "properties": {
@@ -637,7 +662,7 @@
           "entities": {
             "default": [],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityRef"
             },
             "title": "Entities",
             "type": "array"
@@ -746,7 +771,7 @@
         "type": "object"
       },
       "AssessmentOut": {
-        "description": "An adjudicator's individual assessment. Nested under ``audit``.",
+        "description": "An adjudicator's individual assessment. Nested under ``audit``.\n\n``warnings`` carries the panelist-specific flags (logical fallacies for\nthe Logic Examiner, missing context for the Context Analyst, weakest\nsources for the Source Auditor). The kind is implicit in ``focus_area``;\nevery panelist emits exactly one category.",
         "properties": {
           "panelist_name": {
             "default": "",
@@ -785,20 +810,12 @@
             "title": "Reasoning",
             "type": "string"
           },
-          "logical_fallacies": {
+          "warnings": {
             "default": [],
             "items": {
               "type": "string"
             },
-            "title": "Logical Fallacies",
-            "type": "array"
-          },
-          "missing_context": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Missing Context",
+            "title": "Warnings",
             "type": "array"
           }
         },
@@ -878,7 +895,7 @@
           "entities": {
             "default": [],
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/EntityRef"
             },
             "title": "Entities",
             "type": "array"
@@ -912,11 +929,6 @@
             },
             "title": "Warnings",
             "type": "array"
-          },
-          "is_time_dependent": {
-            "default": false,
-            "title": "Is Time Dependent",
-            "type": "boolean"
           },
           "created_at": {
             "default": "",
@@ -1139,16 +1151,6 @@
         "properties": {
           "text": {
             "title": "Text",
-            "type": "string"
-          },
-          "country": {
-            "default": "",
-            "title": "Country",
-            "type": "string"
-          },
-          "city": {
-            "default": "",
-            "title": "City",
             "type": "string"
           }
         },
