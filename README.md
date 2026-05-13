@@ -9,7 +9,7 @@ with a 7-model panel and citations, ~90s. Use them together or alone.
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
 agents producing structured deliverables. Not chat AI, not voice AI,
-not real-time copilots — 90 seconds is the wrong shape for those.
+not real-time copilots — pipeline runs are the wrong shape for those.
 
 ```bash
 pip install lenz-io
