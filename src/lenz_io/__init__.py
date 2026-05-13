@@ -16,7 +16,13 @@ Quickstart:
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """
 
-__version__ = "1.0.0rc1"
+# Version is generated at build time by hatch-vcs from the git tag.
+# `_version.py` is gitignored; falls back to "0.0.0+local" for editable
+# dev installs where the file hasn't been written yet.
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "0.0.0+local"
 
 # Public surface
 from .client import API_VERSION, DEFAULT_BASE_URL, Lenz
