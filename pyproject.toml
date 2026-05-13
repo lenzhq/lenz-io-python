@@ -1,0 +1,77 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lenz-io"
+version = "1.0.0rc1"
+description = "Official Python SDK for the Lenz Claim Verification API for AI Product Teams"
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "Lenz", email = "support@lenz.io" }]
+requires-python = ">=3.9"
+keywords = ["lenz", "fact-check", "llm", "hallucination", "verification", "api", "sdk", "ai"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+dependencies = [
+  "httpx>=0.27",
+  "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "responses>=0.25",
+  "respx>=0.21",
+  "ruff>=0.6",
+  "mypy>=1.10",
+]
+
+[project.urls]
+Homepage = "https://lenz.io"
+Documentation = "https://lenz.io/api/v1/docs/"
+Repository = "https://github.com/lenzhq/lenz-io-python"
+Issues = "https://github.com/lenzhq/lenz-io-python/issues"
+Changelog = "https://github.com/lenzhq/lenz-io-python/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lenz_io"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/lenz_io/**", "README.md", "LICENSE", "CHANGELOG.md"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[tool.mypy]
+python_version = "3.9"
+strict = true
+ignore_missing_imports = true
+files = ["src/lenz_io"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+  "smoke: opt-in tests that hit a real Lenz staging environment (require LENZ_E2E_KEY)",
+]
