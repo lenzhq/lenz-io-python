@@ -1,6 +1,6 @@
 # lenz-io
 
-Official Python SDK for the [Lenz Hallucination Verification API](https://lenz.io).
+Official Python SDK for the [Lenz Claim Verification API for AI Product Teams](https://lenz.io/developers).
 
 **Two API primitives for AI product teams.** `extract` pulls verifiable
 claims out of any text — free, 1000 calls/key/day. `verify` checks one

@@ -1,4 +1,4 @@
-"""Official Python SDK for the Lenz Hallucination Verification API.
+"""Official Python SDK for the Lenz Claim Verification API for AI Product Teams.
 
     pip install lenz-io
 

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "lenz-io"
 version = "1.0.0rc1"
-description = "Official Python SDK for the Lenz Hallucination Verification API"
+description = "Official Python SDK for the Lenz Claim Verification API for AI Product Teams"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Lenz", email = "support@lenz.io" }]
