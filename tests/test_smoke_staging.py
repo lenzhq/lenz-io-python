@@ -64,3 +64,22 @@ def test_me_usage_returns_populated_structure(smoke_client):
     # We don't assert exact values; just shape.
     assert isinstance(u.credits_total, int)
     assert isinstance(u.credits_used, int)
+
+
+def test_extract_splits_multi_claim_text(smoke_client):
+    """/extract is free and deterministic enough for a shape assertion.
+
+    Uses the same Einstein brief shown on /developers — keeps the smoke
+    aligned with what callers see in the docs.
+    """
+    brief = (
+        'Albert Einstein won the 1921 Nobel Prize in Physics for his theory '
+        'of general relativity. He developed the special theory of relativity '
+        'in 1905 while working as a patent clerk in Bern. Born in Ulm in '
+        '1879, he emigrated to the US in 1933 and joined the Institute for '
+        'Advanced Study.'
+    )
+    out = smoke_client.extract(text=brief)
+    assert isinstance(out.identified_claims, list)
+    assert len(out.identified_claims) >= 2
+    assert all(isinstance(c, str) and c.strip() for c in out.identified_claims)
