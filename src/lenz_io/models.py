@@ -146,6 +146,12 @@ class VerificationList(_Lax):
     page_size: int = 20
 
 
+class RelatedVerifications(_Lax):
+    """Wrapper for ``GET /verifications/{id}/related``."""
+
+    items: list[SimilarVerification] = Field(default_factory=list)
+
+
 class LibraryItem(VerificationListItem):
     """Same shape as VerificationListItem on the public Library list."""
 
@@ -231,6 +237,7 @@ __all__ = [
     "FollowupReply",
     "LibraryItem",
     "LibraryList",
+    "RelatedVerifications",
     "SimilarVerification",
     "Source",
     "TaskAccepted",

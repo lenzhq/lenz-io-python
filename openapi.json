@@ -512,6 +512,64 @@
         ]
       }
     },
+    "/api/v1/verifications/{verification_id}/related": {
+      "get": {
+        "operationId": "listRelated",
+        "summary": "List Related",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "default": 5,
+              "title": "Limit",
+              "type": "integer"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RelatedVerificationsOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "List public verifications semantically related to this one.\n\nReturns the closest public-library claims by pgvector ANN distance\n(cosine, 0 = identical). Excludes the verification itself, near-\nduplicates (distance < 0.2), and editorially-hidden claims. Empty\nlist when the verification has no embedding yet (early pipeline) or\nwhen no claim is close enough.\n\nAccess: any verification the caller owns OR any public library item.\n``limit`` is clamped to [1, 10].",
+        "tags": [
+          "Verifications"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nrelated = client.verifications.related(\"vid_abc123\", limit=5)\nfor r in related.items:\n    print(r.verification_id, r.claim, r.verdict_label)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst related = await client.verifications.related(\"vid_abc123\", { limit: 5 });\nrelated.items.forEach(r => console.log(r.verification_id, r.claim, r.verdict_label));\n"
+          }
+        ]
+      }
+    },
     "/api/v1/verifications/{verification_id}/follow-up": {
       "get": {
         "operationId": "getFollowupHistory",
@@ -1186,6 +1244,66 @@
         "title": "VisibilityPatchIn",
         "type": "object"
       },
+      "RelatedVerificationsOut": {
+        "description": "Wrapper for ``GET /verifications/{id}/related``.\n\nEmpty ``items`` when the verification has no embedding yet (early\npipeline) or no public-library claim is close enough.",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SimilarVerificationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "RelatedVerificationsOut",
+        "type": "object"
+      },
+      "SimilarVerificationOut": {
+        "description": "An existing public verification that semantically resembles a\ngiven claim text.\n\nSurfaced in two places:\n\n* When duplicate detection finds a close-enough match on a fresh\n  `/verify` (the ``duplicate_found`` needs-input branch).\n* As an item in ``GET /verifications/{id}/related`` for callers\n  surfacing \"see also\" references next to a verdict.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "verdict_label": {
+            "default": "",
+            "title": "Verdict Label",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "distance"
+        ],
+        "title": "SimilarVerificationOut",
+        "type": "object"
+      },
       "FollowUpMessageIn": {
         "properties": {
           "message": {
@@ -1254,52 +1372,6 @@
           "reason"
         ],
         "title": "NeedsInputOut",
-        "type": "object"
-      },
-      "SimilarVerificationOut": {
-        "description": "An existing public verification that semantically resembles the\nsubmitted text. Surfaced when duplicate detection finds a close-enough\nmatch before the pipeline runs. The caller can adopt the existing\nverification, or proceed with a fresh verification via /select.",
-        "properties": {
-          "verification_id": {
-            "title": "Verification Id",
-            "type": "string"
-          },
-          "claim": {
-            "title": "Claim",
-            "type": "string"
-          },
-          "verdict_label": {
-            "default": "",
-            "title": "Verdict Label",
-            "type": "string"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Score"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "distance": {
-            "title": "Distance",
-            "type": "number"
-          }
-        },
-        "required": [
-          "verification_id",
-          "claim",
-          "distance"
-        ],
-        "title": "SimilarVerificationOut",
         "type": "object"
       },
       "WebhookPayload": {

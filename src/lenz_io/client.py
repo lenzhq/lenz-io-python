@@ -62,6 +62,7 @@ from .models import (
     FollowupReply,
     LibraryItem,
     LibraryList,
+    RelatedVerifications,
     TaskAccepted,
     TaskStatus,
     Usage,
@@ -88,7 +89,7 @@ def _user_agent() -> str:
 
 
 class _VerificationsNamespace:
-    """``client.verifications.{list,get,delete,set_visibility}``."""
+    """``client.verifications.{list,get,delete,set_visibility,related}``."""
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
@@ -121,6 +122,22 @@ class _VerificationsNamespace:
             json={"visibility": visibility},
         )
         return body  # {"ok": True, "visibility": "public"}
+
+    def related(self, verification_id: str, *, limit: int = 5) -> RelatedVerifications:
+        """Return public verifications semantically related to this one.
+
+        Server caps ``limit`` to 10. Empty list when the verification has
+        no embedding yet or no claim is close enough. Excludes the
+        verification itself and editorially-hidden claims. Accessible for
+        any verification the caller owns (any visibility) or any public
+        library item.
+        """
+        body = self._p._request(
+            "GET",
+            f"/verifications/{verification_id}/related",
+            params={"limit": limit},
+        )
+        return RelatedVerifications.model_validate(body)
 
 
 class _FollowupNamespace:

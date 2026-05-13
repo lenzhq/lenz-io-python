@@ -325,6 +325,48 @@ class TestVerifications:
             out = client.verifications.set_visibility("vid_1", "public")
         assert out == {"ok": True, "visibility": "public"}
 
+    def test_related_returns_typed_items(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/verifications/vid_1/related").respond(
+                200,
+                json={
+                    "items": [
+                        {
+                            "verification_id": "rel00001",
+                            "claim": "A related claim",
+                            "verdict_label": "false",
+                            "score": 2.5,
+                            "url": "https://lenz.io/c/foo-rel00001",
+                            "distance": 0.31,
+                        },
+                        {
+                            "verification_id": "rel00002",
+                            "claim": "Another",
+                            "verdict_label": "true",
+                            "score": 8.7,
+                            "url": "https://lenz.io/c/bar-rel00002",
+                            "distance": 0.42,
+                        },
+                    ]
+                },
+            )
+            related = client.verifications.related("vid_1", limit=5)
+        # limit propagated as query param
+        assert route.calls.last.request.url.params["limit"] == "5"
+        assert len(related.items) == 2
+        first = related.items[0]
+        assert first.verification_id == "rel00001"
+        assert first.claim == "A related claim"
+        assert first.verdict_label == "false"
+        assert first.score == 2.5
+        assert first.distance == 0.31
+
+    def test_related_empty_when_no_matches(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_2/related").respond(200, json={"items": []})
+            related = client.verifications.related("vid_2")
+        assert related.items == []
+
 
 class TestFollowup:
     def test_history(self, client):
