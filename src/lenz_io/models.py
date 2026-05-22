@@ -10,11 +10,10 @@ breaking changes that require a SDK major bump.
 
 Vocabulary (applies across every claim-shaped response):
 
-- ``claim``            : str           — the framed claim text
-- ``verdict``          : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
-- ``confidence``       : str           — "high" | "medium" | "low" (categorical)
-- ``confidence_score`` : float | None  — 0–1 numeric (deep / audit only)
-- ``lenz_score``       : float | None  — 0–10 (deep / list; /assess omits)
+- ``claim``       : str           — the framed claim text
+- ``verdict``     : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
+- ``confidence``  : str           — "high" | "medium" | "low" (categorical)
+- ``lenz_score``  : float | None  — 0–10 (deep / list; /assess omits)
 """
 
 from __future__ import annotations
@@ -63,16 +62,13 @@ class Assessment(_Lax):
     sources for the Source Auditor). The kind is implicit in ``focus_area``;
     all of them surface under a single ``warnings`` list.
 
-    The ``score`` and ``confidence_score`` fields here are panelist-level
-    sub-scores — distinct from the top-level ``lenz_score`` /
-    ``confidence_score`` on a ``Verification``. The nesting under
-    ``audit.assessments[i]`` makes the name overlap harmless.
+    ``score`` is a panelist-level 0-10 sub-score, distinct from the
+    top-level ``lenz_score`` on a ``Verification``.
     """
 
     panelist_name: str = ""
     focus_area: str = ""
     score: float | None = None
-    confidence_score: float | None = None
     reasoning: str = ""
     warnings: list[str] = Field(default_factory=list)
 
@@ -140,7 +136,6 @@ class Verification(_Lax):
     # Verdict block (flat)
     verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
-    confidence_score: float | None = None  # 0–1 numeric
     lenz_score: float | None = None  # 0–10
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
@@ -152,7 +147,13 @@ class Verification(_Lax):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint and the public library list."""
+    """Compact item for the verifications list endpoint and the public library list.
+
+    Both ``GET /api/v1/library`` and ``GET /api/v1/verifications`` return
+    the same per-item shape. ``visibility`` is the literal string
+    ``'public'`` on /library (the only visibility surfaced there);
+    /verifications carries the owner's actual visibility.
+    """
 
     verification_id: str = ""
     url: str = ""

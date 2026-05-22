@@ -1,7 +1,7 @@
 {
   "claims": [
     {
-      "claim": "Water boils at 100°C at sea level.",
+      "claim": "Water boils at 100\u00b0C at sea level.",
       "verdict": "True",
       "confidence": "high",
       "verification_url": "https://lenz.io/api/v1/verifications/a1b2c3d4"

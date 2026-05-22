@@ -84,14 +84,13 @@ class TestConstruction:
 
 
 # Canonical completed-verification fixture shared across verify_and_wait tests
-# Post-unify: flat verdict block (verdict + confidence + lenz_score +
-# confidence_score) at top level — no nested Verdict object.
+# Post-unify: flat verdict block (verdict + confidence + lenz_score) at top
+# level — no nested Verdict object. Categorical confidence only.
 _COMPLETED_RESULT = {
     "verification_id": "v",
     "claim": "Sample claim",
     "verdict": "True",
     "confidence": "high",
-    "confidence_score": 0.95,
     "lenz_score": 8.5,
 }
 
@@ -295,18 +294,16 @@ class TestVerifyAndWait:
                             "verification_id": "vid_1",
                             "verdict": "False",
                             "confidence": "high",
-                            "confidence_score": 0.97,
                             "lenz_score": 1.0,
                         },
                     },
                 ),
             ]
             v = client.verify_and_wait(claim="x", timeout=10)
-        # Flat verdict block — no nested .label / .score
+        # Flat verdict block — categorical confidence only, no nested .label / .score
         assert v.verdict == "False"
         assert v.lenz_score == 1.0
         assert v.confidence == "high"
-        assert v.confidence_score == 0.97
 
     def test_idempotency_default_true_sends_uuid_header(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

@@ -8,8 +8,14 @@
   "candidate_claims": [],
   "domain": "Science",
   "key_entities": [
-    {"name": "Albert Einstein", "type": "person"},
-    {"name": "Nobel Prize in Physics", "type": "org"}
+    {
+      "name": "Albert Einstein",
+      "type": "person"
+    },
+    {
+      "name": "Nobel Prize in Physics",
+      "type": "org"
+    }
   ],
   "presumed_intent": "Verify a factual claim",
   "original_input": "Einstein won the 1921 Nobel for general relativity. He invented special relativity in 1905."

@@ -96,7 +96,6 @@ Every claim-shaped response shares these fields at top level:
 | `claim` | `str` | The framed claim text. |
 | `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Misleading"` \| `"False"` \| `"Error"`. |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
-| `confidence_score` | `float \| None` | 0–1 numeric (deep verdicts / audit only). |
 | `lenz_score` | `float \| None` | 0–10 (deep verdicts and list endpoints; `assess` omits it). |
 
 ### Webhooks

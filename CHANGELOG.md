@@ -14,8 +14,9 @@ All notable changes to this SDK are documented here. Format follows
 - `AskMessage` model (`role`, `content`, `created_at`) — `AskHistory.messages`
   is now a typed `list[AskMessage]` instead of `list[dict]`.
 - `confidence` (categorical: `"high"` | `"medium"` | `"low"`) at the top
-  level of every claim-shaped response.
-- `confidence_score` (numeric 0–1) on deep verdicts.
+  level of every claim-shaped response. Replaces the numeric
+  `verdict.confidence` (0–1) — the numeric form is no longer in the
+  public API; the SDK exposes only the categorical label.
 - `lenz_score` (numeric 0–10) flattened to the top level (was nested
   under `verdict.score`).
 - Contract test (`tests/test_contract.py`) — re-validates 6 frozen
@@ -27,8 +28,8 @@ All notable changes to this SDK are documented here. Format follows
   `/verifications/{id}/follow-up` → `/ask/{id}`.
 - `FollowupHistory` → `AskHistory`, `FollowupReply` → `AskReply`.
 - `Verdict` block flattened — was `verification.verdict.label/.score/.confidence`,
-  now `verification.verdict` (string), `verification.confidence`,
-  `verification.confidence_score`, `verification.lenz_score`.
+  now `verification.verdict` (string), `verification.confidence`
+  (categorical), `verification.lenz_score`.
 - `ExtractedClaims.atomic_claim` → `ExtractedClaims.claim`.
 - `SimilarVerification.verdict_label` → `verdict`; `score` → `lenz_score`;
   added `confidence`.

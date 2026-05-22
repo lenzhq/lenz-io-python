@@ -70,7 +70,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicLibraryOut"
+                  "$ref": "#/components/schemas/VerificationListOut"
                 }
               }
             }
@@ -387,7 +387,14 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerificationListOut"
+                }
+              }
+            }
           }
         },
         "description": "List the authenticated key's verifications (all visibilities).",
@@ -692,8 +699,8 @@
         "title": "EntityRef",
         "type": "object"
       },
-      "PublicLibraryItemOut": {
-        "description": "Single item in the public library listing.\n\nFlat verdict block (verdict + confidence + lenz_score) \u2014 same vocabulary\nas ``ClaimDetailOut``, just without the audit nesting and per-source\ndetail that a list view doesn't need.",
+      "VerificationListItemOut": {
+        "description": "Single item in a list of verifications.\n\nUsed by BOTH ``GET /library`` (public catalog) and\n``GET /verifications`` (authed-owner listing). Same vocabulary as\n``ClaimDetailOut``, just without the audit nesting and per-source\ndetail that a list view doesn't need.\n\n``visibility`` is populated only on the authed-owner endpoint\n(``GET /verifications`` knows the owner); ``GET /library`` leaves it\n``None``.",
         "properties": {
           "verification_id": {
             "title": "Verification Id",
@@ -761,6 +768,17 @@
               }
             ],
             "title": "Modified At"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
           }
         },
         "required": [
@@ -768,15 +786,15 @@
           "claim",
           "domain"
         ],
-        "title": "PublicLibraryItemOut",
+        "title": "VerificationListItemOut",
         "type": "object"
       },
-      "PublicLibraryOut": {
-        "description": "Paginated public library response.",
+      "VerificationListOut": {
+        "description": "Paginated verifications response. Shared by /library + /verifications.",
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/PublicLibraryItemOut"
+              "$ref": "#/components/schemas/VerificationListItemOut"
             },
             "title": "Items",
             "type": "array"
@@ -800,7 +818,7 @@
           "page",
           "page_size"
         ],
-        "title": "PublicLibraryOut",
+        "title": "VerificationListOut",
         "type": "object"
       },
       "VerifyIn": {
@@ -1041,18 +1059,6 @@
             "default": null,
             "title": "Score"
           },
-          "confidence_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Confidence Score"
-          },
           "reasoning": {
             "default": "",
             "title": "Reasoning",
@@ -1131,7 +1137,7 @@
         "type": "object"
       },
       "ClaimDetailOut": {
-        "description": "Full verification report.\n\nSlim top-level (verdict + confidence + lenz_score + sources). Audit\ndetail (panel reasoning, debate, individual panelist assessments)\nlives under ``audit``.\n\nSame field vocabulary as ``PublicLibraryItemOut`` (list view) and\n``AssessClaimOut`` (fast verdict). A consumer that branches on\n``verdict`` or ``confidence`` reads the same field name regardless\nof which endpoint produced the payload.",
+        "description": "Full verification report.\n\nSlim top-level (verdict + confidence + lenz_score + sources). Audit\ndetail (panel reasoning, debate, individual panelist assessments)\nlives under ``audit``.\n\nSame field vocabulary as ``VerificationListItemOut`` (list view) and\n``AssessClaimOut`` (fast verdict). A consumer that branches on\n``verdict`` or ``confidence`` reads the same field name regardless\nof which endpoint produced the payload.",
         "properties": {
           "verification_id": {
             "title": "Verification Id",
@@ -1173,18 +1179,6 @@
             "default": "low",
             "title": "Confidence",
             "type": "string"
-          },
-          "confidence_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Confidence Score"
           },
           "lenz_score": {
             "anyOf": [

@@ -8,20 +8,25 @@
     "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
     "domain": "Science",
     "entities": [
-      {"name": "Albert Einstein", "qid": "Q937"},
-      {"name": "Nobel Prize in Physics", "qid": "Q38104"}
+      {
+        "name": "Albert Einstein",
+        "qid": "Q937"
+      },
+      {
+        "name": "Nobel Prize in Physics",
+        "qid": "Q38104"
+      }
     ],
     "presumed_intent": "Verify a factual claim",
     "verdict": "False",
     "confidence": "high",
-    "confidence_score": 0.97,
     "lenz_score": 1.0,
     "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
     "warnings": [],
     "sources": [
       {
         "source_name": "Nobel Prize",
-        "title": "Albert Einstein – Facts",
+        "title": "Albert Einstein \u2013 Facts",
         "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/facts/",
         "snippet": "The Nobel Prize in Physics 1921 was awarded to Albert Einstein \"for his services to Theoretical Physics, and especially for his discovery of the law of the photoelectric effect.\"",
         "stance": "refutes",
@@ -35,7 +40,6 @@
           "panelist_name": "The Source Auditor",
           "focus_area": "Source Reliability",
           "score": 9.5,
-          "confidence_score": 0.98,
           "reasoning": "Nobel committee citation is a primary source.",
           "warnings": []
         }

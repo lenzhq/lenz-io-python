@@ -77,7 +77,6 @@ class TestLenzWebhooks:
                 "claim": "Sample claim.",
                 "verdict": "False",
                 "confidence": "high",
-                "confidence_score": 0.92,
                 "lenz_score": 1.5,
                 "created_at": "2026-05-22T12:00:00Z",
                 "modified_at": None,
@@ -87,10 +86,12 @@ class TestLenzWebhooks:
         event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})
         assert isinstance(event, VerificationCompleted)
         assert event.verification_id == "vid_1"
-        # Flat verdict block — accessed by string key on the raw dict
+        # Flat verdict block — accessed by string key on the raw dict.
+        # Categorical confidence only; the numeric confidence_score is gone.
         assert event.result["verdict"] == "False"
         assert event.result["confidence"] == "high"
         assert event.result["lenz_score"] == 1.5
+        assert "confidence_score" not in event.result
         # `published_at` is no longer part of the payload
         assert "published_at" not in event.result
 
