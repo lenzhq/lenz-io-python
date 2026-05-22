@@ -24,6 +24,7 @@ files so any drift between the two SDKs surfaces in CI.
 from __future__ import annotations
 
 import json
+import types
 import typing
 from pathlib import Path
 
@@ -36,7 +37,13 @@ from lenz_io.models import (
     TaskStatus,
     Verification,
 )
-from lenz_io.webhooks import WebhookEvent
+
+# PEP 604 unions (`int | None`) produce `types.UnionType` on 3.10+, while
+# `typing.Union[int, None]` produces `typing.Union`. Older 3.9 has only
+# the typing form. Match against both so the walker handles either.
+_UNION_ORIGINS: tuple = (typing.Union,)
+if hasattr(types, "UnionType"):  # pragma: no cover  -- 3.10+
+    _UNION_ORIGINS = (typing.Union, types.UnionType)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "contract"
 
@@ -47,7 +54,7 @@ def _unwrap_model(annotation) -> type[BaseModel] | None:
         return annotation
     origin = typing.get_origin(annotation)
     args = typing.get_args(annotation)
-    if origin in (typing.Union, type(int) | type(str)):  # type: ignore[operator] — covers Union/Optional under PEP 604
+    if origin in _UNION_ORIGINS:
         for arg in args:
             if isinstance(arg, type) and issubclass(arg, BaseModel):
                 return arg
@@ -90,10 +97,7 @@ def _check(payload, model_cls: type[BaseModel], path: str = "") -> list[str]:
     extras = sorted(payload_keys - fields)
     errors: list[str] = []
     if extras:
-        errors.append(
-            f"{path or model_cls.__name__}: unknown server fields {extras} "
-            f"(model={model_cls.__name__})"
-        )
+        errors.append(f"{path or model_cls.__name__}: unknown server fields {extras} (model={model_cls.__name__})")
     for key, value in payload.items():
         if key not in fields:
             continue

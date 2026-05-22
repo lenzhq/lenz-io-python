@@ -13,7 +13,7 @@ Vocabulary (applies across every claim-shaped response):
 - ``claim``       : str           — the framed claim text
 - ``verdict``     : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
 - ``confidence``  : str           — "high" | "medium" | "low" (categorical)
-- ``lenz_score``  : int | None    — 0–10 integer (deep / list; /assess omits)
+- ``lenz_score``  : int | None    - 0-10 integer (deep / list; /assess omits)
 """
 
 from __future__ import annotations
@@ -136,7 +136,7 @@ class Verification(_Lax):
     # Verdict block (flat)
     verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
-    lenz_score: int | None = None  # 0–10 integer
+    lenz_score: int | None = None  # 0-10 integer
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)

@@ -291,7 +291,7 @@ class Lenz:
         return self._extract(**kwargs)
 
     def assess(self, *, text: str) -> AssessResponse:
-        """Fast verdict via a 3-model frontier panel. Sync, ~5–10s.
+        """Fast verdict via a 3-model frontier panel. Sync, ~5-10s.
 
         Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
         claim that framing identified. Each claim has a ``verdict``

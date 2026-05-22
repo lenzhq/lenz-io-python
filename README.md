@@ -199,6 +199,18 @@ Environment variables:
 - Mockable for tests: every HTTP call goes through `httpx`; use `respx` or
   inject your own `httpx.Client` via `Lenz(..., http_client=...)`
 
+## Contributing
+
+```bash
+git clone https://github.com/lenzhq/lenz-io-python && cd lenz-io-python
+uv sync --extra dev
+git config core.hooksPath scripts/hooks   # one-time: enables pre-commit
+```
+
+The pre-commit hook mirrors CI exactly (`ruff check`, `ruff format --check`,
+`mypy`, `pytest`). Runs ~10s per commit on a warm cache. Skip once with
+`git commit --no-verify` when you must.
+
 ## Bug reports + feature requests
 
 [github.com/lenzhq/lenz-io-python/issues](https://github.com/lenzhq/lenz-io-python/issues)

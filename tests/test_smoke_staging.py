@@ -89,13 +89,13 @@ def test_extract_returns_parseable_claims(smoke_client):
     the LLM picks based on the input's coherence.
     """
     brief = (
-        'Albert Einstein won the 1921 Nobel Prize in Physics for his theory '
-        'of general relativity. He developed the special theory of relativity '
-        'in 1905 while working as a patent clerk in Bern. Born in Ulm in '
-        '1879, he emigrated to the US in 1933 and joined the Institute for '
-        'Advanced Study.'
+        "Albert Einstein won the 1921 Nobel Prize in Physics for his theory "
+        "of general relativity. He developed the special theory of relativity "
+        "in 1905 while working as a patent clerk in Bern. Born in Ulm in "
+        "1879, he emigrated to the US in 1933 and joined the Institute for "
+        "Advanced Study."
     )
     out = smoke_client.extract(text=brief)
     has_atomic = bool(out.claim and out.claim.strip())
     has_identified = bool(out.identified_claims and all(c.strip() for c in out.identified_claims))
-    assert has_atomic or has_identified, 'extract returned neither claim nor identified_claims'
+    assert has_atomic or has_identified, "extract returned neither claim nor identified_claims"
