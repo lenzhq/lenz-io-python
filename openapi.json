@@ -1,9 +1,11 @@
+
 {
   "openapi": "3.1.0",
   "info": {
     "title": "Lenz \u2014 Claim Verification API for AI Product Teams",
     "version": "1.0.0",
-    "description": "# The fact-check API for your LLM features\n\n## Install the SDK\n\n```bash\n# Python\npip install lenz-io\n\n# Node / TypeScript\nnpm install lenz-io\n```\n\n```python\nfrom lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\nprint(v.verdict.label, v.verdict.score)\n# false 2.0\n```\n\n```typescript\nimport { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst v = await client.verifyAndWait({ claim: \"Sharks don't get cancer\" });\nconsole.log(v.verdict?.label, v.verdict?.score);\n// false 2.0\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The two primitives\n\n- **`POST /verify`** \u2014 verify one claim. Get back a truth score, confidence, and the sources behind it.\n- **`POST /extract`** \u2014 pull verifiable claims out of any text (LLM output, article, transcript). Free, capped at 1000 calls/key/day.\n\nUse them together \u2014 extract the claims your model emitted, then verify the ones that matter \u2014 or use either on its own.\n\n## How it fits in your LLM pipeline\n\n1. Your model emits an answer.\n2. `POST /extract` returns the verifiable claims inside it.\n3. `POST /verify` returns a verdict + sources for each claim that matters.\n4. Surface, suppress, or flag the output. Your call.\n\n## What's in the response\n\n- A **`verdict`**: `label` (true / mostly true / false / unverified), `score` (0\u201310), `confidence`.\n- **`sources`** \u2014 the evidence used, each with title, URL, snippet, and stance.\n- An optional **`audit`** block \u2014 adjudication reasoning, debate transcript, panelist breakdowns, panel agreement.\n\n## Why not just better RAG?\n\n- **Independent verification** \u2014 your model can't grade its own output. Lenz is a separate panel with its own retrieval and reasoning.\n- **Out-of-corpus claims** \u2014 RAG only knows what you indexed; we search the live web for current evidence.\n- **Auditability** \u2014 every verdict ships with the sources and reasoning that produced it. Hand it to a compliance reviewer.\n\n## How the API is organized\n\n- **Verify** \u2014 submit a claim and poll status.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on your past verifications.\n- **Follow-up** \u2014 ask follow-up questions on a verification.\n- **Library** \u2014 browse the public catalog. No API key needed.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API Integration](https://lenz.io/api-integration) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /verify` and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks. The server caches the response body for 24h and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per `verify_and_wait` call by default.\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API Integration](https://lenz.io/api-integration)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact)."
+    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 pull verifiable claims out of any text. Free, 1000/key/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~10s. Sync, paid.\n- `POST /verify` \u2014 full 7-model pipeline with citations in ~90s. Async, paid.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Pull factual claims out of your model output (free, ~1s)\nclaims = client.extract(text=llm_output).identified_claims\n\n# 2. Fast verdict on all of them via /assess (~10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, 7-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim).verdict\n        print(deep.verdict, deep.lenz_score)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, context) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Misleading\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 0\u201310 numeric score (deep payloads).\n- **`sources`** \u2014 evidence with title, URL, snippet, stance (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep 7-model pipeline, submit and poll status.\n- **Ask** \u2014 follow-up questions on a verification.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Account** \u2014 credits and rate-limit usage.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API Integration](https://lenz.io/api-integration) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API Integration](https://lenz.io/api-integration)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "termsOfService": "https://lenz.io/api-terms"
   },
   "paths": {
     "/api/v1/library": {
@@ -81,45 +83,12 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz()  # no api_key needed for the public library\npage = client.library.list(page=1, sort=\"recent\")\nfor v in page.items:\n    print(v.claim, \"\u2192\", v.verdict.label)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz()  # no api_key needed for the public library\npage = client.library.list(page=1, sort=\"recent\")\nfor v in page.items:\n    print(v.claim, \"\u2192\", v.verdict)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz();  // no api_key needed\nconst page = await client.library.listLibrary({ page: 1, sort: \"recent\" });\npage.items.forEach(v => console.log(v.claim, \"\u2192\", v.verdict.label));\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz();  // no api_key needed\nconst page = await client.library.listLibrary({ page: 1, sort: \"recent\" });\npage.items.forEach(v => console.log(v.claim, \"\u2192\", v.verdict));\n"
           }
-        ]
-      }
-    },
-    "/api/v1/library/{verification_id}": {
-      "get": {
-        "operationId": "getLibraryItem",
-        "summary": "Get Library Item",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "verification_id",
-            "schema": {
-              "title": "Verification Id",
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ClaimDetailOut"
-                }
-              }
-            }
-          }
-        },
-        "description": "Retrieve the full verification report for a single published item.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and individual assessments.",
-        "tags": [
-          "Library"
         ]
       }
     },
@@ -155,11 +124,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\nprint(v.verdict.label, v.verdict.score)\n# false 2.0\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\nprint(v.verdict, v.lenz_score)\n# false 2.0\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst v = await client.verifyAndWait({ claim: \"Sharks don't get cancer\" });\nconsole.log(v.verdict.label, v.verdict.score);\n// false 2.0\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst v = await client.verifyAndWait({ claim: \"Sharks don't get cancer\" });\nconsole.log(v.verdict, v.lenz_score);\n// false 2.0\n"
           }
         ]
       }
@@ -205,6 +174,37 @@
         ]
       }
     },
+    "/api/v1/assess": {
+      "post": {
+        "operationId": "assess",
+        "summary": "Assess",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Submit text for fast verdict via 3-model panel (sync).\n\nReturns a per-atomic-claim verdict array in ~5-10 seconds. Cheaper\nand faster than ``POST /verify``; uses 3 frontier models in\nparallel and skips the research/debate/adjudication pipeline.\n\nSmart-routed: time-sensitive claims (events from the past ~6\nmonths) get a retrieval-grounded panel; evergreen claims get a\nparametric panel.\n\nCache lookup chain: existing Claim row first (deep /verify\nresult), then Assessment row (prior /assess verdict). Both honor a\n6h staleness rule for time-sensitive claims.",
+        "tags": [
+          "Assess"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssessIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/v1/extract": {
       "post": {
         "operationId": "extract",
@@ -217,7 +217,7 @@
         },
         "description": "Extract verifiable claims from arbitrary text.\n\nRuns only the framing step of the pipeline \u2014 no research, no debate,\nno credit charge. Returns the list of verifiable claims, candidate\ndisambiguations (if the input was ambiguous), domain, key entities,\nsearch queries, and presumed intent.\n\nFree for API-key holders, capped at 1000 calls per key per day\n(resets at 00:00 UTC). Keys with admin-set ``unlimited_extract=True``\nbypass the cap.",
         "tags": [
-          "Verify"
+          "Extract"
         ],
         "requestBody": {
           "content": {
@@ -402,11 +402,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\npage = client.verifications.list(page=1)\nfor v in page.items:\n    print(v.verification_id, v.verdict.label)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\npage = client.verifications.list(page=1)\nfor v in page.items:\n    print(v.verification_id, v.verdict)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst page = await client.verifications.listVerifications({ page: 1 });\npage.items.forEach(v => console.log(v.verificationId, v.verdict.label));\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst page = await client.verifications.listVerifications({ page: 1 });\npage.items.forEach(v => console.log(v.verificationId, v.verdict));\n"
           }
         ]
       }
@@ -431,14 +431,9 @@
             "description": "OK"
           }
         },
-        "description": "Get full detail of an owned verification.",
+        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any claim whose ``visibility != 'private'`` AND\n  ``status != 'hidden'`` \u2014 i.e. ``visibility='public'`` AND\n  ``status`` in {pending, published, discoverable}.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private / hidden claims owned by someone else return 404.",
         "tags": [
           "Verifications"
-        ],
-        "security": [
-          {
-            "APIKeyBearerAuth": []
-          }
         ]
       },
       "delete": {
@@ -561,19 +556,19 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nrelated = client.verifications.related(\"vid_abc123\", limit=5)\nfor r in related.items:\n    print(r.verification_id, r.claim, r.verdict_label)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nrelated = client.verifications.related(\"vid_abc123\", limit=5)\nfor r in related.items:\n    print(r.verification_id, r.claim, r.verdict)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst related = await client.verifications.related(\"vid_abc123\", { limit: 5 });\nrelated.items.forEach(r => console.log(r.verification_id, r.claim, r.verdict_label));\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst related = await client.verifications.related(\"vid_abc123\", { limit: 5 });\nrelated.items.forEach(r => console.log(r.verification_id, r.claim, r.verdict));\n"
           }
         ]
       }
     },
-    "/api/v1/verifications/{verification_id}/follow-up": {
+    "/api/v1/ask/{verification_id}": {
       "get": {
-        "operationId": "getFollowupHistory",
-        "summary": "Get Followup History",
+        "operationId": "getAskHistory",
+        "summary": "Get Ask History",
         "parameters": [
           {
             "in": "path",
@@ -590,9 +585,9 @@
             "description": "OK"
           }
         },
-        "description": "Get follow-up history and remaining quota for a verification.",
+        "description": "Get ask history and remaining quota for a verification.",
         "tags": [
-          "Follow-up"
+          "Ask"
         ],
         "security": [
           {
@@ -601,8 +596,8 @@
         ]
       },
       "delete": {
-        "operationId": "resetFollowup",
-        "summary": "Reset Followup",
+        "operationId": "resetAsk",
+        "summary": "Reset Ask",
         "parameters": [
           {
             "in": "path",
@@ -619,9 +614,9 @@
             "description": "OK"
           }
         },
-        "description": "Delete all follow-up messages for this user on a verification.",
+        "description": "Delete all ask messages for this user on a verification.",
         "tags": [
-          "Follow-up"
+          "Ask"
         ],
         "security": [
           {
@@ -630,8 +625,8 @@
         ]
       },
       "post": {
-        "operationId": "sendFollowup",
-        "summary": "Send Followup Message",
+        "operationId": "sendAsk",
+        "summary": "Send Ask",
         "parameters": [
           {
             "in": "path",
@@ -648,15 +643,15 @@
             "description": "OK"
           }
         },
-        "description": "Send a follow-up question and get an expert response.",
+        "description": "Send a question and get an expert response.",
         "tags": [
-          "Follow-up"
+          "Ask"
         ],
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/FollowUpMessageIn"
+                "$ref": "#/components/schemas/AskIn"
               }
             }
           },
@@ -698,7 +693,7 @@
         "type": "object"
       },
       "PublicLibraryItemOut": {
-        "description": "Single item in the public library listing.",
+        "description": "Single item in the public library listing.\n\nFlat verdict block (verdict + confidence + lenz_score) \u2014 same vocabulary\nas ``ClaimDetailOut``, just without the audit nesting and per-source\ndetail that a list view doesn't need.",
         "properties": {
           "verification_id": {
             "title": "Verification Id",
@@ -726,23 +721,37 @@
             "type": "array"
           },
           "verdict": {
-            "allOf": [
+            "default": "",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lenz_score": {
+            "anyOf": [
               {
-                "$ref": "#/components/schemas/VerdictOut"
+                "type": "number"
+              },
+              {
+                "type": "null"
               }
             ],
-            "default": {
-              "label": "",
-              "score": null,
-              "confidence": null
-            }
+            "title": "Lenz Score"
           },
           "executive_summary": {
             "default": "",
             "title": "Executive Summary",
             "type": "string"
           },
-          "published_at": {
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "modified_at": {
             "anyOf": [
               {
                 "type": "string"
@@ -751,7 +760,7 @@
                 "type": "null"
               }
             ],
-            "title": "Published At"
+            "title": "Modified At"
           }
         },
         "required": [
@@ -792,335 +801,6 @@
           "page_size"
         ],
         "title": "PublicLibraryOut",
-        "type": "object"
-      },
-      "VerdictOut": {
-        "description": "The single most-used block on a verification response.",
-        "properties": {
-          "label": {
-            "default": "",
-            "title": "Label",
-            "type": "string"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "confidence": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence"
-          }
-        },
-        "title": "VerdictOut",
-        "type": "object"
-      },
-      "AssessmentOut": {
-        "description": "An adjudicator's individual assessment. Nested under ``audit``.\n\n``warnings`` carries the panelist-specific flags (logical fallacies for\nthe Logic Examiner, missing context for the Context Analyst, weakest\nsources for the Source Auditor). The kind is implicit in ``focus_area``;\nevery panelist emits exactly one category.",
-        "properties": {
-          "panelist_name": {
-            "default": "",
-            "title": "Panelist Name",
-            "type": "string"
-          },
-          "focus_area": {
-            "default": "",
-            "title": "Focus Area",
-            "type": "string"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Score"
-          },
-          "confidence_score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Confidence Score"
-          },
-          "reasoning": {
-            "default": "",
-            "title": "Reasoning",
-            "type": "string"
-          },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "title": "AssessmentOut",
-        "type": "object"
-      },
-      "AuditOut": {
-        "description": "Audit / explainability block \u2014 for callers that need to show their work.\n\n``panel_agreement`` is derived from the panel: ``unanimous`` (all agree),\n``majority`` (score spread <= 2), or ``split``.",
-        "properties": {
-          "adjudication_summary": {
-            "default": "",
-            "title": "Adjudication Summary",
-            "type": "string"
-          },
-          "assessments": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AssessmentOut"
-            },
-            "title": "Assessments",
-            "type": "array"
-          },
-          "debate_pro": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DebateSideOut"
-              }
-            ],
-            "default": {
-              "role": "",
-              "argument": "",
-              "rebuttal": ""
-            }
-          },
-          "debate_con": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/DebateSideOut"
-              }
-            ],
-            "default": {
-              "role": "",
-              "argument": "",
-              "rebuttal": ""
-            }
-          },
-          "panel_agreement": {
-            "default": "",
-            "title": "Panel Agreement",
-            "type": "string"
-          }
-        },
-        "title": "AuditOut",
-        "type": "object"
-      },
-      "ClaimDetailOut": {
-        "description": "Full verification report.\n\nSlim top-level for the 80% of callers who only need verdict + sources.\nAudit detail lives under ``audit``.",
-        "properties": {
-          "verification_id": {
-            "title": "Verification Id",
-            "type": "string"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "claim": {
-            "title": "Claim",
-            "type": "string"
-          },
-          "domain": {
-            "default": "",
-            "title": "Domain",
-            "type": "string"
-          },
-          "entities": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/EntityRef"
-            },
-            "title": "Entities",
-            "type": "array"
-          },
-          "presumed_intent": {
-            "default": "",
-            "title": "Presumed Intent",
-            "type": "string"
-          },
-          "verdict": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/VerdictOut"
-              }
-            ],
-            "default": {
-              "label": "",
-              "score": null,
-              "confidence": null
-            }
-          },
-          "executive_summary": {
-            "default": "",
-            "title": "Executive Summary",
-            "type": "string"
-          },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          },
-          "created_at": {
-            "default": "",
-            "title": "Created At",
-            "type": "string"
-          },
-          "published_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Published At"
-          },
-          "modified_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Modified At"
-          },
-          "sources": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SourceOut"
-            },
-            "title": "Sources",
-            "type": "array"
-          },
-          "audit": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AuditOut"
-              }
-            ],
-            "default": {
-              "adjudication_summary": "",
-              "assessments": [],
-              "debate_pro": {
-                "argument": "",
-                "rebuttal": "",
-                "role": ""
-              },
-              "debate_con": {
-                "argument": "",
-                "rebuttal": "",
-                "role": ""
-              },
-              "panel_agreement": ""
-            }
-          },
-          "visibility": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visibility"
-          }
-        },
-        "required": [
-          "verification_id",
-          "claim"
-        ],
-        "title": "ClaimDetailOut",
-        "type": "object"
-      },
-      "DebateSideOut": {
-        "description": "One side of the debate (pro or con). Nested under ``audit``.",
-        "properties": {
-          "role": {
-            "default": "",
-            "title": "Role",
-            "type": "string"
-          },
-          "argument": {
-            "default": "",
-            "title": "Argument",
-            "type": "string"
-          },
-          "rebuttal": {
-            "default": "",
-            "title": "Rebuttal",
-            "type": "string"
-          }
-        },
-        "title": "DebateSideOut",
-        "type": "object"
-      },
-      "SourceOut": {
-        "description": "A research source used to evaluate a claim.",
-        "properties": {
-          "source_name": {
-            "default": "",
-            "title": "Source Name",
-            "type": "string"
-          },
-          "title": {
-            "default": "",
-            "title": "Title",
-            "type": "string"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "snippet": {
-            "default": "",
-            "title": "Snippet",
-            "type": "string"
-          },
-          "stance": {
-            "default": "",
-            "title": "Stance",
-            "type": "string"
-          },
-          "date": {
-            "default": "",
-            "title": "Date",
-            "type": "string"
-          }
-        },
-        "title": "SourceOut",
         "type": "object"
       },
       "VerifyIn": {
@@ -1205,6 +885,20 @@
         "title": "VerifyBatchItemIn",
         "type": "object"
       },
+      "AssessIn": {
+        "description": "Request body for ``POST /assess``.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "AssessIn",
+        "type": "object"
+      },
       "ExtractIn": {
         "properties": {
           "text": {
@@ -1270,12 +964,17 @@
             "title": "Claim",
             "type": "string"
           },
-          "verdict_label": {
+          "verdict": {
             "default": "",
-            "title": "Verdict Label",
+            "title": "Verdict",
             "type": "string"
           },
-          "score": {
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lenz_score": {
             "anyOf": [
               {
                 "type": "number"
@@ -1284,7 +983,7 @@
                 "type": "null"
               }
             ],
-            "title": "Score"
+            "title": "Lenz Score"
           },
           "url": {
             "default": "",
@@ -1304,7 +1003,7 @@
         "title": "SimilarVerificationOut",
         "type": "object"
       },
-      "FollowUpMessageIn": {
+      "AskIn": {
         "properties": {
           "message": {
             "title": "Message",
@@ -1314,7 +1013,102 @@
         "required": [
           "message"
         ],
-        "title": "FollowUpMessageIn",
+        "title": "AskIn",
+        "type": "object"
+      },
+      "AssessmentOut": {
+        "description": "An adjudicator's individual assessment. Nested under ``audit``.\n\n``warnings`` carries the panelist-specific flags (logical fallacies for\nthe Logic Examiner, missing context for the Context Analyst, weakest\nsources for the Source Auditor). The kind is implicit in ``focus_area``;\nevery panelist emits exactly one category.",
+        "properties": {
+          "panelist_name": {
+            "default": "",
+            "title": "Panelist Name",
+            "type": "string"
+          },
+          "focus_area": {
+            "default": "",
+            "title": "Focus Area",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Score"
+          },
+          "confidence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence Score"
+          },
+          "reasoning": {
+            "default": "",
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "AssessmentOut",
+        "type": "object"
+      },
+      "AuditOut": {
+        "description": "Audit / explainability block \u2014 for callers that need to show their work.\n\n``panel_agreement`` is derived from the panel: ``unanimous`` (all agree),\n``majority`` (score spread <= 2), or ``split``.",
+        "properties": {
+          "adjudication_summary": {
+            "default": "",
+            "title": "Adjudication Summary",
+            "type": "string"
+          },
+          "assessments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssessmentOut"
+            },
+            "title": "Assessments",
+            "type": "array"
+          },
+          "debate_pro": {
+            "$ref": "#/components/schemas/DebateSideOut",
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "debate_con": {
+            "$ref": "#/components/schemas/DebateSideOut",
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "panel_agreement": {
+            "default": "",
+            "title": "Panel Agreement",
+            "type": "string"
+          }
+        },
+        "title": "AuditOut",
         "type": "object"
       },
       "CandidateClaimOut": {
@@ -1336,8 +1130,174 @@
         "title": "CandidateClaimOut",
         "type": "object"
       },
+      "ClaimDetailOut": {
+        "description": "Full verification report.\n\nSlim top-level (verdict + confidence + lenz_score + sources). Audit\ndetail (panel reasoning, debate, individual panelist assessments)\nlives under ``audit``.\n\nSame field vocabulary as ``PublicLibraryItemOut`` (list view) and\n``AssessClaimOut`` (fast verdict). A consumer that branches on\n``verdict`` or ``confidence`` reads the same field name regardless\nof which endpoint produced the payload.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          },
+          "entities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EntityRef"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "presumed_intent": {
+            "default": "",
+            "title": "Presumed Intent",
+            "type": "string"
+          },
+          "verdict": {
+            "default": "",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "confidence_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence Score"
+          },
+          "lenz_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lenz Score"
+          },
+          "executive_summary": {
+            "default": "",
+            "title": "Executive Summary",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Modified At"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "audit": {
+            "$ref": "#/components/schemas/AuditOut",
+            "default": {
+              "adjudication_summary": "",
+              "assessments": [],
+              "debate_pro": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "debate_con": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "panel_agreement": ""
+            }
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Visibility"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim"
+        ],
+        "title": "ClaimDetailOut",
+        "type": "object"
+      },
+      "DebateSideOut": {
+        "description": "One side of the debate (pro or con). Nested under ``audit``.",
+        "properties": {
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "argument": {
+            "default": "",
+            "title": "Argument",
+            "type": "string"
+          },
+          "rebuttal": {
+            "default": "",
+            "title": "Rebuttal",
+            "type": "string"
+          }
+        },
+        "title": "DebateSideOut",
+        "type": "object"
+      },
       "NeedsInputOut": {
-        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``), needs disambiguation\n(``clarification_required``), or finds a near-duplicate of an existing\nverification (``duplicate_found``). Only one of ``claims``,\n``candidate_claims``, or ``similar_claims`` is populated per event, keyed\non ``reason``. Resolve by calling ``POST /verify/{task_id}/select``.",
+        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``), needs disambiguation\n(``clarification_required``), or finds a near-duplicate of an existing\nverification (``duplicate_found``). Only one of ``claims``,\n``candidates``, or ``similar_claims`` is populated per event, keyed\non ``reason``. Resolve by calling ``POST /verify/{task_id}/select``.",
         "properties": {
           "reason": {
             "title": "Reason",
@@ -1351,12 +1311,12 @@
             "title": "Claims",
             "type": "array"
           },
-          "candidate_claims": {
+          "candidates": {
             "default": [],
             "items": {
               "type": "string"
             },
-            "title": "Candidate Claims",
+            "title": "Candidates",
             "type": "array"
           },
           "similar_claims": {
@@ -1372,6 +1332,43 @@
           "reason"
         ],
         "title": "NeedsInputOut",
+        "type": "object"
+      },
+      "SourceOut": {
+        "description": "A research source used to evaluate a claim.\n\n``date`` is the source article's publication date (a source-level\nattribute, not a Lenz API event time \u2014 so it's not renamed to\n``published_at``).",
+        "properties": {
+          "source_name": {
+            "default": "",
+            "title": "Source Name",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "stance": {
+            "default": "",
+            "title": "Stance",
+            "type": "string"
+          },
+          "date": {
+            "default": "",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "title": "SourceOut",
         "type": "object"
       },
       "WebhookPayload": {
@@ -1482,24 +1479,32 @@
   ],
   "tags": [
     {
+      "name": "Extract",
+      "description": "Pull verifiable claims out of any text. Free, 1000/key/day."
+    },
+    {
+      "name": "Assess",
+      "description": "Fast 3-model panel verdict on a claim. Sync, ~10s."
+    },
+    {
       "name": "Verify",
-      "description": "Submit a claim for verification and poll status."
+      "description": "Deep 7-model pipeline with citations. Async, ~90s. Submit + poll status."
+    },
+    {
+      "name": "Ask",
+      "description": "Ask follow-up questions grounded on an existing verification."
     },
     {
       "name": "Verifications",
-      "description": "Manage the verifications tied to your API key."
+      "description": "List, fetch, delete, and toggle visibility on stored verifications."
     },
     {
-      "name": "Follow-up",
-      "description": "Ask follow-up questions on a verification."
+      "name": "Library",
+      "description": "Browse the public catalog of verifications. No API key required."
     },
     {
       "name": "Account",
       "description": "Subscription credits and rate-limit usage."
-    },
-    {
-      "name": "Library",
-      "description": "Browse the public catalog. No API key required."
     }
   ],
   "webhooks": {

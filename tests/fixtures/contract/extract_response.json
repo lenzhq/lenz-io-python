@@ -1,0 +1,16 @@
+{
+  "status": "ready",
+  "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+  "identified_claims": [
+    "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+    "Albert Einstein developed the special theory of relativity in 1905."
+  ],
+  "candidate_claims": [],
+  "domain": "Science",
+  "key_entities": [
+    {"name": "Albert Einstein", "type": "person"},
+    {"name": "Nobel Prize in Physics", "type": "org"}
+  ],
+  "presumed_intent": "Verify a factual claim",
+  "original_input": "Einstein won the 1921 Nobel for general relativity. He invented special relativity in 1905."
+}

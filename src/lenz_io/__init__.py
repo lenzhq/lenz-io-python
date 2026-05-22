@@ -2,16 +2,26 @@
 
     pip install lenz-io
 
-Quickstart:
+The fact-check API for AI products. Four primitives form a research-depth
+ladder — find claims, judge them fast, prove them deep, follow up:
 
     from lenz_io import Lenz
-
     client = Lenz(api_key="lenz_...")
-    v = client.verify_and_wait(claim="Sharks don't get cancer")
-    print(v.verdict.label, v.verdict.score)
-    # false 2.0
-    for source in v.sources[:3]:
-        print(" -", source.title, source.url)
+
+    # 1. /extract — pull verifiable claims out of text (free, 1000/day)
+    claims = client.extract(text=llm_output).identified_claims
+
+    # 2. /assess — fast 3-model verdict on each (~10s, paid)
+    quick = client.assess(text=llm_output)
+
+    # 3. /verify — escalate low-confidence to the full pipeline (~90s, paid)
+    for c in quick.claims:
+        if c.confidence == "low":
+            deep = client.verify_and_wait(claim=c.claim)
+            print(deep.verdict, deep.lenz_score)
+
+    # 4. /ask — follow-up questions grounded on a verification
+    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """
@@ -39,6 +49,11 @@ from .errors import (
     LenzWebhookSignatureError,
 )
 from .models import (
+    AskHistory,
+    AskMessage,
+    AskReply,
+    AssessClaim,
+    AssessResponse,
     Assessment,
     Audit,
     BatchAccepted,
@@ -47,8 +62,6 @@ from .models import (
     EntityRef,
     ExtractedClaims,
     ExtractedEntity,
-    FollowupHistory,
-    FollowupReply,
     LibraryItem,
     LibraryList,
     RelatedVerifications,
@@ -57,7 +70,6 @@ from .models import (
     TaskAccepted,
     TaskStatus,
     Usage,
-    Verdict,
     Verification,
     VerificationList,
     VerificationListItem,
@@ -74,6 +86,11 @@ from .webhooks import (
 __all__ = [
     "API_VERSION",
     "DEFAULT_BASE_URL",
+    "AskHistory",
+    "AskMessage",
+    "AskReply",
+    "AssessClaim",
+    "AssessResponse",
     "Assessment",
     "Audit",
     "BatchAccepted",
@@ -82,8 +99,6 @@ __all__ = [
     "EntityRef",
     "ExtractedClaims",
     "ExtractedEntity",
-    "FollowupHistory",
-    "FollowupReply",
     "Lenz",
     "LenzAPIError",
     "LenzAuthError",
@@ -104,7 +119,6 @@ __all__ = [
     "TaskAccepted",
     "TaskStatus",
     "Usage",
-    "Verdict",
     "Verification",
     "VerificationCompleted",
     "VerificationFailed",

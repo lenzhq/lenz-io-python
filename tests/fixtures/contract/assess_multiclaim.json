@@ -1,0 +1,23 @@
+{
+  "claims": [
+    {
+      "claim": "Water boils at 100°C at sea level.",
+      "verdict": "True",
+      "confidence": "high",
+      "verification_url": "https://lenz.io/api/v1/verifications/a1b2c3d4"
+    },
+    {
+      "claim": "Bilingual children develop stronger executive function.",
+      "verdict": "Mostly True",
+      "confidence": "medium",
+      "verification_url": null
+    },
+    {
+      "claim": "Coffee causes cancer.",
+      "verdict": "Misleading",
+      "confidence": "low",
+      "verification_url": null
+    }
+  ],
+  "error": null
+}

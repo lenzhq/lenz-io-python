@@ -1,0 +1,11 @@
+{
+  "claims": [
+    {
+      "claim": "The Earth is flat.",
+      "verdict": "False",
+      "confidence": "high",
+      "verification_url": null
+    }
+  ],
+  "error": null
+}
