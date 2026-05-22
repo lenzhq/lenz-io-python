@@ -6,6 +6,47 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- `client.assess(text=...)` — new sync verb that returns a fast 3-model
+  panel verdict in ~5-10s. Mirrors the new `POST /api/v1/assess` server
+  endpoint.
+- `AssessClaim` and `AssessResponse` types for the assess response shape.
+- `AskMessage` model (`role`, `content`, `created_at`) — `AskHistory.messages`
+  is now a typed `list[AskMessage]` instead of `list[dict]`.
+- `confidence` (categorical: `"high"` | `"medium"` | `"low"`) at the top
+  level of every claim-shaped response. Replaces the numeric
+  `verdict.confidence` (0–1) — the numeric form is no longer in the
+  public API; the SDK exposes only the categorical label.
+- `lenz_score` (integer 0–10) flattened to the top level (was nested
+  under `verdict.score` as a float). The DB column is now
+  `IntegerField`; the API/SDK type narrows from `float | None` to
+  `int | None`. The conclusion-step LLM already constrained the score
+  to integers — only the storage and surface types lagged.
+- Contract test (`tests/test_contract.py`) — re-validates 6 frozen
+  server-response fixtures under `extra="forbid"` so silent rename
+  misses fail CI.
+
+### Changed (breaking)
+- `client.followup.*` → `client.ask.*`; URL paths
+  `/verifications/{id}/follow-up` → `/ask/{id}`.
+- `FollowupHistory` → `AskHistory`, `FollowupReply` → `AskReply`.
+- `Verdict` block flattened — was `verification.verdict.label/.score/.confidence`,
+  now `verification.verdict` (string), `verification.confidence`
+  (categorical), `verification.lenz_score`.
+- `ExtractedClaims.atomic_claim` → `ExtractedClaims.claim`.
+- `SimilarVerification.verdict_label` → `verdict`; `score` → `lenz_score`;
+  added `confidence`.
+- `TaskStatus.candidate_claims` → `candidates`.
+- `client.library.get(id)` removed — use `client.verifications.get(id)`,
+  which now accepts anon callers and returns the same `Verification`
+  shape for any non-hidden public claim.
+
+### Removed
+- `Verdict` class (no consumers after the flatten).
+- `published_at` on `Verification` / `VerificationListItem` /
+  `LibraryItem`. Use `created_at` + `modified_at` instead.
+- `FollowupHistory`, `FollowupReply`, `Verdict` exports.
+
 ## [1.0.0rc1] — 2026-05-13
 
 First public release candidate. Targets Lenz Public API v1

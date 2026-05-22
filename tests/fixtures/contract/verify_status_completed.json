@@ -1,0 +1,63 @@
+{
+  "status": "completed",
+  "reason": "",
+  "progress": {},
+  "result": {
+    "verification_id": "a1b2c3d4",
+    "url": "https://lenz.io/c/einstein-1921-nobel-a1b2c3d4",
+    "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+    "domain": "Science",
+    "entities": [
+      {
+        "name": "Albert Einstein",
+        "qid": "Q937"
+      },
+      {
+        "name": "Nobel Prize in Physics",
+        "qid": "Q38104"
+      }
+    ],
+    "presumed_intent": "Verify a factual claim",
+    "verdict": "False",
+    "confidence": "high",
+    "lenz_score": 1,
+    "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+    "warnings": [],
+    "sources": [
+      {
+        "source_name": "Nobel Prize",
+        "title": "Albert Einstein \u2013 Facts",
+        "url": "https://www.nobelprize.org/prizes/physics/1921/einstein/facts/",
+        "snippet": "The Nobel Prize in Physics 1921 was awarded to Albert Einstein \"for his services to Theoretical Physics, and especially for his discovery of the law of the photoelectric effect.\"",
+        "stance": "refutes",
+        "date": "1921-12-10"
+      }
+    ],
+    "audit": {
+      "adjudication_summary": "All three panelists agree the 1921 Nobel was for the photoelectric effect.",
+      "assessments": [
+        {
+          "panelist_name": "The Source Auditor",
+          "focus_area": "Source Reliability",
+          "score": 9.5,
+          "reasoning": "Nobel committee citation is a primary source.",
+          "warnings": []
+        }
+      ],
+      "debate_pro": {
+        "role": "Advocate",
+        "argument": "Einstein did win in 1921.",
+        "rebuttal": "But the citation was for the photoelectric effect."
+      },
+      "debate_con": {
+        "role": "Skeptic",
+        "argument": "The Nobel citation explicitly names the photoelectric effect.",
+        "rebuttal": "Pro concedes."
+      },
+      "panel_agreement": "unanimous"
+    },
+    "created_at": "2026-05-22T12:00:00Z",
+    "modified_at": null,
+    "visibility": "public"
+  }
+}

@@ -2,9 +2,12 @@
 
 Official Python SDK for the [Lenz Claim Verification API for AI Product Teams](https://lenz.io/developers).
 
-**Two API primitives for AI product teams.** `extract` pulls verifiable
-claims out of any text — free, 1000 calls/key/day. `verify` checks one
-with a 7-model panel and citations, ~90s. Use them together or alone.
+**Four API primitives, one research-depth ladder.**
+
+- `extract` — pull verifiable claims out of any text. Free, 1000 calls/key/day.
+- `assess` — fast 3-model panel verdict in ~5-10s. Sync, paid.
+- `verify` — full 7-model pipeline with citations in ~90s. Async, paid.
+- `ask` — follow-up questions grounded on a verification.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
@@ -22,20 +25,35 @@ from lenz_io import Lenz
 
 client = Lenz(api_key="lenz_...")
 
-# 1. Pull factual claims out of your model output (free, instant)
-claims = client.extract(text=llm_output).claims
+# 1. extract — pull verifiable claims out of any text (free)
+out = client.extract(text=llm_output)
 
-# 2. Verify the ones that matter (~90s each, 7-model panel)
-for claim in claims:
-    v = client.verify_and_wait(claim=claim).verdict
-    print(v.label, v.score, v.confidence)
+# 2. assess — fast 3-model verdict on each (~5-10s, sync)
+quick = client.assess(text=llm_output)
+for c in quick.claims:
+    print(c.verdict, c.confidence, c.claim)
+
+# 3. verify — escalate low-confidence claims to the full panel + citations
+for c in quick.claims:
+    if c.confidence == "low":
+        v = client.verify_and_wait(claim=c.claim)
+        print(v.verdict, v.lenz_score, v.executive_summary)
+
+# 4. ask — follow-up grounded on a verification
+reply = client.ask.send(v.verification_id, message="Which source is strongest?")
+print(reply.reply)
 ```
+
+`assess` and `verify` share a result cache server-side: if a claim
+already has a deep verification, `assess` returns it via
+`verification_url` and you can skip the escalation.
 
 ## How verification works
 
 Frame → Collect Evidence → Debate (2 models, 2 rounds) → Adjudicate
 (3 models: sources, logic, context) → Conclude. ~90 seconds wall-clock
-per claim.
+per claim. `assess` runs a leaner 3-model panel against the same
+framing for the ~5-10s pass.
 
 ## Magical-moment demo
 
@@ -45,8 +63,8 @@ from lenz_io import Lenz
 client = Lenz(api_key="lenz_...")
 
 v = client.verify_and_wait(claim="Sharks don't get cancer")
-print(v.verdict.label, v.verdict.score)
-# false 2.0
+print(v.verdict, v.lenz_score)
+# False 2.0
 
 for source in v.sources[:3]:
     print(" -", source.title, source.url)
@@ -57,16 +75,28 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 
 > **Get your webhook secret here →** [lenz.io/api-integration](https://lenz.io/api-integration)
 
-## What you get
+## What you get on the client
 
-- **`client.verify_and_wait(...)`** — submit + poll until the pipeline lands. Returns a typed `Verification`.
-- **`client.verify(...)`** — async submit; returns a `task_id`. Use webhooks for the callback.
-- **`client.extract(text=...)`** — pull verifiable claims out of any text (free, capped at 1000/key/day).
-- **`client.verify_batch(claims=[...])`** — fan-out for multi-claim LLM outputs.
-- **`client.verifications.{list,get,delete,set_visibility}(...)`** — manage past verifications.
-- **`client.followup.{history,send,reset}(verification_id)`** — Q&A on a verification.
-- **`client.library.{list,get}(...)`** — browse the public catalog (no API key needed).
-- **`client.usage()`** — credits and rate-limit remaining.
+- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/key/day.
+- **`client.assess(text=...)`** → `AssessResponse`. Sync, ~5-10s, returns one entry per identified claim.
+- **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Pair with a webhook for the callback.
+- **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic).
+- **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
+- **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification.
+- **`client.verifications.{list,get,delete,set_visibility,related}(...)`** → manage past verifications. `get` accepts anon callers and returns any non-hidden public claim.
+- **`client.library.list(...)`** → browse the public catalog (no API key needed).
+- **`client.usage()`** → credits and rate-limit remaining.
+
+## Response shape — the unified vocabulary
+
+Every claim-shaped response shares these fields at top level:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `claim` | `str` | The framed claim text. |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Misleading"` \| `"False"` \| `"Error"`. |
+| `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
+| `lenz_score` | `int \| None` | Integer 0–10 (deep verdicts and list endpoints; `assess` omits it). |
 
 ### Webhooks
 
@@ -79,7 +109,7 @@ webhooks = LenzWebhooks(secret="whsec_...")
 event = webhooks.parse(raw_body=request.body, headers=request.headers)
 if isinstance(event, VerificationCompleted):
     vid, result = event.verification_id, event.result
-    ...
+    # result["verdict"], result["lenz_score"], result["confidence"], ...
 elif isinstance(event, VerificationNeedsInput):
     tid, ni = event.task_id, event.needs_input
     ...
@@ -93,7 +123,7 @@ you and rejects tampered or replayed payloads.
 
 See [`examples/core/fastapi_webhook.py`](examples/core/fastapi_webhook.py)
 for a runnable FastAPI receiver, and [`examples/core/verify_llm_output.py`](examples/core/verify_llm_output.py)
-for the headline extract-and-verify integration pattern.
+for the headline assess-then-escalate pattern.
 
 ## Errors
 
@@ -136,7 +166,7 @@ except LenzTimeoutError as exc:
 # Later (different process / restart):
 status = client.get_status("tsk_abc123")
 if status.status == "completed":
-    print(status.result.verdict.label)
+    print(status.result.verdict, status.result.lenz_score)
 ```
 
 ## Idempotency

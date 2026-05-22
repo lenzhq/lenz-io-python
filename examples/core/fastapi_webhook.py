@@ -46,12 +46,13 @@ async def lenz_webhook(request: Request) -> dict[str, str]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if isinstance(event, VerificationCompleted):
-        verdict = event.result.get("verdict", {})
+        # Verdict block is FLAT on event.result — no nested object.
         logger.info(
-            "Completed: %s -> %s (score %s)",
+            "Completed: %s -> %s (lenz_score %s, confidence %s)",
             event.verification_id,
-            verdict.get("label"),
-            verdict.get("score"),
+            event.result.get("verdict"),
+            event.result.get("lenz_score"),
+            event.result.get("confidence"),
         )
         # TODO: persist verdict + sources to your DB; ping users; etc.
     elif isinstance(event, VerificationNeedsInput):

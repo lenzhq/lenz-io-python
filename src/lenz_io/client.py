@@ -1,14 +1,18 @@
 """Public Lenz client — the ergonomic top-level surface.
 
-Shape:
+Shape (four-primitive ladder + the supporting reads):
 
     from lenz_io import Lenz
     client = Lenz(api_key="lenz_...")
 
-    # Marquee verbs — top-level
-    v = client.verify_and_wait(claim="Sharks don't get cancer")
+    # Marquee verbs — top-level (the four-primitive ladder)
+    out = client.extract(text="...")                       # find claims
+    r = client.assess(text="...")                          # fast 3-model verdict, ~5-10s
+    v = client.verify_and_wait(claim="...")                # full 7-model pipeline, ~90s
+    reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
+
+    # Other verify-family verbs
     v = client.verify(claim="...")          # async submit; returns task_id
-    out = client.extract(text="...")
     batch = client.verify_batch(claims=[...])
     status = client.get_status(task_id)
     client.select(task_id, claim_index=0)
@@ -16,8 +20,8 @@ Shape:
     # Resource namespaces
     client.verifications.list()
     client.verifications.get(id) / delete(id) / set_visibility(id, "public")
-    client.followup.history(id) / send(id, message=...) / reset(id)
-    client.library.list() / get(id)
+    client.ask.history(id) / send(id, message=...) / reset(id)
+    client.library.list()
     client.usage()
 
 Design decisions:
@@ -56,11 +60,11 @@ from .errors import (
     map_response_to_error,
 )
 from .models import (
+    AskHistory,
+    AskReply,
+    AssessResponse,
     BatchAccepted,
     ExtractedClaims,
-    FollowupHistory,
-    FollowupReply,
-    LibraryItem,
     LibraryList,
     RelatedVerifications,
     TaskAccepted,
@@ -99,7 +103,17 @@ class _VerificationsNamespace:
         return VerificationList.model_validate(body)
 
     def get(self, verification_id: str) -> Verification:
-        body = self._p._request("GET", f"/verifications/{verification_id}")
+        """Fetch a single verification by id.
+
+        Works without an API key — the server accepts optional Bearer:
+        anon callers see any public + non-hidden claim, authed callers
+        additionally see their own at any visibility / status.
+        """
+        body = self._p._request(
+            "GET",
+            f"/verifications/{verification_id}",
+            auth_required=False,
+        )
         return Verification.model_validate(body)
 
     def delete(self, verification_id: str) -> bool:
@@ -140,31 +154,42 @@ class _VerificationsNamespace:
         return RelatedVerifications.model_validate(body)
 
 
-class _FollowupNamespace:
-    """``client.followup.{history,send,reset}``."""
+class _AskNamespace:
+    """``client.ask.{history,send,reset}``.
+
+    The endpoint moved from ``/verifications/{id}/follow-up`` to a flat
+    ``/ask/{id}`` server-side; this namespace tracks the new URL shape.
+    """
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
 
-    def history(self, verification_id: str) -> FollowupHistory:
-        body = self._p._request("GET", f"/verifications/{verification_id}/follow-up")
-        return FollowupHistory.model_validate(body)
+    def history(self, verification_id: str) -> AskHistory:
+        body = self._p._request("GET", f"/ask/{verification_id}")
+        return AskHistory.model_validate(body)
 
-    def send(self, verification_id: str, *, message: str) -> FollowupReply:
+    def send(self, verification_id: str, *, message: str) -> AskReply:
         body = self._p._request(
             "POST",
-            f"/verifications/{verification_id}/follow-up",
+            f"/ask/{verification_id}",
             json={"message": message},
         )
-        return FollowupReply.model_validate(body)
+        return AskReply.model_validate(body)
 
     def reset(self, verification_id: str) -> bool:
-        self._p._request("DELETE", f"/verifications/{verification_id}/follow-up")
+        self._p._request("DELETE", f"/ask/{verification_id}")
         return True
 
 
 class _LibraryNamespace:
-    """``client.library.{list,get}``. Works without an API key."""
+    """``client.library.list()``. Works without an API key.
+
+    The single-item ``library.get()`` was removed when the server merged
+    ``GET /api/v1/library/{id}`` into ``GET /api/v1/verifications/{id}``.
+    Use ``client.verifications.get(id)`` for single-item lookups — it
+    works on a key-less client too (the server accepts an optional
+    Bearer; anon callers see public + non-hidden claims).
+    """
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
@@ -191,14 +216,6 @@ class _LibraryNamespace:
             auth_required=False,
         )
         return LibraryList.model_validate(body)
-
-    def get(self, verification_id: str) -> LibraryItem:
-        body = self._p._request(
-            "GET",
-            f"/library/{verification_id}",
-            auth_required=False,
-        )
-        return LibraryItem.model_validate(body)
 
 
 class Lenz:
@@ -238,7 +255,7 @@ class Lenz:
         # Resource namespaces (Stripe pattern for CRUD on past verifications,
         # follow-up conversations, and the public library)
         self.verifications = _VerificationsNamespace(self)
-        self.followup = _FollowupNamespace(self)
+        self.ask = _AskNamespace(self)
         self.library = _LibraryNamespace(self)
 
     # ── lifecycle ──
@@ -272,6 +289,25 @@ class Lenz:
         1000 calls/key/day.
         """
         return self._extract(**kwargs)
+
+    def assess(self, *, text: str) -> AssessResponse:
+        """Fast verdict via a 3-model frontier panel. Sync, ~5–10s.
+
+        Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
+        claim that framing identified. Each claim has a ``verdict``
+        ("True" / "Mostly True" / "Misleading" / "False" / "Error"),
+        a categorical ``confidence`` ("high" / "medium" / "low"), and
+        an optional ``verification_url`` pointing at the deep
+        ``Verification`` when /assess found a matching stored claim.
+
+        Use ``confidence`` to decide when to escalate: ``"low"`` claims
+        are worth re-running through ``verify_and_wait`` for the deep
+        7-model pipeline with citations.
+
+        Paid quota — see ``client.usage()``. Quota debits per atomic
+        claim that framing produces (multiclaim inputs consume N units).
+        """
+        return self._assess(text=text)
 
     def select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
         """Resolve a needs-input interrupt by selecting / clarifying the claim.
@@ -432,6 +468,10 @@ class Lenz:
     def _extract(self, *, text: str) -> ExtractedClaims:
         body = self._request("POST", "/extract", json={"text": text})
         return ExtractedClaims.model_validate(body)
+
+    def _assess(self, *, text: str) -> AssessResponse:
+        body = self._request("POST", "/assess", json={"text": text})
+        return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
         payload: dict[str, Any] = {}

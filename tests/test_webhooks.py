@@ -72,13 +72,28 @@ class TestLenzWebhooks:
             "verification.completed",
             verification_id="vid_1",
             status="completed",
-            result={"verification_id": "vid_1", "verdict": {"label": "false"}},
+            result={
+                "verification_id": "vid_1",
+                "claim": "Sample claim.",
+                "verdict": "False",
+                "confidence": "high",
+                "lenz_score": 2,
+                "created_at": "2026-05-22T12:00:00Z",
+                "modified_at": None,
+            },
         )
         wh = LenzWebhooks(secret=SECRET)
         event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})
         assert isinstance(event, VerificationCompleted)
         assert event.verification_id == "vid_1"
-        assert event.result["verdict"]["label"] == "false"
+        # Flat verdict block — accessed by string key on the raw dict.
+        # Categorical confidence only; the numeric confidence_score is gone.
+        assert event.result["verdict"] == "False"
+        assert event.result["confidence"] == "high"
+        assert event.result["lenz_score"] == 2
+        assert "confidence_score" not in event.result
+        # `published_at` is no longer part of the payload
+        assert "published_at" not in event.result
 
     def test_parse_failed_event(self):
         body = _payload("verification.failed", error="research_empty")

@@ -2,10 +2,18 @@
 
 Kept hand-written and small so customers can audit them. The shapes
 mirror ``lenz/api/schemas/public_api.py`` server-side; contract tests
-pin the cross-language invariant.
+in ``tests/test_contract.py`` pin the cross-language invariant against
+frozen JSON fixtures.
 
 These models are the public, semver-stable surface. Renames here are
 breaking changes that require a SDK major bump.
+
+Vocabulary (applies across every claim-shaped response):
+
+- ``claim``       : str           — the framed claim text
+- ``verdict``     : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
+- ``confidence``  : str           — "high" | "medium" | "low" (categorical)
+- ``lenz_score``  : int | None    — 0–10 integer (deep / list; /assess omits)
 """
 
 from __future__ import annotations
@@ -19,35 +27,31 @@ class _Lax(BaseModel):
     """Base model that tolerates extra fields.
 
     The Lenz API may add fields in minor versions; we don't want to break
-    customers' deserialisation when that happens. Strict validation only
-    runs on the contract-test path.
+    customers' deserialisation when that happens. Strict validation runs
+    in ``tests/test_contract.py`` via a per-test ``extra="forbid"``
+    override so rename misses don't slip through silently.
     """
 
     model_config = ConfigDict(extra="allow")
 
 
-class Verdict(_Lax):
-    """The marquee block on a verification — what 80% of callers read."""
-
-    label: str = ""
-    score: float | None = None
-    confidence: float | None = None
-
-
 class Source(_Lax):
     """A single citation backing a verification."""
 
+    source_name: str = ""
     title: str = ""
     url: str = ""
     snippet: str = ""
     stance: str = ""
+    date: str = ""
 
 
 class DebateSide(_Lax):
     """One side of the adversarial debate transcript."""
 
     role: str = ""
-    arguments: list[str] = Field(default_factory=list)
+    argument: str = ""
+    rebuttal: str = ""
 
 
 class Assessment(_Lax):
@@ -57,12 +61,14 @@ class Assessment(_Lax):
     for the Logic Examiner, missing context for the Context Analyst, weakest
     sources for the Source Auditor). The kind is implicit in ``focus_area``;
     all of them surface under a single ``warnings`` list.
+
+    ``score`` is a panelist-level 0-10 sub-score, distinct from the
+    top-level ``lenz_score`` on a ``Verification``.
     """
 
     panelist_name: str = ""
     focus_area: str = ""
     score: float | None = None
-    confidence: float | None = None
     reasoning: str = ""
     warnings: list[str] = Field(default_factory=list)
 
@@ -96,18 +102,30 @@ class EntityRef(_Lax):
 
 
 class SimilarVerification(_Lax):
-    """An existing public verification that semantically resembles the submitted text."""
+    """An existing public verification that semantically resembles the submitted text.
+
+    Same vocabulary as ``Verification`` — flat ``verdict`` / ``confidence`` /
+    ``lenz_score`` at top level, no nested ``Verdict`` object.
+    """
 
     verification_id: str = ""
     claim: str = ""
-    verdict_label: str = ""
-    score: float | None = None
+    verdict: str = ""
+    confidence: str = "low"
+    lenz_score: int | None = None
     url: str = ""
     distance: float = 0.0
 
 
 class Verification(_Lax):
-    """Full verification report — returned by `verify`, `get_verification`, etc."""
+    """Full verification report — returned by ``verify_and_wait``,
+    ``verifications.get``, the ``/verify/status/{task_id}`` polling
+    endpoint, and the webhook payload.
+
+    The verdict block is FLAT at top level (was nested ``Verdict`` object
+    pre-unify). ``created_at`` + ``modified_at`` are the only timestamp
+    fields on the API surface — editorial ``published_at`` is internal-only.
+    """
 
     verification_id: str = ""
     url: str = ""
@@ -115,27 +133,39 @@ class Verification(_Lax):
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
-    verdict: Verdict = Field(default_factory=Verdict)
+    # Verdict block (flat)
+    verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
+    confidence: str = "low"  # "high" | "medium" | "low"
+    lenz_score: int | None = None  # 0–10 integer
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
-    published_at: str | None = None
     modified_at: str | None = None
     visibility: str | None = None
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint."""
+    """Compact item for the verifications list endpoint and the public library list.
+
+    Both ``GET /api/v1/library`` and ``GET /api/v1/verifications`` return
+    the same per-item shape. ``visibility`` is the literal string
+    ``'public'`` on /library (the only visibility surfaced there);
+    /verifications carries the owner's actual visibility.
+    """
 
     verification_id: str = ""
     url: str = ""
     claim: str = ""
     domain: str = ""
-    verdict: Verdict = Field(default_factory=Verdict)
+    entities: list[EntityRef] = Field(default_factory=list)
+    verdict: str = ""
+    confidence: str = "low"
+    lenz_score: int | None = None
     executive_summary: str = ""
     created_at: str | None = None
+    modified_at: str | None = None
     visibility: str = ""
 
 
@@ -175,13 +205,40 @@ class ExtractedClaims(_Lax):
     """Output of ``POST /extract``."""
 
     status: str = ""
-    atomic_claim: str = ""
+    claim: str = ""
     identified_claims: list[str] = Field(default_factory=list)
     candidate_claims: list[str] = Field(default_factory=list)
     domain: str = ""
     key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
+
+
+class AssessClaim(_Lax):
+    """Per-claim entry in an ``AssessResponse.claims`` list.
+
+    Lean shape by design — no model_votes, no panel identity. The
+    ``verification_url`` (when present) points at the full
+    ``ClaimDetailOut`` payload at ``GET /api/v1/verifications/{id}`` for
+    callers that want citations and the full audit trail.
+    """
+
+    claim: str = ""
+    verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
+    confidence: str = "low"  # "high" | "medium" | "low"
+    verification_url: str | None = None
+
+
+class AssessResponse(_Lax):
+    """Output of ``POST /assess``.
+
+    ``claims`` is one entry per atomic_claim that framing identified in
+    the input. Multiclaim inputs return N entries. ``error`` is set when
+    framing returns zero claims.
+    """
+
+    claims: list[AssessClaim] = Field(default_factory=list)
+    error: str | None = None
 
 
 class TaskAccepted(_Lax):
@@ -205,7 +262,7 @@ class TaskStatus(_Lax):
     result: Verification | None = None
     # needs_input branches
     claims: list[CandidateClaim] = Field(default_factory=list)
-    candidate_claims: list[str] = Field(default_factory=list)
+    candidates: list[str] = Field(default_factory=list)
     similar_claims: list[SimilarVerification] = Field(default_factory=list)
     # failure branches
     failure_reason: str = ""
@@ -223,26 +280,43 @@ class Usage(_Lax):
     extract_daily_limit: int = 0
 
 
-class FollowupHistory(_Lax):
-    messages: list[dict[str, Any]] = Field(default_factory=list)
+class AskMessage(_Lax):
+    """One message in an ``/ask`` conversation thread."""
+
+    role: str = ""  # "user" | "expert"
+    content: str = ""
+    created_at: str = ""
+
+
+class AskHistory(_Lax):
+    """Returned by ``GET /ask/{verification_id}``."""
+
+    messages: list[AskMessage] = Field(default_factory=list)
     exchanges_used: int = 0
     exchange_limit: int = 0
     can_send: bool = False
 
 
-class FollowupReply(_Lax):
+class AskReply(_Lax):
+    """Returned by ``POST /ask/{verification_id}``."""
+
     reply: str = ""
 
 
 __all__ = [
+    "AskHistory",
+    "AskMessage",
+    "AskReply",
+    "AssessClaim",
+    "AssessResponse",
     "Assessment",
     "Audit",
     "BatchAccepted",
     "CandidateClaim",
     "DebateSide",
+    "EntityRef",
     "ExtractedClaims",
-    "FollowupHistory",
-    "FollowupReply",
+    "ExtractedEntity",
     "LibraryItem",
     "LibraryList",
     "RelatedVerifications",
@@ -251,7 +325,6 @@ __all__ = [
     "TaskAccepted",
     "TaskStatus",
     "Usage",
-    "Verdict",
     "Verification",
     "VerificationList",
     "VerificationListItem",

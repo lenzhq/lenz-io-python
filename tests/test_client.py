@@ -83,6 +83,18 @@ class TestConstruction:
 # ─────────────────────────────────────────────────── verify (top-level) ──
 
 
+# Canonical completed-verification fixture shared across verify_and_wait tests
+# Post-unify: flat verdict block (verdict + confidence + lenz_score) at top
+# level — no nested Verdict object. Categorical confidence only.
+_COMPLETED_RESULT = {
+    "verification_id": "v",
+    "claim": "Sample claim",
+    "verdict": "True",
+    "confidence": "high",
+    "lenz_score": 8,
+}
+
+
 class TestVerify:
     def test_verify_happy_path_returns_task_id(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -140,6 +152,7 @@ class TestVerify:
                 200,
                 json={
                     "status": "multi_claim",
+                    "claim": "The earth is flat.",
                     "identified_claims": ["The earth is flat.", "Coffee causes cancer."],
                     "domain": "Science",
                     "original_input": "...",
@@ -147,6 +160,10 @@ class TestVerify:
             )
             out = client.extract(text="The earth is flat and coffee causes cancer.")
         assert out.identified_claims == ["The earth is flat.", "Coffee causes cancer."]
+        # Unified vocabulary: `claim` (not `atomic_claim`) on the top-level
+        # ExtractedClaims response, matching every other claim-shaped API
+        # response.
+        assert out.claim == "The earth is flat."
 
     def test_get_status_returns_typed_status(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -155,6 +172,22 @@ class TestVerify:
             )
             s = client.get_status("tsk_001")
         assert s.status == "processing"
+
+    def test_get_status_clarification_uses_candidates_not_candidate_claims(self, client):
+        # Server-side renamed candidate_claims -> candidates on the
+        # clarification_required needs_input branch. SDK model tracks.
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/tsk_x").respond(
+                200,
+                json={
+                    "status": "needs_input",
+                    "reason": "clarification_required",
+                    "candidates": ["Did you mean A?", "Or B?"],
+                },
+            )
+            s = client.get_status("tsk_x")
+        assert s.reason == "clarification_required"
+        assert s.candidates == ["Did you mean A?", "Or B?"]
 
     def test_select_requires_text_or_claim_index(self, client):
         with pytest.raises(ValueError):
@@ -165,6 +198,81 @@ class TestVerify:
             r.post("/verify/tsk_001/select").respond(200, json={"task_id": "tsk_002", "claim_text": "x"})
             t = client.select("tsk_001", text="The earth is flat.")
         assert t.task_id == "tsk_002"
+
+
+# ─────────────────────────────────────────────────── assess (top-level) ──
+
+
+class TestAssess:
+    def test_single_claim_happy_path(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(
+                200,
+                json={
+                    "claims": [
+                        {
+                            "claim": "The earth is flat.",
+                            "verdict": "False",
+                            "confidence": "high",
+                        }
+                    ],
+                    "error": None,
+                },
+            )
+            r2 = client.assess(text="The earth is flat.")
+        assert len(r2.claims) == 1
+        c = r2.claims[0]
+        assert c.claim == "The earth is flat."
+        assert c.verdict == "False"
+        assert c.confidence == "high"
+        assert c.verification_url is None
+
+    def test_multiclaim_returns_n_entries(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(
+                200,
+                json={
+                    "claims": [
+                        {"claim": "Coffee causes cancer.", "verdict": "Misleading", "confidence": "medium"},
+                        {"claim": "The earth is flat.", "verdict": "False", "confidence": "high"},
+                    ],
+                    "error": None,
+                },
+            )
+            r2 = client.assess(text="Coffee causes cancer and the earth is flat.")
+        assert [c.verdict for c in r2.claims] == ["Misleading", "False"]
+        assert [c.confidence for c in r2.claims] == ["medium", "high"]
+
+    def test_verification_url_present_on_claim_hit(self, client):
+        # /assess found a matching stored Claim row; the response includes
+        # an API URL the SDK consumer can hit for the deep payload.
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(
+                200,
+                json={
+                    "claims": [
+                        {
+                            "claim": "Water boils at 100°C at sea level.",
+                            "verdict": "True",
+                            "confidence": "high",
+                            "verification_url": "https://lenz.io/api/v1/verifications/a1b2c3d4",
+                        }
+                    ],
+                    "error": None,
+                },
+            )
+            r2 = client.assess(text="Water boils at 100°C at sea level.")
+        assert r2.claims[0].verification_url == "https://lenz.io/api/v1/verifications/a1b2c3d4"
+
+    def test_zero_claims_error_payload(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(
+                200,
+                json={"claims": [], "error": "No verifiable claim detected"},
+            )
+            r2 = client.assess(text="just chatter")
+        assert r2.claims == []
+        assert r2.error == "No verifiable claim detected"
 
 
 # ─────────────────────────────────────────────────── verify_and_wait ──
@@ -184,25 +292,23 @@ class TestVerifyAndWait:
                         "status": "completed",
                         "result": {
                             "verification_id": "vid_1",
-                            "verdict": {"label": "false", "score": 2.0, "confidence": 0.9},
+                            "verdict": "False",
+                            "confidence": "high",
+                            "lenz_score": 1,
                         },
                     },
                 ),
             ]
             v = client.verify_and_wait(claim="x", timeout=10)
-        assert v.verdict.label == "false"
-        assert v.verdict.score == 2.0
+        # Flat verdict block — categorical confidence only, no nested .label / .score
+        assert v.verdict == "False"
+        assert v.lenz_score == 1
+        assert v.confidence == "high"
 
     def test_idempotency_default_true_sends_uuid_header(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(
-                200,
-                json={
-                    "status": "completed",
-                    "result": {"verification_id": "v", "verdict": {"label": "true"}},
-                },
-            )
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5)
         idem = submit.calls.last.request.headers.get("Idempotency-Key")
         assert idem and re.match(r"^[0-9a-f]{32}$", idem), idem
@@ -210,13 +316,7 @@ class TestVerifyAndWait:
     def test_idempotency_explicit_overrides_default(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(
-                200,
-                json={
-                    "status": "completed",
-                    "result": {"verification_id": "v", "verdict": {"label": "true"}},
-                },
-            )
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5, idempotency_key="my-key")
         assert submit.calls.last.request.headers["Idempotency-Key"] == "my-key"
 
@@ -225,13 +325,7 @@ class TestVerifyAndWait:
 
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(
-                200,
-                json={
-                    "status": "completed",
-                    "result": {"verification_id": "v", "verdict": {"label": "true"}},
-                },
-            )
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5, visibility="private")
         body = json.loads(submit.calls.last.request.content)
         assert body["visibility"] == "private"
@@ -239,13 +333,7 @@ class TestVerifyAndWait:
     def test_idempotency_off_when_explicitly_disabled(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(
-                200,
-                json={
-                    "status": "completed",
-                    "result": {"verification_id": "v", "verdict": {"label": "true"}},
-                },
-            )
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5, idempotency=False)
         assert "Idempotency-Key" not in submit.calls.last.request.headers
 
@@ -303,10 +391,43 @@ class TestVerifications:
 
     def test_get(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/verifications/vid_1").respond(200, json={"verification_id": "vid_1", "verdict": {"label": "true"}})
+            r.get("/verifications/vid_1").respond(
+                200,
+                json={
+                    "verification_id": "vid_1",
+                    "verdict": "True",
+                    "confidence": "high",
+                    "lenz_score": 9,
+                },
+            )
             v = client.verifications.get("vid_1")
         assert v.verification_id == "vid_1"
-        assert v.verdict.label == "true"
+        assert v.verdict == "True"
+        assert v.confidence == "high"
+        assert v.lenz_score == 9
+
+    def test_get_works_without_api_key(self, unauth_client):
+        """Server-merge gave GET /verifications/{id} optional Bearer auth:
+        anon callers see any public + non-hidden claim. The SDK already
+        supports key-less calls via auth_required=False — this test pins
+        the contract so a future tightening of auth_required would fail.
+        """
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/verifications/public_id").respond(
+                200,
+                json={
+                    "verification_id": "public_id",
+                    "claim": "Water boils at 100°C.",
+                    "verdict": "True",
+                    "confidence": "high",
+                    "lenz_score": 10,
+                },
+            )
+            v = unauth_client.verifications.get("public_id")
+        # No Authorization header sent (anon caller)
+        assert "Authorization" not in route.calls.last.request.headers
+        assert v.verification_id == "public_id"
+        assert v.verdict == "True"
 
     def test_delete_happy(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -334,16 +455,18 @@ class TestVerifications:
                         {
                             "verification_id": "rel00001",
                             "claim": "A related claim",
-                            "verdict_label": "false",
-                            "score": 2.5,
+                            "verdict": "False",
+                            "confidence": "high",
+                            "lenz_score": 2,
                             "url": "https://lenz.io/c/foo-rel00001",
                             "distance": 0.31,
                         },
                         {
                             "verification_id": "rel00002",
                             "claim": "Another",
-                            "verdict_label": "true",
-                            "score": 8.7,
+                            "verdict": "True",
+                            "confidence": "medium",
+                            "lenz_score": 9,
                             "url": "https://lenz.io/c/bar-rel00002",
                             "distance": 0.42,
                         },
@@ -357,8 +480,11 @@ class TestVerifications:
         first = related.items[0]
         assert first.verification_id == "rel00001"
         assert first.claim == "A related claim"
-        assert first.verdict_label == "false"
-        assert first.score == 2.5
+        # Unified vocabulary: `verdict` + `lenz_score` (not the old
+        # `verdict_label` + `score`); `confidence` is now also exposed.
+        assert first.verdict == "False"
+        assert first.lenz_score == 2
+        assert first.confidence == "high"
         assert first.distance == 0.31
 
     def test_related_empty_when_no_matches(self, client):
@@ -368,26 +494,42 @@ class TestVerifications:
         assert related.items == []
 
 
-class TestFollowup:
+class TestAsk:
+    """Renamed from TestFollowup after the /verifications/{id}/follow-up ->
+    /ask/{id} server-side rename and the followup -> ask client namespace
+    rename."""
+
     def test_history(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/verifications/vid_1/follow-up").respond(
+            r.get("/ask/vid_1").respond(
                 200,
-                json={"messages": [], "exchanges_used": 0, "exchange_limit": 10, "can_send": True},
+                json={
+                    "messages": [
+                        {"role": "user", "content": "why?", "created_at": "2026-05-22T12:00:00Z"},
+                        {"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
+                    ],
+                    "exchanges_used": 1,
+                    "exchange_limit": 10,
+                    "can_send": True,
+                },
             )
-            h = client.followup.history("vid_1")
+            h = client.ask.history("vid_1")
         assert h.can_send is True
+        # Typed AskMessage in the messages list (no more bare dicts)
+        assert h.messages[0].role == "user"
+        assert h.messages[1].role == "expert"
+        assert h.messages[1].content == "because…"
 
     def test_send(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.post("/verifications/vid_1/follow-up").respond(200, json={"reply": "..."})
-            f = client.followup.send("vid_1", message="why?")
+            r.post("/ask/vid_1").respond(200, json={"reply": "..."})
+            f = client.ask.send("vid_1", message="why?")
         assert f.reply == "..."
 
     def test_reset(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.delete("/verifications/vid_1/follow-up").respond(200, json={"ok": True})
-            assert client.followup.reset("vid_1") is True
+            r.delete("/ask/vid_1").respond(200, json={"ok": True})
+            assert client.ask.reset("vid_1") is True
 
 
 class TestLibrary:
@@ -398,11 +540,11 @@ class TestLibrary:
         # No Authorization header sent for library
         assert "Authorization" not in route.calls.last.request.headers
 
-    def test_get(self, unauth_client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/library/vid_1").respond(200, json={"verification_id": "vid_1", "verdict": {"label": "false"}})
-            item = unauth_client.library.get("vid_1")
-        assert item.verification_id == "vid_1"
+    def test_get_method_removed(self, unauth_client):
+        # GET /api/v1/library/{id} merged server-side into
+        # GET /api/v1/verifications/{id}. SDK's library.get() was dropped;
+        # callers use verifications.get() (works key-less for public claims).
+        assert not hasattr(unauth_client.library, "get")
 
 
 # ─────────────────────────────────────────────────── Auto-retry ──
@@ -455,13 +597,7 @@ class TestConnectionReuse:
         caplog.set_level(logging.INFO, logger="lenz_io")
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/verify").respond(200, json={"task_id": "tsk_log_test", "claim_text": "x"})
-            r.get("/verify/status/tsk_log_test").respond(
-                200,
-                json={
-                    "status": "completed",
-                    "result": {"verification_id": "v", "verdict": {"label": "true"}},
-                },
-            )
+            r.get("/verify/status/tsk_log_test").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5)
         # INFO-level log of the task_id (for support recovery)
         assert any("tsk_log_test" in r.message for r in caplog.records)

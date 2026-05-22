@@ -1,0 +1,43 @@
+{
+  "event": "verification.completed",
+  "verification_id": "a1b2c3d4",
+  "task_id": "tsk_abc123",
+  "batch_id": null,
+  "status": "completed",
+  "result": {
+    "verification_id": "a1b2c3d4",
+    "url": "https://lenz.io/c/sample-a1b2c3d4",
+    "claim": "Sample claim text.",
+    "domain": "Science",
+    "entities": [],
+    "presumed_intent": "Verify a factual claim",
+    "verdict": "True",
+    "confidence": "high",
+    "lenz_score": 8,
+    "executive_summary": "Sample summary.",
+    "warnings": [],
+    "sources": [],
+    "audit": {
+      "adjudication_summary": "Sample adjudication.",
+      "assessments": [],
+      "debate_pro": {
+        "role": "",
+        "argument": "",
+        "rebuttal": ""
+      },
+      "debate_con": {
+        "role": "",
+        "argument": "",
+        "rebuttal": ""
+      },
+      "panel_agreement": "unanimous"
+    },
+    "created_at": "2026-05-22T12:00:00Z",
+    "modified_at": null,
+    "visibility": "public"
+  },
+  "needs_input": null,
+  "error": null,
+  "attempt": 1,
+  "delivered_at": "2026-05-22T12:01:00Z"
+}
