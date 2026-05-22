@@ -31,7 +31,7 @@ def main() -> None:
         print(f"  - {c}")
     print()
 
-    # 2. assess — fast 3-model verdict on each (~10s, sync)
+    # 2. assess — fast 3-model verdict on each (~5-10s, sync)
     quick = client.assess(text="Sharks don't get cancer")
     for c in quick.claims:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")

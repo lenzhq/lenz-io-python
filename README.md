@@ -5,7 +5,7 @@ Official Python SDK for the [Lenz Claim Verification API for AI Product Teams](h
 **Four API primitives, one research-depth ladder.**
 
 - `extract` — pull verifiable claims out of any text. Free, 1000 calls/key/day.
-- `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
+- `assess` — fast 3-model panel verdict in ~5-10s. Sync, paid.
 - `verify` — full 7-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification.
 
@@ -28,7 +28,7 @@ client = Lenz(api_key="lenz_...")
 # 1. extract — pull verifiable claims out of any text (free)
 out = client.extract(text=llm_output)
 
-# 2. assess — fast 3-model verdict on each (~10s, sync)
+# 2. assess — fast 3-model verdict on each (~5-10s, sync)
 quick = client.assess(text=llm_output)
 for c in quick.claims:
     print(c.verdict, c.confidence, c.claim)
@@ -53,7 +53,7 @@ already has a deep verification, `assess` returns it via
 Frame → Collect Evidence → Debate (2 models, 2 rounds) → Adjudicate
 (3 models: sources, logic, context) → Conclude. ~90 seconds wall-clock
 per claim. `assess` runs a leaner 3-model panel against the same
-framing for the ~10s pass.
+framing for the ~5-10s pass.
 
 ## Magical-moment demo
 
@@ -78,7 +78,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/key/day.
-- **`client.assess(text=...)`** → `AssessResponse`. Sync, ~10s, returns one entry per identified claim.
+- **`client.assess(text=...)`** → `AssessResponse`. Sync, ~5-10s, returns one entry per identified claim.
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Pair with a webhook for the callback.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic).
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.

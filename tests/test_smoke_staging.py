@@ -52,7 +52,7 @@ def test_quickstart_claim_returns_via_cache(smoke_client):
 
 
 def test_assess_returns_typed_claims(smoke_client):
-    """``/assess`` is sync, ~10s. Returns one entry per identified claim."""
+    """``/assess`` is sync, ~5-10s. Returns one entry per identified claim."""
     out = smoke_client.assess(text="Sharks don't get cancer")
     assert out.claims, "assess returned zero claims"
     first = out.claims[0]

@@ -27,7 +27,7 @@ Today it receives roughly 7 million visitors per year.
 def main() -> None:
     client = Lenz(api_key=os.environ.get("LENZ_API_KEY"))
 
-    # Step 1: assess everything in one sync call (~10s for the whole batch)
+    # Step 1: assess everything in one sync call (~5-10s for the whole batch)
     # ``/assess`` runs framing internally, so passing the raw LLM output
     # is equivalent to ``extract`` -> per-claim ``assess`` but in one trip.
     quick = client.assess(text=LLM_OUTPUT)

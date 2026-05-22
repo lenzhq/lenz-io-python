@@ -11,7 +11,7 @@ ladder — find claims, judge them fast, prove them deep, follow up:
     # 1. /extract — pull verifiable claims out of text (free, 1000/day)
     claims = client.extract(text=llm_output).identified_claims
 
-    # 2. /assess — fast 3-model verdict on each (~10s, paid)
+    # 2. /assess — fast 3-model verdict on each (~5-10s, paid)
     quick = client.assess(text=llm_output)
 
     # 3. /verify — escalate low-confidence to the full pipeline (~90s, paid)

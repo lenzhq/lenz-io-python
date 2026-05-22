@@ -8,7 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 - `client.assess(text=...)` — new sync verb that returns a fast 3-model
-  panel verdict in ~10s. Mirrors the new `POST /api/v1/assess` server
+  panel verdict in ~5-10s. Mirrors the new `POST /api/v1/assess` server
   endpoint.
 - `AssessClaim` and `AssessResponse` types for the assess response shape.
 - `AskMessage` model (`role`, `content`, `created_at`) — `AskHistory.messages`

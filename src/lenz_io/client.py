@@ -7,7 +7,7 @@ Shape (four-primitive ladder + the supporting reads):
 
     # Marquee verbs — top-level (the four-primitive ladder)
     out = client.extract(text="...")                       # find claims
-    r = client.assess(text="...")                          # fast 3-model verdict, ~10s
+    r = client.assess(text="...")                          # fast 3-model verdict, ~5-10s
     v = client.verify_and_wait(claim="...")                # full 7-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
