@@ -36,7 +36,6 @@ from lenz_io.models import (
     TaskStatus,
     Verification,
 )
-from lenz_io.webhooks import WebhookEvent
 
 FIXTURES = Path(__file__).parent / "fixtures" / "contract"
 
@@ -90,10 +89,7 @@ def _check(payload, model_cls: type[BaseModel], path: str = "") -> list[str]:
     extras = sorted(payload_keys - fields)
     errors: list[str] = []
     if extras:
-        errors.append(
-            f"{path or model_cls.__name__}: unknown server fields {extras} "
-            f"(model={model_cls.__name__})"
-        )
+        errors.append(f"{path or model_cls.__name__}: unknown server fields {extras} (model={model_cls.__name__})")
     for key, value in payload.items():
         if key not in fields:
             continue

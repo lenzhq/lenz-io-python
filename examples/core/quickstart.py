@@ -50,7 +50,7 @@ def main() -> None:
     # 4. ask — follow-up question on the verification
     reply = client.ask.send(v.verification_id, message="Which source is strongest?")
     print()
-    print(f"Q: Which source is strongest?")
+    print("Q: Which source is strongest?")
     print(f"A: {reply.reply}")
 
 

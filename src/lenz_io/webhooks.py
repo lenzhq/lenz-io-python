@@ -131,24 +131,59 @@ class VerificationNeedsInput(WebhookEvent):
 def _build_event(payload: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
     event = str(payload.get("event") or "")
-    common = {
-        "event": event,
-        "task_id": str(payload.get("task_id") or ""),
-        "attempt": int(payload.get("attempt") or 1),
-        "delivered_at": str(payload.get("delivered_at") or ""),
-        "verification_id": payload.get("verification_id") or None,
-        "batch_id": payload.get("batch_id") or None,
-        "status": str(payload.get("status") or ""),
-        "raw": payload,
-    }
+    task_id = str(payload.get("task_id") or "")
+    attempt = int(payload.get("attempt") or 1)
+    delivered_at = str(payload.get("delivered_at") or "")
+    verification_id = str(payload["verification_id"]) if payload.get("verification_id") else None
+    batch_id = str(payload["batch_id"]) if payload.get("batch_id") else None
+    status = str(payload.get("status") or "")
     if event == "verification.completed":
-        return VerificationCompleted(**common, result=payload.get("result") or {})
+        return VerificationCompleted(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            result=payload.get("result") or {},
+        )
     if event == "verification.failed":
-        return VerificationFailed(**common, error=str(payload.get("error") or ""))
+        return VerificationFailed(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            error=str(payload.get("error") or ""),
+        )
     if event == "verification.needs_input":
-        return VerificationNeedsInput(**common, needs_input=payload.get("needs_input") or {})
+        return VerificationNeedsInput(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            needs_input=payload.get("needs_input") or {},
+        )
     # Unknown event type — return generic. Future-compatible.
-    return WebhookEvent(**common)
+    return WebhookEvent(
+        event=event,
+        task_id=task_id,
+        attempt=attempt,
+        delivered_at=delivered_at,
+        verification_id=verification_id,
+        batch_id=batch_id,
+        status=status,
+        raw=payload,
+    )
 
 
 class LenzWebhooks:

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook — mirrors .github/workflows/ci.yml exactly so a clean
+# commit can never push a red CI badge.
+#
+# Setup (one-time, per clone):
+#   git config core.hooksPath scripts/hooks
+#
+# Runs (~10s total on a warm cache):
+#   1. ruff check     — lint
+#   2. ruff format    — formatting
+#   3. mypy           — strict type-check on src/lenz_io
+#   4. pytest         — unit suite (skips live-API smoke; those run in CI / on release)
+#
+# Skip on a specific commit with `git commit --no-verify`. Don't habituate.
+#
+# To split slow from fast (e.g. move mypy + pytest to pre-push), copy the
+# bottom two blocks into scripts/hooks/pre-push and delete them here.
+
+set -euo pipefail
+
+# Run from the repo root so paths in pyproject.toml resolve.
+cd "$(git rev-parse --show-toplevel)"
+
+# Colour helpers — bail out cleanly if not a tty.
+if [ -t 1 ]; then
+  C_RED='\033[0;31m'; C_GREEN='\033[0;32m'; C_DIM='\033[2m'; C_RESET='\033[0m'
+else
+  C_RED=''; C_GREEN=''; C_DIM=''; C_RESET=''
+fi
+
+step() { echo -e "${C_DIM}→${C_RESET} $1"; }
+fail() { echo -e "${C_RED}✗ pre-commit: $1 failed.${C_RESET} Fix and re-commit, or skip once with --no-verify."; exit 1; }
+done_ok() { echo -e "${C_GREEN}✓${C_RESET} $1"; }
+
+step "ruff check"
+uv run ruff check . || fail "ruff check"
+done_ok "ruff check"
+
+step "ruff format --check"
+uv run ruff format --check . || fail "ruff format (run: uv run ruff format .)"
+done_ok "ruff format"
+
+step "mypy (strict)"
+uv run mypy src/lenz_io || fail "mypy"
+done_ok "mypy"
+
+step "pytest (unit; skips live-API smoke)"
+uv run pytest tests/ -q --ignore=tests/test_smoke_staging.py || fail "pytest"
+done_ok "pytest"
+
+echo -e "${C_GREEN}All pre-commit checks passed.${C_RESET}"
