@@ -91,7 +91,7 @@ _COMPLETED_RESULT = {
     "claim": "Sample claim",
     "verdict": "True",
     "confidence": "high",
-    "lenz_score": 8.5,
+    "lenz_score": 8,
 }
 
 
@@ -294,7 +294,7 @@ class TestVerifyAndWait:
                             "verification_id": "vid_1",
                             "verdict": "False",
                             "confidence": "high",
-                            "lenz_score": 1.0,
+                            "lenz_score": 1,
                         },
                     },
                 ),
@@ -302,7 +302,7 @@ class TestVerifyAndWait:
             v = client.verify_and_wait(claim="x", timeout=10)
         # Flat verdict block — categorical confidence only, no nested .label / .score
         assert v.verdict == "False"
-        assert v.lenz_score == 1.0
+        assert v.lenz_score == 1
         assert v.confidence == "high"
 
     def test_idempotency_default_true_sends_uuid_header(self, client):
@@ -397,14 +397,14 @@ class TestVerifications:
                     "verification_id": "vid_1",
                     "verdict": "True",
                     "confidence": "high",
-                    "lenz_score": 9.0,
+                    "lenz_score": 9,
                 },
             )
             v = client.verifications.get("vid_1")
         assert v.verification_id == "vid_1"
         assert v.verdict == "True"
         assert v.confidence == "high"
-        assert v.lenz_score == 9.0
+        assert v.lenz_score == 9
 
     def test_get_works_without_api_key(self, unauth_client):
         """Server-merge gave GET /verifications/{id} optional Bearer auth:
@@ -420,7 +420,7 @@ class TestVerifications:
                     "claim": "Water boils at 100°C.",
                     "verdict": "True",
                     "confidence": "high",
-                    "lenz_score": 9.5,
+                    "lenz_score": 10,
                 },
             )
             v = unauth_client.verifications.get("public_id")
@@ -457,7 +457,7 @@ class TestVerifications:
                             "claim": "A related claim",
                             "verdict": "False",
                             "confidence": "high",
-                            "lenz_score": 2.5,
+                            "lenz_score": 2,
                             "url": "https://lenz.io/c/foo-rel00001",
                             "distance": 0.31,
                         },
@@ -466,7 +466,7 @@ class TestVerifications:
                             "claim": "Another",
                             "verdict": "True",
                             "confidence": "medium",
-                            "lenz_score": 8.7,
+                            "lenz_score": 9,
                             "url": "https://lenz.io/c/bar-rel00002",
                             "distance": 0.42,
                         },
@@ -483,7 +483,7 @@ class TestVerifications:
         # Unified vocabulary: `verdict` + `lenz_score` (not the old
         # `verdict_label` + `score`); `confidence` is now also exposed.
         assert first.verdict == "False"
-        assert first.lenz_score == 2.5
+        assert first.lenz_score == 2
         assert first.confidence == "high"
         assert first.distance == 0.31
 

@@ -740,7 +740,7 @@
           "lenz_score": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "integer"
               },
               {
                 "type": "null"
@@ -995,7 +995,7 @@
           "lenz_score": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "integer"
               },
               {
                 "type": "null"
@@ -1183,7 +1183,7 @@
           "lenz_score": {
             "anyOf": [
               {
-                "type": "number"
+                "type": "integer"
               },
               {
                 "type": "null"

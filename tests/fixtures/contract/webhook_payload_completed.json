@@ -13,7 +13,7 @@
     "presumed_intent": "Verify a factual claim",
     "verdict": "True",
     "confidence": "high",
-    "lenz_score": 8.5,
+    "lenz_score": 8,
     "executive_summary": "Sample summary.",
     "warnings": [],
     "sources": [],

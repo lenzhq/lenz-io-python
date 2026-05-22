@@ -17,8 +17,11 @@ All notable changes to this SDK are documented here. Format follows
   level of every claim-shaped response. Replaces the numeric
   `verdict.confidence` (0–1) — the numeric form is no longer in the
   public API; the SDK exposes only the categorical label.
-- `lenz_score` (numeric 0–10) flattened to the top level (was nested
-  under `verdict.score`).
+- `lenz_score` (integer 0–10) flattened to the top level (was nested
+  under `verdict.score` as a float). The DB column is now
+  `IntegerField`; the API/SDK type narrows from `float | None` to
+  `int | None`. The conclusion-step LLM already constrained the score
+  to integers — only the storage and surface types lagged.
 - Contract test (`tests/test_contract.py`) — re-validates 6 frozen
   server-response fixtures under `extra="forbid"` so silent rename
   misses fail CI.

@@ -12,7 +12,7 @@
   "presumed_intent": "Verify a factual claim",
   "verdict": "True",
   "confidence": "high",
-  "lenz_score": 9.8,
+  "lenz_score": 10,
   "executive_summary": "At standard atmospheric pressure, water boils at exactly 100\u00b0C.",
   "warnings": [],
   "sources": [

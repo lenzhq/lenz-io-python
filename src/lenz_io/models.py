@@ -13,7 +13,7 @@ Vocabulary (applies across every claim-shaped response):
 - ``claim``       : str           — the framed claim text
 - ``verdict``     : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
 - ``confidence``  : str           — "high" | "medium" | "low" (categorical)
-- ``lenz_score``  : float | None  — 0–10 (deep / list; /assess omits)
+- ``lenz_score``  : int | None    — 0–10 integer (deep / list; /assess omits)
 """
 
 from __future__ import annotations
@@ -112,7 +112,7 @@ class SimilarVerification(_Lax):
     claim: str = ""
     verdict: str = ""
     confidence: str = "low"
-    lenz_score: float | None = None
+    lenz_score: int | None = None
     url: str = ""
     distance: float = 0.0
 
@@ -136,7 +136,7 @@ class Verification(_Lax):
     # Verdict block (flat)
     verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
-    lenz_score: float | None = None  # 0–10
+    lenz_score: int | None = None  # 0–10 integer
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
@@ -162,7 +162,7 @@ class VerificationListItem(_Lax):
     entities: list[EntityRef] = Field(default_factory=list)
     verdict: str = ""
     confidence: str = "low"
-    lenz_score: float | None = None
+    lenz_score: int | None = None
     executive_summary: str = ""
     created_at: str | None = None
     modified_at: str | None = None

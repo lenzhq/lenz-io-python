@@ -77,7 +77,7 @@ class TestLenzWebhooks:
                 "claim": "Sample claim.",
                 "verdict": "False",
                 "confidence": "high",
-                "lenz_score": 1.5,
+                "lenz_score": 2,
                 "created_at": "2026-05-22T12:00:00Z",
                 "modified_at": None,
             },
@@ -90,7 +90,7 @@ class TestLenzWebhooks:
         # Categorical confidence only; the numeric confidence_score is gone.
         assert event.result["verdict"] == "False"
         assert event.result["confidence"] == "high"
-        assert event.result["lenz_score"] == 1.5
+        assert event.result["lenz_score"] == 2
         assert "confidence_score" not in event.result
         # `published_at` is no longer part of the payload
         assert "published_at" not in event.result

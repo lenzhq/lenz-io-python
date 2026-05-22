@@ -20,7 +20,7 @@
     "presumed_intent": "Verify a factual claim",
     "verdict": "False",
     "confidence": "high",
-    "lenz_score": 1.0,
+    "lenz_score": 1,
     "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
     "warnings": [],
     "sources": [
