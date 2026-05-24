@@ -42,7 +42,6 @@ class Source(_Lax):
     title: str = ""
     url: str = ""
     snippet: str = ""
-    stance: str = ""
     date: str = ""
 
 
