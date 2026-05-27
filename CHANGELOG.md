@@ -6,6 +6,13 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-05-27
+
+First stable release. The pre-1.0 RC series (`1.0.0rc1` … `1.0.0rc11`) is now
+considered superseded; consumers should upgrade. No breaking changes vs the
+final RC — see entries below for the multi-language additions that landed in
+this cut.
+
 ### Added
 - **Multi-language API support** (12 languages). Optional `language=` kwarg on
   `verify`, `verify_and_wait`, `verify_batch`, `assess`, `extract`, and
