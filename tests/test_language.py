@@ -299,3 +299,24 @@ class TestVerifyBatchItemTypedDict:
         # total=False means every key is optional — callers may pass any
         # subset.
         assert VerifyBatchItem.__total__ is False
+
+    def test_top_level_export(self):
+        # REGRESSION: 1.0.0 published with VerifyBatchItem reachable only
+        # via ``from lenz_io.client import VerifyBatchItem`` — the README
+        # and example files used the top-level path, so customers
+        # following the docs hit ImportError. 1.0.1 added it to
+        # ``lenz_io.__all__``; this test pins it so a future re-export
+        # rename doesn't silently regress.
+        import lenz_io
+
+        assert hasattr(lenz_io, "VerifyBatchItem"), (
+            "lenz_io.VerifyBatchItem must be importable at the top level; see lenz_io/__init__.py"
+        )
+        assert "VerifyBatchItem" in lenz_io.__all__, (
+            "VerifyBatchItem must be listed in lenz_io.__all__ so `from lenz_io import *` brings it in."
+        )
+        # The top-level symbol must be the same TypedDict object the
+        # submodule exports — no shadowing.
+        from lenz_io.client import VerifyBatchItem as ClientVbi
+
+        assert lenz_io.VerifyBatchItem is ClientVbi

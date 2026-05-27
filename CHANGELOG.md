@@ -6,6 +6,16 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-05-27
+
+### Fixed
+- `VerifyBatchItem` now importable from the top-level `lenz_io` package
+  (`from lenz_io import VerifyBatchItem`). In 1.0.0 it was reachable
+  only via the submodule path `from lenz_io.client import VerifyBatchItem`
+  because it was missing from `lenz_io.__init__.__all__`. The type was
+  always present in the wheel — this is purely a re-export gap.
+  Regression test added so future drift fails CI.
+
 ## [1.0.0] — 2026-05-27
 
 First stable release. The pre-1.0 RC series (`1.0.0rc1` … `1.0.0rc11`) is now

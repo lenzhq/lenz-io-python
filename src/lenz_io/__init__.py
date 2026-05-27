@@ -35,7 +35,7 @@ except ImportError:
     __version__ = "0.0.0+local"
 
 # Public surface
-from .client import API_VERSION, DEFAULT_BASE_URL, Lenz
+from .client import API_VERSION, DEFAULT_BASE_URL, Lenz, VerifyBatchItem
 from .errors import (
     LenzAPIError,
     LenzAuthError,
@@ -125,6 +125,7 @@ __all__ = [
     "VerificationList",
     "VerificationListItem",
     "VerificationNeedsInput",
+    "VerifyBatchItem",
     "WebhookEvent",
     "__version__",
     "verify_signature",
