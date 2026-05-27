@@ -124,10 +124,14 @@ class Verification(_Lax):
     The verdict block is FLAT at top level (was nested ``Verdict`` object
     pre-unify). ``created_at`` + ``modified_at`` are the only timestamp
     fields on the API surface — editorial ``published_at`` is internal-only.
+
+    1.1.0: dropped ``url`` and ``visibility``. API claims are private by
+    default and referenced by ``verification_id`` only. Cache-hit on
+    another customer's claim is transparent — the customer always sees
+    their own ``verification_id``, never another customer's.
     """
 
     verification_id: str = ""
-    url: str = ""
     claim: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
@@ -142,7 +146,6 @@ class Verification(_Lax):
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
     modified_at: str | None = None
-    visibility: str | None = None
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
     # older cached payloads that lack the field.
@@ -150,16 +153,12 @@ class Verification(_Lax):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint and the public library list.
-
-    Both ``GET /api/v1/library`` and ``GET /api/v1/verifications`` return
-    the same per-item shape. ``visibility`` is the literal string
-    ``'public'`` on /library (the only visibility surfaced there);
-    /verifications carries the owner's actual visibility.
+    """Compact item for the verifications list endpoint and the public
+    library list. Slim shape — no ``url`` (reference by
+    ``verification_id``), no ``visibility`` (1.1.0).
     """
 
     verification_id: str = ""
-    url: str = ""
     claim: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
@@ -169,7 +168,6 @@ class VerificationListItem(_Lax):
     executive_summary: str = ""
     created_at: str | None = None
     modified_at: str | None = None
-    visibility: str = ""
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
 

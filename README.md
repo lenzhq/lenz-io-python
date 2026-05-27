@@ -83,7 +83,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic).
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification.
-- **`client.verifications.{list,get,delete,set_visibility,related}(...)`** → manage past verifications. `get` accepts anon callers and returns any non-hidden public claim.
+- **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** → browse the public catalog (no API key needed).
 - **`client.usage()`** → credits and rate-limit remaining.
 

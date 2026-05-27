@@ -34,7 +34,7 @@ Shape (four-primitive ladder + the supporting reads):
 
     # Resource namespaces
     client.verifications.list()
-    client.verifications.get(id) / delete(id) / set_visibility(id, "public")
+    client.verifications.get(id) / delete(id)
     client.ask.history(id) / send(id, message=...) / reset(id)
     client.library.list()
     client.usage()
@@ -125,12 +125,11 @@ class VerifyBatchItem(TypedDict, total=False):
     language: str
     source_url: str
     webhook_url: str
-    visibility: str
     idempotency_key: str
 
 
 class _VerificationsNamespace:
-    """``client.verifications.{list,get,delete,set_visibility,related}``."""
+    """``client.verifications.{list,get,delete,related}``."""
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
@@ -165,14 +164,6 @@ class _VerificationsNamespace:
             if exc.status_code == 404:
                 return True
             raise
-
-    def set_visibility(self, verification_id: str, visibility: str) -> dict[str, Any]:
-        body = self._p._request(
-            "PATCH",
-            f"/verifications/{verification_id}/visibility",
-            json={"visibility": visibility},
-        )
-        return body  # {"ok": True, "visibility": "public"}
 
     def related(self, verification_id: str, *, limit: int = 5) -> RelatedVerifications:
         """Return public verifications semantically related to this one.
@@ -332,7 +323,6 @@ class Lenz:
         *,
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
@@ -346,7 +336,6 @@ class Lenz:
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
-            visibility=visibility,
             language=language,
             idempotency_key=idempotency_key,
         )
@@ -409,7 +398,6 @@ class Lenz:
         *,
         source_url: str = "",
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
@@ -438,7 +426,6 @@ class Lenz:
             claim=claim,
             source_url=source_url,
             webhook_url=webhook_url,
-            visibility=visibility,
             language=language,
             idempotency_key=key,
         )
@@ -509,7 +496,6 @@ class Lenz:
         text: str = "",
         source_url: str = "",
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
@@ -517,7 +503,6 @@ class Lenz:
             "text": claim or text,
             "source_url": source_url,
             "webhook_url": webhook_url,
-            "visibility": visibility,
         }
         # Omit-when-empty so existing English callers keep byte-identical
         # request bodies (no extra "language": "" key).
@@ -534,19 +519,16 @@ class Lenz:
         *,
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
-        # `visibility` (and `webhook_url`, `language`) here are batch-wide
-        # defaults; any per-item value on a claim dict overrides them
-        # server-side. Per-item items are validated as plain dicts at
-        # runtime — the ``VerifyBatchItem`` TypedDict is purely for IDE
-        # autocompletion (revised SDK plan decision 1C — no Pydantic
-        # coercion, keep the runtime contract a plain dict).
+        # ``webhook_url`` and ``language`` are batch-wide defaults; any
+        # per-item value on a claim dict overrides them server-side.
+        # Per-item items are validated as plain dicts at runtime — the
+        # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
+        # (revised SDK plan decision 1C — no Pydantic coercion, keep the
+        # runtime contract a plain dict).
         payload: dict[str, Any] = {"claims": list(claims), "webhook_url": webhook_url}
-        if visibility:
-            payload["visibility"] = visibility
         if language:
             payload["language"] = language
         headers = {}

@@ -6,6 +6,37 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-05-28
+
+API privacy redesign. The server now treats every API claim as private
+by default and never leaks another customer's verification_id back on
+a cache-hit. SDK changes align the typed surface with the new server
+contract.
+
+### Removed
+- `Verification.url`, `Verification.visibility` — API claims are
+  private and referenced by `verification_id` only. Cache-hit on
+  someone else's claim is transparent: the customer always sees their
+  own `verification_id`.
+- `VerificationListItem.url`, `VerificationListItem.visibility` —
+  same reasoning at the list-item layer.
+- `client.verifications.set_visibility(...)` method — the underlying
+  endpoint is gone. Accessing the attribute raises `AttributeError`.
+- `visibility` kwarg from `verify`, `verify_batch`, `verify_and_wait`
+  — server rejects it as unknown.
+
+### Migration
+If you were reading `verification.url`, the URL is no longer part of
+the API surface. If you need to link to a verification, use the
+`verification_id` directly (e.g. construct your own deep-link in your
+app, or fetch and render the verdict in-app). `verification.visibility`
+was always `'private'` for any API-created claim — the field had zero
+information value and is now removed.
+
+If you were calling `client.verifications.set_visibility(...)`,
+remove those calls. API claims are private; there's no public-facing
+surface to flip to.
+
 ## [1.0.2] — 2026-05-27
 
 ### Fixed

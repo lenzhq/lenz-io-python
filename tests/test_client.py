@@ -124,26 +124,15 @@ class TestVerify:
         assert b.batch_id == "batch_1"
         assert len(b.items) == 2
 
-    def test_verify_batch_visibility_default_in_request_body(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
-            client.verify_batch(claims=[{"text": "a"}, {"text": "b"}], visibility="public")
-        import json
-
-        body = json.loads(route.calls.last.request.content)
-        # Batch-level visibility lands at the top of the body; per-item
-        # values can still override server-side.
-        assert body["visibility"] == "public"
-
-    def test_verify_batch_omits_visibility_when_unset(self, client):
+    def test_verify_batch_does_not_send_visibility(self, client):
+        """1.1.0: API claims are private by default. The SDK no longer
+        sends a ``visibility`` field — server rejects it anyway."""
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
             client.verify_batch(claims=[{"text": "a"}])
         import json
 
         body = json.loads(route.calls.last.request.content)
-        # When visibility is left empty, we don't send it — server applies
-        # the user's account default.
         assert "visibility" not in body
 
     def test_extract_returns_identified_claims(self, client):
@@ -320,16 +309,6 @@ class TestVerifyAndWait:
             client.verify_and_wait(claim="x", timeout=5, idempotency_key="my-key")
         assert submit.calls.last.request.headers["Idempotency-Key"] == "my-key"
 
-    def test_visibility_passed_through_to_submit_body(self, client):
-        import json
-
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
-            client.verify_and_wait(claim="x", timeout=5, visibility="private")
-        body = json.loads(submit.calls.last.request.content)
-        assert body["visibility"] == "private"
-
     def test_idempotency_off_when_explicitly_disabled(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
@@ -440,11 +419,10 @@ class TestVerifications:
             r.delete("/verifications/vid_1").respond(404, json={"detail": "not found"})
             assert client.verifications.delete("vid_1") is True
 
-    def test_set_visibility(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.patch("/verifications/vid_1/visibility").respond(200, json={"ok": True, "visibility": "public"})
-            out = client.verifications.set_visibility("vid_1", "public")
-        assert out == {"ok": True, "visibility": "public"}
+    def test_set_visibility_method_removed_in_1_1_0(self, client):
+        """1.1.0: API claims are always private. The set_visibility
+        method was removed; accessing it raises AttributeError."""
+        assert not hasattr(client.verifications, "set_visibility")
 
     def test_related_returns_typed_items(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
