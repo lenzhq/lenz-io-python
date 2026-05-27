@@ -176,6 +176,35 @@ default, so a network drop after submit doesn't spawn a duplicate verification
 or charge a second credit. Override with `idempotency_key="..."` to pin a
 specific key, or `idempotency=False` to opt out.
 
+## Multi-language output
+
+The Lenz API returns prose fields (atomic claim, executive summary, debate, panel
+reasoning) in any of 12 languages. Pass `language=` on `verify`, `verify_and_wait`,
+`verify_batch`, `assess`, `extract`, or `ask.send`. Verdict labels stay English
+regardless of language.
+
+```python
+v = client.verify_and_wait(
+    claim="La Tierra es plana",
+    language="es",                 # Spanish output
+)
+print(v.verdict, v.language)
+# False es
+```
+
+Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`, `nl`, `sv`, `da`,
+`no`, `fi`, `bg`. Per-item override on `verify_batch`:
+
+```python
+batch = client.verify_batch(
+    claims=[
+        {"text": "Coffee causes cancer."},                    # en (batch default)
+        {"text": "El café causa cáncer.", "language": "es"},  # overrides
+    ],
+    language="en",
+)
+```
+
 ## Configuration
 
 ```python

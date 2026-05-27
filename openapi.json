@@ -1,4 +1,3 @@
-
 {
   "openapi": "3.1.0",
   "info": {
@@ -124,7 +123,7 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\nprint(v.verdict, v.lenz_score)\n# false 2.0\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\n# Add language=\"es\" for Spanish output (12 languages supported).\nprint(v.verdict, v.lenz_score)\n# false 2.0\n"
           },
           {
             "lang": "TypeScript",
@@ -181,7 +180,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessOut"
+                }
+              }
+            }
           }
         },
         "description": "Submit text for fast verdict via 3-model panel (sync).\n\nReturns a per-atomic-claim verdict array in ~5-10 seconds. Cheaper\nand faster than ``POST /verify``; uses 3 frontier models in\nparallel and skips the research/debate/adjudication pipeline.\n\nSmart-routed: time-sensitive claims (events from the past ~6\nmonths) get a retrieval-grounded panel; evergreen claims get a\nparametric panel.\n\nCache lookup chain: existing Claim row first (deep /verify\nresult), then Assessment row (prior /assess verdict). Both honor a\n6h staleness rule for time-sensitive claims.",
@@ -201,6 +207,16 @@
         "security": [
           {
             "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nout = client.assess(text=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" for Spanish verdict text; verdict labels stay English.\nfor c in out.claims:\n    print(c.claim, \"\u2192\", c.verdict, c.confidence)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.assess({\n  text: \"Coffee causes cancer and the earth is flat.\",\n});\nout.claims.forEach(c => console.log(c.claim, \"\u2192\", c.verdict, c.confidence));\n"
           }
         ]
       }
@@ -237,7 +253,7 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nclaims = client.extract(text=\"Coffee causes cancer and the earth is flat.\")\nfor c in claims.identified_claims:\n    print(c)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nclaims = client.extract(text=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" to return extracted claims in Spanish.\nfor c in claims.identified_claims:\n    print(c)\n"
           },
           {
             "lang": "TypeScript",
@@ -438,7 +454,7 @@
             "description": "OK"
           }
         },
-        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any claim whose ``visibility != 'private'`` AND\n  ``status != 'hidden'`` \u2014 i.e. ``visibility='public'`` AND\n  ``status`` in {pending, published, discoverable}.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private / hidden claims owned by someone else return 404.",
+        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any claim whose ``visibility != 'private'`` AND\n  ``status != 'hidden'`` \u2014 i.e. ``visibility='public'`` AND\n  ``status`` in {pending, published}.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private / hidden claims owned by someone else return 404.",
         "tags": [
           "Verifications"
         ]
@@ -779,12 +795,17 @@
               }
             ],
             "title": "Visibility"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
           }
         },
         "required": [
           "verification_id",
           "claim",
-          "domain"
+          "domain",
+          "language"
         ],
         "title": "VerificationListItemOut",
         "type": "object"
@@ -841,6 +862,11 @@
             "default": "",
             "title": "Webhook Url",
             "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
           }
         },
         "required": [
@@ -866,6 +892,11 @@
           "visibility": {
             "default": "",
             "title": "Visibility",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
             "type": "string"
           }
         },
@@ -895,6 +926,11 @@
             "default": "",
             "title": "Visibility",
             "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
+            "type": "string"
           }
         },
         "required": [
@@ -903,11 +939,82 @@
         "title": "VerifyBatchItemIn",
         "type": "object"
       },
+      "AssessClaimOut": {
+        "description": "Per-claim entry inside an ``AssessOut.claims`` list.\n\nDeliberately minimal \u2014 no model_votes, no panel identity, no\nsource/cache-provenance, no internal confidence label. The\n``verification_url`` is the SDK's signal that a deep payload exists\nfor this claim; otherwise this row is the entire answer.\n\nSame field vocabulary as ``ClaimDetailOut`` (``claim``, ``verdict``,\n``confidence``); /assess just omits ``lenz_score`` (no deep score\nis computed at this tier). ``language`` echoes the requested\noutput language so SDK consumers can route per-claim text in\nbatch responses where items may have different languages.",
+        "properties": {
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "title": "Confidence",
+            "type": "string"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          }
+        },
+        "required": [
+          "claim",
+          "language",
+          "verdict",
+          "confidence"
+        ],
+        "title": "AssessClaimOut",
+        "type": "object"
+      },
+      "AssessOut": {
+        "description": "Response body for ``POST /assess``.",
+        "properties": {
+          "claims": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssessClaimOut"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "title": "AssessOut",
+        "type": "object"
+      },
       "AssessIn": {
         "description": "Request body for ``POST /assess``.",
         "properties": {
           "text": {
             "title": "Text",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
             "type": "string"
           }
         },
@@ -921,6 +1028,11 @@
         "properties": {
           "text": {
             "title": "Text",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
             "type": "string"
           }
         },
@@ -1025,6 +1137,11 @@
         "properties": {
           "message": {
             "title": "Message",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "title": "Language",
             "type": "string"
           }
         },
@@ -1259,11 +1376,16 @@
             ],
             "default": null,
             "title": "Visibility"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
           }
         },
         "required": [
           "verification_id",
-          "claim"
+          "claim",
+          "language"
         ],
         "title": "ClaimDetailOut",
         "type": "object"

@@ -1,5 +1,20 @@
 """Public Lenz client — the ergonomic top-level surface.
 
+Multi-language SDK convention:
+* Request methods (verify, assess, extract, ask, …) take ``language=''``
+  as their default. Sending an empty string means "do NOT include the
+  field in the request body" — preserves byte-identical behavior for
+  existing English callers. Set ``language='es'`` (or any of the 12
+  supported codes) to receive prose fields in that language.
+* Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
+  expose ``language`` populated by the server. Verdict / domain / status
+  enum values stay English regardless of language; only free-form prose
+  (atomic_claim, executive_summary, audit text) follows the request.
+* Mixing the two (e.g. ``language='en'`` on a request) would send an
+  extra ``"language": "en"`` key on every English call — breaks the
+  byte-identical English path. The empty-default-then-omit convention
+  exists precisely to avoid that.
+
 Shape (four-primitive ladder + the supporting reads):
 
     from lenz_io import Lenz
@@ -46,7 +61,7 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 
@@ -90,6 +105,28 @@ POLL_BACKOFF_CAP = 10.0
 
 def _user_agent() -> str:
     return f"lenz-io-python/{__version__} (httpx {httpx.__version__})"
+
+
+class VerifyBatchItem(TypedDict, total=False):
+    """Per-item shape for ``verify_batch``.
+
+    All fields optional — callers can pass any subset. Type-only:
+    the SDK accepts plain dicts at runtime and does no Pydantic
+    coercion. The TypedDict exists purely so IDEs autocomplete the
+    per-item keys (``text``, ``language``, …).
+
+    Precedence on conflicting language: per-item ``language`` overrides
+    the batch-wide ``language`` kwarg on ``verify_batch``, which overrides
+    the implicit English default. The SDK forwards both verbatim; the
+    server is authoritative on the merge.
+    """
+
+    text: str
+    language: str
+    source_url: str
+    webhook_url: str
+    visibility: str
+    idempotency_key: str
 
 
 class _VerificationsNamespace:
@@ -168,11 +205,20 @@ class _AskNamespace:
         body = self._p._request("GET", f"/ask/{verification_id}")
         return AskHistory.model_validate(body)
 
-    def send(self, verification_id: str, *, message: str) -> AskReply:
+    def send(self, verification_id: str, *, message: str, language: str = "") -> AskReply:
+        """Send a follow-up question on an existing verification.
+
+        ``language`` (optional) overrides the claim's stored language for
+        this single reply. Omit to let the server use the claim's
+        ``language`` as default — that's the typical case.
+        """
+        payload: dict[str, Any] = {"message": message}
+        if language:
+            payload["language"] = language
         body = self._p._request(
             "POST",
             f"/ask/{verification_id}",
-            json={"message": message},
+            json=payload,
         )
         return AskReply.model_validate(body)
 
@@ -272,25 +318,49 @@ class Lenz:
 
     # ── marquee verbs (top-level shortcuts) ──
 
-    def verify(self, claim: str, **kwargs: Any) -> TaskAccepted:
+    def verify(self, claim: str, *, language: str = "", **kwargs: Any) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
-        """
-        return self._verify_submit(claim=claim, **kwargs)
 
-    def verify_batch(self, **kwargs: Any) -> BatchAccepted:
+        ``language`` (optional): output language for the verification's
+        prose fields. See module docstring for supported codes.
+        """
+        return self._verify_submit(claim=claim, language=language, **kwargs)
+
+    def verify_batch(
+        self,
+        *,
+        claims: list[VerifyBatchItem | dict[str, Any]],
+        webhook_url: str = "",
+        visibility: str = "",
+        language: str = "",
+        idempotency_key: str | None = None,
+    ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
         per-claim ``task_id``s. Each item has its own lifecycle and webhook.
-        """
-        return self._verify_batch(**kwargs)
 
-    def extract(self, **kwargs: Any) -> ExtractedClaims:
+        ``language`` (optional): batch-wide output-language default. Each
+        item dict may set its own ``language`` key to override the
+        batch-wide value — server is authoritative on the merge.
+        """
+        return self._verify_batch(
+            claims=claims,
+            webhook_url=webhook_url,
+            visibility=visibility,
+            language=language,
+            idempotency_key=idempotency_key,
+        )
+
+    def extract(self, *, text: str, language: str = "") -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/key/day.
-        """
-        return self._extract(**kwargs)
 
-    def assess(self, *, text: str) -> AssessResponse:
+        ``language`` (optional): return extracted claims in the target
+        language. Domain / status enums stay English.
+        """
+        return self._extract(text=text, language=language)
+
+    def assess(self, *, text: str, language: str = "") -> AssessResponse:
         """Fast verdict via a 3-model frontier panel. Sync, ~5-10s.
 
         Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
@@ -304,10 +374,16 @@ class Lenz:
         are worth re-running through ``verify_and_wait`` for the deep
         7-model pipeline with citations.
 
+        ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
+        'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg'`` to receive
+        the claim text in that language. Verdict enums always English.
+        Empty string omits the field from the request body — preserves
+        byte-identical behavior for existing English callers.
+
         Paid quota — see ``client.usage()``. Quota debits per atomic
         claim that framing produces (multiclaim inputs consume N units).
         """
-        return self._assess(text=text)
+        return self._assess(text=text, language=language)
 
     def select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
         """Resolve a needs-input interrupt by selecting / clarifying the claim.
@@ -334,6 +410,7 @@ class Lenz:
         source_url: str = "",
         webhook_url: str = "",
         visibility: str = "",
+        language: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -362,6 +439,7 @@ class Lenz:
             source_url=source_url,
             webhook_url=webhook_url,
             visibility=visibility,
+            language=language,
             idempotency_key=key,
         )
         task_id = accepted.task_id
@@ -432,14 +510,19 @@ class Lenz:
         source_url: str = "",
         webhook_url: str = "",
         visibility: str = "",
+        language: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
-        payload = {
+        payload: dict[str, Any] = {
             "text": claim or text,
             "source_url": source_url,
             "webhook_url": webhook_url,
             "visibility": visibility,
         }
+        # Omit-when-empty so existing English callers keep byte-identical
+        # request bodies (no extra "language": "" key).
+        if language:
+            payload["language"] = language
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
@@ -449,28 +532,41 @@ class Lenz:
     def _verify_batch(
         self,
         *,
-        claims: list[dict[str, Any]],
+        claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         visibility: str = "",
+        language: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
-        # `visibility` (and `webhook_url`) here are batch-wide defaults; any
-        # per-item value on a claim dict overrides them server-side.
-        payload: dict[str, Any] = {"claims": claims, "webhook_url": webhook_url}
+        # `visibility` (and `webhook_url`, `language`) here are batch-wide
+        # defaults; any per-item value on a claim dict overrides them
+        # server-side. Per-item items are validated as plain dicts at
+        # runtime — the ``VerifyBatchItem`` TypedDict is purely for IDE
+        # autocompletion (revised SDK plan decision 1C — no Pydantic
+        # coercion, keep the runtime contract a plain dict).
+        payload: dict[str, Any] = {"claims": list(claims), "webhook_url": webhook_url}
         if visibility:
             payload["visibility"] = visibility
+        if language:
+            payload["language"] = language
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         body = self._request("POST", "/verify/batch", json=payload, headers=headers)
         return BatchAccepted.model_validate(body)
 
-    def _extract(self, *, text: str) -> ExtractedClaims:
-        body = self._request("POST", "/extract", json={"text": text})
+    def _extract(self, *, text: str, language: str = "") -> ExtractedClaims:
+        payload: dict[str, Any] = {"text": text}
+        if language:
+            payload["language"] = language
+        body = self._request("POST", "/extract", json=payload)
         return ExtractedClaims.model_validate(body)
 
-    def _assess(self, *, text: str) -> AssessResponse:
-        body = self._request("POST", "/assess", json={"text": text})
+    def _assess(self, *, text: str, language: str = "") -> AssessResponse:
+        payload: dict[str, Any] = {"text": text}
+        if language:
+            payload["language"] = language
+        body = self._request("POST", "/assess", json=payload)
         return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
@@ -564,4 +660,4 @@ def _retry_sleep(attempt: int) -> float:
     return RETRY_BACKOFF[-1]
 
 
-__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "Lenz"]
+__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "Lenz", "VerifyBatchItem"]

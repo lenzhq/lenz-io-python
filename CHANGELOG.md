@@ -7,6 +7,16 @@ All notable changes to this SDK are documented here. Format follows
 ## [Unreleased]
 
 ### Added
+- **Multi-language API support** (12 languages). Optional `language=` kwarg on
+  `verify`, `verify_and_wait`, `verify_batch`, `assess`, `extract`, and
+  `ask.send`. Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`,
+  `nl`, `sv`, `da`, `no`, `fi`, `bg`. Verdict / domain / status enum values
+  stay English regardless of language; only free-form prose follows the request.
+- `VerifyBatchItem` TypedDict — IDE-only type hint for per-item shapes on
+  `verify_batch`; runtime still accepts plain dicts (no Pydantic coercion).
+- `language: str` field on `Verification`, `VerificationListItem`,
+  `LibraryItem`, and `AssessClaim` response models. Defaults to `'en'` for
+  resilience against older payloads that omit the field.
 - `client.assess(text=...)` — new sync verb that returns a fast 3-model
   panel verdict in ~5-10s. Mirrors the new `POST /api/v1/assess` server
   endpoint.

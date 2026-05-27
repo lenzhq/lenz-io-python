@@ -143,6 +143,10 @@ class Verification(_Lax):
     created_at: str | None = None
     modified_at: str | None = None
     visibility: str | None = None
+    # Output language (ISO 639-1). Always populated by the server when
+    # the SDK is fresh; defaulted to ``'en'`` for resilience against
+    # older cached payloads that lack the field.
+    language: str = "en"
 
 
 class VerificationListItem(_Lax):
@@ -166,6 +170,8 @@ class VerificationListItem(_Lax):
     created_at: str | None = None
     modified_at: str | None = None
     visibility: str = ""
+    # Output language (ISO 639-1). See ``Verification.language``.
+    language: str = "en"
 
 
 class VerificationList(_Lax):
@@ -223,6 +229,9 @@ class AssessClaim(_Lax):
     """
 
     claim: str = ""
+    # Output language (ISO 639-1). Echoes the language requested on the
+    # call, or ``'en'`` when unspecified. Verdict enums always English.
+    language: str = "en"
     verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
