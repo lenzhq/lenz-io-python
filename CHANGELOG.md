@@ -6,6 +6,24 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.0.2] — 2026-05-27
+
+### Fixed
+- `AskReply` contract now matches the server. Pre-1.0.2 the model declared
+  a single `reply: str` field that **never matched the wire** — the server
+  always returned `{role, content, created_at}`, and the SDK's `_Lax`
+  base swallowed those as extras. Reading `reply.content` worked at
+  runtime via attribute fall-through; reading `reply.reply` silently
+  returned `""`. 1.0.2 makes the typed surface match reality:
+  `AskReply.role`, `AskReply.content`, `AskReply.created_at`.
+
+### Migration
+If your code uses `.reply`, switch to `.content` — it's the same data
+that was already coming over the wire, just now properly typed. Any
+1.0.x code reading `.reply` was always getting an empty string anyway,
+so functional impact is limited to "code that errored silently now
+errors loudly at type-check time."
+
 ## [1.0.1] — 2026-05-27
 
 ### Fixed

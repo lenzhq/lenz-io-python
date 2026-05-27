@@ -306,9 +306,19 @@ class AskHistory(_Lax):
 
 
 class AskReply(_Lax):
-    """Returned by ``POST /ask/{verification_id}``."""
+    """Returned by ``POST /ask/{verification_id}``.
 
-    reply: str = ""
+    Server actually returns ``{role, content, created_at}``. Pre-1.0.2 the
+    SDK declared a single ``reply`` field that never matched the wire — it
+    silently returned ``""`` because ``_Lax(extra='allow')`` swallowed the
+    real ``content`` field as an extra attribute. ``reply.content`` worked
+    at runtime via attribute access, but the typed surface didn't show it.
+    1.0.2 aligns the model with the server contract.
+    """
+
+    role: str = ""  # 'expert' on every reply (the assistant turn)
+    content: str = ""  # the reply text
+    created_at: str = ""
 
 
 __all__ = [

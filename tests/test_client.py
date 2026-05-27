@@ -521,10 +521,39 @@ class TestAsk:
         assert h.messages[1].content == "because…"
 
     def test_send(self, client):
+        # Server returns {role, content, created_at} — confirmed against
+        # lenz/api/public_authed.py:1804. Pre-1.0.2 the mock used
+        # `{"reply": "..."}` and the SDK declared `.reply: str`; both were
+        # documentation drift away from the wire format, but the test
+        # passed because the mock matched the (wrong) model.
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.post("/ask/vid_1").respond(200, json={"reply": "..."})
+            r.post("/ask/vid_1").respond(
+                200,
+                json={
+                    "role": "expert",
+                    "content": "because the photoelectric effect…",
+                    "created_at": "2026-05-22T12:00:05Z",
+                },
+            )
             f = client.ask.send("vid_1", message="why?")
-        assert f.reply == "..."
+        assert f.role == "expert"
+        assert f.content == "because the photoelectric effect…"
+        assert f.created_at == "2026-05-22T12:00:05Z"
+
+    def test_send_legacy_reply_attr_gone(self):
+        # REGRESSION: pre-1.0.2 `AskReply.reply` always returned `""`
+        # because the server never sends a `reply` key. Renamed to
+        # `content` in 1.0.2; the old name is no longer in the typed
+        # surface. This test pins the rename so a careless revert
+        # silently re-introducing `.reply` fails CI.
+        from lenz_io import AskReply
+
+        fields = set(AskReply.model_fields.keys())
+        assert "content" in fields, "AskReply.content must be the declared field"
+        assert "reply" not in fields, (
+            "AskReply.reply was removed in 1.0.2 — it was always empty "
+            "because the server returns `content`, not `reply`."
+        )
 
     def test_reset(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
