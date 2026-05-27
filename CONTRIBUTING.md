@@ -44,6 +44,25 @@ a staging URL via `LENZ_BASE_URL`) and is opt-in via the `smoke` marker.
 ruff check . && ruff format --check . && mypy src/lenz_io
 ```
 
+## OpenAPI snapshot
+
+This SDK is **hand-written**, not generated. The committed `openapi.json`
+is a documentation snapshot — useful for inspecting the typed API
+surface, but no code is generated from it. Refresh it after any
+server-side schema change:
+
+```bash
+LENZ_REPO=/path/to/Lenz make regen
+git diff openapi.json   # confirm additive
+```
+
+**Cross-SDK invariant**: the Python SDK and the Node SDK both keep a
+local copy of `openapi.json`. When you refresh one, regen the sibling
+SDK in the same commit / PR so the two snapshots stay byte-identical
+(both are copies of the same upstream Ninja-emitted spec). Drift
+between the two will silently confuse customers comparing typed
+shapes across languages.
+
 ## Compatibility promise
 
 We follow [SemVer](https://semver.org/). Breaking changes to public
