@@ -306,19 +306,17 @@ class AskHistory(_Lax):
 class AskReply(_Lax):
     """Returned by ``POST /ask/{verification_id}``.
 
-    ``content`` is the assistant's reply text. It uses a small markdown
-    subset that the chat model produces consistently:
+    ``content`` is the assistant's reply text in a small markdown
+    subset:
 
     - ``**bold**`` and ``*italic*``
     - ``- `` or ``* `` bullet lists
     - Blank-line paragraph breaks; single newlines inside a paragraph
       mean line break
 
-    If you're rendering to a UI, either pass it through a minimal
-    markdown renderer (the subset above is enough) or display it
-    verbatim. Anything beyond the subset surfaces as literal text
-    rather than malformed HTML. See
-    https://lenz.io/docs/quickstart#ask-reply-format.
+    The model only produces these — no headings, no tables, no code
+    blocks. Pass it through any markdown library or display it
+    verbatim. See https://lenz.io/docs/quickstart#ask-reply-format.
 
     Pre-1.0.2 the SDK declared a single ``reply`` field that never
     matched the wire — the server has always returned
