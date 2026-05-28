@@ -306,16 +306,27 @@ class AskHistory(_Lax):
 class AskReply(_Lax):
     """Returned by ``POST /ask/{verification_id}``.
 
-    Server actually returns ``{role, content, created_at}``. Pre-1.0.2 the
-    SDK declared a single ``reply`` field that never matched the wire — it
-    silently returned ``""`` because ``_Lax(extra='allow')`` swallowed the
-    real ``content`` field as an extra attribute. ``reply.content`` worked
-    at runtime via attribute access, but the typed surface didn't show it.
-    1.0.2 aligns the model with the server contract.
+    ``content`` is the assistant's reply text. It uses a small markdown
+    subset that the chat model produces consistently:
+
+    - ``**bold**`` and ``*italic*``
+    - ``- `` or ``* `` bullet lists
+    - Blank-line paragraph breaks; single newlines inside a paragraph
+      mean line break
+
+    If you're rendering to a UI, either pass it through a minimal
+    markdown renderer (the subset above is enough) or display it
+    verbatim. Anything beyond the subset surfaces as literal text
+    rather than malformed HTML. See
+    https://lenz.io/docs/quickstart#ask-reply-format.
+
+    Pre-1.0.2 the SDK declared a single ``reply`` field that never
+    matched the wire — the server has always returned
+    ``{role, content, created_at}``. 1.0.2 aligned the typed surface.
     """
 
     role: str = ""  # 'expert' on every reply (the assistant turn)
-    content: str = ""  # the reply text
+    content: str = ""  # markdown-subset prose (see class docstring)
     created_at: str = ""
 
 
