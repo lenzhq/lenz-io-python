@@ -6,6 +6,33 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-06-07
+
+Polling ergonomics. The async path (`verify()` → poll) is now first-class and
+discoverable, not just a webhook fallback. Parallel verification (unlocked by the
+server dropping its per-user single-flight lock) gets a dedicated batch-and-wait
+helper.
+
+### Added
+- `client.wait(task)` → `Verification`. Blocks on an already-submitted task until
+  it terminates. Accepts a `task_id` string **or** a `TaskAccepted`, so
+  `client.wait(client.verify(claim=...))` reads naturally. `verify_and_wait` is now
+  `wait(verify(...))` internally (behavior unchanged).
+- `client.verify_batch_and_wait(claims=[...])` → `list[BatchItemResult]`. Fans out a
+  batch and polls every item to completion, returning one result per claim in input
+  order. Never raises on a per-item outcome — inspect each `BatchItemResult.status`
+  (`completed` | `needs_input` | `failed` | `timeout`).
+- `BatchItemResult` model (`task_id`, `claim_text`, `status`, `verification`,
+  `status_detail`).
+- `TaskStatus.error` — the server's failed-status responses carry the diagnostic
+  under `error`; it's now a typed field.
+
+### Fixed
+- Failed verifications now surface the real diagnostic. The server sends
+  `{"status": "failed", "error": "..."}`, but the SDK only read
+  `failure_reason`/`failure_detail`, so `LenzPipelineError` reported "unknown". The
+  failed path now reads `error or failure_detail or failure_reason`.
+
 ## [1.1.0] — 2026-05-28
 
 API privacy redesign. The server now treats every API claim as private

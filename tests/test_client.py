@@ -19,6 +19,7 @@ from lenz_io import (
     LenzNeedsInputError,
     LenzPipelineError,
     LenzTimeoutError,
+    TaskAccepted,
 )
 from lenz_io.client import API_VERSION
 
@@ -356,6 +357,141 @@ class TestVerifyAndWait:
             with pytest.raises(LenzTimeoutError) as ei:
                 client.verify_and_wait(claim="x", timeout=0.001)
         assert ei.value.task_id == "tsk_slow"
+
+    def test_failed_surfaces_error_wire_field(self, client):
+        # Server sends the diagnostic under ``error`` (not failure_reason).
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            r.get("/verify/status/t").respond(
+                200, json={"status": "failed", "error": "Pipeline stopped at: research_empty"}
+            )
+            with pytest.raises(LenzPipelineError) as ei:
+                client.verify_and_wait(claim="x", timeout=5)
+        assert "research_empty" in str(ei.value)
+
+
+# ─────────────────────────────────────────────────── wait ──
+
+
+class TestWait:
+    def test_accepts_task_id_string(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            v = client.wait("t", timeout=5)
+        assert v.verdict == "True"
+
+    def test_accepts_task_accepted_object(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            v = client.wait(TaskAccepted(task_id="t", claim_text="x"), timeout=5)
+        assert v.lenz_score == 8
+
+    def test_empty_task_id_raises_value_error(self, client):
+        with pytest.raises(ValueError):
+            client.wait(TaskAccepted())  # task_id defaults to ""
+
+    def test_polls_until_completed(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json={"status": "processing", "progress": {}}),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            v = client.wait("t", timeout=10)
+        assert v.verdict == "True"
+
+    def test_needs_input_raises(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(
+                200, json={"status": "needs_input", "reason": "multi_claim", "claims": []}
+            )
+            with pytest.raises(LenzNeedsInputError) as ei:
+                client.wait("t", timeout=5)
+        assert ei.value.kind == "multi_claim"
+
+    def test_completed_without_result_raises(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed"})
+            with pytest.raises(LenzPipelineError):
+                client.wait("t", timeout=5)
+
+    def test_timeout_raises(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "processing", "progress": {}})
+            with pytest.raises(LenzTimeoutError) as ei:
+                client.wait("t", timeout=0.001)
+        assert ei.value.task_id == "t"
+
+
+# ─────────────────────────────────────────────────── verify_batch_and_wait ──
+
+
+class TestVerifyBatchAndWait:
+    def test_all_complete_in_input_order(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=5)
+        assert [x.task_id for x in results] == ["t1", "t2"]
+        assert all(x.status == "completed" and x.verification is not None for x in results)
+
+    def test_mixed_outcomes(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [
+                        {"task_id": "t1", "claim_text": "a"},
+                        {"task_id": "t2", "claim_text": "b"},
+                        {"task_id": "t3", "claim_text": "c"},
+                    ],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(
+                200, json={"status": "needs_input", "reason": "multi_claim", "claims": []}
+            )
+            r.get("/verify/status/t3").respond(200, json={"status": "failed", "error": "research_empty"})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}, {"text": "c"}], timeout=5)
+        assert [x.status for x in results] == ["completed", "needs_input", "failed"]
+        assert results[1].status_detail is not None and results[1].status_detail.reason == "multi_claim"
+        assert results[2].status_detail is not None and results[2].status_detail.error == "research_empty"
+
+    def test_item_timeout(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(200, json={"status": "processing", "progress": {}})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=0.001)
+        by_id = {x.task_id: x for x in results}
+        assert by_id["t1"].status == "completed"
+        assert by_id["t2"].status == "timeout"
+        assert by_id["t2"].status_detail is None
+
+    def test_forwards_idempotency_key(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "t1", "claim_text": "a"}]}
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            client.verify_batch_and_wait(claims=[{"text": "a"}], idempotency_key="k1", timeout=5)
+        assert submit.calls.last.request.headers["Idempotency-Key"] == "k1"
 
 
 # ─────────────────────────────────────────────────── Resources ──

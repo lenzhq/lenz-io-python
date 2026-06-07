@@ -79,13 +79,50 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/key/day.
 - **`client.assess(text=...)`** → `AssessResponse`. Sync, ~5-10s, returns one entry per identified claim.
-- **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Pair with a webhook for the callback.
-- **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic).
+- **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
+- **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
+- **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
+- **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** → browse the public catalog (no API key needed).
 - **`client.usage()`** → credits and rate-limit remaining.
+
+## Polling without webhooks
+
+`verify()` returns immediately with a `task_id`; the pipeline runs async (~60-90s
+for a cold claim). You don't need webhooks to get the result — poll for it.
+
+The one-liner is `verify_and_wait()`. If you already hold a `task_id` (or want to
+submit and wait separately), use `wait()`:
+
+```python
+task = client.verify(claim="Sharks don't get cancer")   # async, returns a task_id
+verification = client.wait(task)                          # blocks until it lands
+print(verification.verdict, verification.lenz_score)
+```
+
+To run several claims in parallel, submit a batch and wait on all of them.
+`verify_batch_and_wait` returns one `BatchItemResult` per claim, in input order,
+and never raises on a single claim failing — inspect each item's `status`:
+
+```python
+results = client.verify_batch_and_wait(claims=[
+    {"text": "Sharks don't get cancer"},
+    {"text": "The Eiffel Tower is 330m tall"},
+])
+for r in results:
+    if r.status == "completed":
+        print(r.claim_text, "→", r.verification.verdict)
+    else:
+        print(r.claim_text, "→", r.status)   # needs_input | failed | timeout
+```
+
+Prefer **webhooks** for production async flows (no long-lived HTTP connection);
+prefer **polling** for scripts, notebooks, and request/response handlers where
+blocking is fine. If you want full control over the loop, call `get_status(task_id)`
+yourself — it's a single non-blocking poll.
 
 ## Response shape — the unified vocabulary
 
@@ -163,7 +200,11 @@ try:
 except LenzTimeoutError as exc:
     print("resume later via:", exc.task_id)
 
-# Later (different process / restart):
+# Later (different process / restart) — block on the same task_id:
+verification = client.wait("tsk_abc123")
+print(verification.verdict, verification.lenz_score)
+
+# ...or do a single non-blocking poll yourself:
 status = client.get_status("tsk_abc123")
 if status.status == "completed":
     print(status.result.verdict, status.result.lenz_score)

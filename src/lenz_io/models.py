@@ -18,7 +18,7 @@ Vocabulary (applies across every claim-shaped response):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -270,9 +270,36 @@ class TaskStatus(_Lax):
     claims: list[CandidateClaim] = Field(default_factory=list)
     candidates: list[str] = Field(default_factory=list)
     similar_claims: list[SimilarVerification] = Field(default_factory=list)
-    # failure branches
+    # failure branches. The server's failed response is
+    # ``{"status": "failed", "error": "..."}`` — ``error`` is the live wire
+    # field. ``failure_reason`` / ``failure_detail`` are kept for forward/back
+    # compatibility and other channels; read precedence is
+    # ``error or failure_detail or failure_reason``.
+    error: str = ""
     failure_reason: str = ""
     failure_detail: str = ""
+
+
+class BatchItemResult(_Lax):
+    """Per-item outcome from :meth:`Lenz.verify_batch_and_wait`.
+
+    A client-side composition type — NOT a wire shape (the server never emits
+    it, so it has no contract fixture). One entry per task that
+    ``POST /verify/batch`` returned, in input order.
+
+    ``status`` is a client-side rollup:
+
+    - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
+    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / candidates).
+    - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
+    - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
+    """
+
+    task_id: str = ""
+    claim_text: str = ""
+    status: Literal["completed", "needs_input", "failed", "timeout"]
+    verification: Verification | None = None
+    status_detail: TaskStatus | None = None
 
 
 class Usage(_Lax):
@@ -337,6 +364,7 @@ __all__ = [
     "Assessment",
     "Audit",
     "BatchAccepted",
+    "BatchItemResult",
     "CandidateClaim",
     "DebateSide",
     "EntityRef",
