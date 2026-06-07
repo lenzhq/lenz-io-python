@@ -28,13 +28,15 @@ Shape (four-primitive ladder + the supporting reads):
 
     # Other verify-family verbs
     v = client.verify(claim="...")          # async submit; returns task_id
+    result = client.wait(v)                  # block on a task_id / TaskAccepted
     batch = client.verify_batch(claims=[...])
-    status = client.get_status(task_id)
+    results = client.verify_batch_and_wait(claims=[...])   # submit + poll all
+    status = client.get_status(task_id)      # single non-blocking poll
     client.select(task_id, claim_index=0)
 
     # Resource namespaces
     client.verifications.list()
-    client.verifications.get(id) / delete(id) / set_visibility(id, "public")
+    client.verifications.get(id) / delete(id)
     client.ask.history(id) / send(id, message=...) / reset(id)
     client.library.list()
     client.usage()
@@ -79,6 +81,7 @@ from .models import (
     AskReply,
     AssessResponse,
     BatchAccepted,
+    BatchItemResult,
     ExtractedClaims,
     LibraryList,
     RelatedVerifications,
@@ -125,12 +128,11 @@ class VerifyBatchItem(TypedDict, total=False):
     language: str
     source_url: str
     webhook_url: str
-    visibility: str
     idempotency_key: str
 
 
 class _VerificationsNamespace:
-    """``client.verifications.{list,get,delete,set_visibility,related}``."""
+    """``client.verifications.{list,get,delete,related}``."""
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
@@ -165,14 +167,6 @@ class _VerificationsNamespace:
             if exc.status_code == 404:
                 return True
             raise
-
-    def set_visibility(self, verification_id: str, visibility: str) -> dict[str, Any]:
-        body = self._p._request(
-            "PATCH",
-            f"/verifications/{verification_id}/visibility",
-            json={"visibility": visibility},
-        )
-        return body  # {"ok": True, "visibility": "public"}
 
     def related(self, verification_id: str, *, limit: int = 5) -> RelatedVerifications:
         """Return public verifications semantically related to this one.
@@ -332,7 +326,6 @@ class Lenz:
         *,
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
@@ -346,7 +339,6 @@ class Lenz:
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
-            visibility=visibility,
             language=language,
             idempotency_key=idempotency_key,
         )
@@ -409,7 +401,6 @@ class Lenz:
         *,
         source_url: str = "",
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
@@ -430,6 +421,10 @@ class Lenz:
         ``idempotency=True`` (default) auto-generates a key per call so a
         network drop after submit doesn't spawn a duplicate verification
         on retry. Customer can pin via ``idempotency_key="..."``.
+
+        Equivalent to ``wait(verify(claim, ...))`` — the idempotency-key
+        handling (auto-generate / pin / disable) lives here because
+        ``verify`` itself never generates one.
         """
         key = idempotency_key
         if key is None and idempotency:
@@ -438,61 +433,181 @@ class Lenz:
             claim=claim,
             source_url=source_url,
             webhook_url=webhook_url,
-            visibility=visibility,
             language=language,
             idempotency_key=key,
         )
-        task_id = accepted.task_id
-        logger.info("Submitted task: %s", task_id)
+        logger.info("Submitted task: %s", accepted.task_id)
+        return self.wait(accepted, timeout=timeout)
 
+    def wait(self, task: str | TaskAccepted, *, timeout: float = 120.0) -> Verification:
+        """Block until an already-submitted task terminates, then return its
+        ``Verification``.
+
+        ``task`` is a ``task_id`` string OR the ``TaskAccepted`` returned by
+        ``verify`` / ``select`` — so ``client.wait(client.verify(claim=...))``
+        reads naturally. Raises ``ValueError`` for an empty id,
+        ``LenzNeedsInputError`` / ``LenzPipelineError`` on terminal
+        non-success, and ``LenzTimeoutError`` if ``timeout`` elapses (the task
+        may still finish server-side — resume via ``get_status``).
+        """
+        task_id = task if isinstance(task, str) else task.task_id
+        if not task_id:
+            raise ValueError("wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
+        terminal, timed_out = self._poll_to_terminal([task_id], timeout)
+        if task_id in timed_out:
+            raise LenzTimeoutError(
+                message=f"wait timed out after {timeout}s",
+                cause="Pipeline still running server-side.",
+                fix=f"Resume via client.get_status('{task_id}') later.",
+                doc_url="https://lenz.io/docs/verify#timeout",
+                task_id=task_id,
+            )
+        return self._verification_from_terminal(terminal[task_id], task_id)
+
+    def verify_batch_and_wait(
+        self,
+        *,
+        claims: list[VerifyBatchItem | dict[str, Any]],
+        webhook_url: str = "",
+        language: str = "",
+        idempotency_key: str | None = None,
+        timeout: float = 180.0,
+    ) -> list[BatchItemResult]:
+        """Submit a batch and poll every item to a terminal state.
+
+        Returns one ``BatchItemResult`` per task the batch accepted, **in input
+        order**. Never raises on a per-item outcome — a claim that fails, pauses
+        for input, or times out becomes a ``BatchItemResult`` with the matching
+        ``status`` rather than an exception. (Transport/auth errors on the
+        initial submit still raise.)
+        """
+        accepted = self._verify_batch(
+            claims=claims,
+            webhook_url=webhook_url,
+            language=language,
+            idempotency_key=idempotency_key,
+        )
+        ids = [it.task_id for it in accepted.items if it.task_id]
+        terminal, timed_out = self._poll_to_terminal(ids, timeout)
+
+        results: list[BatchItemResult] = []
+        for it in accepted.items:  # preserve input order
+            status = terminal.get(it.task_id)
+            if not it.task_id or it.task_id in timed_out or status is None:
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
+            elif status.status == "completed" and status.result is not None:
+                results.append(
+                    BatchItemResult(
+                        task_id=it.task_id,
+                        claim_text=it.claim_text,
+                        status="completed",
+                        verification=status.result,
+                        status_detail=status,
+                    )
+                )
+            elif status.status == "needs_input":
+                results.append(
+                    BatchItemResult(
+                        task_id=it.task_id, claim_text=it.claim_text, status="needs_input", status_detail=status
+                    )
+                )
+            else:
+                # failed, or completed-without-result (treated as failed).
+                results.append(
+                    BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed", status_detail=status)
+                )
+        return results
+
+    # ── poll engine (shared by wait + verify_batch_and_wait) ──
+
+    def _poll_to_terminal(self, task_ids: list[str], timeout: float) -> tuple[dict[str, TaskStatus], set[str]]:
+        """Round-robin poll ``task_ids`` until each reaches a terminal state
+        (completed / needs_input / failed) or the deadline elapses.
+
+        Returns ``(terminal_by_id, timed_out_ids)``. A timed-out task has no
+        ``TaskStatus`` — ``"timeout"`` is a client-side concept, never a wire
+        status — so it lands in the second set, not the dict.
+
+        Ordering preserves the legacy ``verify_and_wait`` behavior: each round
+        polls every still-pending id once *before* the deadline check, so after
+        sleeping the remaining time we always poll once more and can succeed
+        just past the nominal deadline. The timeout is therefore approximate:
+        the final round finishes polling every pending id (bounded by the
+        per-request timeout + retries) before any still-pending ids are marked
+        timed out. Backoff reuses the existing 2/4/8/8…s sequence; the 10s cap
+        is currently unreachable and kept only to preserve identical timing.
+
+        A per-id poll that raises ``LenzError`` (e.g. a transport blip that
+        outlived ``_request``'s own retries) does not abort the other ids: that
+        id stays pending and is retried next round. A persistent error
+        therefore surfaces as a timeout once the deadline passes.
+        """
+        pending = list(task_ids)
+        terminal: dict[str, TaskStatus] = {}
+        timed_out: set[str] = set()
         deadline = time.monotonic() + timeout
         backoff_idx = 0
-        while True:
-            status = self._get_status(task_id)
-            if status.status == "completed":
-                if status.result is None:
-                    raise LenzPipelineError(
-                        message="Pipeline completed but the result is empty.",
-                        cause="Server reported status=completed without a result block.",
-                        fix="File an issue at https://github.com/lenzhq/lenz-io-python/issues with the Request ID.",
-                        doc_url="https://lenz.io/docs/errors",
-                        task_id=task_id,
-                    )
-                return status.result
-            if status.status == "needs_input":
-                raise LenzNeedsInputError(
-                    message=f"Pipeline paused: {status.reason}",
-                    cause="The verification needs caller input to proceed.",
-                    fix="Inspect the payload, then call client.select(task_id, claim_index=...) (or .text=...).",
-                    doc_url="https://lenz.io/docs/verify#needs-input",
-                    task_id=task_id,
-                    kind=status.reason,
-                    payload=status.model_dump(),
-                )
-            if status.status == "failed":
-                raise LenzPipelineError(
-                    message=f"Pipeline failed: {status.failure_reason or 'unknown'}",
-                    cause=status.failure_detail or status.failure_reason or "Unknown failure.",
-                    fix="Retry with a different claim, or check status.failure_reason for the diagnostic.",
-                    doc_url="https://lenz.io/docs/errors",
-                    task_id=task_id,
-                    failure_reason=status.failure_reason,
-                )
-
-            # processing — sleep + backoff
+        while pending:
+            still_pending: list[str] = []
+            for task_id in pending:
+                try:
+                    status = self._get_status(task_id)
+                except LenzError:
+                    # Don't let one id's poll failure abort the rest — retry it
+                    # next round (bounded by the deadline below).
+                    still_pending.append(task_id)
+                    continue
+                if status.status in ("completed", "needs_input", "failed"):
+                    terminal[task_id] = status
+                else:
+                    still_pending.append(task_id)
+            pending = still_pending
+            if not pending:
+                break
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise LenzTimeoutError(
-                    message=f"verify_and_wait timed out after {timeout}s",
-                    cause="Pipeline still running server-side.",
-                    fix=f"Resume via client.get_status('{task_id}') later.",
-                    doc_url="https://lenz.io/docs/verify#timeout",
-                    task_id=task_id,
-                )
+                timed_out.update(pending)
+                break
             sleep_for = min(POLL_BACKOFF[min(backoff_idx, len(POLL_BACKOFF) - 1)], POLL_BACKOFF_CAP)
             sleep_for = min(sleep_for, remaining)
             time.sleep(sleep_for)
             backoff_idx += 1
+        return terminal, timed_out
+
+    def _verification_from_terminal(self, status: TaskStatus, task_id: str) -> Verification:
+        """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
+        matching typed error. Shared by ``wait`` (and thus ``verify_and_wait``)."""
+        if status.status == "completed":
+            if status.result is None:
+                raise LenzPipelineError(
+                    message="Pipeline completed but the result is empty.",
+                    cause="Server reported status=completed without a result block.",
+                    fix="File an issue at https://github.com/lenzhq/lenz-io-python/issues with the Request ID.",
+                    doc_url="https://lenz.io/docs/errors",
+                    task_id=task_id,
+                )
+            return status.result
+        if status.status == "needs_input":
+            raise LenzNeedsInputError(
+                message=f"Pipeline paused: {status.reason}",
+                cause="The verification needs caller input to proceed.",
+                fix="Inspect the payload, then call client.select(task_id, claim_index=...) (or .text=...).",
+                doc_url="https://lenz.io/docs/verify#needs-input",
+                task_id=task_id,
+                kind=status.reason,
+                payload=status.model_dump(),
+            )
+        # failed. Server sends the diagnostic under ``error``; fall back to the
+        # legacy fields for resilience.
+        detail = status.error or status.failure_detail or status.failure_reason or "unknown"
+        raise LenzPipelineError(
+            message=f"Pipeline failed: {detail}",
+            cause=detail,
+            fix="Retry with a different claim, or check status.error for the diagnostic.",
+            doc_url="https://lenz.io/docs/errors",
+            task_id=task_id,
+            failure_reason=status.failure_reason,
+        )
 
     # ── account ──
 
@@ -509,7 +624,6 @@ class Lenz:
         text: str = "",
         source_url: str = "",
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
@@ -517,7 +631,6 @@ class Lenz:
             "text": claim or text,
             "source_url": source_url,
             "webhook_url": webhook_url,
-            "visibility": visibility,
         }
         # Omit-when-empty so existing English callers keep byte-identical
         # request bodies (no extra "language": "" key).
@@ -534,19 +647,16 @@ class Lenz:
         *,
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
-        visibility: str = "",
         language: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
-        # `visibility` (and `webhook_url`, `language`) here are batch-wide
-        # defaults; any per-item value on a claim dict overrides them
-        # server-side. Per-item items are validated as plain dicts at
-        # runtime — the ``VerifyBatchItem`` TypedDict is purely for IDE
-        # autocompletion (revised SDK plan decision 1C — no Pydantic
-        # coercion, keep the runtime contract a plain dict).
+        # ``webhook_url`` and ``language`` are batch-wide defaults; any
+        # per-item value on a claim dict overrides them server-side.
+        # Per-item items are validated as plain dicts at runtime — the
+        # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
+        # (revised SDK plan decision 1C — no Pydantic coercion, keep the
+        # runtime contract a plain dict).
         payload: dict[str, Any] = {"claims": list(claims), "webhook_url": webhook_url}
-        if visibility:
-            payload["visibility"] = visibility
         if language:
             payload["language"] = language
         headers = {}

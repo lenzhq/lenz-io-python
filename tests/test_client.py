@@ -19,6 +19,7 @@ from lenz_io import (
     LenzNeedsInputError,
     LenzPipelineError,
     LenzTimeoutError,
+    TaskAccepted,
 )
 from lenz_io.client import API_VERSION
 
@@ -124,26 +125,15 @@ class TestVerify:
         assert b.batch_id == "batch_1"
         assert len(b.items) == 2
 
-    def test_verify_batch_visibility_default_in_request_body(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
-            client.verify_batch(claims=[{"text": "a"}, {"text": "b"}], visibility="public")
-        import json
-
-        body = json.loads(route.calls.last.request.content)
-        # Batch-level visibility lands at the top of the body; per-item
-        # values can still override server-side.
-        assert body["visibility"] == "public"
-
-    def test_verify_batch_omits_visibility_when_unset(self, client):
+    def test_verify_batch_does_not_send_visibility(self, client):
+        """1.1.0: API claims are private by default. The SDK no longer
+        sends a ``visibility`` field — server rejects it anyway."""
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
             client.verify_batch(claims=[{"text": "a"}])
         import json
 
         body = json.loads(route.calls.last.request.content)
-        # When visibility is left empty, we don't send it — server applies
-        # the user's account default.
         assert "visibility" not in body
 
     def test_extract_returns_identified_claims(self, client):
@@ -320,16 +310,6 @@ class TestVerifyAndWait:
             client.verify_and_wait(claim="x", timeout=5, idempotency_key="my-key")
         assert submit.calls.last.request.headers["Idempotency-Key"] == "my-key"
 
-    def test_visibility_passed_through_to_submit_body(self, client):
-        import json
-
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
-            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
-            client.verify_and_wait(claim="x", timeout=5, visibility="private")
-        body = json.loads(submit.calls.last.request.content)
-        assert body["visibility"] == "private"
-
     def test_idempotency_off_when_explicitly_disabled(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
@@ -377,6 +357,141 @@ class TestVerifyAndWait:
             with pytest.raises(LenzTimeoutError) as ei:
                 client.verify_and_wait(claim="x", timeout=0.001)
         assert ei.value.task_id == "tsk_slow"
+
+    def test_failed_surfaces_error_wire_field(self, client):
+        # Server sends the diagnostic under ``error`` (not failure_reason).
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            r.get("/verify/status/t").respond(
+                200, json={"status": "failed", "error": "Pipeline stopped at: research_empty"}
+            )
+            with pytest.raises(LenzPipelineError) as ei:
+                client.verify_and_wait(claim="x", timeout=5)
+        assert "research_empty" in str(ei.value)
+
+
+# ─────────────────────────────────────────────────── wait ──
+
+
+class TestWait:
+    def test_accepts_task_id_string(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            v = client.wait("t", timeout=5)
+        assert v.verdict == "True"
+
+    def test_accepts_task_accepted_object(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            v = client.wait(TaskAccepted(task_id="t", claim_text="x"), timeout=5)
+        assert v.lenz_score == 8
+
+    def test_empty_task_id_raises_value_error(self, client):
+        with pytest.raises(ValueError):
+            client.wait(TaskAccepted())  # task_id defaults to ""
+
+    def test_polls_until_completed(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json={"status": "processing", "progress": {}}),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            v = client.wait("t", timeout=10)
+        assert v.verdict == "True"
+
+    def test_needs_input_raises(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(
+                200, json={"status": "needs_input", "reason": "multi_claim", "claims": []}
+            )
+            with pytest.raises(LenzNeedsInputError) as ei:
+                client.wait("t", timeout=5)
+        assert ei.value.kind == "multi_claim"
+
+    def test_completed_without_result_raises(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "completed"})
+            with pytest.raises(LenzPipelineError):
+                client.wait("t", timeout=5)
+
+    def test_timeout_raises(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(200, json={"status": "processing", "progress": {}})
+            with pytest.raises(LenzTimeoutError) as ei:
+                client.wait("t", timeout=0.001)
+        assert ei.value.task_id == "t"
+
+
+# ─────────────────────────────────────────────────── verify_batch_and_wait ──
+
+
+class TestVerifyBatchAndWait:
+    def test_all_complete_in_input_order(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=5)
+        assert [x.task_id for x in results] == ["t1", "t2"]
+        assert all(x.status == "completed" and x.verification is not None for x in results)
+
+    def test_mixed_outcomes(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [
+                        {"task_id": "t1", "claim_text": "a"},
+                        {"task_id": "t2", "claim_text": "b"},
+                        {"task_id": "t3", "claim_text": "c"},
+                    ],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(
+                200, json={"status": "needs_input", "reason": "multi_claim", "claims": []}
+            )
+            r.get("/verify/status/t3").respond(200, json={"status": "failed", "error": "research_empty"})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}, {"text": "c"}], timeout=5)
+        assert [x.status for x in results] == ["completed", "needs_input", "failed"]
+        assert results[1].status_detail is not None and results[1].status_detail.reason == "multi_claim"
+        assert results[2].status_detail is not None and results[2].status_detail.error == "research_empty"
+
+    def test_item_timeout(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").respond(200, json={"status": "processing", "progress": {}})
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=0.001)
+        by_id = {x.task_id: x for x in results}
+        assert by_id["t1"].status == "completed"
+        assert by_id["t2"].status == "timeout"
+        assert by_id["t2"].status_detail is None
+
+    def test_forwards_idempotency_key(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "t1", "claim_text": "a"}]}
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            client.verify_batch_and_wait(claims=[{"text": "a"}], idempotency_key="k1", timeout=5)
+        assert submit.calls.last.request.headers["Idempotency-Key"] == "k1"
 
 
 # ─────────────────────────────────────────────────── Resources ──
@@ -440,11 +555,10 @@ class TestVerifications:
             r.delete("/verifications/vid_1").respond(404, json={"detail": "not found"})
             assert client.verifications.delete("vid_1") is True
 
-    def test_set_visibility(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.patch("/verifications/vid_1/visibility").respond(200, json={"ok": True, "visibility": "public"})
-            out = client.verifications.set_visibility("vid_1", "public")
-        assert out == {"ok": True, "visibility": "public"}
+    def test_set_visibility_method_removed_in_1_1_0(self, client):
+        """1.1.0: API claims are always private. The set_visibility
+        method was removed; accessing it raises AttributeError."""
+        assert not hasattr(client.verifications, "set_visibility")
 
     def test_related_returns_typed_items(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
