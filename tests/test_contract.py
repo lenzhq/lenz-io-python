@@ -131,6 +131,7 @@ def _load(name: str) -> dict:
         ("assess_single_claim.json", AssessResponse),
         ("assess_multiclaim.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
+        ("verify_status_failed.json", TaskStatus),
         ("verifications_detail.json", Verification),
     ],
 )

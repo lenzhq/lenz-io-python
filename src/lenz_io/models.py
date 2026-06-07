@@ -18,7 +18,7 @@ Vocabulary (applies across every claim-shaped response):
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -124,10 +124,14 @@ class Verification(_Lax):
     The verdict block is FLAT at top level (was nested ``Verdict`` object
     pre-unify). ``created_at`` + ``modified_at`` are the only timestamp
     fields on the API surface — editorial ``published_at`` is internal-only.
+
+    1.1.0: dropped ``url`` and ``visibility``. API claims are private by
+    default and referenced by ``verification_id`` only. Cache-hit on
+    another customer's claim is transparent — the customer always sees
+    their own ``verification_id``, never another customer's.
     """
 
     verification_id: str = ""
-    url: str = ""
     claim: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
@@ -142,7 +146,6 @@ class Verification(_Lax):
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
     modified_at: str | None = None
-    visibility: str | None = None
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
     # older cached payloads that lack the field.
@@ -150,16 +153,12 @@ class Verification(_Lax):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint and the public library list.
-
-    Both ``GET /api/v1/library`` and ``GET /api/v1/verifications`` return
-    the same per-item shape. ``visibility`` is the literal string
-    ``'public'`` on /library (the only visibility surfaced there);
-    /verifications carries the owner's actual visibility.
+    """Compact item for the verifications list endpoint and the public
+    library list. Slim shape — no ``url`` (reference by
+    ``verification_id``), no ``visibility`` (1.1.0).
     """
 
     verification_id: str = ""
-    url: str = ""
     claim: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
@@ -169,7 +168,6 @@ class VerificationListItem(_Lax):
     executive_summary: str = ""
     created_at: str | None = None
     modified_at: str | None = None
-    visibility: str = ""
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
 
@@ -272,9 +270,36 @@ class TaskStatus(_Lax):
     claims: list[CandidateClaim] = Field(default_factory=list)
     candidates: list[str] = Field(default_factory=list)
     similar_claims: list[SimilarVerification] = Field(default_factory=list)
-    # failure branches
+    # failure branches. The server's failed response is
+    # ``{"status": "failed", "error": "..."}`` — ``error`` is the live wire
+    # field. ``failure_reason`` / ``failure_detail`` are kept for forward/back
+    # compatibility and other channels; read precedence is
+    # ``error or failure_detail or failure_reason``.
+    error: str = ""
     failure_reason: str = ""
     failure_detail: str = ""
+
+
+class BatchItemResult(_Lax):
+    """Per-item outcome from :meth:`Lenz.verify_batch_and_wait`.
+
+    A client-side composition type — NOT a wire shape (the server never emits
+    it, so it has no contract fixture). One entry per task that
+    ``POST /verify/batch`` returned, in input order.
+
+    ``status`` is a client-side rollup:
+
+    - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
+    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / candidates).
+    - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
+    - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
+    """
+
+    task_id: str = ""
+    claim_text: str = ""
+    status: Literal["completed", "needs_input", "failed", "timeout"]
+    verification: Verification | None = None
+    status_detail: TaskStatus | None = None
 
 
 class Usage(_Lax):
@@ -308,16 +333,25 @@ class AskHistory(_Lax):
 class AskReply(_Lax):
     """Returned by ``POST /ask/{verification_id}``.
 
-    Server actually returns ``{role, content, created_at}``. Pre-1.0.2 the
-    SDK declared a single ``reply`` field that never matched the wire — it
-    silently returned ``""`` because ``_Lax(extra='allow')`` swallowed the
-    real ``content`` field as an extra attribute. ``reply.content`` worked
-    at runtime via attribute access, but the typed surface didn't show it.
-    1.0.2 aligns the model with the server contract.
+    ``content`` is the assistant's reply text in a small markdown
+    subset:
+
+    - ``**bold**`` and ``*italic*``
+    - ``- `` or ``* `` bullet lists
+    - Blank-line paragraph breaks; single newlines inside a paragraph
+      mean line break
+
+    The model only produces these — no headings, no tables, no code
+    blocks. Pass it through any markdown library or display it
+    verbatim. See https://lenz.io/docs/quickstart#ask-reply-format.
+
+    Pre-1.0.2 the SDK declared a single ``reply`` field that never
+    matched the wire — the server has always returned
+    ``{role, content, created_at}``. 1.0.2 aligned the typed surface.
     """
 
     role: str = ""  # 'expert' on every reply (the assistant turn)
-    content: str = ""  # the reply text
+    content: str = ""  # markdown-subset prose (see class docstring)
     created_at: str = ""
 
 
@@ -330,6 +364,7 @@ __all__ = [
     "Assessment",
     "Audit",
     "BatchAccepted",
+    "BatchItemResult",
     "CandidateClaim",
     "DebateSide",
     "EntityRef",
