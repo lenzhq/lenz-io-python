@@ -355,7 +355,7 @@ class TestVerifyAndWait:
             r.post("/verify").respond(200, json={"task_id": "tsk_slow", "claim_text": "x"})
             r.get("/verify/status/tsk_slow").respond(200, json={"status": "processing", "progress": {}})
             with pytest.raises(LenzTimeoutError) as ei:
-                client.verify_and_wait(claim="x", timeout=0.001)
+                client.verify_and_wait(claim="x", timeout=0)
         assert ei.value.task_id == "tsk_slow"
 
     def test_failed_surfaces_error_wire_field(self, client):
@@ -420,7 +420,7 @@ class TestWait:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.get("/verify/status/t").respond(200, json={"status": "processing", "progress": {}})
             with pytest.raises(LenzTimeoutError) as ei:
-                client.wait("t", timeout=0.001)
+                client.wait("t", timeout=0)
         assert ei.value.task_id == "t"
 
 
@@ -478,7 +478,7 @@ class TestVerifyBatchAndWait:
             )
             r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             r.get("/verify/status/t2").respond(200, json={"status": "processing", "progress": {}})
-            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=0.001)
+            results = client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=0)
         by_id = {x.task_id: x for x in results}
         assert by_id["t1"].status == "completed"
         assert by_id["t2"].status == "timeout"
