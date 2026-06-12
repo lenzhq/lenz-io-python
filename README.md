@@ -51,7 +51,7 @@ already has a deep verification, `assess` returns it via
 ## How verification works
 
 Frame → Collect Evidence → Debate (2 models, 2 rounds) → Adjudicate
-(3 models: sources, logic, context) → Conclude. ~90 seconds wall-clock
+(3 models: sources, logic, precision) → Conclude. ~90 seconds wall-clock
 per claim. `assess` runs a leaner 3-model panel against the same
 framing for the ~5-10s pass.
 

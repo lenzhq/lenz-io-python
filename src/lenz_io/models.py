@@ -57,9 +57,11 @@ class Assessment(_Lax):
     """One panelist's structured assessment.
 
     Each panelist emits exactly one category of warnings (logical fallacies
-    for the Logic Examiner, missing context for the Context Analyst, weakest
-    sources for the Source Auditor). The kind is implicit in ``focus_area``;
-    all of them surface under a single ``warnings`` list.
+    for the Logic Examiner, precision issues for the Precision Analyst,
+    weakest sources for the Source Auditor; verifications from before
+    2026-06 carry missing context for the retired Context Analyst). The
+    kind is implicit in ``focus_area``; all of them surface under a single
+    ``warnings`` list.
 
     ``score`` is a panelist-level 0-10 sub-score, distinct from the
     top-level ``lenz_score`` on a ``Verification``.
