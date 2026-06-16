@@ -1,6 +1,6 @@
 # lenz-io
 
-Official Python SDK for the [Lenz Claim Verification API for AI Product Teams](https://lenz.io/developers).
+Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https://lenz.io/developers).
 
 **Four API primitives, one research-depth ladder.**
 

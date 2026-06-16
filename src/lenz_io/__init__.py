@@ -1,4 +1,4 @@
-"""Official Python SDK for the Lenz Claim Verification API for AI Product Teams.
+"""Official Python SDK for the Lenz Fact Checking API for AI Product Teams.
 
     pip install lenz-io
 
