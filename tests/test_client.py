@@ -7,6 +7,7 @@ behavior; together they form the cross-language test parity baseline.
 
 from __future__ import annotations
 
+import json
 import re
 
 import httpx
@@ -179,15 +180,33 @@ class TestVerify:
         assert s.reason == "clarification_required"
         assert s.candidates == ["Did you mean A?", "Or B?"]
 
-    def test_select_requires_text_or_claim_index(self, client):
+    def test_select_requires_text(self, client):
         with pytest.raises(ValueError):
-            client.select("tsk_001")  # no args
+            client.select("tsk_001", text="")  # empty text
 
     def test_select_with_text_dispatches_new_task(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/verify/tsk_001/select").respond(200, json={"task_id": "tsk_002", "claim_text": "x"})
             t = client.select("tsk_001", text="The earth is flat.")
         assert t.task_id == "tsk_002"
+
+    def test_select_request_body_is_text_only(self, client):
+        # The server's SelectIn is {text: str} — assert the SDK actually sends
+        # that exact shape. respx mocks the response regardless of the request,
+        # so without inspecting the body a malformed payload passes silently —
+        # which is exactly how the claim_index bug slipped through.
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify/tsk_001/select").respond(200, json={"task_id": "tsk_002"})
+            client.select("tsk_001", text="The earth is flat.")
+        assert json.loads(route.calls.last.request.content) == {"text": "The earth is flat."}
+
+    def test_select_by_index_is_not_supported(self, client):
+        # There is no index-based selection server-side; offering claim_index let
+        # the SDK POST {"claim_index": N} (no text) → server 422. The param must
+        # not exist, so an index-based call fails loudly at the call site (before
+        # any HTTP — no respx route needed).
+        with pytest.raises(TypeError):
+            client.select("tsk_001", claim_index=1)
 
 
 # ─────────────────────────────────────────────────── assess (top-level) ──

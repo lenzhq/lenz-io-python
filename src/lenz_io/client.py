@@ -377,17 +377,21 @@ class Lenz:
         """
         return self._assess(text=text, language=language)
 
-    def select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
+    def select(self, task_id: str, *, text: str) -> TaskAccepted:
         """Resolve a needs-input interrupt by selecting / clarifying the claim.
 
-        Pass either ``text=`` (the resolved claim wording) or
-        ``claim_index=`` (0-based index into the prior status's claims list).
-        Spawns a new pipeline task; the returned ``task_id`` is the one to
-        poll going forward.
+        Pass ``text=`` — the exact wording of the claim/reading you're choosing
+        (the relevant entry from the prior status's ``claims`` / ``candidates``).
+        Spawns a new pipeline task; the returned ``task_id`` is the one to poll
+        going forward.
+
+        Selection is by text, not index: the server's ``/select`` accepts only a
+        ``text`` field. (An earlier ``claim_index`` param produced a body the
+        server 422s, so it was removed.)
         """
-        if not text and claim_index is None:
-            raise ValueError("select requires either text= or claim_index=")
-        return self._select(task_id, text=text, claim_index=claim_index)
+        if not text:
+            raise ValueError("select requires text=")
+        return self._select(task_id, text=text)
 
     def get_status(self, task_id: str) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
@@ -679,13 +683,8 @@ class Lenz:
         body = self._request("POST", "/assess", json=payload)
         return AssessResponse.model_validate(body)
 
-    def _select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
-        payload: dict[str, Any] = {}
-        if text:
-            payload["text"] = text
-        if claim_index is not None:
-            payload["claim_index"] = claim_index
-        body = self._request("POST", f"/verify/{task_id}/select", json=payload)
+    def _select(self, task_id: str, *, text: str) -> TaskAccepted:
+        body = self._request("POST", f"/verify/{task_id}/select", json={"text": text})
         return TaskAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:

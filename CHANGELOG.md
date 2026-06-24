@@ -18,6 +18,13 @@ All notable changes to this SDK are documented here. Format follows
   `pip install lenz-io` keeps the SDK lean; running `lenz` without the extra
   prints an install nudge instead of a traceback.
 
+### Fixed
+- `client.select()` now takes `text=` only. The former `claim_index=` param
+  produced a request body (`{"claim_index": N}`, no `text`) that the server's
+  text-only `/select` rejected with a 422 — it never worked. Selection is by
+  the chosen claim's wording; pass the relevant entry from the prior status's
+  `claims` / `candidates`.
+
 ## [1.2.0] — 2026-06-07
 
 Polling ergonomics. The async path (`verify()` → poll) is now first-class and
