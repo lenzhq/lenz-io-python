@@ -107,6 +107,31 @@ def save_api_key(key: str) -> Path:
     return path
 
 
+def clear_api_key() -> bool:
+    """Remove the stored ``api_key`` from the config file.
+
+    Returns ``True`` if a key was present. Other settings (e.g. ``base_url``)
+    are preserved; the file is deleted if nothing else remains. A corrupt file
+    is removed wholesale so the user can recover.
+    """
+    path = config_path()
+    if not path.exists():
+        return False
+    try:
+        data = _load()
+    except ConfigError:
+        path.unlink(missing_ok=True)
+        return True
+    had_key = bool(data.pop("api_key", None))
+    if data:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2)
+    else:
+        path.unlink(missing_ok=True)
+    return had_key
+
+
 def mask_key(key: str) -> str:
     if not key:
         return "(none)"

@@ -165,6 +165,39 @@ def test_corrupt_config_is_friendly(monkeypatch, tmp_path):
         cfg.resolve_api_key(None)
 
 
+def test_logout_clears_stored_key(monkeypatch):
+    cfg.save_api_key("lenz_tokill")
+    assert cfg.resolve_api_key(None) == ("lenz_tokill", "file")
+    result = runner.invoke(app, ["logout"])
+    assert result.exit_code == 0
+    assert cfg.resolve_api_key(None) == ("", "none")
+
+
+def test_logout_preserves_base_url(monkeypatch):
+    cfg.save_api_key("lenz_tokill")
+    path = cfg.config_path()
+    path.write_text(json.dumps({"api_key": "lenz_tokill", "base_url": "https://staging.lenz.io/api/v1"}))
+    runner.invoke(app, ["logout"])
+    assert cfg.resolve_base_url(None) == "https://staging.lenz.io/api/v1"
+    assert cfg.resolve_api_key(None) == ("", "none")
+
+
+def test_logout_no_key_is_friendly(monkeypatch):
+    # Idempotent: clearing when nothing is stored exits clean, not an error.
+    result = runner.invoke(app, ["logout"])
+    assert result.exit_code == 0
+
+
+def test_logout_json_warns_env_shadow(monkeypatch):
+    cfg.save_api_key("lenz_tokill")
+    monkeypatch.setenv("LENZ_API_KEY", "lenz_envstillset")
+    result = runner.invoke(app, ["--json", "logout"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "logged_out"
+    assert payload["env_key_present"] is True
+
+
 def test_config_command_masks_key(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "lenz_supersecretvalue")
     result = runner.invoke(app, ["--json", "config"])

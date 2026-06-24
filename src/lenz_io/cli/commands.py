@@ -5,6 +5,7 @@ renders. All error/exit handling lives in :func:`._run.execute`; ``verify``
 
 from __future__ import annotations
 
+import os
 from urllib.parse import urlsplit, urlunsplit
 
 import typer
@@ -13,7 +14,7 @@ from lenz_io import Lenz
 from lenz_io.errors import LenzError
 
 from ._run import execute, read_text_arg
-from .config import config_path, mask_key, save_api_key
+from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
 from .context import CLIState
 from .errors import CLIError
 from .render import render_ask, render_assess, render_config, render_extract
@@ -144,6 +145,25 @@ def login(ctx: typer.Context) -> None:
         out.emit_json({"status": "ok", "config_file": str(path)})
     else:
         out.console.print(f"[green]✓[/green] Saved API key to {path}")
+
+
+def logout(ctx: typer.Context) -> None:
+    """Remove the locally stored API key (undoes `lenz login`).
+
+    Only clears the key saved on disk — a key supplied via `LENZ_API_KEY` or
+    `--api-key` lives in your environment, so it's flagged but left untouched.
+    """
+    state: CLIState = ctx.obj
+    out = state.output
+    had_key = clear_api_key()
+    env_shadow = bool((os.environ.get(ENV_API_KEY) or "").strip())
+
+    if out.json_mode:
+        out.emit_json({"status": "logged_out" if had_key else "no_key", "env_key_present": env_shadow})
+    else:
+        out.console.print("[green]✓[/green] Cleared the saved API key." if had_key else "No saved API key to clear.")
+        if env_shadow:
+            out.note(f"Note: {ENV_API_KEY} is still set in your environment — it'll still be used.")
 
 
 def config_status(ctx: typer.Context) -> None:
