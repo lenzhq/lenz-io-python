@@ -18,6 +18,7 @@ from lenz_io.cli import _run
 from lenz_io.cli import config as cfg
 from lenz_io.cli import verify as verify_mod
 from lenz_io.cli.app import app
+from lenz_io.cli.errors import CLIError
 from lenz_io.errors import (
     LenzAuthError,
     LenzQuotaExceededError,
@@ -165,6 +166,48 @@ def test_corrupt_config_is_friendly(monkeypatch, tmp_path):
         cfg.resolve_api_key(None)
 
 
+# ── read_text_arg: no-arg must not hang on an interactive terminal ───────────
+def test_read_text_arg_tty_no_arg_errors_not_hangs(monkeypatch):
+    class _Tty:
+        def isatty(self):
+            return True
+
+        def read(self):
+            raise AssertionError("must not block on stdin when no arg + interactive tty")
+
+    monkeypatch.setattr("sys.stdin", _Tty())
+    with pytest.raises(CLIError) as exc:
+        _run.read_text_arg(None)
+    assert exc.value.code == "no_input"
+    assert exc.value.exit_code == 2
+
+
+def test_read_text_arg_piped_still_reads(monkeypatch):
+    import io
+
+    class _Pipe(io.StringIO):
+        def isatty(self):
+            return False
+
+    monkeypatch.setattr("sys.stdin", _Pipe("piped claim"))
+    assert _run.read_text_arg(None) == "piped claim"
+
+
+# ── corrupt config must not brick the whole CLI ──────────────────────────────
+def test_corrupt_config_does_not_traceback(monkeypatch, tmp_path):
+    (tmp_path / "config.json").write_text("{not json")
+    result = runner.invoke(app, ["--json", "config"])
+    assert result.exit_code == 0  # degraded, not a traceback (was exit 1)
+    assert json.loads(result.stdout)["key_source"] == "none"
+
+
+def test_logout_recovers_corrupt_config(monkeypatch, tmp_path):
+    (tmp_path / "config.json").write_text("{not json")
+    result = runner.invoke(app, ["logout"])
+    assert result.exit_code == 0
+    assert not cfg.config_path().exists()
+
+
 def test_logout_clears_stored_key(monkeypatch):
     cfg.save_api_key("lenz_tokill")
     assert cfg.resolve_api_key(None) == ("lenz_tokill", "file")
@@ -264,6 +307,36 @@ def test_extract_pretty_renders_atomic_claim():
     assert "Einstein won the 1921 Nobel Prize" in text
     assert "No verifiable claim" not in text
     assert "History" in text
+
+
+def test_extract_pretty_multi_claim_includes_primary():
+    """The server puts the primary claim in atomic_claim and extras in
+    identified_claims — the rendered list must include BOTH (regression: the
+    primary used to be dropped from the list and only shown in the verify hint)."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_extract
+
+    extracted = ExtractedClaims.model_validate(
+        {
+            "domain": "Science",
+            "atomic_claim": "The Earth is flat.",
+            "identified_claims": ["Ruby is harder than diamond."],
+        }
+    )
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_extract(out, extracted)
+    text = buf.getvalue()
+    assert "The Earth is flat." in text  # primary not dropped
+    assert "Ruby is harder than diamond." in text
+    assert "2 claim" in text  # counted as two, not one
+    # no single 'Verify it:' hint when there are multiple claims (it was orphaned)
+    assert "Verify it:" not in text
 
 
 def test_assess_json_success(monkeypatch):

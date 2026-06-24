@@ -46,7 +46,10 @@ class Output:
         # Non-tty stdout → JSON contract (documented), even without --json.
         self.json_mode = json_mode or not self._stdout_tty
         self.console = Console(no_color=no_color or not self._stdout_tty, highlight=False)
-        self.err = Console(stderr=True, no_color=no_color)
+        # highlight=False: stop Rich from auto-coloring paths/numbers in error
+        # text — it colors a path only up to the first space ("Application
+        # Support" → half-colored), which looks broken. We add our own markup.
+        self.err = Console(stderr=True, no_color=no_color, highlight=False)
 
     # ── primitives ──
     def emit_json(self, payload: Any) -> None:
@@ -95,19 +98,22 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
     if out.json_mode:
         out.emit_json(_model_json(result))
         return
-    # The API atomises a single input into ``atomic_claim`` and only fills
-    # ``identified_claims`` for multi-claim text — so keying solely off the
-    # latter renders "nothing found" for the common single-claim case. Prefer
-    # the explicit list, fall back to the atomic claim, and only declare an
-    # empty result when both are absent.
-    claims = result.identified_claims or []
+    # The server splits a claim set across two fields: the primary claim lands
+    # in ``atomic_claim`` and any extras in ``identified_claims``. Neither alone
+    # is the full list — render the union so the primary is never dropped (and
+    # the count is right). Single-claim input → just ``atomic_claim``.
     atomic = (getattr(result, "atomic_claim", "") or "").strip()
-    if claims:
-        out.console.print(f"[bold]{len(claims)} claim(s) found:[/bold]")
+    claims = [atomic] if atomic else []
+    for c in result.identified_claims or []:
+        c = (c or "").strip()
+        if c and c not in claims:
+            claims.append(c)
+    if len(claims) > 1:
+        out.console.print(f"[bold]{len(claims)} claims found:[/bold]")
         for i, claim in enumerate(claims, 1):
             out.console.print(f"  {i}. {claim}")
-    elif atomic:
-        out.console.print(f"[bold]Claim:[/bold] {atomic}")
+    elif claims:
+        out.console.print(f"[bold]Claim:[/bold] {claims[0]}")
     else:
         out.console.print("[dim]No verifiable claim found in that text.[/dim]")
         return
@@ -126,8 +132,10 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.console.print("\n[dim]Ambiguous — candidate readings:[/dim]")
         for c in result.candidate_claims:
             out.console.print(f"  • {c}")
-    if atomic:
-        out.console.print(f'\n[dim]Verify it:[/dim] lenz verify "{atomic}"')
+    # Only nudge to verify when there's a single, unambiguous claim — a lone
+    # hint next to a multi-claim list reads as if it belongs to one of them.
+    if len(claims) == 1:
+        out.console.print(f'\n[dim]Verify it:[/dim] lenz verify "{claims[0]}"')
 
 
 def render_assess(out: Output, result: AssessResponse) -> None:

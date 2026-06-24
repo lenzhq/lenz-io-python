@@ -12,10 +12,11 @@ import os
 import typer
 
 from lenz_io import __version__
+from lenz_io.client import DEFAULT_BASE_URL
 
 from . import commands
 from . import verify as verify_mod
-from .config import resolve_api_key, resolve_base_url
+from .config import ENV_BASE_URL, ConfigError, resolve_api_key, resolve_base_url
 from .context import CLIState
 from .render import Output
 
@@ -50,9 +51,19 @@ def _main(
         None, "--version", callback=_version_callback, is_eager=True, help="Show version and exit."
     ),
 ) -> None:
-    key, source = resolve_api_key(api_key)
-    base = resolve_base_url(base_url)
     output = Output(json_mode=json_out, no_color=no_color or bool(os.environ.get("NO_COLOR")))
+    try:
+        key, source = resolve_api_key(api_key)
+        base = resolve_base_url(base_url)
+    except ConfigError as exc:
+        # A corrupt config file resolves here, before any command — left
+        # unhandled it tracebacks and bricks even `logout`/`config`, the very
+        # commands needed to recover. Degrade to no-key + a clear warning so
+        # those still run (and can clear the bad file).
+        output.note(f"[yellow]Warning:[/yellow] {exc} Ignoring it — run `lenz logout` to reset.")
+        key, source = "", "none"
+        # Resolve base without touching the (corrupt) file: flag → env → default.
+        base = (base_url or os.environ.get(ENV_BASE_URL) or DEFAULT_BASE_URL).rstrip("/")
     ctx.obj = CLIState(output=output, api_key=key, key_source=source, base_url=base)
 
 

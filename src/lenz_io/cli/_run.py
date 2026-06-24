@@ -21,8 +21,21 @@ from .errors import CLIError, exit_code_for, friendly_text, no_api_key_error, to
 
 
 def read_text_arg(text: str | None) -> str:
-    """Resolve a text argument from the positional value, ``-``, or stdin."""
-    if text is None or text == "-":
+    """Resolve a text argument from the positional value, ``-``, or stdin.
+
+    Reads stdin only when it's explicitly requested (``-``) or actually piped.
+    With no argument on an interactive terminal we must NOT call ``read()`` — it
+    would block forever waiting for input the user doesn't know to give.
+    """
+    if text == "-":
+        data = sys.stdin.read()
+    elif text is None:
+        if sys.stdin.isatty():
+            raise CLIError(
+                "No text provided. Pass it as an argument or pipe it via stdin.",
+                code="no_input",
+                exit_code=2,
+            )
         data = sys.stdin.read()
     else:
         data = text
