@@ -51,13 +51,19 @@ def _load() -> dict[str, Any]:
 
 
 def resolve_api_key(flag_key: str | None) -> tuple[str, str]:
-    """Return ``(key, source)`` where source is ``flag|env|file|none``."""
-    if flag_key:
-        return flag_key, "flag"
-    env = os.environ.get(ENV_API_KEY)
+    """Return ``(key, source)`` where source is ``flag|env|file|none``.
+
+    Every source is ``.strip()``-ed: a stray newline/space from a paste makes an
+    otherwise-valid key an illegal HTTP header value, which surfaces as a cryptic
+    load-balancer 400 (not a 401) — strip it at the door so it can't.
+    """
+    flag = (flag_key or "").strip()
+    if flag:
+        return flag, "flag"
+    env = (os.environ.get(ENV_API_KEY) or "").strip()
     if env:
         return env, "env"
-    key = _load().get("api_key") or ""
+    key = (_load().get("api_key") or "").strip()
     if key:
         return key, "file"
     return "", "none"

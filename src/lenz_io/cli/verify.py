@@ -37,6 +37,27 @@ from .render import Output, render_verification
 
 POLL_INTERVAL = 2.5  # seconds — never sub-second; the pipeline runs ~90s.
 
+# Friendlier spinner copy for the raw pipeline step names the status endpoint
+# reports (a mix of bare 'research' and decorated 'Framing...'). Unknown steps
+# fall back to a cleaned-up version of whatever the server sent.
+_STEP_LABELS = {
+    "starting": "Starting",
+    "framing": "Framing the claim",
+    "research": "Gathering evidence",
+    "researcher": "Gathering evidence",
+    "debate": "Weighing both sides",
+    "adjudication": "Adjudicating across models",
+    "conclusion": "Writing the verdict",
+}
+
+
+def _step_label(step: str | None) -> str:
+    if not step:
+        return "Verifying… (~90s)"
+    key = step.strip().rstrip(".").strip().lower()
+    pretty = _STEP_LABELS.get(key) or key.replace("_", " ").capitalize() or "Working"
+    return f"Verifying… {pretty}"
+
 
 def verify(
     ctx: typer.Context,
@@ -44,26 +65,43 @@ def verify(
     resume: str = typer.Option(None, "--resume", metavar="ID", help="Re-attach to a task_id or verification_id."),
     timeout: float = typer.Option(180.0, "--timeout", help="Max seconds to wait."),
     pick: int = typer.Option(None, "--claim", help="Pre-pick the Nth claim (1-based) on a multi-claim input."),
+    detach: bool = typer.Option(False, "--detach", help="Submit and exit immediately; print the re-attach command."),
 ) -> None:
     """Full fact-check pipeline (~90s). Needs a key; spends a credit on a fresh claim."""
     state: CLIState = ctx.obj
+    out = state.output
     preselect = (pick - 1) if pick is not None else None
 
     def work(client: Lenz) -> None:
         if resume:
-            _resume(client, state.output, resume, timeout)
+            _resume(client, out, resume, timeout)
             return
         text = read_text_arg(claim)
         accepted = client.verify(text, idempotency_key=uuid.uuid4().hex)
-        _poll(client, state.output, accepted.task_id, timeout, preselect=preselect)
+        if detach:
+            _emit_detached(out, accepted.task_id)
+            return
+        _poll(client, out, accepted.task_id, timeout, preselect=preselect)
 
     execute(state, needs_key=True, work=work)
 
 
+def _emit_detached(out: Output, task_id: str) -> None:
+    """Print the handle for a fire-and-forget submit (``--detach``)."""
+    if out.json_mode:
+        out.emit_json({"status": "submitted", "task_id": task_id})
+    else:
+        out.console.print(f"Verification started (task {task_id}).")
+        out.console.print(f"[dim]Read the verdict with:[/dim] lenz verify --resume {task_id}")
+
+
 def _poll(client: Lenz, out: Output, task_id: str, timeout: float, *, preselect: int | None = None) -> None:
     deadline = time.monotonic() + timeout
+    # Shared across needs_input loops so the "Ctrl-C to detach" hint prints at
+    # most once for the whole verify (not before each picker, not twice).
+    hint = {"shown": False}
     while True:
-        st = _wait_until_actionable(client, out, task_id, deadline)
+        st = _wait_until_actionable(client, out, task_id, deadline, hint)
         if st.status == "completed":
             render_verification(out, st.result)
             return
@@ -76,10 +114,12 @@ def _poll(client: Lenz, out: Output, task_id: str, timeout: float, *, preselect:
         raise CLIError(f"Unexpected status {st.status!r}.", code="unexpected_status")
 
 
-def _wait_until_actionable(client: Lenz, out: Output, task_id: str, deadline: float) -> TaskStatus:
+def _wait_until_actionable(
+    client: Lenz, out: Output, task_id: str, deadline: float, hint: dict[str, bool]
+) -> TaskStatus:
     """Poll until the task is completed/failed/needs_input (i.e. not processing)."""
     show_spinner = not out.json_mode and sys.stderr.isatty()
-    spinner = out.err.status("Verifying… (~90s)") if show_spinner else None
+    spinner = out.err.status(_step_label(None)) if show_spinner else None
     cm = spinner if spinner is not None else contextlib.nullcontext()
     try:
         with cm:
@@ -93,10 +133,14 @@ def _wait_until_actionable(client: Lenz, out: Output, task_id: str, deadline: fl
                 st = client.get_status(task_id)
                 if st.status != "processing":
                     return st
+                # Only hint once we're actually waiting on the pipeline — not
+                # before a picker, where there's nothing to detach from yet.
+                if spinner is not None and not hint["shown"]:
+                    out.err.print("[dim]Ctrl-C to detach — the verification keeps running.[/dim]")
+                    hint["shown"] = True
                 if spinner is not None:
                     step = (st.progress or {}).get("step")
-                    if step:
-                        spinner.update(f"Verifying… {step}")
+                    spinner.update(_step_label(step))
                 time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:
         out.resume_hint(task_id)
@@ -123,8 +167,10 @@ def _needs_input(client: Lenz, out: Output, task_id: str, st: TaskStatus, presel
             label = "Multiple claims found — pick one:" if reason == "multi_claim" else "Ambiguous — pick a reading:"
             idx = _choose(out, label, options)
         _validate_index(idx, options)
-        if reason == "multi_claim":
-            return client.select(task_id, claim_index=idx).task_id
+        # Always select by text: the server's /select takes only ``text`` —
+        # passing ``claim_index`` sends a body with no ``text`` and 422s
+        # ("body.payload.text Field required"). ``options[idx]`` is the chosen
+        # claim's wording for both multi_claim and clarification.
         return client.select(task_id, text=options[idx]).task_id
 
     if reason == "duplicate_found":

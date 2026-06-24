@@ -139,6 +139,19 @@ def test_key_precedence_flag_over_env_over_file(monkeypatch, tmp_path):
     assert cfg.resolve_api_key("flag_key") == ("flag_key", "flag")
 
 
+def test_resolve_strips_whitespace_from_key(monkeypatch, tmp_path):
+    """A pasted key with a trailing newline must not survive to the wire (it's an
+    illegal header value → cryptic 400). Strip at every source."""
+    monkeypatch.setenv("LENZ_API_KEY", "  lenz_padded\n")
+    assert cfg.resolve_api_key(None) == ("lenz_padded", "env")
+    monkeypatch.delenv("LENZ_API_KEY")
+    cfg.save_api_key("lenz_filekey")
+    # simulate a polluted on-disk value
+    (tmp_path / "config.json").write_text(json.dumps({"api_key": "lenz_filekey\n "}))
+    assert cfg.resolve_api_key(None) == ("lenz_filekey", "file")
+    assert cfg.resolve_api_key("  flagkey ") == ("flagkey", "flag")
+
+
 def test_save_api_key_perms_0600(tmp_path):
     path = cfg.save_api_key("secret")
     mode = stat.S_IMODE(path.stat().st_mode)
@@ -192,6 +205,34 @@ def test_extract_reads_stdin(monkeypatch):
     assert result.exit_code == 0
 
 
+def test_extract_pretty_renders_atomic_claim():
+    """Single-claim input fills atomic_claim, not identified_claims — the pretty
+    renderer must surface it (regression: it used to print 'no claims found')."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_extract
+
+    # extra="allow" carries atomic_claim/domain through model_validate.
+    extracted = ExtractedClaims.model_validate(
+        {
+            "domain": "History",
+            "atomic_claim": "Einstein won the 1921 Nobel Prize in Physics.",
+            "key_entities": [{"name": "Albert Einstein", "type": "person"}],
+        }
+    )
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False  # force pretty even though the test stdout isn't a tty
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_extract(out, extracted)
+    text = buf.getvalue()
+    assert "Einstein won the 1921 Nobel Prize" in text
+    assert "No verifiable claim" not in text
+    assert "History" in text
+
+
 def test_assess_json_success(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
@@ -220,6 +261,26 @@ def test_error_mapping_json(monkeypatch, exc, code, status):
     err = json.loads(result.stdout)["error"]
     assert err["code"] == code
     assert err["status"] == status
+
+
+def test_ask_bad_id_is_friendly_not_retry(monkeypatch):
+    """A 404 from ask means a wrong/expired id — say so, don't tell the user to
+    'retry and file an issue' (the generic LenzError fix)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient()
+    fake.ask = _FakeAsk(None)
+
+    def _raise(vid, *, message, language=""):
+        raise LenzAuthError(message="Verification not found.", status_code=404)
+
+    fake.ask.send = _raise
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "ask", "435100acc5464911", "what else?"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_found"
+    assert "verification_id" in err["message"]
+    assert "task_id" in err["message"]
 
 
 # ── verify lifecycle ────────────────────────────────────────────────────────
@@ -262,10 +323,11 @@ def test_verify_multi_claim_with_preselect(monkeypatch):
             ],
         ),
     )
-    # --claim 2 (1-based) → select claim_index=1, no hang, verdict rendered
+    # --claim 2 (1-based) → select by the claim's TEXT (the server's /select only
+    # accepts ``text``; sending claim_index 422s). No hang, verdict rendered.
     result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "2"])
     assert result.exit_code == 0
-    assert fake.select_calls == [("t-1", "", 1)]
+    assert fake.select_calls == [("t-1", "claim B", None)]
     assert json.loads(result.stdout)["verdict"] == "False"
 
 

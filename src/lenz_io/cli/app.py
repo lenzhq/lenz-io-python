@@ -23,9 +23,9 @@ app = typer.Typer(
     name="lenz",
     help=(
         "Lenz — fact-check AI output from your terminal.\n\n"
-        "Quick start (free):\n"
+        "Quick start:\n"
         "  lenz login\n"
-        '  lenz extract "Einstein won the 1921 Nobel for relativity"'
+        '  lenz assess "Einstein won the 1921 Nobel for relativity"'
     ),
     no_args_is_help=True,
     add_completion=True,
