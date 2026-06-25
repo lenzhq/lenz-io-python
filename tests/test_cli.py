@@ -442,7 +442,6 @@ def test_extract_pretty_renders_atomic_claim():
     text = buf.getvalue()
     assert "Einstein won the 1921 Nobel Prize" in text
     assert "No verifiable claim" not in text
-    assert "History" in text
 
 
 def test_extract_pretty_multi_claim_includes_primary():

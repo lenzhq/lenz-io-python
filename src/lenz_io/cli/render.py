@@ -120,16 +120,6 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.console.print("[dim]No verifiable claim found in that text.[/dim]")
         return
 
-    context = []
-    domain = (getattr(result, "domain", "") or "").strip()
-    if domain:
-        context.append(domain)
-    entities = getattr(result, "key_entities", None) or []
-    names = [getattr(e, "name", "") for e in entities if getattr(e, "name", "")]
-    if names:
-        context.append(", ".join(names[:4]))
-    if context:
-        out.console.print(f"[dim]{'  •  '.join(context)}[/dim]")
     if result.candidate_claims:
         out.console.print("\n[dim]Ambiguous — candidate readings:[/dim]")
         for c in result.candidate_claims:
