@@ -167,11 +167,11 @@ def _needs_input(client: Lenz, out: Output, task_id: str, st: TaskStatus, presel
             label = "Multiple claims found — pick one:" if reason == "multi_claim" else "Ambiguous — pick a reading:"
             idx = _choose(out, label, options)
         _validate_index(idx, options)
-        # Always select by text: the server's /select takes only ``text`` —
-        # passing ``claim_index`` sends a body with no ``text`` and 422s
-        # ("body.payload.text Field required"). ``options[idx]`` is the chosen
+        # Select by text. /select fans out one pipeline per chosen claim and
+        # returns a batch; the CLI picker chooses exactly one, so read the
+        # single spawned task off items[0]. ``options[idx]`` is the chosen
         # claim's wording for both multi_claim and clarification.
-        return client.select(task_id, text=options[idx]).task_id
+        return client.select(task_id, texts=[options[idx]]).items[0].task_id
 
     if reason == "duplicate_found":
         if out.json_mode:

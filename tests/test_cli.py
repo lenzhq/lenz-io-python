@@ -28,6 +28,7 @@ from lenz_io.errors import (
 from lenz_io.models import (
     AssessClaim,
     AssessResponse,
+    BatchAccepted,
     CandidateClaim,
     ExtractedClaims,
     SimilarVerification,
@@ -81,7 +82,9 @@ class FakeClient:
         self._assess = assess_result
         self._verify_task = verify_task or TaskAccepted(task_id="t-1", status="queued")
         self._statuses = list(statuses or [])
-        self._select_task = select_task or TaskAccepted(task_id="t-2", status="queued")
+        self._select_task = select_task or BatchAccepted(
+            batch_id="b-1", items=[TaskAccepted(task_id="t-2", claim_text="")]
+        )
         self.ask = _FakeAsk(ask_reply)
         self.verifications = verifications or _FakeVerifications()
         self._raises = raises or {}
@@ -110,8 +113,8 @@ class FakeClient:
         self._maybe_raise("get_status")
         return self._statuses.pop(0)
 
-    def select(self, task_id, *, text="", claim_index=None):
-        self.select_calls.append((task_id, text, claim_index))
+    def select(self, task_id, *, texts):
+        self.select_calls.append((task_id, texts))
         return self._select_task
 
     def close(self):
@@ -620,11 +623,11 @@ def test_verify_multi_claim_with_preselect(monkeypatch):
             ],
         ),
     )
-    # --claim 2 (1-based) → select by the claim's TEXT (the server's /select only
-    # accepts ``text``; sending claim_index 422s). No hang, verdict rendered.
+    # --claim 2 (1-based) → select by the claim's TEXT as a one-element list
+    # (/select is list-only and fans out one pipeline per pick). No hang.
     result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "2"])
     assert result.exit_code == 0
-    assert fake.select_calls == [("t-1", "claim B", None)]
+    assert fake.select_calls == [("t-1", ["claim B"])]
     assert json.loads(result.stdout)["verdict"] == "False"
 
 

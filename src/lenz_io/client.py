@@ -32,7 +32,7 @@ Shape (four-primitive ladder + the supporting reads):
     batch = client.verify_batch(claims=[...])
     results = client.verify_batch_and_wait(claims=[...])   # submit + poll all
     status = client.get_status(task_id)      # single non-blocking poll
-    client.select(task_id, claim_index=0)
+    client.select(task_id, texts=["The earth is flat."])  # pick one or more
 
     # Resource namespaces
     client.verifications.list()
@@ -377,21 +377,22 @@ class Lenz:
         """
         return self._assess(text=text, language=language)
 
-    def select(self, task_id: str, *, text: str) -> TaskAccepted:
-        """Resolve a needs-input interrupt by selecting / clarifying the claim.
+    def select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
+        """Resolve a needs-input interrupt by selecting one or more claims.
 
-        Pass ``text=`` — the exact wording of the claim/reading you're choosing
-        (the relevant entry from the prior status's ``claims`` / ``candidates``).
-        Spawns a new pipeline task; the returned ``task_id`` is the one to poll
-        going forward.
+        Pass ``texts=`` — the exact wording of the claim(s) you're choosing
+        (entries from the prior status's ``claims`` / ``candidates``). Each
+        selected claim fans out into its own pipeline; the returned
+        ``BatchAccepted`` carries one ``items`` entry (each with its own
+        ``task_id``) per claim. Poll each via ``get_status`` / ``wait``.
 
-        Selection is by text, not index: the server's ``/select`` accepts only a
-        ``text`` field. (An earlier ``claim_index`` param produced a body the
-        server 422s, so it was removed.)
+        Selection is by text, not index. Every text must match a claim that was
+        offered in the prior interrupt — the server rejects anything else with
+        a 422. To resolve a single claim, pass a one-element list.
         """
-        if not text:
-            raise ValueError("select requires text=")
-        return self._select(task_id, text=text)
+        if not texts:
+            raise ValueError("select requires a non-empty texts=[...]")
+        return self._select(task_id, texts=texts)
 
     def get_status(self, task_id: str) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
@@ -595,7 +596,7 @@ class Lenz:
             raise LenzNeedsInputError(
                 message=f"Pipeline paused: {status.reason}",
                 cause="The verification needs caller input to proceed.",
-                fix="Inspect the payload, then call client.select(task_id, claim_index=...) (or .text=...).",
+                fix="Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
                 doc_url="https://lenz.io/docs/verify#needs-input",
                 task_id=task_id,
                 kind=status.reason,
@@ -683,9 +684,9 @@ class Lenz:
         body = self._request("POST", "/assess", json=payload)
         return AssessResponse.model_validate(body)
 
-    def _select(self, task_id: str, *, text: str) -> TaskAccepted:
-        body = self._request("POST", f"/verify/{task_id}/select", json={"text": text})
-        return TaskAccepted.model_validate(body)
+    def _select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
+        body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts})
+        return BatchAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:
         body = self._request("GET", f"/verify/status/{task_id}")

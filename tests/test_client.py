@@ -180,33 +180,43 @@ class TestVerify:
         assert s.reason == "clarification_required"
         assert s.candidates == ["Did you mean A?", "Or B?"]
 
-    def test_select_requires_text(self, client):
+    def test_select_requires_texts(self, client):
         with pytest.raises(ValueError):
-            client.select("tsk_001", text="")  # empty text
+            client.select("tsk_001", texts=[])  # empty selection
 
-    def test_select_with_text_dispatches_new_task(self, client):
+    def test_select_dispatches_a_task_per_claim(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.post("/verify/tsk_001/select").respond(200, json={"task_id": "tsk_002", "claim_text": "x"})
-            t = client.select("tsk_001", text="The earth is flat.")
-        assert t.task_id == "tsk_002"
+            r.post("/verify/tsk_001/select").respond(
+                200,
+                json={
+                    "batch_id": "bat_1",
+                    "items": [
+                        {"task_id": "tsk_002", "claim_text": "The earth is flat."},
+                        {"task_id": "tsk_003", "claim_text": "Coffee causes cancer."},
+                    ],
+                },
+            )
+            b = client.select("tsk_001", texts=["The earth is flat.", "Coffee causes cancer."])
+        assert b.batch_id == "bat_1"
+        assert [it.task_id for it in b.items] == ["tsk_002", "tsk_003"]
 
-    def test_select_request_body_is_text_only(self, client):
-        # The server's SelectIn is {text: str} — assert the SDK actually sends
-        # that exact shape. respx mocks the response regardless of the request,
-        # so without inspecting the body a malformed payload passes silently —
-        # which is exactly how the claim_index bug slipped through.
+    def test_select_request_body_is_texts(self, client):
+        # The server's SelectIn is {texts: list[str]} — assert the SDK sends that
+        # exact shape. respx mocks the response regardless of the request, so
+        # without inspecting the body a malformed payload passes silently.
         with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/verify/tsk_001/select").respond(200, json={"task_id": "tsk_002"})
-            client.select("tsk_001", text="The earth is flat.")
-        assert json.loads(route.calls.last.request.content) == {"text": "The earth is flat."}
+            route = r.post("/verify/tsk_001/select").respond(
+                200, json={"batch_id": "bat_1", "items": [{"task_id": "tsk_002", "claim_text": "x"}]}
+            )
+            client.select("tsk_001", texts=["The earth is flat."])
+        assert json.loads(route.calls.last.request.content) == {"texts": ["The earth is flat."]}
 
-    def test_select_by_index_is_not_supported(self, client):
-        # There is no index-based selection server-side; offering claim_index let
-        # the SDK POST {"claim_index": N} (no text) → server 422. The param must
-        # not exist, so an index-based call fails loudly at the call site (before
-        # any HTTP — no respx route needed).
+    def test_select_text_kwarg_is_not_supported(self, client):
+        # The single-claim `text=` / `claim_index=` params are gone; selection is
+        # always a list. An old-style call must fail loudly at the call site
+        # (before any HTTP — no respx route needed).
         with pytest.raises(TypeError):
-            client.select("tsk_001", claim_index=1)
+            client.select("tsk_001", text="The earth is flat.")
 
 
 # ─────────────────────────────────────────────────── assess (top-level) ──
