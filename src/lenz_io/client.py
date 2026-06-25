@@ -32,7 +32,7 @@ Shape (four-primitive ladder + the supporting reads):
     batch = client.verify_batch(claims=[...])
     results = client.verify_batch_and_wait(claims=[...])   # submit + poll all
     status = client.get_status(task_id)      # single non-blocking poll
-    client.select(task_id, claim_index=0)
+    client.select(task_id, texts=["The earth is flat."])  # pick one or more
 
     # Resource namespaces
     client.verifications.list()
@@ -277,16 +277,20 @@ class Lenz:
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.Client | None = None,
+        user_agent: str | None = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("LENZ_API_KEY") or ""
         self._base_url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
+        # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
+        # the SDK keeps ownership of every other default header — so a new
+        # default header can't be silently dropped by a hand-copied client.
         self._client = http_client or httpx.Client(
             timeout=httpx.Timeout(timeout),
             headers={
-                "User-Agent": _user_agent(),
+                "User-Agent": user_agent or _user_agent(),
                 "X-Lenz-API-Version": API_VERSION,
                 "Accept": "application/json",
             },
@@ -377,17 +381,22 @@ class Lenz:
         """
         return self._assess(text=text, language=language)
 
-    def select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
-        """Resolve a needs-input interrupt by selecting / clarifying the claim.
+    def select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
+        """Resolve a needs-input interrupt by selecting one or more claims.
 
-        Pass either ``text=`` (the resolved claim wording) or
-        ``claim_index=`` (0-based index into the prior status's claims list).
-        Spawns a new pipeline task; the returned ``task_id`` is the one to
-        poll going forward.
+        Pass ``texts=`` — the exact wording of the claim(s) you're choosing
+        (entries from the prior status's ``claims`` / ``candidates``). Each
+        selected claim fans out into its own pipeline; the returned
+        ``BatchAccepted`` carries one ``items`` entry (each with its own
+        ``task_id``) per claim. Poll each via ``get_status`` / ``wait``.
+
+        Selection is by text, not index. Every text must match a claim that was
+        offered in the prior interrupt — the server rejects anything else with
+        a 422. To resolve a single claim, pass a one-element list.
         """
-        if not text and claim_index is None:
-            raise ValueError("select requires either text= or claim_index=")
-        return self._select(task_id, text=text, claim_index=claim_index)
+        if not texts:
+            raise ValueError("select requires a non-empty texts=[...]")
+        return self._select(task_id, texts=texts)
 
     def get_status(self, task_id: str) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
@@ -591,7 +600,7 @@ class Lenz:
             raise LenzNeedsInputError(
                 message=f"Pipeline paused: {status.reason}",
                 cause="The verification needs caller input to proceed.",
-                fix="Inspect the payload, then call client.select(task_id, claim_index=...) (or .text=...).",
+                fix="Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
                 doc_url="https://lenz.io/docs/verify#needs-input",
                 task_id=task_id,
                 kind=status.reason,
@@ -679,14 +688,9 @@ class Lenz:
         body = self._request("POST", "/assess", json=payload)
         return AssessResponse.model_validate(body)
 
-    def _select(self, task_id: str, *, text: str = "", claim_index: int | None = None) -> TaskAccepted:
-        payload: dict[str, Any] = {}
-        if text:
-            payload["text"] = text
-        if claim_index is not None:
-            payload["claim_index"] = claim_index
-        body = self._request("POST", f"/verify/{task_id}/select", json=payload)
-        return TaskAccepted.model_validate(body)
+    def _select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
+        body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts})
+        return BatchAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:
         body = self._request("GET", f"/verify/status/{task_id}")

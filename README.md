@@ -18,6 +18,33 @@ not real-time copilots — pipeline runs are the wrong shape for those.
 pip install lenz-io
 ```
 
+## Command-line tool
+
+The same four primitives from your terminal. Ships inside this package behind
+the `cli` extra (quotes matter — bare brackets are a glob in zsh):
+
+```bash
+pipx install "lenz-io[cli]"      # isolated CLI install (recommended)
+pip install "lenz-io[cli]"       # or into your current environment
+```
+
+```bash
+lenz login                       # paste an API key (free — get one at lenz.io/api-integration)
+lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
+lenz assess  "The Great Wall is visible from space"          # fast verdict
+lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
+lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
+lenz ask <verification_id> "Which source is strongest?"
+lenz config                      # show which key/base URL is in use
+```
+
+Every command takes `--json` for a clean machine-readable object (also emitted
+automatically when stdout is not a TTY, so pipes Just Work). Errors in `--json`
+mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
+exit. `verify` blocks with a progress spinner; Ctrl-C prints a
+`lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
+order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
+
 ## Quickstart — the canonical integration
 
 ```python

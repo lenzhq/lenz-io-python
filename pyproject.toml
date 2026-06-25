@@ -38,6 +38,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The `lenz` CLI ships inside this package; its deps live here so a plain
+# `pip install lenz-io` stays lean (the SDK is the revenue-path import).
+cli = [
+  "typer>=0.12",
+  "rich>=13.0",
+  "platformdirs>=4.0",
+]
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
@@ -45,7 +52,17 @@ dev = [
   "respx>=0.21",
   "ruff>=0.6",
   "mypy>=1.10",
+  # CLI deps so the CLI test suite (Typer CliRunner) runs under `dev`.
+  "typer>=0.12",
+  "rich>=13.0",
+  "platformdirs>=4.0",
 ]
+
+[project.scripts]
+# Entry point is the guarded `main()` (not the Typer `app`) so a plain
+# `pip install lenz-io` user who runs `lenz` gets a friendly install nudge
+# instead of an ImportError traceback.
+lenz = "lenz_io.cli:main"
 
 [project.urls]
 Homepage = "https://lenz.io"
