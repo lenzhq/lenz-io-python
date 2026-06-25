@@ -11,6 +11,7 @@ from __future__ import annotations
 import contextlib
 import json
 import sys
+from datetime import datetime, timezone
 from typing import Any
 
 from rich.console import Console
@@ -280,6 +281,44 @@ def _capacity_row(out: Output, label: str, cap: UsageCapacity) -> None:
     out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
 
 
+def _humanize_reset(iso: str, *, now: datetime | None = None) -> str:
+    """Turn an ISO-8601 reset timestamp into a friendly ``in 6 days (Jul 1, 2026)``.
+
+    Leads with the actionable relative distance and keeps the absolute date in
+    parens. Falls back to the raw string if the value isn't parseable (the API
+    contract is lax/forward-compatible — never crash on an unexpected shape).
+    ``now`` is injectable for deterministic tests; defaults to the current UTC."""
+    try:
+        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return iso
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    # Build the date by hand — strftime's no-pad day (%-d / %#d) isn't portable.
+    absolute = f"{when:%b} {when.day}, {when.year}"
+
+    seconds = (when - (now or datetime.now(timezone.utc))).total_seconds()
+    if seconds <= 0:
+        return absolute  # already past — relative phrasing would read oddly
+    minutes, hours, days = seconds / 60, seconds / 3600, seconds / 86400
+    if days >= 2:
+        relative = _plural(round(days), "day")
+    elif hours >= 36:
+        relative = "tomorrow"
+    elif hours >= 1:
+        relative = _plural(round(hours), "hour")
+    elif minutes >= 1:
+        relative = _plural(round(minutes), "minute")
+    else:
+        relative = "in under a minute"
+    return f"{relative} ({absolute})"
+
+
+def _plural(n: int, unit: str) -> str:
+    """``in 1 hour`` / ``in 6 days`` — singular when n == 1."""
+    return f"in {n} {unit}" if n == 1 else f"in {n} {unit}s"
+
+
 def render_usage(out: Output, u: Usage) -> None:
     if out.json_mode:
         out.emit_json(_model_json(u))
@@ -295,7 +334,7 @@ def render_usage(out: Output, u: Usage) -> None:
     else:
         out.console.print(f"  {label} {ex.calls_today} / {ex.daily_limit} today  [dim](free — no credit charge)[/dim]")
     if u.quota_resets_at:
-        out.console.print(f"  [dim]Quota resets {u.quota_resets_at}[/dim]")
+        out.console.print(f"  [dim]Quota resets {_humanize_reset(u.quota_resets_at)}[/dim]")
 
 
 def render_config(out: Output, payload: dict[str, Any]) -> None:

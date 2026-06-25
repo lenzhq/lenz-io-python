@@ -669,7 +669,38 @@ def test_usage_pretty_shows_bonus_breakdown():
     assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
     # No bonus tail on Ask or Assess (credits==0 for both)
     assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]
-    assert "Quota resets 2026-07-01" in text
+    # Humanized: absolute date always present; relative prefix ("in N days")
+    # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
+    assert "Quota resets" in text
+    assert "Jul 1, 2026" in text
+
+
+@pytest.mark.parametrize(
+    "iso,expected",
+    [
+        # relative buckets (now pinned to 2026-06-25T12:00 UTC)
+        ("2026-07-01T00:00:00+00:00", "in 6 days (Jul 1, 2026)"),
+        ("2026-06-25T13:00:00+00:00", "in 1 hour (Jun 25, 2026)"),
+        ("2026-06-25T12:10:00+00:00", "in 10 minutes (Jun 25, 2026)"),
+        ("2026-06-25T12:00:30+00:00", "in under a minute (Jun 25, 2026)"),
+        ("2026-06-27T06:00:00+00:00", "tomorrow (Jun 27, 2026)"),  # 42h → not "in 2 days" yet
+        # already past → bare absolute, no awkward "in -N"
+        ("2026-06-20T00:00:00+00:00", "Jun 20, 2026"),
+        # date-only (no tz) is assumed UTC and still parses
+        ("2026-07-01", "in 6 days (Jul 1, 2026)"),
+        # Z suffix normalized
+        ("2026-07-01T00:00:00Z", "in 6 days (Jul 1, 2026)"),
+        # unparseable → echoed verbatim (lax/forward-compatible)
+        ("whenever", "whenever"),
+    ],
+)
+def test_humanize_reset(iso, expected):
+    from datetime import datetime, timezone
+
+    from lenz_io.cli.render import _humanize_reset
+
+    now = datetime(2026, 6, 25, 12, 0, 0, tzinfo=timezone.utc)
+    assert _humanize_reset(iso, now=now) == expected
 
 
 def test_usage_pretty_unlimited_extract():
