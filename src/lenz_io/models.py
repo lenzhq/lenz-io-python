@@ -304,15 +304,48 @@ class BatchItemResult(_Lax):
     status_detail: TaskStatus | None = None
 
 
+class UsageCapacity(_Lax):
+    """Per-capability remaining capacity (``verify`` / ``ask``).
+
+    Two buckets, kept separate on purpose:
+
+    - ``quota_*``  — the recurring monthly allowance for the current plan;
+      resets every period (see :attr:`Usage.quota_resets_at`).
+      ``quota_remaining`` is ``quota_total - quota_used`` (never negative).
+    - ``credits``  — one-off top-up credits that do NOT reset monthly; spent
+      only after the monthly quota is exhausted.
+
+    ``remaining`` is the true usable capacity: ``quota_remaining + credits``.
+    """
+
+    quota_used: int = 0
+    quota_total: int = 0
+    quota_remaining: int = 0
+    credits: int = 0
+    remaining: int = 0
+
+
+class UsageExtract(_Lax):
+    """Daily ``/extract`` usage — a per-day rate limit, not credit-based."""
+
+    calls_today: int = 0
+    daily_limit: int = 0
+    unlimited: bool = False
+
+
 class Usage(_Lax):
-    """Returned by ``GET /me/usage``."""
+    """Returned by ``GET /me/usage`` — usage + remaining capacity for the key.
+
+    Monthly quota (resets at ``quota_resets_at``) and one-off top-up credits are
+    reported separately per capability so callers can tell a recurring allowance
+    apart from a purchased balance.
+    """
 
     plan: str = ""
-    credits_used: int = 0
-    credits_total: int = 0
-    credits_resets_at: str | None = None
-    extract_calls_today: int = 0
-    extract_daily_limit: int = 0
+    quota_resets_at: str | None = None
+    verify: UsageCapacity = Field(default_factory=UsageCapacity)
+    ask: UsageCapacity = Field(default_factory=UsageCapacity)
+    extract: UsageExtract = Field(default_factory=UsageExtract)
 
 
 class AskMessage(_Lax):

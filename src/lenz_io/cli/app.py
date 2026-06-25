@@ -73,5 +73,6 @@ app.command("ask")(commands.ask)
 app.command("login")(commands.login)
 app.command("logout")(commands.logout)
 app.command("config")(commands.config_status)
+app.command("usage")(commands.usage)
 # Hidden: `lenz help [cmd]` mirrors `lenz [cmd] --help`; not listed in --help.
 app.command("help", hidden=True)(commands.help_command)

@@ -35,6 +35,9 @@ from lenz_io.models import (
     Source,
     TaskAccepted,
     TaskStatus,
+    Usage,
+    UsageCapacity,
+    UsageExtract,
     Verification,
 )
 
@@ -76,6 +79,7 @@ class FakeClient:
         select_task=None,
         ask_reply=None,
         verifications=None,
+        usage_result=None,
         raises=None,
     ):
         self._extract = extract_result
@@ -87,6 +91,7 @@ class FakeClient:
         self._select_task = select_task
         self.ask = _FakeAsk(ask_reply)
         self.verifications = verifications or _FakeVerifications()
+        self._usage = usage_result
         self._raises = raises or {}
         self.verify_calls: list = []
         self.select_calls: list = []
@@ -121,6 +126,10 @@ class FakeClient:
             batch_id="b-1",
             items=[TaskAccepted(task_id=f"sel-{i + 1}", claim_text=t) for i, t in enumerate(texts)],
         )
+
+    def usage(self):
+        self._maybe_raise("usage")
+        return self._usage
 
     def close(self):
         pass
@@ -586,6 +595,99 @@ def test_assess_json_success(monkeypatch):
     result = runner.invoke(app, ["--json", "assess", "c"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["claims"][0]["verdict"] == "False"
+
+
+def _usage(**kw):
+    """Build a Usage with the nested per-capability shape (verify/ask/extract)."""
+    verify = UsageCapacity(**kw.pop("verify", {}))
+    ask = UsageCapacity(**kw.pop("ask", {}))
+    extract = UsageExtract(**kw.pop("extract", {}))
+    return Usage(verify=verify, ask=ask, extract=extract, **kw)
+
+
+def test_usage_json_success(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            usage_result=_usage(
+                plan="developer",
+                quota_resets_at="2026-07-01",
+                verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
+                ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+                extract={"calls_today": 3, "daily_limit": 1000},
+            )
+        ),
+    )
+    result = runner.invoke(app, ["--json", "usage"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["plan"] == "developer"
+    assert payload["verify"]["remaining"] == 405
+    assert payload["verify"]["credits"] == 25
+    assert payload["ask"]["quota_total"] == 200
+    assert payload["extract"]["calls_today"] == 3
+
+
+def test_usage_pretty_shows_bonus_breakdown():
+    """Human render: per-capability 'remaining left' headline + quota breakdown,
+    with a '+ N bonus' tail when the key holds top-up credits. CliRunner forces
+    json_mode (non-tty stdout), so render directly like other pretty tests."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_usage
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False  # force pretty even though the test stdout isn't a tty
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_usage(
+        out,
+        _usage(
+            plan="developer",
+            quota_resets_at="2026-07-01",
+            verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
+            ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+            extract={"calls_today": 3, "daily_limit": 1000},
+        ),
+    )
+    text = buf.getvalue()
+    assert "developer plan" in text
+    assert "Verify:" in text
+    assert "405 left" in text  # quota_remaining + bonus
+    assert "120 / 500 quota + 25 bonus" in text  # bonus tail present
+    assert "Ask:" in text
+    assert "190 left" in text
+    assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]  # no bonus tail when credits==0
+    assert "Quota resets 2026-07-01" in text
+
+
+def test_usage_pretty_unlimited_extract():
+    """unlimited extract → 'unlimited', not 'N / 0 today'."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_usage
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_usage(out, _usage(plan="scale", extract={"unlimited": True}))
+    text = buf.getvalue()
+    assert "Extract:" in text
+    assert "unlimited" in text
+    assert "/ 0 today" not in text
+
+
+def test_usage_needs_key(monkeypatch):
+    _patch_client(monkeypatch, FakeClient())
+    result = runner.invoke(app, ["--json", "usage"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["error"]["code"] == "no_api_key"
 
 
 # ── --json error contract + corrected status codes ──────────────────────────

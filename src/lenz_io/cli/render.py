@@ -19,6 +19,8 @@ from rich.markdown import Markdown
 from lenz_io.models import (
     AssessResponse,
     ExtractedClaims,
+    Usage,
+    UsageCapacity,
     Verification,
 )
 
@@ -273,6 +275,35 @@ def render_ask(out: Output, reply: Any) -> None:
     # Render it instead of dumping raw, so '**600 Nm**' shows bold, not literal
     # asterisks, and paragraph spacing is normalized.
     out.console.print(Markdown(content))
+
+
+def _capacity_row(out: Output, label: str, cap: UsageCapacity) -> None:
+    """One credit-based capability (verify / ask): usable total + breakdown.
+
+    ``remaining`` is the headline (monthly quota left + bonus credits); the dim
+    tail shows the split — ``used / total quota`` plus ``+N bonus`` when the key
+    holds one-off top-up credits."""
+    detail = f"{cap.quota_used} / {cap.quota_total} quota"
+    if cap.credits:
+        detail += f" + {cap.credits} bonus"
+    out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
+
+
+def render_usage(out: Output, u: Usage) -> None:
+    if out.json_mode:
+        out.emit_json(_model_json(u))
+        return
+    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({u.plan or '—'} plan)[/dim]")
+    _capacity_row(out, "Verify", u.verify)
+    _capacity_row(out, "Ask", u.ask)
+    ex = u.extract
+    label = f"{'Extract:':<9}"
+    if ex.unlimited:
+        out.console.print(f"  {label} [dim]unlimited[/dim]")
+    else:
+        out.console.print(f"  {label} {ex.calls_today} / {ex.daily_limit} today  [dim](free — no credit charge)[/dim]")
+    if u.quota_resets_at:
+        out.console.print(f"  [dim]Quota resets {u.quota_resets_at}[/dim]")
 
 
 def render_config(out: Output, payload: dict[str, Any]) -> None:
