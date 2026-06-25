@@ -35,6 +35,9 @@ from lenz_io.models import (
     Source,
     TaskAccepted,
     TaskStatus,
+    Usage,
+    UsageCapacity,
+    UsageExtract,
     Verification,
 )
 
@@ -76,17 +79,19 @@ class FakeClient:
         select_task=None,
         ask_reply=None,
         verifications=None,
+        usage_result=None,
         raises=None,
     ):
         self._extract = extract_result
         self._assess = assess_result
         self._verify_task = verify_task or TaskAccepted(task_id="t-1", status="queued")
         self._statuses = list(statuses or [])
-        self._select_task = select_task or BatchAccepted(
-            batch_id="b-1", items=[TaskAccepted(task_id="t-2", claim_text="")]
-        )
+        # None → select() builds one task per selected text (realistic batch
+        # fan-out); pass select_task to override with a fixed BatchAccepted.
+        self._select_task = select_task
         self.ask = _FakeAsk(ask_reply)
         self.verifications = verifications or _FakeVerifications()
+        self._usage = usage_result
         self._raises = raises or {}
         self.verify_calls: list = []
         self.select_calls: list = []
@@ -115,7 +120,16 @@ class FakeClient:
 
     def select(self, task_id, *, texts):
         self.select_calls.append((task_id, texts))
-        return self._select_task
+        if self._select_task is not None:
+            return self._select_task
+        return BatchAccepted(
+            batch_id="b-1",
+            items=[TaskAccepted(task_id=f"sel-{i + 1}", claim_text=t) for i, t in enumerate(texts)],
+        )
+
+    def usage(self):
+        self._maybe_raise("usage")
+        return self._usage
 
     def close(self):
         pass
@@ -583,6 +597,109 @@ def test_assess_json_success(monkeypatch):
     assert json.loads(result.stdout)["claims"][0]["verdict"] == "False"
 
 
+def _usage(**kw):
+    """Build a Usage with the nested per-capability shape (verify/ask/assess/extract)."""
+    verify = UsageCapacity(**kw.pop("verify", {}))
+    ask = UsageCapacity(**kw.pop("ask", {}))
+    assess = UsageCapacity(**kw.pop("assess", {}))
+    extract = UsageExtract(**kw.pop("extract", {}))
+    return Usage(verify=verify, ask=ask, assess=assess, extract=extract, **kw)
+
+
+def test_usage_json_success(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            usage_result=_usage(
+                plan="developer",
+                quota_resets_at="2026-07-01",
+                verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
+                ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+                assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
+                extract={"calls_today": 3, "daily_limit": 1000},
+            )
+        ),
+    )
+    result = runner.invoke(app, ["--json", "usage"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["plan"] == "developer"
+    assert payload["verify"]["remaining"] == 405
+    assert payload["verify"]["credits"] == 25
+    assert payload["ask"]["quota_total"] == 200
+    assert payload["assess"]["remaining"] == 955
+    assert payload["assess"]["credits"] == 0
+    assert payload["extract"]["calls_today"] == 3
+
+
+def test_usage_pretty_shows_bonus_breakdown():
+    """Human render: per-capability 'remaining left' headline + quota breakdown,
+    with a '+ N bonus' tail when the key holds top-up credits. CliRunner forces
+    json_mode (non-tty stdout), so render directly like other pretty tests."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_usage
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False  # force pretty even though the test stdout isn't a tty
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_usage(
+        out,
+        _usage(
+            plan="developer",
+            quota_resets_at="2026-07-01",
+            verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
+            ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+            assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
+            extract={"calls_today": 3, "daily_limit": 1000},
+        ),
+    )
+    text = buf.getvalue()
+    assert "developer plan" in text
+    assert "Verify:" in text
+    assert "405 left" in text  # quota_remaining + bonus
+    assert "120 / 500 quota + 25 bonus" in text  # bonus tail present
+    assert "Ask:" in text
+    assert "190 left" in text
+    assert "Assess:" in text
+    assert "955 left" in text  # quota-only capability, no bonus tail
+    # Row order: Verify → Ask → Assess → Extract
+    assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
+    # No bonus tail on Ask or Assess (credits==0 for both)
+    assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]
+    assert "Quota resets 2026-07-01" in text
+
+
+def test_usage_pretty_unlimited_extract():
+    """unlimited extract → 'unlimited', not 'N / 0 today'."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_usage
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_usage(out, _usage(plan="scale", extract={"unlimited": True}))
+    text = buf.getvalue()
+    assert "Extract:" in text
+    assert "unlimited" in text
+    assert "/ 0 today" not in text
+
+
+def test_usage_needs_key(monkeypatch):
+    _patch_client(monkeypatch, FakeClient())
+    result = runner.invoke(app, ["--json", "usage"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["error"]["code"] == "no_api_key"
+
+
 # ── --json error contract + corrected status codes ──────────────────────────
 @pytest.mark.parametrize(
     "exc,code,status",
@@ -845,6 +962,103 @@ def test_verify_ctrl_c_prints_resume_handle(monkeypatch):
     payload = json.loads(result.stdout)
     assert payload["status"] == "interrupted"
     assert payload["task_id"] == "t-1"
+
+
+def test_parse_claim_selection():
+    from lenz_io.cli.verify import _parse_claim_selection as p
+
+    assert p(None) is None
+    assert p("all") == "all"
+    assert p("2") == [1]
+    assert p("1, 2, 4, 5") == [0, 1, 3, 4]
+    assert p("1,1,2") == [0, 1]  # dedup
+
+
+def test_verify_multi_select_json_emits_array(monkeypatch):
+    """`--claim 1,3` selects two claims → two pipelines → a JSON array of both
+    verdicts (the new batch path)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B"), CandidateClaim(text="C")],
+                ),
+                TaskStatus(status="completed", result=_verification()),  # for sel-1
+                TaskStatus(status="completed", result=_verification()),  # for sel-2
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,3"])
+    assert result.exit_code == 0
+    assert fake.select_calls == [("t-1", ["A", "C"])]  # picked options 1 and 3
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list) and len(payload) == 2
+    assert all(item["status"] == "completed" for item in payload)
+
+
+def test_verify_select_all(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+                TaskStatus(status="completed", result=_verification()),
+                TaskStatus(status="completed", result=_verification()),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "all"])
+    assert result.exit_code == 0
+    assert fake.select_calls == [("t-1", ["A", "B"])]
+    assert len(json.loads(result.stdout)) == 2
+
+
+def test_verify_multi_select_detach(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,2", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert len(payload) == 2 and all(p["status"] == "submitted" for p in payload)
+
+
+def test_verify_claim_out_of_range_multi(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,9"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"]["code"] == "invalid_selection"
 
 
 def test_verify_deadline_resets_after_pick(monkeypatch):

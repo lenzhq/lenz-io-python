@@ -35,6 +35,7 @@ from lenz_io.models import (
     AssessResponse,
     ExtractedClaims,
     TaskStatus,
+    Usage,
     Verification,
 )
 
@@ -133,6 +134,7 @@ def _load(name: str) -> dict:
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
         ("verifications_detail.json", Verification),
+        ("usage.json", Usage),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):

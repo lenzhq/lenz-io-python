@@ -50,15 +50,36 @@ class TestConstruction:
                 200,
                 json={
                     "plan": "plus",
-                    "credits_used": 5,
-                    "credits_total": 100,
-                    "extract_calls_today": 0,
-                    "extract_daily_limit": 1000,
+                    "quota_resets_at": "2026-07-01T00:00:00+00:00",
+                    "verify": {
+                        "quota_used": 5,
+                        "quota_total": 100,
+                        "quota_remaining": 95,
+                        "credits": 0,
+                        "remaining": 95,
+                    },
+                    "ask": {
+                        "quota_used": 0,
+                        "quota_total": 50,
+                        "quota_remaining": 50,
+                        "credits": 0,
+                        "remaining": 50,
+                    },
+                    "assess": {
+                        "quota_used": 0,
+                        "quota_total": 500,
+                        "quota_remaining": 500,
+                        "credits": 0,
+                        "remaining": 500,
+                    },
+                    "extract": {"calls_today": 0, "daily_limit": 1000, "unlimited": False},
                 },
             )
             u = client.usage()
         assert u.plan == "plus"
-        assert u.credits_total == 100
+        assert u.verify.quota_total == 100
+        assert u.verify.remaining == 95
+        assert u.assess.credits == 0
 
     def test_base_url_override_routes_through_alternate_base(self, custom_base_client):
         with respx.mock(base_url="http://localhost:8001/api/v1") as r:
@@ -217,6 +238,24 @@ class TestVerify:
         # (before any HTTP — no respx route needed).
         with pytest.raises(TypeError):
             client.select("tsk_001", text="The earth is flat.")
+
+    def test_select_partial_flag_is_reachable_via_lax(self, client):
+        # The server sets `partial: true` on a mid-fan-out enqueue failure (still
+        # a 202 — the spawned task_ids are returned). We intentionally don't type
+        # `partial` on BatchAccepted, but the `_Lax` model must pass it through so
+        # callers who need the degraded-success signal can still read it.
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/tsk_001/select").respond(
+                200,
+                json={
+                    "batch_id": "bat_1",
+                    "items": [{"task_id": "tsk_002", "claim_text": "The earth is flat."}],
+                    "partial": True,
+                },
+            )
+            b = client.select("tsk_001", texts=["The earth is flat.", "Coffee causes cancer."])
+        assert b.batch_id == "bat_1"
+        assert b.partial is True
 
 
 # ─────────────────────────────────────────────────── assess (top-level) ──

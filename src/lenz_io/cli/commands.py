@@ -17,7 +17,7 @@ from ._run import execute, read_text_arg
 from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
 from .context import CLIState
 from .errors import CLIError
-from .render import render_ask, render_assess, render_config, render_extract
+from .render import render_ask, render_assess, render_config, render_extract, render_usage
 
 
 def extract(
@@ -79,6 +79,19 @@ def ask(
                 ) from None
             raise
         render_ask(out, reply)
+
+    execute(state, needs_key=True, work=work)
+
+
+def usage(ctx: typer.Context) -> None:
+    """Show this key's account usage — plan, credit balance, and today's extract calls. Needs a key."""
+    state: CLIState = ctx.obj
+    out = state.output
+
+    def work(client: Lenz) -> None:
+        with out.working("Fetching usage…"):
+            result = client.usage()
+        render_usage(out, result)
 
     execute(state, needs_key=True, work=work)
 

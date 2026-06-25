@@ -19,6 +19,8 @@ from rich.markdown import Markdown
 from lenz_io.models import (
     AssessResponse,
     ExtractedClaims,
+    Usage,
+    UsageCapacity,
     Verification,
 )
 
@@ -179,6 +181,88 @@ def render_verification(out: Output, v: Verification | None) -> None:
         out.console.print(f'[dim]ask follow-ups:[/dim] lenz ask {v.verification_id} "<your question>"')
 
 
+def _truncate(text: str, width: int = 60) -> str:
+    text = " ".join((text or "").split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def _batch_status_cell(st: Any) -> Any:
+    """The per-row status: an animated spinner while processing, else a verdict."""
+    from rich.spinner import Spinner
+    from rich.text import Text
+
+    if st is None:
+        return Spinner("dots", text=Text("Verifying…", style="dim"))
+    if st.status == "processing":
+        step = (st.progress or {}).get("step")
+        from lenz_io.cli.verify import _step_label  # local: friendly step copy
+
+        label = _step_label(step).removeprefix("Verifying… ")
+        return Spinner("dots", text=Text(label, style="dim"))
+    if st.status == "completed" and st.result is not None:
+        v = st.result
+        color = _VERDICT_COLOR.get(v.verdict, "white")
+        score = "" if v.lenz_score is None else f" {v.lenz_score}/10"
+        return Text(f"{v.verdict or '?'} ({v.confidence}){score}", style=f"bold {color}")
+    if st.status == "failed":
+        return Text("failed", style="red")
+    return Text(st.status or "?", style="yellow")
+
+
+def render_batch_table(picks: list[tuple[str, str]], statuses: dict[str, Any]) -> Any:
+    """Live table for N concurrent verifications — one row per claim, each
+    updating independently as its own pipeline progresses."""
+    from rich.table import Table
+
+    table = Table.grid(padding=(0, 2))
+    table.add_column(justify="right", style="dim")  # [i/N]
+    table.add_column(min_width=22)  # status
+    table.add_column()  # claim
+    n = len(picks)
+    for i, (tid, text) in enumerate(picks, 1):
+        table.add_row(f"[{i}/{n}]", _batch_status_cell(statuses.get(tid)), _truncate(text))
+    return table
+
+
+def _batch_verdict_block(out: Output, v: Verification) -> None:
+    """Compact per-claim verdict for a batch: verdict line, summary, and a
+    single dim footer (source count + verification_id). Deliberately omits the
+    full source list and the ``ask`` hint that single-claim ``verify`` shows —
+    in a batch of N those repeat into a wall. Full sources live on the web page
+    behind the ``verification_id`` (or a single ``lenz verify`` of that claim)."""
+    color = _VERDICT_COLOR.get(v.verdict, "white")
+    score = "" if v.lenz_score is None else f"  [dim]score {v.lenz_score}/10[/dim]"
+    out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
+    if v.executive_summary:
+        out.console.print(v.executive_summary)
+    footer = []
+    if v.sources:
+        footer.append(f"{len(v.sources)} source{'s' if len(v.sources) != 1 else ''}")
+    if v.verification_id:
+        footer.append(f"verification_id: {v.verification_id}")
+    if footer:
+        out.console.print(f"[dim]{'  ·  '.join(footer)}[/dim]")
+
+
+def render_batch_details(out: Output, picks: list[tuple[str, str]], statuses: dict[str, Any]) -> None:
+    """Final verdicts for each claim, after the live table settles — printed to
+    stdout. Compact per claim (see ``_batch_verdict_block``) so N verdicts stay
+    scannable instead of becoming a wall of sources."""
+    n = len(picks)
+    for i, (tid, text) in enumerate(picks, 1):
+        if i > 1:
+            out.console.print("[dim]" + "─" * 70 + "[/dim]")
+        out.console.print(f"[bold]\\[{i}/{n}][/bold] {text}")
+        st = statuses.get(tid)
+        if st is not None and st.status == "completed" and st.result is not None:
+            _batch_verdict_block(out, st.result)
+        elif st is not None and st.status == "failed":
+            out.console.print(f"[red]Failed:[/red] {st.error or st.failure_detail or 'pipeline error'}")
+        else:
+            label = "timed out" if st is None else (st.status or "unknown")
+            out.console.print(f"[yellow]{label}[/yellow] — resume: lenz verify --resume {tid}")
+
+
 def render_ask(out: Output, reply: Any) -> None:
     if out.json_mode:
         out.emit_json(_model_json(reply))
@@ -191,6 +275,36 @@ def render_ask(out: Output, reply: Any) -> None:
     # Render it instead of dumping raw, so '**600 Nm**' shows bold, not literal
     # asterisks, and paragraph spacing is normalized.
     out.console.print(Markdown(content))
+
+
+def _capacity_row(out: Output, label: str, cap: UsageCapacity) -> None:
+    """One credit-based capability (verify / ask): usable total + breakdown.
+
+    ``remaining`` is the headline (monthly quota left + bonus credits); the dim
+    tail shows the split — ``used / total quota`` plus ``+N bonus`` when the key
+    holds one-off top-up credits."""
+    detail = f"{cap.quota_used} / {cap.quota_total} quota"
+    if cap.credits:
+        detail += f" + {cap.credits} bonus"
+    out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
+
+
+def render_usage(out: Output, u: Usage) -> None:
+    if out.json_mode:
+        out.emit_json(_model_json(u))
+        return
+    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({u.plan or '—'} plan)[/dim]")
+    _capacity_row(out, "Verify", u.verify)
+    _capacity_row(out, "Ask", u.ask)
+    _capacity_row(out, "Assess", u.assess)
+    ex = u.extract
+    label = f"{'Extract:':<9}"
+    if ex.unlimited:
+        out.console.print(f"  {label} [dim]unlimited[/dim]")
+    else:
+        out.console.print(f"  {label} {ex.calls_today} / {ex.daily_limit} today  [dim](free — no credit charge)[/dim]")
+    if u.quota_resets_at:
+        out.console.print(f"  [dim]Quota resets {u.quota_resets_at}[/dim]")
 
 
 def render_config(out: Output, payload: dict[str, Any]) -> None:
