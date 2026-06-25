@@ -82,9 +82,9 @@ class FakeClient:
         self._assess = assess_result
         self._verify_task = verify_task or TaskAccepted(task_id="t-1", status="queued")
         self._statuses = list(statuses or [])
-        self._select_task = select_task or BatchAccepted(
-            batch_id="b-1", items=[TaskAccepted(task_id="t-2", claim_text="")]
-        )
+        # None → select() builds one task per selected text (realistic batch
+        # fan-out); pass select_task to override with a fixed BatchAccepted.
+        self._select_task = select_task
         self.ask = _FakeAsk(ask_reply)
         self.verifications = verifications or _FakeVerifications()
         self._raises = raises or {}
@@ -115,7 +115,12 @@ class FakeClient:
 
     def select(self, task_id, *, texts):
         self.select_calls.append((task_id, texts))
-        return self._select_task
+        if self._select_task is not None:
+            return self._select_task
+        return BatchAccepted(
+            batch_id="b-1",
+            items=[TaskAccepted(task_id=f"sel-{i + 1}", claim_text=t) for i, t in enumerate(texts)],
+        )
 
     def close(self):
         pass
@@ -845,6 +850,103 @@ def test_verify_ctrl_c_prints_resume_handle(monkeypatch):
     payload = json.loads(result.stdout)
     assert payload["status"] == "interrupted"
     assert payload["task_id"] == "t-1"
+
+
+def test_parse_claim_selection():
+    from lenz_io.cli.verify import _parse_claim_selection as p
+
+    assert p(None) is None
+    assert p("all") == "all"
+    assert p("2") == [1]
+    assert p("1, 2, 4, 5") == [0, 1, 3, 4]
+    assert p("1,1,2") == [0, 1]  # dedup
+
+
+def test_verify_multi_select_json_emits_array(monkeypatch):
+    """`--claim 1,3` selects two claims → two pipelines → a JSON array of both
+    verdicts (the new batch path)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B"), CandidateClaim(text="C")],
+                ),
+                TaskStatus(status="completed", result=_verification()),  # for sel-1
+                TaskStatus(status="completed", result=_verification()),  # for sel-2
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,3"])
+    assert result.exit_code == 0
+    assert fake.select_calls == [("t-1", ["A", "C"])]  # picked options 1 and 3
+    payload = json.loads(result.stdout)
+    assert isinstance(payload, list) and len(payload) == 2
+    assert all(item["status"] == "completed" for item in payload)
+
+
+def test_verify_select_all(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+                TaskStatus(status="completed", result=_verification()),
+                TaskStatus(status="completed", result=_verification()),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "all"])
+    assert result.exit_code == 0
+    assert fake.select_calls == [("t-1", ["A", "B"])]
+    assert len(json.loads(result.stdout)) == 2
+
+
+def test_verify_multi_select_detach(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,2", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert len(payload) == 2 and all(p["status"] == "submitted" for p in payload)
+
+
+def test_verify_claim_out_of_range_multi(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1,9"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"]["code"] == "invalid_selection"
 
 
 def test_verify_deadline_resets_after_pick(monkeypatch):
