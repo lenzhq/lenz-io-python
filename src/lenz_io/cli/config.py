@@ -50,8 +50,11 @@ def _load() -> dict[str, Any]:
     return data
 
 
-def resolve_api_key(flag_key: str | None) -> tuple[str, str]:
+def resolve_api_key(flag_key: str | None, *, data: dict[str, Any] | None = None) -> tuple[str, str]:
     """Return ``(key, source)`` where source is ``flag|env|file|none``.
+
+    Pass ``data`` (a pre-loaded config dict) to avoid re-reading the file when
+    the caller already has it (see :func:`resolve_all`).
 
     Every source is ``.strip()``-ed: a stray newline/space from a paste makes an
     otherwise-valid key an illegal HTTP header value, which surfaces as a cryptic
@@ -63,39 +66,50 @@ def resolve_api_key(flag_key: str | None) -> tuple[str, str]:
     env = (os.environ.get(ENV_API_KEY) or "").strip()
     if env:
         return env, "env"
-    key = (_load().get("api_key") or "").strip()
+    key = ((data if data is not None else _load()).get("api_key") or "").strip()
     if key:
         return key, "file"
     return "", "none"
 
 
-def resolve_base_url(flag_base: str | None) -> str:
+def resolve_base_url(flag_base: str | None, *, data: dict[str, Any] | None = None) -> str:
     if flag_base:
         return flag_base.rstrip("/")
     env = os.environ.get(ENV_BASE_URL)
     if env:
         return env.rstrip("/")
-    base = _load().get("base_url")
+    base = (data if data is not None else _load()).get("base_url")
     if base:
         return str(base).rstrip("/")
     return DEFAULT_BASE_URL
 
 
-def save_api_key(key: str) -> Path:
-    """Persist ``key`` to the config file with ``0600`` perms; returns the path."""
+def resolve_all(flag_key: str | None, flag_base: str | None) -> tuple[str, str, str]:
+    """Resolve ``(key, source, base_url)`` from a SINGLE config-file read.
+
+    The callback needs both the key and the base URL; reading the file once
+    keeps them a consistent snapshot (no TOCTOU window if a concurrent
+    ``lenz login`` rewrites it) and halves the per-invocation I/O. Raises
+    ``ConfigError`` if the file is malformed (the callback degrades gracefully).
+    """
+    data = _load()
+    key, source = resolve_api_key(flag_key, data=data)
+    base = resolve_base_url(flag_base, data=data)
+    return key, source, base
+
+
+def _write_config(data: dict[str, Any]) -> Path:
+    """Write ``data`` to the config file atomically with ``0600`` perms.
+
+    Single source of truth for the secure-write incantation so a future change
+    (fsync, atomic rename, perm tweak) can't land on one writer and miss another.
+    """
     path = config_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
         os.chmod(path.parent, 0o700)
     except OSError:
         pass
-    data: dict[str, Any] = {}
-    if path.exists():
-        try:
-            data = _load()
-        except ConfigError:
-            data = {}
-    data["api_key"] = key
     # O_CREAT with mode 0600 so the key is never briefly world-readable.
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
@@ -105,6 +119,18 @@ def save_api_key(key: str) -> Path:
     except OSError:
         pass
     return path
+
+
+def save_api_key(key: str) -> Path:
+    """Persist ``key`` to the config file with ``0600`` perms; returns the path."""
+    data: dict[str, Any] = {}
+    if config_path().exists():
+        try:
+            data = _load()
+        except ConfigError:
+            data = {}
+    data["api_key"] = key
+    return _write_config(data)
 
 
 def clear_api_key() -> bool:
@@ -124,9 +150,7 @@ def clear_api_key() -> bool:
         return True
     had_key = bool(data.pop("api_key", None))
     if data:
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, indent=2)
+        _write_config(data)
     else:
         path.unlink(missing_ok=True)
     return had_key

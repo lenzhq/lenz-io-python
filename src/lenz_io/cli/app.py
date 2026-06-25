@@ -16,7 +16,7 @@ from lenz_io.client import DEFAULT_BASE_URL
 
 from . import commands
 from . import verify as verify_mod
-from .config import ENV_BASE_URL, ConfigError, resolve_api_key, resolve_base_url
+from .config import ENV_BASE_URL, ConfigError, resolve_all
 from .context import CLIState
 from .render import Output
 
@@ -53,8 +53,7 @@ def _main(
 ) -> None:
     output = Output(json_mode=json_out, no_color=no_color or bool(os.environ.get("NO_COLOR")))
     try:
-        key, source = resolve_api_key(api_key)
-        base = resolve_base_url(base_url)
+        key, source, base = resolve_all(api_key, base_url)
     except ConfigError as exc:
         # A corrupt config file resolves here, before any command — left
         # unhandled it tracebacks and bricks even `logout`/`config`, the very

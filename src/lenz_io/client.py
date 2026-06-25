@@ -277,16 +277,20 @@ class Lenz:
         timeout: float = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.Client | None = None,
+        user_agent: str | None = None,
     ) -> None:
         self._api_key = api_key or os.environ.get("LENZ_API_KEY") or ""
         self._base_url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
+        # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
+        # the SDK keeps ownership of every other default header — so a new
+        # default header can't be silently dropped by a hand-copied client.
         self._client = http_client or httpx.Client(
             timeout=httpx.Timeout(timeout),
             headers={
-                "User-Agent": _user_agent(),
+                "User-Agent": user_agent or _user_agent(),
                 "X-Lenz-API-Version": API_VERSION,
                 "Accept": "application/json",
             },

@@ -44,10 +44,16 @@ def normalize_argv(argv: list[str]) -> list[str]:
         elif tok in _GLOBAL_FLAGS or any(tok.startswith(o + "=") for o in _GLOBAL_VALUE_OPTS):
             front.append(tok)
         elif tok in _GLOBAL_VALUE_OPTS:
-            front.append(tok)
-            if i + 1 < n:  # carry its value along
+            # Only hoist with its value when the next token is a real value. If
+            # it's missing or itself an option (`--api-key --json`), leave the
+            # opt in place so Click reports a clear error instead of us silently
+            # swallowing the following flag as the value.
+            if i + 1 < n and not argv[i + 1].startswith("-"):
+                front.append(tok)
                 i += 1
                 front.append(argv[i])
+            else:
+                rest.append(tok)
         else:
             rest.append(tok)
         i += 1

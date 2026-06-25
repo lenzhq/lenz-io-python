@@ -190,6 +190,37 @@ def test_normalize_argv_respects_double_dash():
     assert normalize_argv(["extract", "--", "--json"]) == ["extract", "--", "--json"]
 
 
+def test_build_client_overrides_only_user_agent():
+    """The CLI sets a distinct UA via the SDK's user_agent= param while the SDK
+    keeps ownership of its other default headers (so a new one can't be dropped),
+    and owns/closes the client (no injected-client leak)."""
+    from lenz_io.cli.client import build_client, cli_user_agent
+
+    c = build_client(api_key="k", base_url="")
+    assert c._client.headers["User-Agent"] == cli_user_agent()
+    assert c._client.headers["X-Lenz-API-Version"]  # SDK default preserved, not hand-copied
+    assert c._owns_client is True  # close() will actually close it
+    c.close()
+
+
+def test_normalize_argv_value_opt_does_not_swallow_a_flag():
+    # `--api-key` with a flag-looking next token must NOT consume it as its value
+    # (that silently loses the --json flag + makes the key the string "--json").
+    # Leave --api-key in place so Click reports a clear error; --json still hoists.
+    assert normalize_argv(["verify", "--api-key", "--json", "claim"]) == [
+        "--json",
+        "verify",
+        "--api-key",
+        "claim",
+    ]
+
+
+def test_normalize_argv_trailing_value_opt_with_no_value():
+    # `--api-key` at the very end (forgot the value) is left in place, not hoisted
+    # bare, so Click errors at the right spot instead of a confusing front error.
+    assert normalize_argv(["extract", "text", "--api-key"]) == ["extract", "text", "--api-key"]
+
+
 def test_normalize_argv_leaves_command_options_in_place():
     assert normalize_argv(["verify", "claim", "--timeout", "5", "--json"]) == [
         "--json",
@@ -806,6 +837,55 @@ def test_verify_ctrl_c_prints_resume_handle(monkeypatch):
     payload = json.loads(result.stdout)
     assert payload["status"] == "interrupted"
     assert payload["task_id"] == "t-1"
+
+
+def test_verify_deadline_resets_after_pick(monkeypatch):
+    """Time spent at the picker must not be charged against the second pipeline
+    run's timeout. A fake clock jumps past the original deadline during the pick;
+    with the reset the second round still has a full budget."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    seq = iter([0.0, 1.0, 50.0, 51.0])  # start, round1 check, reset, round2 check
+    monkeypatch.setattr(verify_mod.time, "monotonic", lambda: next(seq, 100.0))
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                ),
+                TaskStatus(status="completed", result=_verification()),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "1", "--timeout", "10"])
+    assert result.exit_code == 0  # no spurious timeout despite the clock jump
+    assert json.loads(result.stdout)["verdict"] == "False"
+
+
+def test_resume_honors_claim_preselect(monkeypatch):
+    """`--resume <id> --claim N` must auto-select on a resumed task that re-enters
+    needs_input, not drop the preselection (regression: _resume ignored --claim)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(status="processing"),  # consumed by _resume's first poll
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="claim A"), CandidateClaim(text="claim B")],
+                ),
+                TaskStatus(status="completed", result=_verification()),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "--resume", "t-1", "--claim", "2"])
+    assert result.exit_code == 0  # not exit 3 (needs_input emitted)
+    assert fake.select_calls == [("t-1", ["claim B"])]
+    assert json.loads(result.stdout)["verdict"] == "False"
 
 
 # ── lazy-import guard ───────────────────────────────────────────────────────

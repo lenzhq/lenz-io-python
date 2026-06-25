@@ -74,7 +74,7 @@ def verify(
 
     def work(client: Lenz) -> None:
         if resume:
-            _resume(client, out, resume, timeout)
+            _resume(client, out, resume, timeout, preselect=preselect)
             return
         text = read_text_arg(claim)
         accepted = client.verify(text, idempotency_key=uuid.uuid4().hex)
@@ -110,6 +110,10 @@ def _poll(client: Lenz, out: Output, task_id: str, timeout: float, *, preselect:
         if st.status == "needs_input":
             task_id = _needs_input(client, out, task_id, st, preselect)
             preselect = None
+            # A pick spawns a fresh ~90s pipeline. Reset the clock so the new
+            # run gets the full --timeout budget, not what's left after the
+            # (possibly slow, interactive) selection.
+            deadline = time.monotonic() + timeout
             continue
         raise CLIError(f"Unexpected status {st.status!r}.", code="unexpected_status")
 
@@ -215,7 +219,7 @@ def _render_similar(out: Output, similar: list[Any]) -> None:
         out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{score}  [dim]id: {s.verification_id}[/dim]")
 
 
-def _resume(client: Lenz, out: Output, ident: str, timeout: float) -> None:
+def _resume(client: Lenz, out: Output, ident: str, timeout: float, *, preselect: int | None = None) -> None:
     try:
         st = client.get_status(ident)
     except LenzError as exc:
@@ -227,8 +231,8 @@ def _resume(client: Lenz, out: Output, ident: str, timeout: float) -> None:
         render_verification(out, st.result)
     elif st.status == "failed":
         raise CLIError(st.error or "Verification failed.", code="pipeline_failed")
-    else:  # processing / needs_input → keep polling from here
-        _poll(client, out, ident, timeout)
+    else:  # processing / needs_input → keep polling from here, honoring --claim
+        _poll(client, out, ident, timeout, preselect=preselect)
 
 
 def _resume_as_verification(client: Lenz, out: Output, ident: str) -> None:
