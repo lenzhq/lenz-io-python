@@ -50,3 +50,21 @@ jobs:
           python -m build
       - name: Publish to PyPI (OIDC trusted publisher)
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  notify:
+    name: discord alert
+    # Only runs when `publish` succeeded (default needs-gating), so this fires
+    # exactly on a successful PyPI publish.
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Discord #alerts
+        env:
+          # Webhook bound to the #alerts channel — set as a repo secret.
+          # Mirrors the server repo's CI alert (same secret name).
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "No DISCORD_WEBHOOK_URL secret; skipping."; exit 0; fi
+          VERSION="${GITHUB_REF_NAME#v}"
+          curl -sS -H "Content-Type: application/json" -X POST "$WEBHOOK" \
+            -d "{\"content\": \"🟢 \`lenz-io ${VERSION}\` published to PyPI — https://pypi.org/project/lenz-io/${VERSION}/\"}"
