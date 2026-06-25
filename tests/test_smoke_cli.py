@@ -73,8 +73,9 @@ def test_cli_extract_real_contract():
     proc = _run("extract", "Einstein won the 1921 Nobel Prize for his work on relativity", "--json", timeout=60)
     assert proc.returncode == 0, proc.stderr
     data = json.loads(proc.stdout)
-    # framing fills atomic_claim (single) and/or identified_claims (multi)
-    assert (data.get("atomic_claim") or "").strip() or data.get("identified_claims")
+    # framing fills `claim` for a single cohesive input and/or
+    # `identified_claims` for a multi-claim input (see ExtractedClaims).
+    assert (data.get("claim") or "").strip() or data.get("identified_claims")
 
 
 def test_cli_assess_real_contract():
