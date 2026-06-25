@@ -101,11 +101,12 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.emit_json(_model_json(result))
         return
     # The server splits a claim set across two fields: the primary claim lands
-    # in ``atomic_claim`` and any extras in ``identified_claims``. Neither alone
-    # is the full list — render the union so the primary is never dropped (and
-    # the count is right). Single-claim input → just ``atomic_claim``.
-    atomic = (getattr(result, "atomic_claim", "") or "").strip()
-    claims = [atomic] if atomic else []
+    # in ``claim`` and any extras in ``identified_claims``. Neither alone is the
+    # full list — the primary is usually NOT echoed into ``identified_claims`` —
+    # so render the union so the primary is never dropped (and the count is
+    # right). Single-claim input → just ``claim``.
+    primary = (getattr(result, "claim", "") or "").strip()
+    claims = [primary] if primary else []
     for c in result.identified_claims or []:
         c = (c or "").strip()
         if c and c not in claims:

@@ -426,11 +426,12 @@ def test_extract_pretty_renders_atomic_claim():
 
     from lenz_io.cli.render import Output, render_extract
 
-    # extra="allow" carries atomic_claim/domain through model_validate.
+    # The public /extract response carries the primary claim under `claim`
+    # (the server renames framing's internal `atomic_claim` → `claim`).
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "History",
-            "atomic_claim": "Einstein won the 1921 Nobel Prize in Physics.",
+            "claim": "Einstein won the 1921 Nobel Prize in Physics.",
             "key_entities": [{"name": "Albert Einstein", "type": "person"}],
         }
     )
@@ -457,7 +458,7 @@ def test_extract_pretty_multi_claim_includes_primary():
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "Science",
-            "atomic_claim": "The Earth is flat.",
+            "claim": "The Earth is flat.",
             "identified_claims": ["Ruby is harder than diamond."],
         }
     )
@@ -570,16 +571,14 @@ def test_render_config_shows_source_and_masked_key():
 def test_render_extract_no_claim_found():
     from lenz_io.cli.render import render_extract
 
-    text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "atomic_claim": ""}))
+    text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "claim": ""}))
     assert "No verifiable claim found" in text
 
 
 def test_render_extract_ambiguous_candidates():
     from lenz_io.cli.render import render_extract
 
-    extracted = ExtractedClaims.model_validate(
-        {"atomic_claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]}
-    )
+    extracted = ExtractedClaims.model_validate({"claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]})
     text = _render(render_extract, extracted)
     assert "candidate readings" in text
     assert "did you mean A?" in text
