@@ -17,13 +17,24 @@ All notable changes to this SDK are documented here. Format follows
   Sends a distinct `User-Agent: lenz-cli/<version>`. A bare
   `pip install lenz-io` keeps the SDK lean; running `lenz` without the extra
   prints an install nudge instead of a traceback.
+- **`/me/usage` is now per-capability.** `client.usage()` returns `plan`,
+  `quota_resets_at`, and a `verify` / `ask` / `assess` / `extract` block instead
+  of the old flat `credits_used` / `credits_total`. Each quota-backed capability
+  (`UsageCapacity`) separates the recurring monthly `quota_*` from one-off
+  top-up `credits`, with `remaining = quota_remaining + credits`. `assess` is
+  quota-only (`credits` always 0). New models: `Usage`, `UsageCapacity`,
+  `UsageExtract`. The `lenz usage` CLI now prints a row per capability
+  (Verify / Ask / Assess / Extract).
 
-### Fixed
-- `client.select()` now takes `text=` only. The former `claim_index=` param
-  produced a request body (`{"claim_index": N}`, no `text`) that the server's
-  text-only `/select` rejected with a 422 — it never worked. Selection is by
-  the chosen claim's wording; pass the relevant entry from the prior status's
-  `claims` / `candidates`.
+### Changed
+- **`client.select()` resolves a multi-claim interrupt by selecting one or more
+  claims.** It now takes `texts=[...]` (was a single `text=` / dead
+  `claim_index=`) and returns a `BatchAccepted` — each selected claim fans out
+  into its own pipeline, so poll each `items[].task_id`. Every text must match a
+  claim offered in the prior status (server-validated). On a rare mid-fan-out
+  enqueue failure the server returns the partial set plus `partial: true` (still
+  HTTP 202); `partial` is not a typed field on `BatchAccepted` but is reachable
+  via the lax/extra-field path (`batch.partial`).
 
 ## [1.2.0] — 2026-06-07
 

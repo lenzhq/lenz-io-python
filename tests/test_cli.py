@@ -598,11 +598,12 @@ def test_assess_json_success(monkeypatch):
 
 
 def _usage(**kw):
-    """Build a Usage with the nested per-capability shape (verify/ask/extract)."""
+    """Build a Usage with the nested per-capability shape (verify/ask/assess/extract)."""
     verify = UsageCapacity(**kw.pop("verify", {}))
     ask = UsageCapacity(**kw.pop("ask", {}))
+    assess = UsageCapacity(**kw.pop("assess", {}))
     extract = UsageExtract(**kw.pop("extract", {}))
-    return Usage(verify=verify, ask=ask, extract=extract, **kw)
+    return Usage(verify=verify, ask=ask, assess=assess, extract=extract, **kw)
 
 
 def test_usage_json_success(monkeypatch):
@@ -615,6 +616,7 @@ def test_usage_json_success(monkeypatch):
                 quota_resets_at="2026-07-01",
                 verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
                 ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+                assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
                 extract={"calls_today": 3, "daily_limit": 1000},
             )
         ),
@@ -626,6 +628,8 @@ def test_usage_json_success(monkeypatch):
     assert payload["verify"]["remaining"] == 405
     assert payload["verify"]["credits"] == 25
     assert payload["ask"]["quota_total"] == 200
+    assert payload["assess"]["remaining"] == 955
+    assert payload["assess"]["credits"] == 0
     assert payload["extract"]["calls_today"] == 3
 
 
@@ -650,6 +654,7 @@ def test_usage_pretty_shows_bonus_breakdown():
             quota_resets_at="2026-07-01",
             verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
             ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
+            assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
             extract={"calls_today": 3, "daily_limit": 1000},
         ),
     )
@@ -660,7 +665,12 @@ def test_usage_pretty_shows_bonus_breakdown():
     assert "120 / 500 quota + 25 bonus" in text  # bonus tail present
     assert "Ask:" in text
     assert "190 left" in text
-    assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]  # no bonus tail when credits==0
+    assert "Assess:" in text
+    assert "955 left" in text  # quota-only capability, no bonus tail
+    # Row order: Verify → Ask → Assess → Extract
+    assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
+    # No bonus tail on Ask or Assess (credits==0 for both)
+    assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]
     assert "Quota resets 2026-07-01" in text
 
 

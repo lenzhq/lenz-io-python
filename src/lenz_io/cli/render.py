@@ -296,6 +296,7 @@ def render_usage(out: Output, u: Usage) -> None:
     out.console.print(f"[bold]Lenz usage[/bold]  [dim]({u.plan or '—'} plan)[/dim]")
     _capacity_row(out, "Verify", u.verify)
     _capacity_row(out, "Ask", u.ask)
+    _capacity_row(out, "Assess", u.assess)
     ex = u.extract
     label = f"{'Extract:':<9}"
     if ex.unlimited:

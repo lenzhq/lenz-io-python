@@ -1,0 +1,30 @@
+{
+  "plan": "developer",
+  "quota_resets_at": "2026-07-01T00:00:00+00:00",
+  "verify": {
+    "quota_used": 120,
+    "quota_total": 500,
+    "quota_remaining": 380,
+    "credits": 25,
+    "remaining": 405
+  },
+  "ask": {
+    "quota_used": 10,
+    "quota_total": 200,
+    "quota_remaining": 190,
+    "credits": 0,
+    "remaining": 190
+  },
+  "assess": {
+    "quota_used": 45,
+    "quota_total": 1000,
+    "quota_remaining": 955,
+    "credits": 0,
+    "remaining": 955
+  },
+  "extract": {
+    "calls_today": 3,
+    "daily_limit": 1000,
+    "unlimited": false
+  }
+}

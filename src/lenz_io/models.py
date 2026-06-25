@@ -338,13 +338,16 @@ class Usage(_Lax):
 
     Monthly quota (resets at ``quota_resets_at``) and one-off top-up credits are
     reported separately per capability so callers can tell a recurring allowance
-    apart from a purchased balance.
+    apart from a purchased balance. ``assess`` is quota-only — there is no
+    one-off assess credit pool, so its ``credits`` is always 0 and
+    ``remaining == quota_remaining`` (not a bug).
     """
 
     plan: str = ""
     quota_resets_at: str | None = None
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
+    assess: UsageCapacity = Field(default_factory=UsageCapacity)
     extract: UsageExtract = Field(default_factory=UsageExtract)
 
 
