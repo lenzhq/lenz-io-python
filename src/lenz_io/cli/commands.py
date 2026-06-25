@@ -184,7 +184,8 @@ def help_command(
             typer.echo(f"No such command: {command!r}. Run `lenz help` to list commands.", err=True)
             raise typer.Exit(2)
         # context_class avoids importing click directly (Typer vendors it).
-        sub_ctx = sub.context_class(sub, info_name=f"lenz {command}", parent=group_ctx)
+        # info_name is just the command — Click prepends the parent's "lenz".
+        sub_ctx = sub.context_class(sub, info_name=command, parent=group_ctx)
         typer.echo(sub.get_help(sub_ctx))
     else:
         typer.echo(group_ctx.get_help())

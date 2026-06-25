@@ -268,10 +268,18 @@ def test_help_command_shows_group_help():
     assert "Usage:" in result.output
 
 
+def _strip_ansi(s: str) -> str:
+    import re
+
+    return re.sub(r"\x1b\[[0-9;]*m", "", s)
+
+
 def test_help_command_shows_subcommand_help():
     result = runner.invoke(app, ["help", "verify"])
     assert result.exit_code == 0
-    assert "--resume" in result.output
+    # Strip ANSI: with color on (e.g. CI), Rich splits option names with escape
+    # codes so "--resume" isn't a raw substring — assert on the rendered text.
+    assert "--resume" in _strip_ansi(result.output)
 
 
 def test_help_command_unknown_is_friendly():
