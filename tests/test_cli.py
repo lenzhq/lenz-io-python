@@ -30,6 +30,7 @@ from lenz_io.models import (
     AssessResponse,
     CandidateClaim,
     ExtractedClaims,
+    SimilarVerification,
     Source,
     TaskAccepted,
     TaskStatus,
@@ -418,6 +419,117 @@ def test_extract_pretty_multi_claim_includes_primary():
     assert "Verify it:" not in text
 
 
+# ── render layer (pretty / TTY output) ───────────────────────────────────────
+def _render(fn, *args):
+    """Run a render_* function in pretty mode, capturing both consoles."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    out.err = Console(file=buf, no_color=True, width=100)
+    fn(out, *args)
+    return buf.getvalue()
+
+
+def test_render_assess_shows_verdict_and_ask_hint():
+    from lenz_io.cli.render import render_assess
+
+    resp = AssessResponse(
+        claims=[
+            AssessClaim(
+                claim="The sky is green",
+                verdict="False",
+                confidence="high",
+                verification_url="https://lenz.io/api/v1/verifications/abcd1234",
+            )
+        ]
+    )
+    text = _render(render_assess, resp)
+    assert "False" in text and "The sky is green" in text
+    assert "lenz ask abcd1234" in text  # follow-up hint with the parsed id
+
+
+def test_render_assess_no_claims():
+    from lenz_io.cli.render import render_assess
+
+    assert "No claims assessed" in _render(render_assess, AssessResponse(claims=[]))
+
+
+def test_render_verification_full():
+    from lenz_io.cli.render import render_verification
+
+    text = _render(render_verification, _verification())
+    assert "False" in text  # verdict
+    assert "Nope." in text  # executive summary
+    assert "https://a.test" in text  # a source url
+    assert "verification_id: v-1" in text
+    assert "lenz ask v-1" in text  # follow-up hint
+
+
+def test_render_verification_none_errors():
+    from lenz_io.cli.render import render_verification
+
+    with pytest.raises(SystemExit):
+        _render(render_verification, None)
+
+
+def test_render_ask_renders_markdown_not_literal():
+    from types import SimpleNamespace
+
+    from lenz_io.cli.render import render_ask
+
+    text = _render(render_ask, SimpleNamespace(content="The **600 Nm** at *6,500 rpm*."))
+    assert "600 Nm" in text
+    assert "**" not in text  # markdown rendered, not dumped literally
+
+
+def test_render_ask_empty_reply():
+    from types import SimpleNamespace
+
+    from lenz_io.cli.render import render_ask
+
+    assert "empty reply" in _render(render_ask, SimpleNamespace(content=""))
+
+
+def test_render_config_shows_source_and_masked_key():
+    from lenz_io.cli.render import render_config
+
+    text = _render(
+        render_config,
+        {
+            "key_source": "file",
+            "api_key": "lenz_x…1234",
+            "base_url": "https://lenz.io/api/v1",
+            "config_file": "/tmp/c.json",
+        },
+    )
+    assert "file" in text and "lenz_x…1234" in text and "https://lenz.io/api/v1" in text
+
+
+def test_render_extract_no_claim_found():
+    from lenz_io.cli.render import render_extract
+
+    text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "atomic_claim": ""}))
+    assert "No verifiable claim found" in text
+
+
+def test_render_extract_ambiguous_candidates():
+    from lenz_io.cli.render import render_extract
+
+    extracted = ExtractedClaims.model_validate(
+        {"atomic_claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]}
+    )
+    text = _render(render_extract, extracted)
+    assert "candidate readings" in text
+    assert "did you mean A?" in text
+
+
 def test_assess_json_success(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
@@ -569,6 +681,128 @@ def test_resume_falls_back_to_verification_id(monkeypatch):
     result = runner.invoke(app, ["--json", "verify", "--resume", "v-1"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["verdict"] == "False"
+
+
+# ── login (was zero coverage) ────────────────────────────────────────────────
+def test_login_saves_flag_key(monkeypatch):
+    result = runner.invoke(app, ["--api-key", "lenz_flagkey", "login"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["status"] == "ok"  # non-tty → json contract
+    assert cfg.resolve_api_key(None) == ("lenz_flagkey", "file")
+
+
+def test_login_json_no_key_points_to_dashboard():
+    result = runner.invoke(app, ["--json", "login"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "no_key"
+    assert "api-integration" in payload["dashboard"]
+
+
+def test_login_write_failure_is_friendly(monkeypatch):
+    from lenz_io.cli import commands
+
+    def _boom(key):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(commands, "save_api_key", _boom)
+    result = runner.invoke(app, ["--json", "--api-key", "lenz_k", "login"])
+    assert result.exit_code == 1
+    assert json.loads(result.stdout)["error"]["code"] == "write_failed"
+
+
+# ── verify lifecycle branches ────────────────────────────────────────────────
+def test_verify_detach_emits_task_id(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient())
+    result = runner.invoke(app, ["--json", "verify", "claim", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "submitted"
+    assert payload["task_id"] == "t-1"
+
+
+def test_verify_claim_index_out_of_range(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="multi_claim",
+                    claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+                )
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "9"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"]["code"] == "invalid_selection"
+
+
+def test_verify_clarification_json_emits_and_exits(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(status="needs_input", reason="clarification_required", candidates=["mean A?", "or B?"])
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob"])
+    assert result.exit_code == 3
+    payload = json.loads(result.stdout)
+    assert payload["reason"] == "clarification_required"
+    assert payload["candidates"] == ["mean A?", "or B?"]
+
+
+def test_verify_duplicate_found_json_emits_and_exits(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(
+                    status="needs_input",
+                    reason="duplicate_found",
+                    similar_claims=[SimilarVerification(verification_id="dup12345", verdict="False", lenz_score=2)],
+                )
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "blob"])
+    assert result.exit_code == 3
+    payload = json.loads(result.stdout)
+    assert payload["reason"] == "duplicate_found"
+    assert payload["similar"][0]["verification_id"] == "dup12345"
+
+
+def test_verify_timeout_emits_resume_fix(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient(statuses=[TaskStatus(status="processing")] * 3))
+    result = runner.invoke(app, ["--json", "verify", "claim", "--timeout", "0"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "timeout"
+    assert "--resume" in err["fix"]
+
+
+def test_verify_ctrl_c_prints_resume_handle(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient()
+
+    def _interrupt(task_id):
+        raise KeyboardInterrupt
+
+    fake.get_status = _interrupt
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "verify", "claim"])
+    assert result.exit_code == 130
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "interrupted"
+    assert payload["task_id"] == "t-1"
 
 
 # ── lazy-import guard ───────────────────────────────────────────────────────
