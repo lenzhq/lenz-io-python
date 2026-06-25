@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-06-25
+
 ### Added
 - **`lenz` command-line tool**, shipped inside this package behind the `cli`
   extra (`pip install "lenz-io[cli]"`). Wraps the four primitives —
