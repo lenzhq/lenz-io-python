@@ -14,7 +14,8 @@ import pytest
 from typer.testing import CliRunner
 
 import lenz_io.cli
-from lenz_io.cli import _run
+import lenz_io.cli as cli_pkg
+from lenz_io.cli import _run, normalize_argv
 from lenz_io.cli import config as cfg
 from lenz_io.cli import verify as verify_mod
 from lenz_io.cli.app import app
@@ -164,6 +165,84 @@ def test_corrupt_config_is_friendly(monkeypatch, tmp_path):
     (tmp_path / "config.json").write_text("{not json")
     with pytest.raises(cfg.ConfigError):
         cfg.resolve_api_key(None)
+
+
+# ── global options accepted in any position (argv normalization) ─────────────
+def test_normalize_argv_hoists_json_after_command():
+    assert normalize_argv(["extract", "x", "--json"]) == ["--json", "extract", "x"]
+
+
+def test_normalize_argv_before_command_unchanged():
+    assert normalize_argv(["--json", "extract", "x"]) == ["--json", "extract", "x"]
+
+
+def test_normalize_argv_value_option_carries_value():
+    assert normalize_argv(["config", "--base-url", "https://s"]) == ["--base-url", "https://s", "config"]
+    assert normalize_argv(["config", "--base-url=https://s"]) == ["--base-url=https://s", "config"]
+
+
+def test_normalize_argv_respects_double_dash():
+    # text that literally looks like a flag, after `--`, is left in place
+    assert normalize_argv(["extract", "--", "--json"]) == ["extract", "--", "--json"]
+
+
+def test_normalize_argv_leaves_command_options_in_place():
+    assert normalize_argv(["verify", "claim", "--timeout", "5", "--json"]) == [
+        "--json",
+        "verify",
+        "claim",
+        "--timeout",
+        "5",
+    ]
+
+
+def test_json_flag_after_command_produces_json(monkeypatch):
+    # end-to-end: normalized argv flows through the app and yields JSON output
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(assess_result=AssessResponse(claims=[AssessClaim(claim="c", verdict="True", confidence="high")])),
+    )
+    result = runner.invoke(app, normalize_argv(["assess", "c", "--json"]))
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["claims"][0]["verdict"] == "True"
+
+
+def test_main_normalizes_argv_and_sets_no_color(monkeypatch):
+    import importlib
+    import os
+    import sys
+    import types
+
+    ran = {}
+    monkeypatch.setattr(
+        importlib, "import_module", lambda name: types.SimpleNamespace(app=lambda: ran.setdefault("ok", True))
+    )
+    monkeypatch.setattr(sys, "argv", ["lenz", "extract", "x", "--no-color"])
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    cli_pkg.main()
+    assert ran["ok"] is True
+    assert sys.argv == ["lenz", "--no-color", "extract", "x"]  # hoisted
+    assert os.environ.get("NO_COLOR") == "1"
+
+
+# ── `lenz help` (hidden alias) ───────────────────────────────────────────────
+def test_help_command_shows_group_help():
+    result = runner.invoke(app, ["help"])
+    assert result.exit_code == 0
+    assert "Usage:" in result.output
+
+
+def test_help_command_shows_subcommand_help():
+    result = runner.invoke(app, ["help", "verify"])
+    assert result.exit_code == 0
+    assert "--resume" in result.output
+
+
+def test_help_command_unknown_is_friendly():
+    result = runner.invoke(app, ["help", "nope"])
+    assert result.exit_code == 2
+    assert "No such command" in result.output
 
 
 # ── read_text_arg: no-arg must not hang on an interactive terminal ───────────

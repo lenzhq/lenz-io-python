@@ -166,6 +166,31 @@ def logout(ctx: typer.Context) -> None:
             out.note(f"Note: {ENV_API_KEY} is still set in your environment — it'll still be used.")
 
 
+def help_command(
+    ctx: typer.Context,
+    command: str = typer.Argument(None, help="Show help for this command (e.g. `lenz help verify`)."),
+) -> None:
+    """Show help for lenz, or for a specific command."""
+    # ctx.parent is the top-level group context; its command is the Typer group.
+    # It is always present when `help` runs as a subcommand (guarded for typing).
+    group_ctx = ctx.parent
+    if group_ctx is None:
+        typer.echo(ctx.get_help())
+        raise typer.Exit()
+    group = group_ctx.command
+    if command:
+        sub = group.get_command(group_ctx, command)  # type: ignore[attr-defined]
+        if sub is None:
+            typer.echo(f"No such command: {command!r}. Run `lenz help` to list commands.", err=True)
+            raise typer.Exit(2)
+        # context_class avoids importing click directly (Typer vendors it).
+        sub_ctx = sub.context_class(sub, info_name=f"lenz {command}", parent=group_ctx)
+        typer.echo(sub.get_help(sub_ctx))
+    else:
+        typer.echo(group_ctx.get_help())
+    raise typer.Exit()
+
+
 def config_status(ctx: typer.Context) -> None:
     """Show which key is in use (flag/env/file), the base URL, and the config path."""
     state: CLIState = ctx.obj
