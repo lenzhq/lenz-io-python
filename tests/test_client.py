@@ -761,6 +761,15 @@ class TestLibrary:
         # No Authorization header sent for library
         assert "Authorization" not in route.calls.last.request.headers
 
+    def test_list_stays_anonymous_even_when_keyed(self, client):
+        """library.list is public content — the bearer must NOT be attached even
+        with a key configured (optional-auth WITHOUT auth_optional). Only
+        verifications.get opts in, so a key never reaches a public-only endpoint."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
+            client.library.list(page=1, sort="recent")
+        assert "Authorization" not in route.calls.last.request.headers
+
     def test_get_method_removed(self, unauth_client):
         # GET /api/v1/library/{id} merged server-side into
         # GET /api/v1/verifications/{id}. SDK's library.get() was dropped;
