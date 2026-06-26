@@ -886,6 +886,20 @@ def test_resume_multi_claim_detach_emits_task_ids(monkeypatch):
     assert fake.select_calls == [("t-parent", ["A is true.", "B is false."])]
 
 
+def test_resume_clarification_detach_emits_task_id(monkeypatch):
+    """`--detach` must also be honored on the single-pick clarification branch,
+    not just multi_claim. Regression: it block-polled the spawned task instead."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    st = TaskStatus(status="needs_input", reason="clarification_required", candidates=["reading A", "reading B"])
+    fake = _patch_client(monkeypatch, FakeClient(statuses=[st, st]))
+    result = runner.invoke(app, ["--json", "verify", "--resume", "t-amb", "--claim", "1", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "submitted"  # detached, not block-polled
+    assert payload["task_id"] == "sel-1"
+    assert fake.select_calls == [("t-amb", ["reading A"])]
+
+
 def test_resume_falls_back_to_verification_id(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = FakeClient(

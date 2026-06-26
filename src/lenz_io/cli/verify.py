@@ -160,6 +160,11 @@ def _poll(
                 task_id = picks[0][0]
             else:  # clarification_required / duplicate_found → single-pick / terminal
                 task_id = _needs_input_single(client, out, task_id, st, selection)
+                # Single-pick spawns a fresh task too; honor --detach here as well
+                # (the multi_claim branch already returns via _verify_batch above).
+                if detach:
+                    _emit_detached(out, task_id)
+                    return
             selection = None
             # A pick spawns a fresh ~90s pipeline. Reset the clock so the new
             # run gets the full --timeout budget, not what's left after the
