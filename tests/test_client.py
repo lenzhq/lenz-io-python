@@ -590,11 +590,8 @@ class TestVerifications:
         assert v.lenz_score == 9
 
     def test_get_works_without_api_key(self, unauth_client):
-        """Server-merge gave GET /verifications/{id} optional Bearer auth:
-        anon callers see any public + non-hidden claim. The SDK already
-        supports key-less calls via auth_required=False — this test pins
-        the contract so a future tightening of auth_required would fail.
-        """
+        """GET /verifications/{id} takes optional Bearer: a key-less client can
+        still fetch public claims (anon caller → no Authorization header)."""
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.get("/verifications/public_id").respond(
                 200,
@@ -607,10 +604,23 @@ class TestVerifications:
                 },
             )
             v = unauth_client.verifications.get("public_id")
-        # No Authorization header sent (anon caller)
+        # No key configured → nothing to send.
         assert "Authorization" not in route.calls.last.request.headers
         assert v.verification_id == "public_id"
         assert v.verdict == "True"
+
+    def test_get_sends_bearer_when_keyed(self, client):
+        """Optional-auth endpoints MUST still send the key when we have one — the
+        server only returns the caller's own private/hidden verifications to the
+        owning bearer. Suppressing it (the old `and auth_required` guard) made
+        `lenz show` 404 on a user's own fresh API claim (private+hidden)."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/verifications/mine").respond(
+                200, json={"verification_id": "mine", "verdict": "False", "confidence": "high"}
+            )
+            v = client.verifications.get("mine")
+        assert route.calls.last.request.headers["Authorization"] == "Bearer lenz_test_abc123"
+        assert v.verification_id == "mine"
 
     def test_delete_happy(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -749,6 +759,15 @@ class TestLibrary:
             route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
             unauth_client.library.list(page=1, sort="recent")
         # No Authorization header sent for library
+        assert "Authorization" not in route.calls.last.request.headers
+
+    def test_list_stays_anonymous_even_when_keyed(self, client):
+        """library.list is public content — the bearer must NOT be attached even
+        with a key configured (optional-auth WITHOUT auth_optional). Only
+        verifications.get opts in, so a key never reaches a public-only endpoint."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
+            client.library.list(page=1, sort="recent")
         assert "Authorization" not in route.calls.last.request.headers
 
     def test_get_method_removed(self, unauth_client):

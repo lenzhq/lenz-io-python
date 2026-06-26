@@ -69,6 +69,8 @@ def _main(
 app.command("extract")(commands.extract)
 app.command("assess")(commands.assess)
 app.command("verify")(verify_mod.verify)
+app.command("status")(commands.status)
+app.command("show")(commands.show)
 app.command("ask")(commands.ask)
 app.command("login")(commands.login)
 app.command("logout")(commands.logout)

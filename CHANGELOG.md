@@ -6,6 +6,32 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.1.0] — 2026-06-26
+
+### Added
+- **`lenz status` and `lenz show` commands.** `status <task_id>` reports where a
+  submitted verification stands; `show <task_id|claim>` prints the resolved
+  result. Together with `--resume`/`--detach` they make the verify lifecycle
+  fully scriptable.
+- **Candidate readings for ambiguous `assess`.** When framing can't pin a vague
+  input to a single claim, `assess` now surfaces the specific candidate readings
+  it identified so you can pick one, instead of failing with a bare error.
+- `lenz usage` humanizes the quota-reset timestamp instead of printing a raw
+  ISO string.
+
+### Changed
+- `extract` output no longer prints the domain/entity tags line, keeping the
+  default view focused on the extracted claims.
+
+### Fixed
+- **Bearer scoping on optional-auth endpoints.** The API key is now sent on
+  optional-auth reads when one is configured — `verifications.get` opts in so
+  the owning caller can retrieve their own private/hidden claims, while purely
+  public reads (`library.list`) stay anonymous.
+- `--detach` (and `--claim`) are now honored when resuming a paused task,
+  including the clarification resume branch.
+- `extract` reads the primary claim from `claim` rather than `atomic_claim`.
+
 ## [2.0.0] — 2026-06-25
 
 ### Added

@@ -243,10 +243,18 @@ class AssessResponse(_Lax):
     ``claims`` is one entry per atomic_claim that framing identified in
     the input. Multiclaim inputs return N entries. ``error`` is set when
     framing returns zero claims.
+
+    When ``claims`` is empty, ``error_code`` disambiguates why:
+    ``'ambiguous'`` → the input was vague but framing produced specific
+    readings in ``candidate_claims`` (assess one of them); ``'no_claim'``
+    → genuinely not a checkable claim. Both fields default empty, so older
+    servers that don't send them degrade to the plain ``error`` message.
     """
 
     claims: list[AssessClaim] = Field(default_factory=list)
     error: str | None = None
+    error_code: str = ""  # '' | 'ambiguous' | 'no_claim'
+    candidate_claims: list[str] = Field(default_factory=list)
 
 
 class TaskAccepted(_Lax):

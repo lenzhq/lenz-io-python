@@ -152,6 +152,7 @@ class _VerificationsNamespace:
             "GET",
             f"/verifications/{verification_id}",
             auth_required=False,
+            auth_optional=True,  # send the key if we have one → owner sees private rows
         )
         return Verification.model_validate(body)
 
@@ -707,6 +708,7 @@ class Lenz:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         auth_required: bool = True,
+        auth_optional: bool = False,
     ) -> dict[str, Any]:
         if auth_required and not self._api_key:
             from .errors import LenzAuthError
@@ -723,7 +725,13 @@ class Lenz:
 
         url = f"{self._base_url}{path}"
         req_headers = dict(headers or {})
-        if self._api_key and auth_required:
+        # Attach the bearer on authed endpoints AND on opt-in optional-auth ones
+        # (`auth_optional=True`). The server returns a caller's own private/hidden
+        # rows only to the owning bearer, so `verifications.get` must send a key it
+        # has (→ `lenz show` on a fresh private API claim). Purely public reads
+        # (`library.list`) stay anonymous — no `auth_optional`, no key on the wire —
+        # so a key never reaches an endpoint that doesn't need it.
+        if self._api_key and (auth_required or auth_optional):
             req_headers["Authorization"] = f"Bearer {self._api_key}"
         req_headers.setdefault("Content-Type", "application/json")
 

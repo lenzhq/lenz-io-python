@@ -17,7 +17,15 @@ from ._run import execute, read_text_arg
 from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
 from .context import CLIState
 from .errors import CLIError
-from .render import render_ask, render_assess, render_config, render_extract, render_usage
+from .render import (
+    render_ask,
+    render_assess,
+    render_config,
+    render_extract,
+    render_task_status,
+    render_usage,
+    render_verification_full,
+)
 
 
 def extract(
@@ -79,6 +87,61 @@ def ask(
                 ) from None
             raise
         render_ask(out, reply)
+
+    execute(state, needs_key=True, work=work)
+
+
+def status(
+    ctx: typer.Context,
+    task_id: str = typer.Argument(..., help="The task_id from `lenz verify` (e.g. a `--detach` submission)."),
+) -> None:
+    """Check a verify task's status, non-interactively (a single, non-blocking poll). Needs a key."""
+    state: CLIState = ctx.obj
+    out = state.output
+
+    def work(client: Lenz) -> None:
+        try:
+            with out.working("Checking status…"):
+                st = client.get_status(task_id)
+        except LenzError as exc:
+            if exc.status_code == 404:
+                raise CLIError(
+                    f"No live task found for {task_id!r}. Tasks expire ~10 min after they finish — "
+                    "if it completed, view the report with `lenz show <verification_id>` "
+                    "(the 8-char id printed when it finished).",
+                    code="not_found",
+                    status=404,
+                ) from None
+            raise
+        render_task_status(out, st, task_id=task_id)
+
+    execute(state, needs_key=True, work=work)
+
+
+def show(
+    ctx: typer.Context,
+    verification_id: str = typer.Argument(..., help="The 8-char verification_id (from verify/assess output)."),
+    concise: bool = typer.Option(False, "--concise", "-c", help="Compact view (verdict + summary + sources only)."),
+) -> None:
+    """Show the full report for a past verification — sources, warnings, and the panel/debate audit. Needs a key."""
+    state: CLIState = ctx.obj
+    out = state.output
+
+    def work(client: Lenz) -> None:
+        try:
+            with out.working("Fetching report…"):
+                v = client.verifications.get(verification_id)
+        except LenzError as exc:
+            if exc.status_code == 404:
+                raise CLIError(
+                    f"No verification found for id {verification_id!r}. A verification_id is the "
+                    "8-character id from a completed `verify`/`assess` — not a task_id. "
+                    "If you have a task_id, check its progress with `lenz status <task_id>`.",
+                    code="not_found",
+                    status=404,
+                ) from None
+            raise
+        render_verification_full(out, v, concise=concise)
 
     execute(state, needs_key=True, work=work)
 

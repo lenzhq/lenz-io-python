@@ -20,8 +20,9 @@ pip install lenz-io
 
 ## Command-line tool
 
-The same four primitives from your terminal. Ships inside this package behind
-the `cli` extra (quotes matter — bare brackets are a glob in zsh):
+The same primitives from your terminal — submit, poll, and read full reports.
+Ships inside this package behind the `cli` extra (quotes matter — bare brackets
+are a glob in zsh):
 
 ```bash
 pipx install "lenz-io[cli]"      # isolated CLI install (recommended)
@@ -34,7 +35,10 @@ lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
 lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
+lenz status  <task_id>           # non-blocking: poll a verify task's progress
+lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
+lenz usage                       # plan, remaining quota, and when it resets
 lenz config                      # show which key/base URL is in use
 ```
 
@@ -44,6 +48,23 @@ mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
 exit. `verify` blocks with a progress spinner; Ctrl-C prints a
 `lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
 order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
+
+**Scripting the lifecycle (no blocking).** `verify --detach` returns a
+`task_id` immediately; poll it with `status` and read the full report with
+`show` once it completes:
+
+```bash
+tid=$(lenz verify "<claim>" --detach --json | jq -r .task_id)
+lenz status "$tid" --json | jq -r .status          # processing → completed
+lenz show <verification_id> --json                 # full report once done
+```
+
+If the input holds several claims, `status` reports `needs_input` and lists
+them; resolve it non-interactively by index (spawns one verification per pick):
+
+```bash
+lenz verify --resume "$tid" --claim 1,3 --detach --json   # → spawned task_ids
+```
 
 ## Quickstart — the canonical integration
 

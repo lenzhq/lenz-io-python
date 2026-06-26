@@ -27,9 +27,13 @@ from lenz_io.errors import (
 )
 from lenz_io.models import (
     AssessClaim,
+    Assessment,
     AssessResponse,
+    Audit,
     BatchAccepted,
     CandidateClaim,
+    DebateSide,
+    EntityRef,
     ExtractedClaims,
     SimilarVerification,
     Source,
@@ -426,11 +430,12 @@ def test_extract_pretty_renders_atomic_claim():
 
     from lenz_io.cli.render import Output, render_extract
 
-    # extra="allow" carries atomic_claim/domain through model_validate.
+    # The public /extract response carries the primary claim under `claim`
+    # (the server renames framing's internal `atomic_claim` → `claim`).
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "History",
-            "atomic_claim": "Einstein won the 1921 Nobel Prize in Physics.",
+            "claim": "Einstein won the 1921 Nobel Prize in Physics.",
             "key_entities": [{"name": "Albert Einstein", "type": "person"}],
         }
     )
@@ -442,7 +447,6 @@ def test_extract_pretty_renders_atomic_claim():
     text = buf.getvalue()
     assert "Einstein won the 1921 Nobel Prize" in text
     assert "No verifiable claim" not in text
-    assert "History" in text
 
 
 def test_extract_pretty_multi_claim_includes_primary():
@@ -458,7 +462,7 @@ def test_extract_pretty_multi_claim_includes_primary():
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "Science",
-            "atomic_claim": "The Earth is flat.",
+            "claim": "The Earth is flat.",
             "identified_claims": ["Ruby is harder than diamond."],
         }
     )
@@ -512,9 +516,36 @@ def test_render_assess_shows_verdict_and_ask_hint():
 
 
 def test_render_assess_no_claims():
+    """Genuine non-claim (no candidate readings) → a clean 'No claim found.'.
+    The raw server `error` is NOT leaked into pretty output (it stays in --json)."""
     from lenz_io.cli.render import render_assess
 
-    assert "No claims assessed" in _render(render_assess, AssessResponse(claims=[]))
+    out = _render(
+        render_assess,
+        AssessResponse(claims=[], error="No verifiable claim detected", error_code="no_claim"),
+    )
+    assert "No claim found." in out
+    assert "No verifiable claim detected" not in out  # raw server wording suppressed in pretty mode
+
+
+def test_render_assess_ambiguous_shows_readings():
+    """Ambiguous input → the server returns candidate readings; the CLI lists
+    them and points at re-assessing one, instead of a flat 'no claim'."""
+    from lenz_io.cli.render import render_assess
+
+    out = _render(
+        render_assess,
+        AssessResponse(
+            claims=[],
+            error="Claim is ambiguous — pick a specific reading",
+            error_code="ambiguous",
+            candidate_claims=["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled 2021-2026."],
+        ),
+    )
+    assert "Ambiguous" in out
+    assert "DDR4 desktop RAM prices doubled 2021-2026." in out  # readings surfaced
+    assert "DRAM contract prices doubled 2021-2026." in out
+    assert "lenz assess" in out  # next step
 
 
 def test_render_verification_full():
@@ -571,16 +602,14 @@ def test_render_config_shows_source_and_masked_key():
 def test_render_extract_no_claim_found():
     from lenz_io.cli.render import render_extract
 
-    text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "atomic_claim": ""}))
+    text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "claim": ""}))
     assert "No verifiable claim found" in text
 
 
 def test_render_extract_ambiguous_candidates():
     from lenz_io.cli.render import render_extract
 
-    extracted = ExtractedClaims.model_validate(
-        {"atomic_claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]}
-    )
+    extracted = ExtractedClaims.model_validate({"claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]})
     text = _render(render_extract, extracted)
     assert "candidate readings" in text
     assert "did you mean A?" in text
@@ -671,7 +700,38 @@ def test_usage_pretty_shows_bonus_breakdown():
     assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
     # No bonus tail on Ask or Assess (credits==0 for both)
     assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]
-    assert "Quota resets 2026-07-01" in text
+    # Humanized: absolute date always present; relative prefix ("in N days")
+    # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
+    assert "Quota resets" in text
+    assert "Jul 1, 2026" in text
+
+
+@pytest.mark.parametrize(
+    "iso,expected",
+    [
+        # relative buckets (now pinned to 2026-06-25T12:00 UTC)
+        ("2026-07-01T00:00:00+00:00", "in 6 days (Jul 1, 2026)"),
+        ("2026-06-25T13:00:00+00:00", "in 1 hour (Jun 25, 2026)"),
+        ("2026-06-25T12:10:00+00:00", "in 10 minutes (Jun 25, 2026)"),
+        ("2026-06-25T12:00:30+00:00", "in under a minute (Jun 25, 2026)"),
+        ("2026-06-27T06:00:00+00:00", "tomorrow (Jun 27, 2026)"),  # 42h → not "in 2 days" yet
+        # already past → bare absolute, no awkward "in -N"
+        ("2026-06-20T00:00:00+00:00", "Jun 20, 2026"),
+        # date-only (no tz) is assumed UTC and still parses
+        ("2026-07-01", "in 6 days (Jul 1, 2026)"),
+        # Z suffix normalized
+        ("2026-07-01T00:00:00Z", "in 6 days (Jul 1, 2026)"),
+        # unparseable → echoed verbatim (lax/forward-compatible)
+        ("whenever", "whenever"),
+    ],
+)
+def test_humanize_reset(iso, expected):
+    from datetime import datetime, timezone
+
+    from lenz_io.cli.render import _humanize_reset
+
+    now = datetime(2026, 6, 25, 12, 0, 0, tzinfo=timezone.utc)
+    assert _humanize_reset(iso, now=now) == expected
 
 
 def test_usage_pretty_unlimited_extract():
@@ -830,6 +890,43 @@ def test_resume_expired_task_is_friendly(monkeypatch):
     assert json.loads(result.stdout)["error"]["code"] == "not_found"
 
 
+def test_resume_multi_claim_detach_emits_task_ids(monkeypatch):
+    """`verify --resume <id> --claim all --detach` must resolve the pause and
+    print the spawned task_ids WITHOUT block-polling. Regression: `detach` was
+    dropped between `_resume` and `_poll`, so it ran the live batch instead."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    claims = [CandidateClaim(text="A is true."), CandidateClaim(text="B is false.")]
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(status="needs_input", reason="multi_claim", claims=claims),
+                TaskStatus(status="needs_input", reason="multi_claim", claims=claims),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "--resume", "t-parent", "--claim", "all", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert [p["status"] for p in payload] == ["submitted", "submitted"]  # detached, not polled
+    # select() resolved the EXISTING parent task with both claim texts.
+    assert fake.select_calls == [("t-parent", ["A is true.", "B is false."])]
+
+
+def test_resume_clarification_detach_emits_task_id(monkeypatch):
+    """`--detach` must also be honored on the single-pick clarification branch,
+    not just multi_claim. Regression: it block-polled the spawned task instead."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    st = TaskStatus(status="needs_input", reason="clarification_required", candidates=["reading A", "reading B"])
+    fake = _patch_client(monkeypatch, FakeClient(statuses=[st, st]))
+    result = runner.invoke(app, ["--json", "verify", "--resume", "t-amb", "--claim", "1", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "submitted"  # detached, not block-polled
+    assert payload["task_id"] == "sel-1"
+    assert fake.select_calls == [("t-amb", ["reading A"])]
+
+
 def test_resume_falls_back_to_verification_id(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = FakeClient(
@@ -840,6 +937,200 @@ def test_resume_falls_back_to_verification_id(monkeypatch):
     result = runner.invoke(app, ["--json", "verify", "--resume", "v-1"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["verdict"] == "False"
+
+
+# ── status (non-interactive single poll) ────────────────────────────────────
+# Pretty-output tests render directly (CliRunner's stdout isn't a tty → json is
+# forced); the runner is used only for the --json contract and error paths.
+def test_render_status_processing_shows_friendly_step():
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="processing", progress={"step": "research"}))
+    assert "processing" in out
+    assert "Gathering evidence" in out  # friendly label, not raw 'research'
+
+
+def test_render_status_completed_points_to_show():
+    """A completed task renders the verdict and routes to `lenz show` for the
+    full report — status stays lightweight."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="completed", result=_verification()))
+    assert "False" in out
+    assert "lenz show v-1" in out
+
+
+def test_render_status_failed_shows_error():
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="failed", error="pipeline boom"))
+    assert "failed" in out
+    assert "pipeline boom" in out
+
+
+def test_render_status_failed_falls_back_to_detail():
+    """`error` empty → fall back through failure_detail → failure_reason → default."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="failed", failure_detail="detail boom"))
+    assert "detail boom" in out
+    out2 = _render(render_task_status, TaskStatus(status="failed"))
+    assert "Verification failed." in out2  # bare default when all reasons empty
+
+
+def test_render_status_completed_without_result():
+    """A completed task whose result didn't deserialize prints bare 'completed'
+    and no `lenz show` pointer (there's no id to show)."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="completed", result=None))
+    assert "completed" in out
+    assert "lenz show" not in out
+
+
+def test_render_status_unknown_state_echoes():
+    """An unexpected/new server status echoes verbatim (lax-forward-compatible)
+    rather than crashing — the `else` fallback branch."""
+    from lenz_io.cli.render import render_task_status
+
+    assert "queued" in _render(render_task_status, TaskStatus(status="queued"))
+
+
+def test_render_status_needs_input_lists_claims_and_resume():
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_task_status
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    st = TaskStatus(
+        status="needs_input",
+        reason="multi_claim",
+        claims=[CandidateClaim(text="Dogs eat meat."), CandidateClaim(text="The Earth is flat.")],
+    )
+    render_task_status(out, st, task_id="t-42")
+    text = buf.getvalue()
+    assert "needs input" in text
+    assert "Dogs eat meat." in text and "The Earth is flat." in text
+    # hint carries the real task_id AND the non-interactive resolver flags
+    assert "lenz verify --resume t-42" in text
+    assert "--claim" in text and "--detach" in text
+
+
+def test_status_json_emits_raw(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient(statuses=[TaskStatus(status="processing", progress={"step": "framing"})]))
+    result = runner.invoke(app, ["--json", "status", "t-1"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "processing"
+    assert payload["progress"]["step"] == "framing"
+
+
+def test_status_404_is_friendly(monkeypatch):
+    """A 404 means a wrong/expired task_id — point at `lenz show`, and don't echo
+    the (32-char) task_id into the show command (it'd just 404 again)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(raises={"get_status": LenzAuthError(message="Task not found.", status_code=404)}),
+    )
+    result = runner.invoke(app, ["--json", "status", "deadbeefdeadbeef"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_found"
+    assert "lenz show <verification_id>" in err["message"]
+    assert "lenz show deadbeefdeadbeef" not in err["message"]
+
+
+# ── show (full verification dossier) ─────────────────────────────────────────
+def _full_verification():
+    return Verification(
+        verification_id="ab12cd34",
+        claim="The Earth is flat.",
+        domain="Science",
+        entities=[EntityRef(name="Earth")],
+        verdict="False",
+        confidence="high",
+        lenz_score=1,
+        executive_summary="It is an oblate spheroid.",
+        warnings=["absolute wording"],
+        sources=[Source(title=f"S{i}", url=f"https://s{i}.test") for i in range(12)],
+        audit=Audit(
+            adjudication_summary="Consensus: false.",
+            panel_agreement="unanimous",
+            assessments=[Assessment(panelist_name="Logic Examiner", focus_area="logic", score=2, reasoning="bad")],
+            debate_pro=DebateSide(role="pro", argument="pro arg", rebuttal="pro reb"),
+            debate_con=DebateSide(role="con", argument="con arg", rebuttal="con reb"),
+        ),
+    )
+
+
+def test_render_show_full_dossier():
+    from lenz_io.cli.render import render_verification_full
+
+    out = _render(render_verification_full, _full_verification())
+    assert "False" in out
+    assert "The Earth is flat." in out
+    assert "Warnings (1):" in out and "absolute wording" in out
+    assert "Sources (12):" in out  # ALL sources, not capped at 8
+    assert "S11" in out  # the 12th source rendered (concise view caps at 8)
+    # audit block: panel + debate
+    assert "Panel" in out and "Logic Examiner" in out
+    assert "Adjudication" in out and "Consensus: false." in out
+    assert "PRO" in out and "pro arg" in out
+    assert "CON" in out and "con arg" in out
+
+
+def test_render_show_concise_omits_panel():
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_verification_full
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_verification_full(out, _full_verification(), concise=True)
+    text = buf.getvalue()
+    assert "False" in text
+    assert "It is an oblate spheroid." in text
+    assert "Panel" not in text  # concise drops the audit block
+    assert "PRO" not in text
+    assert "S11" not in text  # concise caps sources at 8
+
+
+def test_show_json_emits_full_object(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(verifications=_FakeVerifications(mapping={"ab12cd34": _full_verification()})),
+    )
+    result = runner.invoke(app, ["--json", "show", "ab12cd34"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["verification_id"] == "ab12cd34"
+    assert payload["audit"]["debate_pro"]["argument"] == "pro arg"
+
+
+def test_show_404_is_friendly(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(verifications=_FakeVerifications(error=LenzAuthError(message="not found", status_code=404))),
+    )
+    result = runner.invoke(app, ["--json", "show", "435100acc5464911"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_found"
+    assert "verification_id" in err["message"]
+    assert "lenz status <task_id>" in err["message"]
 
 
 # ── login (was zero coverage) ────────────────────────────────────────────────
