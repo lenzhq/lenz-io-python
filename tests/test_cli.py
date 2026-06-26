@@ -863,6 +863,29 @@ def test_resume_expired_task_is_friendly(monkeypatch):
     assert json.loads(result.stdout)["error"]["code"] == "not_found"
 
 
+def test_resume_multi_claim_detach_emits_task_ids(monkeypatch):
+    """`verify --resume <id> --claim all --detach` must resolve the pause and
+    print the spawned task_ids WITHOUT block-polling. Regression: `detach` was
+    dropped between `_resume` and `_poll`, so it ran the live batch instead."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    claims = [CandidateClaim(text="A is true."), CandidateClaim(text="B is false.")]
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(
+            statuses=[
+                TaskStatus(status="needs_input", reason="multi_claim", claims=claims),
+                TaskStatus(status="needs_input", reason="multi_claim", claims=claims),
+            ]
+        ),
+    )
+    result = runner.invoke(app, ["--json", "verify", "--resume", "t-parent", "--claim", "all", "--detach"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert [p["status"] for p in payload] == ["submitted", "submitted"]  # detached, not polled
+    # select() resolved the EXISTING parent task with both claim texts.
+    assert fake.select_calls == [("t-parent", ["A is true.", "B is false."])]
+
+
 def test_resume_falls_back_to_verification_id(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = FakeClient(

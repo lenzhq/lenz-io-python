@@ -76,7 +76,7 @@ def verify(
 
     def work(client: Lenz) -> None:
         if resume:
-            _resume(client, out, resume, timeout, selection=selection)
+            _resume(client, out, resume, timeout, selection=selection, detach=detach)
             return
         text = read_text_arg(claim)
         accepted = client.verify(text, idempotency_key=uuid.uuid4().hex)
@@ -392,7 +392,15 @@ def _render_similar(out: Output, similar: list[Any]) -> None:
         out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{score}  [dim]id: {s.verification_id}[/dim]")
 
 
-def _resume(client: Lenz, out: Output, ident: str, timeout: float, *, selection: list[int] | str | None = None) -> None:
+def _resume(
+    client: Lenz,
+    out: Output,
+    ident: str,
+    timeout: float,
+    *,
+    selection: list[int] | str | None = None,
+    detach: bool = False,
+) -> None:
     try:
         st = client.get_status(ident)
     except LenzError as exc:
@@ -404,8 +412,8 @@ def _resume(client: Lenz, out: Output, ident: str, timeout: float, *, selection:
         render_verification(out, st.result)
     elif st.status == "failed":
         raise CLIError(st.error or "Verification failed.", code="pipeline_failed")
-    else:  # processing / needs_input → keep polling from here, honoring --claim
-        _poll(client, out, ident, timeout, selection=selection)
+    else:  # processing / needs_input → keep polling from here, honoring --claim/--detach
+        _poll(client, out, ident, timeout, selection=selection, detach=detach)
 
 
 def _resume_as_verification(client: Lenz, out: Output, ident: str) -> None:
