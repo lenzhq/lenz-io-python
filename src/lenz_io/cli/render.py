@@ -18,8 +18,12 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from lenz_io.models import (
+    Assessment,
     AssessResponse,
+    Audit,
     ExtractedClaims,
+    Source,
+    TaskStatus,
     Usage,
     UsageCapacity,
     Verification,
@@ -148,19 +152,30 @@ def render_assess(out: Output, result: AssessResponse) -> None:
             out.console.print(f'    [dim]ask follow-ups:[/dim] lenz ask {vid} "<your question>"')
 
 
-def render_verification(out: Output, v: Verification | None) -> None:
-    if v is None:
-        out.error(
-            {"error": {"code": "empty_result", "message": "No verification returned.", "status": 0}},
-            "No verification returned.",
-        )
-        raise SystemExit(1)
-    if out.json_mode:
-        out.emit_json(_model_json(v))
-        return
+def _verdict_header(out: Output, v: Verification) -> None:
+    """The verdict line shared by the concise and full verification views."""
     color = _VERDICT_COLOR.get(v.verdict, "white")
     score = "" if v.lenz_score is None else f"  [dim]score {v.lenz_score}/10[/dim]"
     out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
+
+
+def _verification_missing(out: Output) -> None:
+    out.error(
+        {"error": {"code": "empty_result", "message": "No verification returned.", "status": 0}},
+        "No verification returned.",
+    )
+    raise SystemExit(1)
+
+
+def render_verification(out: Output, v: Verification | None) -> None:
+    """Concise verdict view — used inline by `verify` and by `show --concise`."""
+    if v is None:
+        _verification_missing(out)
+        return  # unreachable (raises), but narrows the type for the rest
+    if out.json_mode:
+        out.emit_json(_model_json(v))
+        return
+    _verdict_header(out, v)
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
     if v.sources:
@@ -171,6 +186,151 @@ def render_verification(out: Output, v: Verification | None) -> None:
     out.console.print(f"\n[dim]verification_id: {v.verification_id}[/dim]")
     if v.verification_id:
         out.console.print(f'[dim]ask follow-ups:[/dim] lenz ask {v.verification_id} "<your question>"')
+
+
+def _fmt_dt(iso: str | None) -> str:
+    """ISO-8601 → ``Jun 1, 2026`` (date only); raw string back if unparseable."""
+    if not iso:
+        return ""
+    try:
+        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return iso
+    return f"{when:%b} {when.day}, {when.year}"
+
+
+def _render_source(out: Output, s: Source) -> None:
+    title = s.title or s.source_name or s.url
+    date = f"  [dim]({s.date})[/dim]" if s.date else ""
+    out.console.print(f"  • {title}{date}")
+    out.console.print(f"    [blue]{s.url}[/blue]")
+    if s.snippet:
+        out.console.print(f"    [dim]{_truncate(s.snippet, 100)}[/dim]")
+
+
+def _render_assessment(out: Output, a: Assessment) -> None:
+    head = a.panelist_name or a.focus_area or "Panelist"
+    if a.panelist_name and a.focus_area:
+        head = f"{a.panelist_name} [dim]({a.focus_area})[/dim]"
+    score = "" if a.score is None else f"  [dim]{a.score}/10[/dim]"
+    out.console.print(f"\n[bold]{head}[/bold]{score}")
+    if a.reasoning:
+        out.console.print(f"  {a.reasoning}")
+    for w in a.warnings:
+        out.console.print(f"  [yellow]•[/yellow] {w}")
+
+
+def _render_audit(out: Output, a: Audit | None) -> None:
+    """The explainability block — panel assessments, adjudication, and the
+    pro/con debate transcript. Silent when the verification carries no audit."""
+    if a is None:
+        return
+    if not (a.adjudication_summary or a.assessments or a.debate_pro or a.debate_con or a.panel_agreement):
+        return
+    out.console.print("\n[bold]── Panel ──[/bold]")
+    if a.panel_agreement:
+        out.console.print(f"[dim]agreement:[/dim] {a.panel_agreement}")
+    for assessment in a.assessments:
+        _render_assessment(out, assessment)
+    if a.adjudication_summary:
+        out.console.print(f"\n[bold]Adjudication[/bold]\n{a.adjudication_summary}")
+    if a.debate_pro or a.debate_con:
+        out.console.print("\n[bold]Debate[/bold]")
+        for side, label in ((a.debate_pro, "PRO"), (a.debate_con, "CON")):
+            if side is None:
+                continue
+            out.console.print(f"  [bold]{label}[/bold]  {side.argument}")
+            if side.rebuttal:
+                out.console.print(f"  [dim]rebuttal:[/dim] {side.rebuttal}")
+
+
+def render_verification_full(out: Output, v: Verification | None, *, concise: bool = False) -> None:
+    """Full dossier for `lenz show` — verdict, claim/meta, summary, warnings,
+    ALL sources, and the panel/debate audit. ``concise`` falls back to the
+    compact `verify`-style view. JSON output is always the complete object."""
+    if v is None:
+        _verification_missing(out)
+        return
+    if out.json_mode:
+        out.emit_json(_model_json(v))
+        return
+    if concise:
+        render_verification(out, v)
+        return
+    _verdict_header(out, v)
+    if v.claim:
+        out.console.print(f"\n[bold]Claim[/bold]  {v.claim}")
+    meta = []
+    if v.domain:
+        meta.append(v.domain)
+    names = [e.name for e in v.entities if e.name]
+    if names:
+        meta.append(", ".join(names))
+    if meta:
+        out.console.print(f"[dim]{'  •  '.join(meta)}[/dim]")
+    if v.executive_summary:
+        out.console.print(f"\n{v.executive_summary}")
+    if v.warnings:
+        out.console.print(f"\n[bold]Warnings ({len(v.warnings)}):[/bold]")
+        for w in v.warnings:
+            out.console.print(f"  [yellow]•[/yellow] {w}")
+    if v.sources:
+        out.console.print(f"\n[bold]Sources ({len(v.sources)}):[/bold]")
+        for s in v.sources:
+            _render_source(out, s)
+    _render_audit(out, v.audit)
+    out.console.print(f"\n[dim]verification_id: {v.verification_id}[/dim]")
+    checked = _fmt_dt(v.created_at)
+    if checked:
+        out.console.print(f"[dim]checked {checked}[/dim]")
+    if v.verification_id:
+        out.console.print(f'[dim]ask follow-ups:[/dim] lenz ask {v.verification_id} "<your question>"')
+
+
+def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> None:
+    """One-shot, non-interactive render of a `/verify/status` poll. Each terminal
+    state points at the command that takes it further (show / verify --resume)."""
+    if out.json_mode:
+        out.emit_json(_model_json(st))
+        return
+    state = st.status or "?"
+    if state == "processing":
+        from lenz_io.cli.verify import _step_label  # local: avoids a render↔verify import cycle
+
+        label = _step_label((st.progress or {}).get("step")).removeprefix("Verifying… ")
+        out.console.print(f"[yellow]processing[/yellow]  [dim]— {label}[/dim]")
+    elif state == "completed":
+        v = st.result
+        if v is None:
+            out.console.print("[green]completed[/green]")
+            return
+        _verdict_header(out, v)
+        if v.verification_id:
+            out.console.print(f"\n[dim]verification_id: {v.verification_id}[/dim]")
+            out.console.print(f"[dim]full report:[/dim] lenz show {v.verification_id}")
+    elif state == "needs_input":
+        out.console.print(f"[yellow]needs input[/yellow]  [dim]({st.reason or '?'})[/dim]")
+        if st.claims:
+            out.console.print("[dim]claims found:[/dim]")
+            for i, claim in enumerate(st.claims, 1):
+                out.console.print(f"  {i}. {claim.text}")
+        if st.candidates:
+            out.console.print("[dim]did you mean:[/dim]")
+            for i, candidate in enumerate(st.candidates, 1):
+                out.console.print(f"  {i}. {candidate}")
+        for s in st.similar_claims[:5]:
+            sc = "" if s.lenz_score is None else f" (score {s.lenz_score}/10)"
+            out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{sc}  [dim]id: {s.verification_id}[/dim]")
+        ref = task_id or "<task_id>"
+        # Non-interactive resolution (agents/scripts): `--claim` picks by index
+        # and `--detach` returns the spawned task_id(s) without blocking. Drop
+        # both flags for the interactive picker.
+        out.console.print(f"[dim]resolve it:[/dim] lenz verify --resume {ref} --claim <N|all> --detach")
+    elif state == "failed":
+        err = st.error or st.failure_detail or st.failure_reason or "Verification failed."
+        out.console.print(f"[red]failed[/red]  [dim]— {err}[/dim]")
+    else:
+        out.console.print(state)
 
 
 def _truncate(text: str, width: int = 60) -> str:

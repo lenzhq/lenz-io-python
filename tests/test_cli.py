@@ -27,9 +27,13 @@ from lenz_io.errors import (
 )
 from lenz_io.models import (
     AssessClaim,
+    Assessment,
     AssessResponse,
+    Audit,
     BatchAccepted,
     CandidateClaim,
+    DebateSide,
+    EntityRef,
     ExtractedClaims,
     SimilarVerification,
     Source,
@@ -869,6 +873,172 @@ def test_resume_falls_back_to_verification_id(monkeypatch):
     result = runner.invoke(app, ["--json", "verify", "--resume", "v-1"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["verdict"] == "False"
+
+
+# ── status (non-interactive single poll) ────────────────────────────────────
+# Pretty-output tests render directly (CliRunner's stdout isn't a tty → json is
+# forced); the runner is used only for the --json contract and error paths.
+def test_render_status_processing_shows_friendly_step():
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="processing", progress={"step": "research"}))
+    assert "processing" in out
+    assert "Gathering evidence" in out  # friendly label, not raw 'research'
+
+
+def test_render_status_completed_points_to_show():
+    """A completed task renders the verdict and routes to `lenz show` for the
+    full report — status stays lightweight."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="completed", result=_verification()))
+    assert "False" in out
+    assert "lenz show v-1" in out
+
+
+def test_render_status_failed_shows_error():
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="failed", error="pipeline boom"))
+    assert "failed" in out
+    assert "pipeline boom" in out
+
+
+def test_render_status_needs_input_lists_claims_and_resume():
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_task_status
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    st = TaskStatus(
+        status="needs_input",
+        reason="multi_claim",
+        claims=[CandidateClaim(text="Dogs eat meat."), CandidateClaim(text="The Earth is flat.")],
+    )
+    render_task_status(out, st, task_id="t-42")
+    text = buf.getvalue()
+    assert "needs input" in text
+    assert "Dogs eat meat." in text and "The Earth is flat." in text
+    # hint carries the real task_id AND the non-interactive resolver flags
+    assert "lenz verify --resume t-42" in text
+    assert "--claim" in text and "--detach" in text
+
+
+def test_status_json_emits_raw(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient(statuses=[TaskStatus(status="processing", progress={"step": "framing"})]))
+    result = runner.invoke(app, ["--json", "status", "t-1"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["status"] == "processing"
+    assert payload["progress"]["step"] == "framing"
+
+
+def test_status_404_is_friendly(monkeypatch):
+    """A 404 means a wrong/expired task_id — point at `lenz show`, and don't echo
+    the (32-char) task_id into the show command (it'd just 404 again)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(raises={"get_status": LenzAuthError(message="Task not found.", status_code=404)}),
+    )
+    result = runner.invoke(app, ["--json", "status", "deadbeefdeadbeef"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_found"
+    assert "lenz show <verification_id>" in err["message"]
+    assert "lenz show deadbeefdeadbeef" not in err["message"]
+
+
+# ── show (full verification dossier) ─────────────────────────────────────────
+def _full_verification():
+    return Verification(
+        verification_id="ab12cd34",
+        claim="The Earth is flat.",
+        domain="Science",
+        entities=[EntityRef(name="Earth")],
+        verdict="False",
+        confidence="high",
+        lenz_score=1,
+        executive_summary="It is an oblate spheroid.",
+        warnings=["absolute wording"],
+        sources=[Source(title=f"S{i}", url=f"https://s{i}.test") for i in range(12)],
+        audit=Audit(
+            adjudication_summary="Consensus: false.",
+            panel_agreement="unanimous",
+            assessments=[Assessment(panelist_name="Logic Examiner", focus_area="logic", score=2, reasoning="bad")],
+            debate_pro=DebateSide(role="pro", argument="pro arg", rebuttal="pro reb"),
+            debate_con=DebateSide(role="con", argument="con arg", rebuttal="con reb"),
+        ),
+    )
+
+
+def test_render_show_full_dossier():
+    from lenz_io.cli.render import render_verification_full
+
+    out = _render(render_verification_full, _full_verification())
+    assert "False" in out
+    assert "The Earth is flat." in out
+    assert "Warnings (1):" in out and "absolute wording" in out
+    assert "Sources (12):" in out  # ALL sources, not capped at 8
+    assert "S11" in out  # the 12th source rendered (concise view caps at 8)
+    # audit block: panel + debate
+    assert "Panel" in out and "Logic Examiner" in out
+    assert "Adjudication" in out and "Consensus: false." in out
+    assert "PRO" in out and "pro arg" in out
+    assert "CON" in out and "con arg" in out
+
+
+def test_render_show_concise_omits_panel():
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_verification_full
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_verification_full(out, _full_verification(), concise=True)
+    text = buf.getvalue()
+    assert "False" in text
+    assert "It is an oblate spheroid." in text
+    assert "Panel" not in text  # concise drops the audit block
+    assert "PRO" not in text
+    assert "S11" not in text  # concise caps sources at 8
+
+
+def test_show_json_emits_full_object(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(verifications=_FakeVerifications(mapping={"ab12cd34": _full_verification()})),
+    )
+    result = runner.invoke(app, ["--json", "show", "ab12cd34"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["verification_id"] == "ab12cd34"
+    assert payload["audit"]["debate_pro"]["argument"] == "pro arg"
+
+
+def test_show_404_is_friendly(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(verifications=_FakeVerifications(error=LenzAuthError(message="not found", status_code=404))),
+    )
+    result = runner.invoke(app, ["--json", "show", "435100acc5464911"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_found"
+    assert "verification_id" in err["message"]
+    assert "lenz status <task_id>" in err["message"]
 
 
 # ── login (was zero coverage) ────────────────────────────────────────────────
