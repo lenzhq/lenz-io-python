@@ -723,7 +723,13 @@ class Lenz:
 
         url = f"{self._base_url}{path}"
         req_headers = dict(headers or {})
-        if self._api_key and auth_required:
+        # Always attach the bearer when we have one — even on optional-auth
+        # endpoints (auth_required=False). `auth_required` only governs whether a
+        # MISSING key fails early (above); it must NOT suppress a key we DO have.
+        # Otherwise the server sees us as anonymous and a caller can't fetch their
+        # own private/hidden verifications (e.g. `verifications.get` → `lenz show`
+        # on a fresh API claim, which is private+hidden by default).
+        if self._api_key:
             req_headers["Authorization"] = f"Bearer {self._api_key}"
         req_headers.setdefault("Content-Type", "application/json")
 

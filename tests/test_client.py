@@ -590,11 +590,8 @@ class TestVerifications:
         assert v.lenz_score == 9
 
     def test_get_works_without_api_key(self, unauth_client):
-        """Server-merge gave GET /verifications/{id} optional Bearer auth:
-        anon callers see any public + non-hidden claim. The SDK already
-        supports key-less calls via auth_required=False — this test pins
-        the contract so a future tightening of auth_required would fail.
-        """
+        """GET /verifications/{id} takes optional Bearer: a key-less client can
+        still fetch public claims (anon caller → no Authorization header)."""
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.get("/verifications/public_id").respond(
                 200,
@@ -607,10 +604,23 @@ class TestVerifications:
                 },
             )
             v = unauth_client.verifications.get("public_id")
-        # No Authorization header sent (anon caller)
+        # No key configured → nothing to send.
         assert "Authorization" not in route.calls.last.request.headers
         assert v.verification_id == "public_id"
         assert v.verdict == "True"
+
+    def test_get_sends_bearer_when_keyed(self, client):
+        """Optional-auth endpoints MUST still send the key when we have one — the
+        server only returns the caller's own private/hidden verifications to the
+        owning bearer. Suppressing it (the old `and auth_required` guard) made
+        `lenz show` 404 on a user's own fresh API claim (private+hidden)."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/verifications/mine").respond(
+                200, json={"verification_id": "mine", "verdict": "False", "confidence": "high"}
+            )
+            v = client.verifications.get("mine")
+        assert route.calls.last.request.headers["Authorization"] == "Bearer lenz_test_abc123"
+        assert v.verification_id == "mine"
 
     def test_delete_happy(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
