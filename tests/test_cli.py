@@ -516,9 +516,14 @@ def test_render_assess_shows_verdict_and_ask_hint():
 
 
 def test_render_assess_no_claims():
+    """Empty claims → a clean human message + the extract tip. The raw server
+    `error` is NOT leaked into pretty output (it stays in --json)."""
     from lenz_io.cli.render import render_assess
 
-    assert "No claims assessed" in _render(render_assess, AssessResponse(claims=[]))
+    out = _render(render_assess, AssessResponse(claims=[], error="No verifiable claim detected"))
+    assert "No claim found." in out
+    assert "No verifiable claim detected" not in out  # raw server wording suppressed in pretty mode
+    assert "lenz extract" in out  # actionable next step
 
 
 def test_render_verification_full():
@@ -939,6 +944,34 @@ def test_render_status_failed_shows_error():
     out = _render(render_task_status, TaskStatus(status="failed", error="pipeline boom"))
     assert "failed" in out
     assert "pipeline boom" in out
+
+
+def test_render_status_failed_falls_back_to_detail():
+    """`error` empty → fall back through failure_detail → failure_reason → default."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="failed", failure_detail="detail boom"))
+    assert "detail boom" in out
+    out2 = _render(render_task_status, TaskStatus(status="failed"))
+    assert "Verification failed." in out2  # bare default when all reasons empty
+
+
+def test_render_status_completed_without_result():
+    """A completed task whose result didn't deserialize prints bare 'completed'
+    and no `lenz show` pointer (there's no id to show)."""
+    from lenz_io.cli.render import render_task_status
+
+    out = _render(render_task_status, TaskStatus(status="completed", result=None))
+    assert "completed" in out
+    assert "lenz show" not in out
+
+
+def test_render_status_unknown_state_echoes():
+    """An unexpected/new server status echoes verbatim (lax-forward-compatible)
+    rather than crashing — the `else` fallback branch."""
+    from lenz_io.cli.render import render_task_status
+
+    assert "queued" in _render(render_task_status, TaskStatus(status="queued"))
 
 
 def test_render_status_needs_input_lists_claims_and_resume():

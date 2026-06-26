@@ -12,7 +12,7 @@ import contextlib
 import json
 import sys
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NoReturn
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -142,14 +142,17 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         return
     claims = result.claims or []
     if not claims:
-        out.console.print("[dim]No claims assessed.[/dim]")
+        # A clean message for humans; the raw server reason (which can be a vague
+        # "no claim" OR an ambiguous-input case) stays in --json's `error`. The
+        # tip points at `extract`, which surfaces clearer candidate readings.
+        out.console.print("[dim]No claim found.[/dim]")
+        out.console.print('[dim]Tip:[/dim] lenz extract "<text>" [dim]— a vague claim may need specifics.[/dim]')
         return
     for c in claims:
         color = _VERDICT_COLOR.get(c.verdict, "white")
         out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({c.confidence}) — {c.claim}")
         vid = _verification_id_from_url(getattr(c, "verification_url", ""))
-        if vid:
-            out.console.print(f'    [dim]ask follow-ups:[/dim] lenz ask {vid} "<your question>"')
+        _ask_hint(out, vid, indent="    ")
 
 
 def _verdict_header(out: Output, v: Verification) -> None:
@@ -159,7 +162,15 @@ def _verdict_header(out: Output, v: Verification) -> None:
     out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
 
 
-def _verification_missing(out: Output) -> None:
+def _ask_hint(out: Output, vid: str, *, indent: str = "") -> None:
+    """The 'ask follow-ups' nudge — shared by the verification + assess views.
+    No-op without an id. ``indent`` matches the surrounding block (assess nests
+    it under each claim)."""
+    if vid:
+        out.console.print(f'{indent}[dim]ask follow-ups:[/dim] lenz ask {vid} "<your question>"')
+
+
+def _verification_missing(out: Output) -> NoReturn:
     out.error(
         {"error": {"code": "empty_result", "message": "No verification returned.", "status": 0}},
         "No verification returned.",
@@ -170,8 +181,7 @@ def _verification_missing(out: Output) -> None:
 def render_verification(out: Output, v: Verification | None) -> None:
     """Concise verdict view — used inline by `verify` and by `show --concise`."""
     if v is None:
-        _verification_missing(out)
-        return  # unreachable (raises), but narrows the type for the rest
+        _verification_missing(out)  # -> NoReturn; narrows v to non-None below
     if out.json_mode:
         out.emit_json(_model_json(v))
         return
@@ -184,19 +194,31 @@ def render_verification(out: Output, v: Verification | None) -> None:
             title = s.title or s.source_name or s.url
             out.console.print(f"  • {title}\n    [blue]{s.url}[/blue]")
     out.console.print(f"\n[dim]verification_id: {v.verification_id}[/dim]")
-    if v.verification_id:
-        out.console.print(f'[dim]ask follow-ups:[/dim] lenz ask {v.verification_id} "<your question>"')
+    _ask_hint(out, v.verification_id)
+
+
+def _parse_iso(iso: str | None) -> datetime | None:
+    """Parse an ISO-8601 string to an aware UTC datetime; ``None`` if empty or
+    unparseable. Naive inputs are assumed UTC. ``Z`` suffix is normalized."""
+    if not iso:
+        return None
+    try:
+        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    except (ValueError, AttributeError):
+        return None
+    return when if when.tzinfo else when.replace(tzinfo=timezone.utc)
+
+
+def _fmt_date(when: datetime) -> str:
+    """datetime → ``Jun 1, 2026``. Built by hand — strftime's no-pad day
+    (``%-d`` / ``%#d``) isn't portable."""
+    return f"{when:%b} {when.day}, {when.year}"
 
 
 def _fmt_dt(iso: str | None) -> str:
     """ISO-8601 → ``Jun 1, 2026`` (date only); raw string back if unparseable."""
-    if not iso:
-        return ""
-    try:
-        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return iso
-    return f"{when:%b} {when.day}, {when.year}"
+    when = _parse_iso(iso)
+    return _fmt_date(when) if when else (iso or "")
 
 
 def _render_source(out: Output, s: Source) -> None:
@@ -249,8 +271,7 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
     ALL sources, and the panel/debate audit. ``concise`` falls back to the
     compact `verify`-style view. JSON output is always the complete object."""
     if v is None:
-        _verification_missing(out)
-        return
+        _verification_missing(out)  # -> NoReturn
     if out.json_mode:
         out.emit_json(_model_json(v))
         return
@@ -283,8 +304,7 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
     checked = _fmt_dt(v.created_at)
     if checked:
         out.console.print(f"[dim]checked {checked}[/dim]")
-    if v.verification_id:
-        out.console.print(f'[dim]ask follow-ups:[/dim] lenz ask {v.verification_id} "<your question>"')
+    _ask_hint(out, v.verification_id)
 
 
 def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> None:
@@ -441,21 +461,17 @@ def _capacity_row(out: Output, label: str, cap: UsageCapacity) -> None:
     out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
 
 
-def _humanize_reset(iso: str, *, now: datetime | None = None) -> str:
+def _humanize_reset(iso: str | None, *, now: datetime | None = None) -> str:
     """Turn an ISO-8601 reset timestamp into a friendly ``in 6 days (Jul 1, 2026)``.
 
     Leads with the actionable relative distance and keeps the absolute date in
     parens. Falls back to the raw string if the value isn't parseable (the API
     contract is lax/forward-compatible — never crash on an unexpected shape).
     ``now`` is injectable for deterministic tests; defaults to the current UTC."""
-    try:
-        when = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    except (ValueError, AttributeError):
-        return iso
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    # Build the date by hand — strftime's no-pad day (%-d / %#d) isn't portable.
-    absolute = f"{when:%b} {when.day}, {when.year}"
+    when = _parse_iso(iso)
+    if when is None:
+        return iso or ""
+    absolute = _fmt_date(when)
 
     seconds = (when - (now or datetime.now(timezone.utc))).total_seconds()
     if seconds <= 0:
