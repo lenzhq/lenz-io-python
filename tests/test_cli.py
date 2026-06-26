@@ -516,14 +516,36 @@ def test_render_assess_shows_verdict_and_ask_hint():
 
 
 def test_render_assess_no_claims():
-    """Empty claims → a clean human message + the extract tip. The raw server
-    `error` is NOT leaked into pretty output (it stays in --json)."""
+    """Genuine non-claim (no candidate readings) → a clean 'No claim found.'.
+    The raw server `error` is NOT leaked into pretty output (it stays in --json)."""
     from lenz_io.cli.render import render_assess
 
-    out = _render(render_assess, AssessResponse(claims=[], error="No verifiable claim detected"))
+    out = _render(
+        render_assess,
+        AssessResponse(claims=[], error="No verifiable claim detected", error_code="no_claim"),
+    )
     assert "No claim found." in out
     assert "No verifiable claim detected" not in out  # raw server wording suppressed in pretty mode
-    assert "lenz extract" in out  # actionable next step
+
+
+def test_render_assess_ambiguous_shows_readings():
+    """Ambiguous input → the server returns candidate readings; the CLI lists
+    them and points at re-assessing one, instead of a flat 'no claim'."""
+    from lenz_io.cli.render import render_assess
+
+    out = _render(
+        render_assess,
+        AssessResponse(
+            claims=[],
+            error="Claim is ambiguous — pick a specific reading",
+            error_code="ambiguous",
+            candidate_claims=["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled 2021-2026."],
+        ),
+    )
+    assert "Ambiguous" in out
+    assert "DDR4 desktop RAM prices doubled 2021-2026." in out  # readings surfaced
+    assert "DRAM contract prices doubled 2021-2026." in out
+    assert "lenz assess" in out  # next step
 
 
 def test_render_verification_full():

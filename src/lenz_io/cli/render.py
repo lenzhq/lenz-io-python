@@ -142,11 +142,17 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         return
     claims = result.claims or []
     if not claims:
-        # A clean message for humans; the raw server reason (which can be a vague
-        # "no claim" OR an ambiguous-input case) stays in --json's `error`. The
-        # tip points at `extract`, which surfaces clearer candidate readings.
-        out.console.print("[dim]No claim found.[/dim]")
-        out.console.print('[dim]Tip:[/dim] lenz extract "<text>" [dim]— a vague claim may need specifics.[/dim]')
+        # Ambiguous input → the server returns specific readings to pick from
+        # (error_code='ambiguous'); show them so the user can assess one. A
+        # genuine non-claim has no readings → a clean "No claim found."
+        candidates = result.candidate_claims or []
+        if candidates:
+            out.console.print("[dim]Ambiguous — pick a specific reading:[/dim]")
+            for reading in candidates:
+                out.console.print(f"  • {reading}")
+            out.console.print('[dim]Then assess one, e.g.:[/dim] lenz assess "<reading>"')
+        else:
+            out.console.print("[dim]No claim found.[/dim]")
         return
     for c in claims:
         color = _VERDICT_COLOR.get(c.verdict, "white")
