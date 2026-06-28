@@ -362,7 +362,7 @@ class Lenz:
 
         Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
         claim that framing identified. Each claim has a ``verdict``
-        ("True" / "Mostly True" / "Misleading" / "False" / "Error"),
+        ("True" / "Mostly True" / "Mixed" / "Mostly False" / "False" / "Error"),
         a categorical ``confidence`` ("high" / "medium" / "low"), and
         an optional ``verification_url`` pointing at the deep
         ``Verification`` when /assess found a matching stored claim.

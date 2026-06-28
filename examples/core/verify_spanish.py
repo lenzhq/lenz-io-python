@@ -7,7 +7,7 @@ Run:
 The same API and same SDK; pass ``language='es'`` (or any of the 12
 supported codes: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg) and
 the response's free-form prose comes back in that language. Verdict
-labels (True / False / Misleading / Mostly True) stay English so SDK
+labels (True / Mostly True / Mixed / Mostly False / False) stay English so SDK
 consumers can branch on them deterministically.
 """
 
