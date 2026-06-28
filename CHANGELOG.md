@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-06-29
+
 ### Changed
 - **Verdict scale is now 5-point.** `verdict` values are
   `"True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"`
