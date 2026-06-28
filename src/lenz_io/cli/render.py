@@ -32,9 +32,12 @@ from lenz_io.models import (
 _VERDICT_COLOR = {
     "True": "green",
     "Mostly True": "green",
-    "Misleading": "yellow",
+    "Mixed": "yellow",
+    "Mostly False": "dark_orange3",
     "False": "red",
     "Error": "red",
+    # Legacy label (pre-5-point), still emitted by older cached responses.
+    "Misleading": "yellow",
 }
 
 

@@ -291,14 +291,14 @@ class TestAssess:
                 200,
                 json={
                     "claims": [
-                        {"claim": "Coffee causes cancer.", "verdict": "Misleading", "confidence": "medium"},
+                        {"claim": "Coffee causes cancer.", "verdict": "Mixed", "confidence": "medium"},
                         {"claim": "The earth is flat.", "verdict": "False", "confidence": "high"},
                     ],
                     "error": None,
                 },
             )
             r2 = client.assess(text="Coffee causes cancer and the earth is flat.")
-        assert [c.verdict for c in r2.claims] == ["Misleading", "False"]
+        assert [c.verdict for c in r2.claims] == ["Mixed", "False"]
         assert [c.confidence for c in r2.claims] == ["medium", "high"]
 
     def test_verification_url_present_on_claim_hit(self, client):

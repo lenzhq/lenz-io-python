@@ -11,7 +11,7 @@ breaking changes that require a SDK major bump.
 Vocabulary (applies across every claim-shaped response):
 
 - ``claim``       : str           — the framed claim text
-- ``verdict``     : str           — "True" | "Mostly True" | "Misleading" | "False" | "Error"
+- ``verdict``     : str           — "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
 - ``confidence``  : str           — "high" | "medium" | "low" (categorical)
 - ``lenz_score``  : int | None    - 0-10 integer (deep / list; /assess omits)
 """
@@ -139,7 +139,7 @@ class Verification(_Lax):
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
     # Verdict block (flat)
-    verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
+    verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     lenz_score: int | None = None  # 0-10 integer
     executive_summary: str = ""
@@ -232,7 +232,7 @@ class AssessClaim(_Lax):
     # Output language (ISO 639-1). Echoes the language requested on the
     # call, or ``'en'`` when unspecified. Verdict enums always English.
     language: str = "en"
-    verdict: str = ""  # "True" | "Mostly True" | "Misleading" | "False" | "Error"
+    verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
 

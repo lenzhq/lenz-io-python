@@ -179,7 +179,7 @@ Every claim-shaped response shares these fields at top level:
 | Field | Type | Notes |
 |-------|------|-------|
 | `claim` | `str` | The framed claim text. |
-| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Misleading"` \| `"False"` \| `"Error"`. |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"` \| `"Error"`. |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 0–10 (deep verdicts and list endpoints; `assess` omits it). |
 

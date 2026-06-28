@@ -6,6 +6,14 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+- **Verdict scale is now 5-point.** `verdict` values are
+  `"True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"`
+  (was 4-point with `"Misleading"`). `verdict` remains a plain `str` for
+  forward compatibility — no type changes — but consumers branching on the
+  literal `"Misleading"` should map it to `"Mixed"` / `"Mostly False"`. The
+  `lenz` CLI colors `Mostly False` distinctly.
+
 ## [2.1.0] — 2026-06-26
 
 ### Added
