@@ -52,19 +52,20 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   notify:
-    name: discord alert
+    name: discord notify
     # Only runs when `publish` succeeded (default needs-gating), so this fires
     # exactly on a successful PyPI publish.
     needs: publish
     runs-on: ubuntu-latest
     steps:
-      - name: Post to Discord #alerts
+      - name: Post to Discord #key-system-events
         env:
-          # Webhook bound to the #alerts channel — set as a repo secret.
-          # Mirrors the server repo's CI alert (same secret name).
-          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          # Webhook bound to the #key-system-events channel — set as a repo secret.
+          # Separate from DISCORD_WEBHOOK_URL (#alerts) so a successful publish
+          # is a release/system-lifecycle event, not an incident.
+          WEBHOOK: ${{ secrets.KEY_SYSTEM_EVENTS_WEBHOOK_URL }}
         run: |
-          if [ -z "$WEBHOOK" ]; then echo "No DISCORD_WEBHOOK_URL secret; skipping."; exit 0; fi
+          if [ -z "$WEBHOOK" ]; then echo "No KEY_SYSTEM_EVENTS_WEBHOOK_URL secret; skipping."; exit 0; fi
           VERSION="${GITHUB_REF_NAME#v}"
           curl -sS -H "Content-Type: application/json" -X POST "$WEBHOOK" \
             -d "{\"content\": \"🟢 \`lenz-io ${VERSION}\` published to PyPI — https://pypi.org/project/lenz-io/${VERSION}/\"}"
