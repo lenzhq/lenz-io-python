@@ -23,7 +23,7 @@ Shape (four-primitive ladder + the supporting reads):
     # Marquee verbs — top-level (the four-primitive ladder)
     out = client.extract(text="...")                       # find claims
     r = client.assess(text="...")                          # fast 3-model verdict, ~5-10s
-    v = client.verify_and_wait(claim="...")                # full 7-model pipeline, ~90s
+    v = client.verify_and_wait(claim="...")                # full 8-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
     # Other verify-family verbs
@@ -369,7 +369,7 @@ class Lenz:
 
         Use ``confidence`` to decide when to escalate: ``"low"`` claims
         are worth re-running through ``verify_and_wait`` for the deep
-        7-model pipeline with citations.
+        8-model pipeline with citations.
 
         ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
         'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg'`` to receive

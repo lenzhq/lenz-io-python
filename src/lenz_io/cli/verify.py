@@ -46,7 +46,7 @@ _STEP_LABELS = {
     "research": "Gathering evidence",
     "researcher": "Gathering evidence",
     "debate": "Weighing both sides",
-    "adjudication": "Adjudicating across models",
+    "adjudication": "Panel review across models",
     "conclusion": "Writing the verdict",
 }
 

@@ -3,7 +3,7 @@
 The headline integration story: your model emits an answer, Lenz pulls
 the verifiable claims out of it (``extract``), gives you a fast verdict
 on each (``assess``), and you escalate only the low-confidence ones to
-the full 7-model pipeline (``verify``). Cheaper and faster than
+the full 8-model pipeline (``verify``). Cheaper and faster than
 verifying every claim outright.
 
 Run:

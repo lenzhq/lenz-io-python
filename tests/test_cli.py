@@ -1081,7 +1081,7 @@ def test_render_show_full_dossier():
     assert "S11" in out  # the 12th source rendered (concise view caps at 8)
     # audit block: panel + debate
     assert "Panel" in out and "Logic Examiner" in out
-    assert "Adjudication" in out and "Consensus: false." in out
+    assert "Panel Review" in out and "Consensus: false." in out
     assert "PRO" in out and "pro arg" in out
     assert "CON" in out and "con arg" in out
 
