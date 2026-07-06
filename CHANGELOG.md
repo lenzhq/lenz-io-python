@@ -6,6 +6,15 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-07-06
+
+### Changed
+- **Docs corrected to match the API.** The Lenz Score range is 1–10 (was
+  documented 0–10); the full pipeline is 8 models across 5 stages (was
+  "7-model"); public stage names are Framing → Research → Debate →
+  Panel Review → Conclusion (README, docstrings, examples, CLI labels).
+  No runtime or API changes — documentation and one CLI display string.
+
 ## [2.2.0] — 2026-06-29
 
 ### Changed
