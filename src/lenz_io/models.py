@@ -13,7 +13,7 @@ Vocabulary (applies across every claim-shaped response):
 - ``claim``       : str           — the framed claim text
 - ``verdict``     : str           — "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
 - ``confidence``  : str           — "high" | "medium" | "low" (categorical)
-- ``lenz_score``  : int | None    - 0-10 integer (deep / list; /assess omits)
+- ``lenz_score``  : int | None    - 1-10 integer (deep / list; /assess omits)
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ class Assessment(_Lax):
     kind is implicit in ``focus_area``; all of them surface under a single
     ``warnings`` list.
 
-    ``score`` is a panelist-level 0-10 sub-score, distinct from the
+    ``score`` is a panelist-level 1-10 sub-score, distinct from the
     top-level ``lenz_score`` on a ``Verification``.
     """
 
@@ -141,7 +141,7 @@ class Verification(_Lax):
     # Verdict block (flat)
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
-    lenz_score: int | None = None  # 0-10 integer
+    lenz_score: int | None = None  # 1-10 integer
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)

@@ -6,7 +6,7 @@ Run:
 
 The pattern: ``extract`` pulls claims out of any text, ``assess`` returns
 a fast 3-model verdict on each, ``verify`` escalates the low-confidence
-ones to the full 7-model panel with citations, and ``ask`` lets you
+ones to the full 8-model panel with citations, and ``ask`` lets you
 follow up on a verification.
 
 The demo claim is pre-cached, so the verify call returns in ~1.5s. Your
@@ -37,7 +37,7 @@ def main() -> None:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
     print()
 
-    # 3. verify — escalate to the full 7-model panel for citations + audit
+    # 3. verify — escalate to the full 8-model panel for citations + audit
     v = client.verify_and_wait(claim="Sharks don't get cancer")
     print(f"Verdict: {v.verdict} (lenz_score {v.lenz_score}, confidence {v.confidence})")
     print(f"Summary: {v.executive_summary}")

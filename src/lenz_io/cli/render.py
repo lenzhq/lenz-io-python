@@ -264,7 +264,7 @@ def _render_audit(out: Output, a: Audit | None) -> None:
     for assessment in a.assessments:
         _render_assessment(out, assessment)
     if a.adjudication_summary:
-        out.console.print(f"\n[bold]Adjudication[/bold]\n{a.adjudication_summary}")
+        out.console.print(f"\n[bold]Panel Review[/bold]\n{a.adjudication_summary}")
     if a.debate_pro or a.debate_con:
         out.console.print("\n[bold]Debate[/bold]")
         for side, label in ((a.debate_pro, "PRO"), (a.debate_con, "CON")):

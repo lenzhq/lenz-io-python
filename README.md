@@ -6,7 +6,7 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 
 - `extract` — pull verifiable claims out of any text. Free, 1000 calls/key/day.
 - `assess` — fast 3-model panel verdict in ~5-10s. Sync, paid.
-- `verify` — full 7-model pipeline with citations in ~90s. Async, paid.
+- `verify` — full 8-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
@@ -98,12 +98,12 @@ already has a deep verification, `assess` returns it via
 
 ## How verification works
 
-Frame → Collect Evidence → Debate (2 models, 2 rounds) → Adjudicate
-(3 models: sources, logic, precision) → Conclude. ~90 seconds wall-clock
+Framing → Research → Debate (2 models, 2 rounds) → Panel Review
+(3 reviewers: source quality, logical structure, claim precision) → Conclusion. ~90 seconds wall-clock
 per claim. `assess` runs a leaner 3-model panel against the same
 framing for the ~5-10s pass.
 
-## Magical-moment demo
+## Quickstart demo
 
 ```python
 from lenz_io import Lenz
@@ -181,7 +181,7 @@ Every claim-shaped response shares these fields at top level:
 | `claim` | `str` | The framed claim text. |
 | `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"` \| `"Error"`. |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
-| `lenz_score` | `int \| None` | Integer 0–10 (deep verdicts and list endpoints; `assess` omits it). |
+| `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
 ### Webhooks
 
