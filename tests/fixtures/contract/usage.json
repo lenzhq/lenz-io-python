@@ -26,5 +26,6 @@
     "calls_today": 3,
     "daily_limit": 1000,
     "unlimited": false
-  }
+  },
+  "has_webhook_secret": true
 }
