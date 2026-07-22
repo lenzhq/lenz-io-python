@@ -243,16 +243,16 @@ class _LibraryNamespace:
         search: str = "",
         domain: str = "",
         entity: str = "",
-        curated: bool = False,
+        curated: list[str] | None = None,
         verdict: str = "",
     ) -> LibraryList:
         """List the public verification catalog. Works without an API key.
 
-        ``curated=True`` restricts to the LLM-curated, trivia-worthy subset
-        (the pool behind the open-source quiz demo). ``verdict`` filters by
-        comma-separated labels, e.g. ``"True,False"``. ``sort`` also accepts
-        ``"random"`` alongside ``recent`` / ``popular`` / ``most_true`` /
-        ``most_untrue`` / ``relevance``.
+        ``curated`` restricts to one or more named curated collections, e.g.
+        ``["trivia"]`` (the pool behind the open-source quiz demo). ``verdict``
+        filters by comma-separated labels, e.g. ``"True,False"``. ``sort`` also
+        accepts ``"random"`` alongside ``recent`` / ``popular`` / ``most_true``
+        / ``most_untrue`` / ``relevance``.
         """
         params: dict[str, Any] = {
             "page": page,
@@ -263,7 +263,7 @@ class _LibraryNamespace:
         }
         # Omit when default so existing callers keep byte-identical query strings.
         if curated:
-            params["curated"] = True
+            params["curated"] = ",".join(curated)
         if verdict:
             params["verdict"] = verdict
         body = self._p._request(

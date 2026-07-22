@@ -1,7 +1,7 @@
 """Keyless public-library reads — the pattern behind the open-source
 FactOrFiction quiz demo (https://play.lenz.io).
 
-``library.list`` needs no API key. ``curated=True`` returns the LLM-curated,
+``library.list`` needs no API key. ``curated=["trivia"]`` returns the LLM-curated,
 trivia-worthy subset; ``verdict`` filters by label; ``sort="random"`` shuffles.
 
     python examples/library_quiz.py
@@ -15,7 +15,7 @@ def main() -> None:
     lenz = Lenz()
 
     # A round of true/false quiz claims, curated and shuffled.
-    rnd = lenz.library.list(curated=True, sort="random", verdict="True,False")
+    rnd = lenz.library.list(curated=["trivia"], sort="random", verdict="True,False")
 
     for item in rnd.items[:5]:
         print(f"\n{item.claim}")
