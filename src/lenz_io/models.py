@@ -357,6 +357,12 @@ class Usage(_Lax):
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
     assess: UsageCapacity = Field(default_factory=UsageCapacity)
     extract: UsageExtract = Field(default_factory=UsageExtract)
+    # Whether this key has a webhook signing secret provisioned. ``POST /verify``
+    # with a ``webhook_url`` is rejected without one, so callers that rely on
+    # webhook delivery can check this up front. Reports existence only — the
+    # secret value is never exposed here (shown once at rotation, never again).
+    # Defaults to ``False`` on servers predating this field.
+    has_webhook_secret: bool = False
 
 
 class AskMessage(_Lax):
