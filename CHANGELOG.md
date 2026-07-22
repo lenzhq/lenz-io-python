@@ -6,6 +6,13 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+- **`library.list` filters.** `curated` — restrict to one or more named curated
+  collections (e.g. `["trivia"]`); `verdict` — comma-separated verdict labels
+  (e.g. `"True,False"`); and `sort="random"` for a shuffled page.
+- **`usage()` now reports `has_webhook_secret`** — whether a webhook signing
+  secret is configured for the API key.
+
 ## [2.3.0] — 2026-07-06
 
 ### Changed
