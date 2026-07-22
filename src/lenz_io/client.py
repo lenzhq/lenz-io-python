@@ -243,17 +243,33 @@ class _LibraryNamespace:
         search: str = "",
         domain: str = "",
         entity: str = "",
+        curated: bool = False,
+        verdict: str = "",
     ) -> LibraryList:
+        """List the public verification catalog. Works without an API key.
+
+        ``curated=True`` restricts to the LLM-curated, trivia-worthy subset
+        (the pool behind the open-source quiz demo). ``verdict`` filters by
+        comma-separated labels, e.g. ``"True,False"``. ``sort`` also accepts
+        ``"random"`` alongside ``recent`` / ``popular`` / ``most_true`` /
+        ``most_untrue`` / ``relevance``.
+        """
+        params: dict[str, Any] = {
+            "page": page,
+            "sort": sort,
+            "search": search,
+            "domain": domain,
+            "entity": entity,
+        }
+        # Omit when default so existing callers keep byte-identical query strings.
+        if curated:
+            params["curated"] = True
+        if verdict:
+            params["verdict"] = verdict
         body = self._p._request(
             "GET",
             "/library",
-            params={
-                "page": page,
-                "sort": sort,
-                "search": search,
-                "domain": domain,
-                "entity": entity,
-            },
+            params=params,
             auth_required=False,
         )
         return LibraryList.model_validate(body)
