@@ -39,6 +39,23 @@ class TestConstruction:
             page = unauth_client.library.list()
         assert page.total == 0
 
+    def test_library_list_forwards_curated_verdict_random(self, unauth_client):
+        with respx.mock(base_url=DEFAULT_BASE, assert_all_called=False) as r:
+            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
+            unauth_client.library.list(curated=True, sort="random", verdict="True,False")
+        qs = route.calls.last.request.url.params
+        assert qs["curated"] == "true"
+        assert qs["sort"] == "random"
+        assert qs["verdict"] == "True,False"
+
+    def test_library_list_omits_curated_and_verdict_when_default(self, unauth_client):
+        with respx.mock(base_url=DEFAULT_BASE, assert_all_called=False) as r:
+            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
+            unauth_client.library.list()
+        qs = route.calls.last.request.url.params
+        assert "curated" not in qs
+        assert "verdict" not in qs
+
     def test_auth_required_method_without_key_raises_with_clear_message(self, unauth_client):
         with pytest.raises(LenzAuthError) as ei:
             unauth_client.verifications.list()
