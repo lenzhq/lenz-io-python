@@ -146,8 +146,8 @@ The one-liner is `verify_and_wait()`. If you already hold a `task_id` (or want t
 submit and wait separately), use `wait()`:
 
 ```python
-task = client.verify(claim="Sharks don't get cancer")   # async, returns a task_id
-verification = client.wait(task)                          # blocks until it lands
+task = client.verify(claim="Sharks don't get cancer")  # async, returns a task_id
+verification = client.wait(task)  # blocks until it lands
 print(verification.verdict, verification.lenz_score)
 ```
 
@@ -156,15 +156,17 @@ To run several claims in parallel, submit a batch and wait on all of them.
 and never raises on a single claim failing — inspect each item's `status`:
 
 ```python
-results = client.verify_batch_and_wait(claims=[
-    {"text": "Sharks don't get cancer"},
-    {"text": "The Eiffel Tower is 330m tall"},
-])
+results = client.verify_batch_and_wait(
+    claims=[
+        {"text": "Sharks don't get cancer"},
+        {"text": "The Eiffel Tower is 330m tall"},
+    ]
+)
 for r in results:
     if r.status == "completed":
         print(r.claim_text, "→", r.verification.verdict)
     else:
-        print(r.claim_text, "→", r.status)   # needs_input | failed | timeout
+        print(r.claim_text, "→", r.status)  # needs_input | failed | timeout
 ```
 
 Prefer **webhooks** for production async flows (no long-lived HTTP connection);
@@ -275,7 +277,7 @@ regardless of language.
 ```python
 v = client.verify_and_wait(
     claim="La Tierra es plana",
-    language="es",                 # Spanish output
+    language="es",  # Spanish output
 )
 print(v.verdict, v.language)
 # False es
@@ -287,7 +289,7 @@ Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`, `nl`, `sv`, `da`,
 ```python
 batch = client.verify_batch(
     claims=[
-        {"text": "Coffee causes cancer."},                    # en (batch default)
+        {"text": "Coffee causes cancer."},  # en (batch default)
         {"text": "El café causa cáncer.", "language": "es"},  # overrides
     ],
     language="en",
@@ -298,8 +300,8 @@ batch = client.verify_batch(
 
 ```python
 Lenz(
-    api_key="lenz_...",                  # or set LENZ_API_KEY env var
-    base_url="https://lenz.io/api/v1",   # override for staging / local
+    api_key="lenz_...",  # or set LENZ_API_KEY env var
+    base_url="https://lenz.io/api/v1",  # override for staging / local
     timeout=30.0,
     max_retries=3,
 )
