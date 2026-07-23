@@ -131,10 +131,16 @@ class Verification(_Lax):
     default and referenced by ``verification_id`` only. Cache-hit on
     another customer's claim is transparent — the customer always sees
     their own ``verification_id``, never another customer's.
+
+    Later: ``visibility`` returns — 'private' | 'unlisted' | 'public'. It
+    echoes what you set on submit ('private'/'unlisted' are settable;
+    'public' can only be read, for listed claims). ``url`` stays dropped.
     """
 
     verification_id: str = ""
     claim: str = ""
+    # 'private' | 'unlisted' | 'public'. Read-back of the claim's visibility.
+    visibility: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
