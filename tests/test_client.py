@@ -164,16 +164,47 @@ class TestVerify:
         assert b.batch_id == "batch_1"
         assert len(b.items) == 2
 
-    def test_verify_batch_does_not_send_visibility(self, client):
-        """1.1.0: API claims are private by default. The SDK no longer
-        sends a ``visibility`` field — server rejects it anyway."""
+    def test_verify_omits_visibility_by_default(self, client):
+        """Omit-when-empty: no visibility kwarg → no key in the body, so the
+        server applies its 'private' default and existing callers are
+        byte-identical."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            client.verify(claim="x")
+        assert "visibility" not in json.loads(route.calls.last.request.content)
+
+    def test_verify_sends_visibility_when_set(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            client.verify(claim="x", visibility="unlisted")
+        assert json.loads(route.calls.last.request.content)["visibility"] == "unlisted"
+
+    def test_verify_batch_visibility_batch_wide_and_per_item(self, client):
+        """Batch-wide default is sent once; per-item override rides on the
+        item dict (server is authoritative on the merge)."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
+            client.verify_batch(
+                claims=[{"text": "a"}, {"text": "b", "visibility": "private"}],
+                visibility="unlisted",
+            )
+        body = json.loads(route.calls.last.request.content)
+        assert body["visibility"] == "unlisted"
+        assert body["claims"][1]["visibility"] == "private"
+
+    def test_verify_batch_omits_visibility_by_default(self, client):
+        import json
+
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
             client.verify_batch(claims=[{"text": "a"}])
-        import json
-
-        body = json.loads(route.calls.last.request.content)
-        assert "visibility" not in body
+        assert "visibility" not in json.loads(route.calls.last.request.content)
 
     def test_extract_returns_identified_claims(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

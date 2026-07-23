@@ -129,6 +129,9 @@ class VerifyBatchItem(TypedDict, total=False):
     source_url: str
     webhook_url: str
     idempotency_key: str
+    # 'private' (default) or 'unlisted' (link-readable, never listed).
+    # Per-item value overrides the batch-wide ``visibility`` default.
+    visibility: str
 
 
 class _VerificationsNamespace:
@@ -333,14 +336,18 @@ class Lenz:
 
     # ── marquee verbs (top-level shortcuts) ──
 
-    def verify(self, claim: str, *, language: str = "", **kwargs: Any) -> TaskAccepted:
+    def verify(self, claim: str, *, language: str = "", visibility: str = "", **kwargs: Any) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
 
         ``language`` (optional): output language for the verification's
         prose fields. See module docstring for supported codes.
+
+        ``visibility`` (optional): ``'private'`` (default, owner-only) or
+        ``'unlisted'`` (readable by verification_id / at the /c/ URL, but
+        never surfaced in the Library or search). Omit for private.
         """
-        return self._verify_submit(claim=claim, language=language, **kwargs)
+        return self._verify_submit(claim=claim, language=language, visibility=visibility, **kwargs)
 
     def verify_batch(
         self,
@@ -348,6 +355,7 @@ class Lenz:
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
+        visibility: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
@@ -356,11 +364,16 @@ class Lenz:
         ``language`` (optional): batch-wide output-language default. Each
         item dict may set its own ``language`` key to override the
         batch-wide value — server is authoritative on the merge.
+
+        ``visibility`` (optional): batch-wide default, ``'private'`` or
+        ``'unlisted'``. Each item dict may set its own ``visibility`` key
+        to override the batch-wide value.
         """
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
             language=language,
+            visibility=visibility,
             idempotency_key=idempotency_key,
         )
 
@@ -428,6 +441,7 @@ class Lenz:
         source_url: str = "",
         webhook_url: str = "",
         language: str = "",
+        visibility: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -460,6 +474,7 @@ class Lenz:
             source_url=source_url,
             webhook_url=webhook_url,
             language=language,
+            visibility=visibility,
             idempotency_key=key,
         )
         logger.info("Submitted task: %s", accepted.task_id)
@@ -496,6 +511,7 @@ class Lenz:
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
+        visibility: str = "",
         idempotency_key: str | None = None,
         timeout: float = 180.0,
     ) -> list[BatchItemResult]:
@@ -511,6 +527,7 @@ class Lenz:
             claims=claims,
             webhook_url=webhook_url,
             language=language,
+            visibility=visibility,
             idempotency_key=idempotency_key,
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
@@ -651,6 +668,7 @@ class Lenz:
         source_url: str = "",
         webhook_url: str = "",
         language: str = "",
+        visibility: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
         payload: dict[str, Any] = {
@@ -662,6 +680,9 @@ class Lenz:
         # request bodies (no extra "language": "" key).
         if language:
             payload["language"] = language
+        # Omit-when-empty: the server defaults to 'private'.
+        if visibility:
+            payload["visibility"] = visibility
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
@@ -674,6 +695,7 @@ class Lenz:
         claims: list[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
+        visibility: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         # ``webhook_url`` and ``language`` are batch-wide defaults; any
@@ -685,6 +707,8 @@ class Lenz:
         payload: dict[str, Any] = {"claims": list(claims), "webhook_url": webhook_url}
         if language:
             payload["language"] = language
+        if visibility:
+            payload["visibility"] = visibility
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
