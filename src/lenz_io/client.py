@@ -177,7 +177,9 @@ class _VerificationsNamespace:
 
         Server caps ``limit`` to 10. Empty list when the verification has
         no embedding yet or no claim is close enough. Excludes the
-        verification itself and editorially-hidden claims. Accessible for
+        verification itself and editorially-hidden claims. Keyless like the
+        library/detail reads; a key additionally unlocks the caller's own
+        verifications. Accessible for
         any verification the caller owns (any visibility) or any public
         library item.
         """
@@ -185,6 +187,8 @@ class _VerificationsNamespace:
             "GET",
             f"/verifications/{verification_id}/related",
             params={"limit": limit},
+            auth_required=False,
+            auth_optional=True,  # send the key if we have one → owner sees own rows
         )
         return RelatedVerifications.model_validate(body)
 
