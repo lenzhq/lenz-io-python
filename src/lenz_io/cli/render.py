@@ -195,6 +195,8 @@ def render_verification(out: Output, v: Verification | None) -> None:
         out.emit_json(_model_json(v))
         return
     _verdict_header(out, v)
+    if v.key_finding:
+        out.console.print(f"\n[bold]{v.key_finding}[/bold]")
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
     if v.sources:
@@ -298,6 +300,8 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
         meta.append(", ".join(names))
     if meta:
         out.console.print(f"[dim]{'  •  '.join(meta)}[/dim]")
+    if v.key_finding:
+        out.console.print(f"\n[bold]{v.key_finding}[/bold]")
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
     if v.warnings:
@@ -414,7 +418,9 @@ def _batch_verdict_block(out: Output, v: Verification) -> None:
     color = _VERDICT_COLOR.get(v.verdict, "white")
     score = "" if v.lenz_score is None else f"  [dim]score {v.lenz_score}/10[/dim]"
     out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
-    if v.executive_summary:
+    if v.key_finding:
+        out.console.print(v.key_finding)
+    elif v.executive_summary:
         out.console.print(v.executive_summary)
     footer = []
     if v.sources:

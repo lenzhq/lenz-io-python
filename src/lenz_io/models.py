@@ -148,6 +148,10 @@ class Verification(_Lax):
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     lenz_score: int | None = None  # 1-10 integer
+    # The analysis's key finding: one declarative sentence stating the
+    # most important fact it established (2.6.0). "" on legacy claims
+    # that were never backfilled.
+    key_finding: str = ""
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
@@ -173,6 +177,8 @@ class VerificationListItem(_Lax):
     verdict: str = ""
     confidence: str = "low"
     lenz_score: int | None = None
+    # The analysis's key finding (2.6.0). See ``Verification.key_finding``.
+    key_finding: str = ""
     executive_summary: str = ""
     created_at: str | None = None
     modified_at: str | None = None
