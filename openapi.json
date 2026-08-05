@@ -1,12 +1,28 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Lenz \u2014 Claim Verification API for AI Product Teams",
+    "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 pull verifiable claims out of any text. Free, 1000/key/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~5-10s. Sync, paid.\n- `POST /verify` \u2014 full 7-model pipeline with citations in ~90s. Async, paid.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Pull factual claims out of your model output (free, ~1s)\nclaims = client.extract(text=llm_output).identified_claims\n\n# 2. Fast verdict on all of them via /assess (~5-10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, 7-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim).verdict\n        print(deep.verdict, deep.lenz_score)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, precision) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 0\u201310 numeric score (deep payloads).\n- **`sources`** \u2014 evidence with title, URL, snippet (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep 7-model pipeline, submit and poll status.\n- **Ask** \u2014 follow-up questions on a verification.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Account** \u2014 credits and rate-limit usage.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API Integration](https://lenz.io/api-integration) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API Integration](https://lenz.io/api-integration)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 pull verifiable claims out of any text. Free, 1000/key/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~5-10s. Sync, paid.\n- `POST /verify` \u2014 full 8-model pipeline with citations in ~90s. Async, paid.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Pull factual claims out of your model output (free, ~1s)\nclaims = client.extract(text=llm_output).identified_claims\n\n# 2. Fast verdict on all of them via /assess (~5-10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, 8-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim).verdict\n        print(deep.verdict, deep.lenz_score)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, precision) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`sources`** \u2014 evidence with title, URL, snippet (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep 8-model pipeline, submit and poll status.\n- **Ask** \u2014 follow-up questions on a verification.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Account** \u2014 credits and rate-limit usage.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API Integration](https://lenz.io/api-integration) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API Integration](https://lenz.io/api-integration)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/api-terms"
   },
   "paths": {
+    "/api/v1/": {
+      "get": {
+        "operationId": "apiRoot",
+        "summary": "Api Root",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Service discovery root \u2014 links to docs, OpenAPI spec, and endpoints.\n\nReturned at ``GET /api/v1/`` so curious humans and probing clients\nget a useful JSON payload instead of a 404.",
+        "tags": [
+          "Discovery"
+        ]
+      }
+    },
     "/api/v1/library": {
       "get": {
         "operationId": "listLibrary",
@@ -61,6 +77,26 @@
               "type": "integer"
             },
             "required": false
+          },
+          {
+            "in": "query",
+            "name": "curated",
+            "schema": {
+              "default": "",
+              "title": "Curated",
+              "type": "string"
+            },
+            "required": false
+          },
+          {
+            "in": "query",
+            "name": "verdict",
+            "schema": {
+              "default": "",
+              "title": "Verdict",
+              "type": "string"
+            },
+            "required": false
           }
         ],
         "responses": {
@@ -75,7 +111,7 @@
             }
           }
         },
-        "description": "Search and browse the public catalog of verified claims.\n\nReturns paginated results from the Lenz Library. Only publicly\npublished verifications are included.\n\n**Sort options:** `recent`, `popular`, `most_true`, `most_untrue`,\n`relevance` (only when `search` is provided).",
+        "description": "Search and browse the public catalog of verified claims.\n\nReturns paginated results from the Lenz Library. Only publicly\npublished verifications are included.\n\n**Sort options:** `recent`, `popular`, `most_true`, `most_untrue`,\n`relevance` (only when `search` is provided), and `random`.\n\n**`curated`** restricts results to one or more named curated collections,\ncomma-separated. Currently supported: `trivia` (the LLM-curated,\ntrivia-worthy pool behind the open-source quiz demo).\n\n**`verdict`** filters to one or more verdict labels, comma-separated\n(e.g. `True,False`). Labels: `True`, `Mostly True`, `Mixed`,\n`Mostly False`, `False`.",
         "tags": [
           "Library"
         ],
@@ -231,7 +267,7 @@
             "description": "OK"
           }
         },
-        "description": "Extract verifiable claims from arbitrary text.\n\nRuns only the framing step of the pipeline \u2014 no research, no debate,\nno credit charge. Returns the list of verifiable claims, candidate\ndisambiguations (if the input was ambiguous), domain, key entities,\nsearch queries, and presumed intent.\n\nFree for API-key holders, capped at 1000 calls per key per day\n(resets at 00:00 UTC). Keys with admin-set ``unlimited_extract=True``\nbypass the cap.",
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns only the framing step of the pipeline \u2014 no research, no debate,\nno credit charge. Returns the list of verifiable claims, candidate\ndisambiguations (if the input was ambiguous), domain, key entities,\nand presumed intent.\n\nFree for API-key holders, capped at 1000 calls per key per day\n(resets at 00:00 UTC). Keys with admin-set ``unlimited_extract=True``\nbypass the cap.",
         "tags": [
           "Extract"
         ],
@@ -282,7 +318,7 @@
             "description": "OK"
           }
         },
-        "description": "Resolve a multi-claim interrupt \u2014 pick which claim to verify.",
+        "description": "Resolve a multi-claim / clarification interrupt by selecting one or more\nof the offered claims.\n\nEach selected claim fans out into its own independent pipeline (like\n``/verify/batch``), so the response is batch-shaped:\n``{batch_id, items: [{task_id, claim_text}], partial?}``. Poll each\n``task_id`` via ``GET /verify/status/{task_id}``.\n\nEvery selected text must match a claim that was offered in the prior\n``needs_input`` response (server-validated against the recorded offer set);\narbitrary client-asserted text is rejected.",
         "tags": [
           "Verify"
         ],
@@ -351,10 +387,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeUsageOut"
+                }
+              }
+            }
           }
         },
-        "description": "Return the calling key's subscription credits and extract usage.\n\nShape::\n\n    {\n        \"plan\": \"free\" | \"plus\" | \"pro\",\n        \"credits_used\": int,\n        \"credits_total\": int,            # 0 if no monthly quota\n        \"credits_resets_at\": iso8601 | null,\n        \"extract_calls_today\": int,      # 0 for unlimited_extract keys\n        \"extract_daily_limit\": int,\n        \"unlimited_extract\": bool,\n    }\n\nSubscription credits track the per-claim quota that ``/verify`` and\n``/verify/batch`` consume. ``extract_calls_today`` tracks the\nper-key Redis counter that powers the daily ``/extract`` limit.",
+        "description": "Return the calling key's remaining capacity, per capability.\n\nOne block per capability \u2014 ``verify``, ``ask``, ``assess``, ``extract``.\nFor the quota-backed capabilities the response separates two buckets:\n\n- ``quota_*`` \u2014 the recurring monthly allowance for the current ``plan``.\n  Resets every period (``quota_resets_at``).\n- ``credits`` \u2014 one-off top-up credits that do NOT reset monthly. They are\n  spent only after the monthly quota runs out. ``assess`` has no one-off\n  credit pool, so its ``credits`` is always 0 and ``remaining`` equals its\n  ``quota_remaining``.\n\n``remaining`` is the true usable capacity (``quota_remaining + credits``) \u2014\ne.g. the number of ``/verify`` calls the key can still make. ``extract`` is\na per-day rate limit (not credit-based), so it is reported separately.",
         "tags": [
           "Account"
         ],
@@ -366,11 +409,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nu = client.usage()\nprint(u.credits_used, \"/\", u.credits_total)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nu = client.usage()\n# Monthly quota vs one-off top-up credits, separated per capability.\nprint(u.verify.quota_used, \"/\", u.verify.quota_total, \"quota\")\nprint(u.verify.credits, \"top-up credits\")\nprint(u.verify.remaining, \"verify calls left (quota + credits)\")\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst u = await client.account.getUsage();\nconsole.log(`${u.creditsUsed} / ${u.creditsTotal}`);\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst u = await client.account.getUsage();\nconsole.log(`${u.verify.quotaUsed} / ${u.verify.quotaTotal} quota`);\nconsole.log(`${u.verify.credits} top-up credits`);\nconsole.log(`${u.verify.remaining} verify calls left`);\n"
           }
         ]
       }
@@ -454,7 +497,7 @@
             "description": "OK"
           }
         },
-        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any claim whose ``visibility != 'private'`` AND\n  ``status != 'hidden'`` \u2014 i.e. ``visibility='public'`` AND\n  ``status`` in {pending, published}.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private / hidden claims owned by someone else return 404.",
+        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any listed public claim (``visibility='public'`` AND\n  ``status`` in {pending, published}) PLUS any API ``unlisted`` claim\n  (``visibility='public'``, ``status='hidden'``, ``source_channel='api'``):\n  unlisted is readable by verification_id, just never surfaced in listings.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private claims, and non-API hidden public claims (retracted / pre-screen),\n  owned by someone else return 404.",
         "tags": [
           "Verifications"
         ]
@@ -482,47 +525,6 @@
         "tags": [
           "Verifications"
         ],
-        "security": [
-          {
-            "APIKeyBearerAuth": []
-          }
-        ]
-      }
-    },
-    "/api/v1/verifications/{verification_id}/visibility": {
-      "patch": {
-        "operationId": "setVisibility",
-        "summary": "Set Verification Visibility",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "verification_id",
-            "schema": {
-              "title": "Verification Id",
-              "type": "string"
-            },
-            "required": true
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK"
-          }
-        },
-        "description": "Change the visibility of an owned verification.",
-        "tags": [
-          "Verifications"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VisibilityPatchIn"
-              }
-            }
-          },
-          "required": true
-        },
         "security": [
           {
             "APIKeyBearerAuth": []
@@ -567,14 +569,9 @@
             }
           }
         },
-        "description": "List public verifications semantically related to this one.\n\nReturns the closest public-library claims by pgvector ANN distance\n(cosine, 0 = identical). Excludes the verification itself, near-\nduplicates (distance < 0.2), and editorially-hidden claims. Empty\nlist when the verification has no embedding yet (early pipeline) or\nwhen no claim is close enough.\n\nAccess: any verification the caller owns OR any public library item.\n``limit`` is clamped to [1, 10].",
+        "description": "List public verifications semantically related to this one.\n\nReturns the closest public-library claims by pgvector ANN distance\n(cosine, 0 = identical). Excludes the verification itself, near-\nduplicates (distance < 0.2), and editorially-hidden claims. Empty\nlist when the verification has no embedding yet (early pipeline) or\nwhen no claim is close enough.\n\nAuthorization model (optional Bearer) \u2014 identical to\n``get_verification``: anon callers reach listed public claims plus\nAPI-origin unlisted ones; a valid key additionally unlocks the\ncaller's own claims. Results are always drawn from the public\nlibrary only, so keyless access exposes nothing new.\n``limit`` is clamped to [1, 10].",
         "tags": [
           "Verifications"
-        ],
-        "security": [
-          {
-            "APIKeyBearerAuth": []
-          }
         ],
         "x-codeSamples": [
           {
@@ -666,7 +663,7 @@
             "description": "OK"
           }
         },
-        "description": "Send a question and get an expert response.",
+        "description": "Send a question and get an expert response.\n\nThe reply (``content`` field on the response) is plain text with a\nsmall markdown subset baked in by the chat model:\n\n- ``**bold**`` and ``*italic*``\n- ``- `` or ``* `` bullet lists\n- Blank-line paragraph breaks; single newlines inside a paragraph\n  mean line break\n\nThe model only produces these \u2014 no headings, no tables, no code\nblocks. Pass the reply through any markdown library or display it\nverbatim.\n\nDocumented at https://lenz.io/docs/quickstart#ask-reply-format.",
         "tags": [
           "Ask"
         ],
@@ -716,15 +713,10 @@
         "type": "object"
       },
       "VerificationListItemOut": {
-        "description": "Single item in a list of verifications.\n\nUsed by BOTH ``GET /library`` (public catalog) and\n``GET /verifications`` (authed-owner listing). Same vocabulary as\n``ClaimDetailOut``, just without the audit nesting and per-source\ndetail that a list view doesn't need.\n\n``visibility`` is populated only on the authed-owner endpoint\n(``GET /verifications`` knows the owner); ``GET /library`` leaves it\n``None``.",
+        "description": "Single item in a list of verifications.\n\nUsed by both ``GET /library`` (public catalog) and\n``GET /verifications`` (authed-owner listing). Slim shape \u2014 no\n``url`` (customers reference claims by ``verification_id``), no\n``visibility`` (API claims are private by default; the field had\nzero information value on the listing surface).",
         "properties": {
           "verification_id": {
             "title": "Verification Id",
-            "type": "string"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
             "type": "string"
           },
           "claim": {
@@ -764,6 +756,11 @@
             ],
             "title": "Lenz Score"
           },
+          "key_finding": {
+            "default": "",
+            "title": "Key Finding",
+            "type": "string"
+          },
           "executive_summary": {
             "default": "",
             "title": "Executive Summary",
@@ -784,17 +781,6 @@
               }
             ],
             "title": "Modified At"
-          },
-          "visibility": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visibility"
           },
           "language": {
             "title": "Language",
@@ -853,11 +839,6 @@
             "title": "Source Url",
             "type": "string"
           },
-          "visibility": {
-            "default": "",
-            "title": "Visibility",
-            "type": "string"
-          },
           "webhook_url": {
             "default": "",
             "title": "Webhook Url",
@@ -866,6 +847,15 @@
           "language": {
             "default": "",
             "title": "Language",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "private",
+            "enum": [
+              "private",
+              "unlisted"
+            ],
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -889,14 +879,18 @@
             "title": "Webhook Url",
             "type": "string"
           },
-          "visibility": {
-            "default": "",
-            "title": "Visibility",
-            "type": "string"
-          },
           "language": {
             "default": "",
             "title": "Language",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "private",
+            "enum": [
+              "private",
+              "unlisted"
+            ],
+            "title": "Visibility",
             "type": "string"
           }
         },
@@ -922,15 +916,25 @@
             "title": "Webhook Url",
             "type": "string"
           },
-          "visibility": {
-            "default": "",
-            "title": "Visibility",
-            "type": "string"
-          },
           "language": {
             "default": "",
             "title": "Language",
             "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "enum": [
+                  "private",
+                  "unlisted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
           }
         },
         "required": [
@@ -980,7 +984,7 @@
         "type": "object"
       },
       "AssessOut": {
-        "description": "Response body for ``POST /assess``.",
+        "description": "Response body for ``POST /assess``.\n\n``error_code`` is the machine-readable companion to ``error`` so callers\ncan distinguish a genuine non-claim (``'no_claim'``) from an ambiguous\nclaim that framing could disambiguate (``'ambiguous'``). For the ambiguous\ncase ``candidate_claims`` carries framing's specific readings so a caller\ncan pick one and re-assess \u2014 mirroring how ``/verify`` surfaces a\n``clarification_required`` interrupt. Both fields are absent/empty on the\nhappy path; existing callers that only read ``claims``/``error`` are\nunaffected.",
         "properties": {
           "claims": {
             "default": [],
@@ -1000,6 +1004,25 @@
               }
             ],
             "title": "Error"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "candidate_claims": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidate Claims",
+            "type": "array"
           }
         },
         "title": "AssessOut",
@@ -1044,28 +1067,118 @@
       },
       "SelectIn": {
         "properties": {
-          "text": {
-            "title": "Text",
-            "type": "string"
+          "texts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Texts",
+            "type": "array"
           }
         },
         "required": [
-          "text"
+          "texts"
         ],
         "title": "SelectIn",
         "type": "object"
       },
-      "VisibilityPatchIn": {
+      "MeUsageExtractOut": {
+        "description": "Daily ``/extract`` usage (rate-limited per day, not credit-based).",
         "properties": {
-          "visibility": {
-            "title": "Visibility",
+          "calls_today": {
+            "default": 0,
+            "title": "Calls Today",
+            "type": "integer"
+          },
+          "daily_limit": {
+            "default": 0,
+            "title": "Daily Limit",
+            "type": "integer"
+          },
+          "unlimited": {
+            "default": false,
+            "title": "Unlimited",
+            "type": "boolean"
+          }
+        },
+        "title": "MeUsageExtractOut",
+        "type": "object"
+      },
+      "MeUsageOut": {
+        "description": "Per-capability capacity for the calling API key.\n\nOne block per API capability (``verify``, ``ask``, ``assess``, ``extract``).\nFor the quota-backed capabilities, monthly quota (resets at\n``quota_resets_at``) and one-off top-up credits are reported separately so\ncallers can tell a recurring allowance from a purchased balance. ``assess``\nhas no one-off credit pool, so its ``credits`` is always 0 (not a bug).",
+        "properties": {
+          "plan": {
+            "default": "free",
+            "title": "Plan",
             "type": "string"
+          },
+          "quota_resets_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quota Resets At"
+          },
+          "verify": {
+            "$ref": "#/components/schemas/MeUsageQuotaOut"
+          },
+          "ask": {
+            "$ref": "#/components/schemas/MeUsageQuotaOut"
+          },
+          "assess": {
+            "$ref": "#/components/schemas/MeUsageQuotaOut"
+          },
+          "extract": {
+            "$ref": "#/components/schemas/MeUsageExtractOut"
+          },
+          "has_webhook_secret": {
+            "default": false,
+            "title": "Has Webhook Secret",
+            "type": "boolean"
           }
         },
         "required": [
-          "visibility"
+          "verify",
+          "ask",
+          "assess",
+          "extract"
         ],
-        "title": "VisibilityPatchIn",
+        "title": "MeUsageOut",
+        "type": "object"
+      },
+      "MeUsageQuotaOut": {
+        "description": "Per-capability allowance for the public API key.\n\nTwo distinct buckets, kept separate on purpose:\n- ``quota_*``: the recurring monthly allowance for the current plan. Resets\n  every period (see ``MeUsageOut.quota_resets_at``). ``quota_remaining`` is\n  ``quota_total - quota_used`` (never negative).\n- ``credits``: one-off top-up credits that DO NOT reset monthly. Spent only\n  after the monthly quota is exhausted. Some capabilities have no one-off\n  credit pool (e.g. ``assess``); for those ``credits`` is always 0 and\n  ``remaining == quota_remaining``.\n\n``remaining`` is the true usable capacity: ``quota_remaining + credits``.",
+        "properties": {
+          "quota_used": {
+            "default": 0,
+            "title": "Quota Used",
+            "type": "integer"
+          },
+          "quota_total": {
+            "default": 0,
+            "title": "Quota Total",
+            "type": "integer"
+          },
+          "quota_remaining": {
+            "default": 0,
+            "title": "Quota Remaining",
+            "type": "integer"
+          },
+          "credits": {
+            "default": 0,
+            "title": "Credits",
+            "type": "integer"
+          },
+          "remaining": {
+            "default": 0,
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "title": "MeUsageQuotaOut",
         "type": "object"
       },
       "RelatedVerificationsOut": {
@@ -1260,13 +1373,13 @@
             "title": "Verification Id",
             "type": "string"
           },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
           "claim": {
             "title": "Claim",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "private",
+            "title": "Visibility",
             "type": "string"
           },
           "domain": {
@@ -1308,6 +1421,11 @@
             ],
             "default": null,
             "title": "Lenz Score"
+          },
+          "key_finding": {
+            "default": "",
+            "title": "Key Finding",
+            "type": "string"
           },
           "executive_summary": {
             "default": "",
@@ -1364,18 +1482,6 @@
               },
               "panel_agreement": ""
             }
-          },
-          "visibility": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Visibility"
           },
           "language": {
             "title": "Language",
@@ -1599,7 +1705,7 @@
     },
     {
       "name": "Verify",
-      "description": "Deep 7-model pipeline with citations. Async, ~90s. Submit + poll status."
+      "description": "Deep 8-model pipeline with citations. Async, ~90s. Submit + poll status."
     },
     {
       "name": "Ask",

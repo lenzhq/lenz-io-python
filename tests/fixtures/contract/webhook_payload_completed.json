@@ -13,6 +13,7 @@
     "verdict": "True",
     "confidence": "high",
     "lenz_score": 8,
+    "key_finding": "A sample one-sentence finding.",
     "executive_summary": "Sample summary.",
     "warnings": [],
     "sources": [],
