@@ -89,7 +89,7 @@ for c in quick.claims:
 
 # 4. ask — follow-up grounded on a verification
 reply = client.ask.send(v.verification_id, message="Which source is strongest?")
-print(reply.reply)
+print(reply.content)
 ```
 
 `assess` and `verify` share a result cache server-side: if a claim
@@ -112,7 +112,7 @@ client = Lenz(api_key="lenz_...")
 
 v = client.verify_and_wait(claim="Sharks don't get cancer")
 print(v.verdict, v.lenz_score)
-# False 2.0
+# False 2
 
 for source in v.sources[:3]:
     print(" -", source.title, source.url)
