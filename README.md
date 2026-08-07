@@ -341,3 +341,7 @@ For commercial use, volume pricing, or onboarding support,
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+## Maintainer
+
+[@Pavel12431432](https://github.com/Pavel12431432)
