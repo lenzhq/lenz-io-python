@@ -19,10 +19,12 @@ from lenz_io import (
     LenzAuthError,
     LenzNeedsInputError,
     LenzPipelineError,
+    LenzRateLimitError,
     LenzTimeoutError,
     TaskAccepted,
 )
-from lenz_io.client import API_VERSION
+from lenz_io.client import API_VERSION, RETRY_BACKOFF
+from lenz_io.errors import MAX_RETRY_AFTER_SLEEP
 
 DEFAULT_BASE = "https://lenz.io/api/v1"
 
@@ -853,6 +855,138 @@ class TestAutoRetry:
             ]
             client.usage()
         assert 7 in slept
+
+    def test_429_with_a_long_retry_after_raises_instead_of_sleeping(self, client, monkeypatch):
+        """The /extract daily cap sends seconds-until-UTC-midnight. Sleeping
+        that would block the call for most of a day — three times over.
+
+        Without the clamp this test does not fail, it HANGS for 24 hours.
+        """
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(
+                    429,
+                    json={"detail": "Daily /extract limit of 1000 reached.", "reset_in_seconds": 86400},
+                    headers={"Retry-After": "86400"},
+                ),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            with pytest.raises(LenzRateLimitError) as exc:
+                client.usage()
+
+        assert slept == [], "must not sleep through a 24h wait"
+        assert len(route.calls) == 1, "must not burn retries on an unwinnable wait"
+        # The true wait is surfaced so the caller can schedule the work.
+        assert exc.value.retry_after == 86400
+
+    def test_429_at_the_clamp_boundary_still_retries(self, client, monkeypatch):
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, json={"detail": "slow"}, headers={"Retry-After": str(MAX_RETRY_AFTER_SLEEP)}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [MAX_RETRY_AFTER_SLEEP]
+
+    def test_429_without_a_stated_wait_falls_back_to_backoff(self, client, monkeypatch):
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, json={"detail": "slow"}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [RETRY_BACKOFF[0]]
+
+    def test_429_reads_the_wait_from_the_body_when_no_header(self, client, monkeypatch):
+        """The body-fallback branch — the only place this diverged from Node."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, json={"detail": "slow", "reset_in_seconds": 5}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [5]
+
+    def test_429_long_wait_in_the_body_alone_still_raises(self, client, monkeypatch):
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, json={"detail": "capped", "reset_in_seconds": 86400}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            with pytest.raises(LenzRateLimitError) as exc:
+                client.usage()
+        assert slept == []
+        assert exc.value.retry_after == 86400
+
+    def test_429_with_a_non_json_body_falls_back_to_backoff(self, client, monkeypatch):
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, text="<html>rate limited</html>"),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [RETRY_BACKOFF[0]]
+
+    def test_negative_retry_after_is_floored_not_a_bare_ValueError(self, client, monkeypatch):
+        """time.sleep(-5) raises ValueError, which would escape the retry
+        ladder as a non-LenzError and defeat the typed-exception contract."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(429, json={"detail": "slow"}, headers={"Retry-After": "-5"}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [0]
+
+    def test_5xx_still_honors_a_short_retry_after(self, client, monkeypatch):
+        """2.6.0 honored Retry-After on 5xx; the clamp must not silently
+        drop that for a status class the changelog never mentions."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(503, json={"detail": "down"}, headers={"Retry-After": "5"}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [5]
+
+    def test_5xx_with_a_long_retry_after_keeps_retrying_on_backoff(self, client, monkeypatch):
+        """Unlike 429, a 5xx is not the caller's fault and our own backoff may
+        still satisfy it — so a maintenance-window hour becomes backoff, not
+        an abort and not an hour-long sleep."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(503, json={"detail": "down"}, headers={"Retry-After": "3600"}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [RETRY_BACKOFF[0]]
 
 
 # ─────────────────────────────────────────────────── Connection reuse ──

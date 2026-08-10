@@ -45,7 +45,8 @@ lenz config                      # show which key/base URL is in use
 Every command takes `--json` for a clean machine-readable object (also emitted
 automatically when stdout is not a TTY, so pipes Just Work). Errors in `--json`
 mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
-exit. `verify` blocks with a progress spinner; Ctrl-C prints a
+exit (an out-of-credits run reports `"code": "no_credits"` and adds
+`upgrade_url`). `verify` blocks with a progress spinner; Ctrl-C prints a
 `lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
 order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
 
@@ -218,10 +219,20 @@ Every error subclass is typed and carries a `request_id` you can quote on
 support tickets:
 
 ```python
-from lenz_io import LenzAuthError, LenzRateLimitError, LenzValidationError
+from lenz_io import (
+    LenzAuthError,
+    LenzQuotaExceededError,
+    LenzRateLimitError,
+    LenzValidationError,
+)
 
 try:
     client.verify_and_wait(claim="...")
+except LenzQuotaExceededError as exc:
+    # HTTP 402. Out of balance — retrying will not clear it.
+    print(exc.remaining)  # 0, or None if the server didn't report a balance
+    print(exc.resets_at)  # "2026-09-01T00:00:00+00:00", or None
+    print(exc.upgrade_url)  # https://lenz.io/plans
 except LenzAuthError as exc:
     print(exc)
     # Unauthorized
@@ -230,11 +241,19 @@ except LenzAuthError as exc:
     #   Docs:   https://lenz.io/docs/auth
     #   Request ID: req_abc123
 except LenzRateLimitError as exc:
-    time.sleep(exc.retry_after)
+    # Waits up to 60s are already retried for you, so reaching here means
+    # either the ladder ran out or the wait is long. Don't sleep it — the
+    # /extract daily cap can be hours away.
+    schedule_retry_in(exc.retry_after)
 except LenzValidationError as exc:
     for field_err in exc.errors:
         print(field_err["loc"], field_err["msg"])
 ```
+
+`LenzQuotaExceededError` is a **sibling** of `LenzAuthError`, not a subclass —
+"fix your key" and "top up your account" are different actions. So if you were
+catching `LenzAuthError` to handle an empty balance, that branch stops firing;
+add a `LenzQuotaExceededError` handler.
 
 ## Resuming a verification
 

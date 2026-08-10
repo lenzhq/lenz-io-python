@@ -1401,6 +1401,52 @@ def test_resume_honors_claim_preselect(monkeypatch):
     assert json.loads(result.stdout)["verdict"] == "False"
 
 
+# ── quota errors ────────────────────────────────────────────────────────────
+class TestQuotaErrorMapping:
+    """The CLI's out-of-credits contract.
+
+    Before the API moved quota from 403 to 402, an out-of-credits run was a
+    LenzAuthError, so `--json` reported `"unauthorized"` and the human path
+    told the user to re-authenticate a key that worked fine. `"no_credits"`
+    was unreachable.
+    """
+
+    def _quota_error(self, **kwargs):
+        from lenz_io.errors import map_response_to_error
+
+        body = json.dumps(
+            {
+                "detail": "No remaining claim checks.",
+                "code": "no_credits",
+                "upgrade_url": "https://lenz.io/plans",
+                "remaining": 0,
+                **kwargs,
+            }
+        )
+        return map_response_to_error(402, body, {})
+
+    def test_json_payload_reports_no_credits_not_unauthorized(self):
+        from lenz_io.cli.errors import to_payload
+
+        err = to_payload(self._quota_error())["error"]
+        assert err["code"] == "no_credits"
+        assert err["status"] == 402
+        assert err["upgrade_url"] == "https://lenz.io/plans"
+
+    def test_friendly_text_does_not_tell_a_paying_user_to_re_login(self):
+        from lenz_io.cli.errors import friendly_text
+
+        text = friendly_text(self._quota_error())
+        assert "lenz login" not in text
+        assert "lenz.io/plans" in text
+
+    def test_auth_errors_still_point_at_login(self):
+        from lenz_io.cli.errors import friendly_text
+        from lenz_io.errors import LenzAuthError
+
+        assert "lenz login" in friendly_text(LenzAuthError(message="Unauthorized"))
+
+
 # ── lazy-import guard ───────────────────────────────────────────────────────
 def test_lazy_import_guard(monkeypatch, capsys):
     import importlib
