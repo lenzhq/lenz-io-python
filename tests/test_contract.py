@@ -179,3 +179,49 @@ def test_assess_multiclaim_round_trips():
     assert parsed.claims[0].verdict == "True"
     assert parsed.claims[0].confidence == "high"
     assert parsed.claims[0].verification_url is not None
+
+
+# ── Error envelopes ─────────────────────────────────────────────────────────
+# The 402/429 bodies are part of the wire contract too, and drift between the
+# two SDKs' error mapping is exactly what this file exists to catch. Node
+# validates the SAME fixture files in test/contract.test.ts.
+
+
+def test_quota_402_envelope_maps_every_field():
+    from lenz_io.errors import LenzQuotaExceededError, map_response_to_error
+
+    fixture = _load("error_quota_402.json")
+    err = map_response_to_error(402, json.dumps(fixture), {})
+
+    assert isinstance(err, LenzQuotaExceededError)
+    assert err.message == fixture["detail"]
+    assert err.code == fixture["code"]
+    assert err.upgrade_url == fixture["upgrade_url"]
+    assert err.remaining == fixture["remaining"]
+    assert err.resets_at == fixture["resets_at"]
+
+    # Every key the server sends must be consumed by a typed field or
+    # deliberately skipped — an unhandled key means the mapper drifted.
+    # `doc_url` is intentionally not mapped: the SDK sets its own doc_url from
+    # the status table so the link is right even against an older server.
+    handled = {"detail", "code", "upgrade_url", "remaining", "resets_at", "requested", "doc_url"}
+    assert not set(fixture) - handled
+
+
+def test_rate_limit_429_envelope_maps_every_field():
+    from lenz_io.errors import LenzRateLimitError, map_response_to_error
+
+    fixture = _load("error_rate_limit_429.json")
+    err = map_response_to_error(429, json.dumps(fixture), {})
+
+    assert isinstance(err, LenzRateLimitError)
+    assert err.message == fixture["detail"]
+    assert err.code == fixture["code"]
+    assert err.limit == fixture["limit"]
+    assert err.reset_in_seconds == fixture["reset_in_seconds"]
+    assert err.retry_after == fixture["reset_in_seconds"]
+    # upgrade_url is on 429 too — the daily /extract cap is lifted by a plan.
+    assert err.upgrade_url == fixture["upgrade_url"]
+
+    handled = {"detail", "code", "limit", "reset_in_seconds", "upgrade_url", "doc_url"}
+    assert not set(fixture) - handled

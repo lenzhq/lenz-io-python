@@ -37,6 +37,7 @@ except ImportError:
 # Public surface
 from .client import API_VERSION, DEFAULT_BASE_URL, Lenz, VerifyBatchItem
 from .errors import (
+    MAX_RETRY_AFTER_SLEEP,
     LenzAPIError,
     LenzAuthError,
     LenzError,
@@ -89,6 +90,7 @@ from .webhooks import (
 __all__ = [
     "API_VERSION",
     "DEFAULT_BASE_URL",
+    "MAX_RETRY_AFTER_SLEEP",
     "AskHistory",
     "AskMessage",
     "AskReply",

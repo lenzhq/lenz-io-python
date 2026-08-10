@@ -4,6 +4,74 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.7.0] - 2026-08-10
+
+Quota errors are now a first-class, typed condition instead of an
+authorization failure.
+
+### Changed
+- **Out-of-credits raises `LenzQuotaExceededError`, not `LenzAuthError`.** The
+  API moved these rejections from HTTP 403 to **402**; 402 already mapped to
+  `LenzQuotaExceededError` in this SDK, so the class you catch changes the
+  moment the server ships. Previously a developer who ran out of credits was
+  told *"This key doesn't have access to that resource"* and pointed at
+  `/docs/auth`.
+
+  **Breaking-ish:** `LenzQuotaExceededError` does not inherit from
+  `LenzAuthError`. If you were catching the auth error to handle an empty
+  balance, catch the quota error instead.
+
+- **`Retry-After` is clamped at 60s** (`MAX_RETRY_AFTER_SLEEP`, now exported).
+  The `/extract` daily cap sends seconds-until-UTC-midnight, so the old
+  behavior could block a call for most of a day — three times over, once per
+  retry. Past the clamp the two retryable statuses now differ:
+
+  - **429** raises immediately with the true `retry_after`. Schedule the work;
+    don't sit in it.
+  - **5xx** falls back to the normal backoff ladder and keeps retrying — the
+    server is down, not throttling you, and a maintenance-window
+    `Retry-After: 3600` shouldn't become an hour-long sleep *or* abort a call
+    that backoff might still satisfy.
+
+  Note the clamp bounds a single sleep, not the call: a 429 stating 60s can
+  still sleep 60s on each of `max_retries` attempts.
+
+- **`LenzRateLimitError.retry_after` now reads `reset_in_seconds`** from the
+  body when the `Retry-After` header is absent. The previously-read
+  `retry_after` body key was an SDK invention the server has never sent.
+
+- **Two server `code` values were retired** (server-side change, affects every
+  SDK version): `insufficient_credits` and `no_chat_credits` are now plain
+  `no_credits`. Both named the endpoint you called rather than what went
+  wrong. **A branch on either string stops matching silently** — read
+  `remaining` instead.
+
+### Added
+- **`LenzError.code`** — the server's machine-readable error code, on the base
+  class so 402, 403 and 429 all carry it. `""` when the server sent none.
+- **`LenzQuotaExceededError.upgrade_url`** — where the wall lifts. No rejection
+  used to carry a URL at all.
+- **`LenzQuotaExceededError.remaining` / `.resets_at` / `.requested`.**
+  `remaining` is **nullable**: `None` means the server didn't report a balance,
+  `0` means it reported an empty one. The server omits these rather than
+  sending `null`, so the distinction survives the wire.
+- **`LenzRateLimitError.limit` / `.reset_in_seconds` / `.upgrade_url`.** The
+  server sends `upgrade_url` on 429 as well as 402 — someone hitting the daily
+  `/extract` cap also wants to know a paid plan raises it.
+- **`MAX_RETRY_AFTER_SLEEP`** is exported from the package root.
+
+### Deprecated
+- **`LenzQuotaExceededError.credits_remaining`** — use `remaining`. The old
+  attribute was zero-defaulted and the server never sent the field it read, so
+  it was always `0`. It is now a property that reads and writes through to
+  `remaining` (still assignable, so constructor kwargs and fixtures keep
+  working) and emits a `DeprecationWarning`. Removed in 3.0.
+
+### Fixed
+- **CLI `--json` reports `"no_credits"`, not `"unauthorized"`,** for an
+  out-of-credits run, and `friendly_text` no longer tells someone with a
+  working key to run `lenz login`. The payload gains `upgrade_url`.
+
 ## [2.6.0] - 2026-08-05
 
 ### Added

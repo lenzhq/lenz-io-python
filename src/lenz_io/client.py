@@ -69,6 +69,7 @@ import httpx
 
 from . import __version__
 from .errors import (
+    MAX_RETRY_AFTER_SLEEP,
     LenzAPIError,
     LenzError,
     LenzNeedsInputError,
@@ -799,14 +800,26 @@ class Lenz:
                 return response.json() if response.content else {}
 
             # Error path. Retry on 5xx and 429; otherwise raise immediately.
+            #
+            # A stated wait is honored only up to MAX_RETRY_AFTER_SLEEP. Past
+            # that the two statuses part ways, because the right answer differs:
+            #
+            #  * 429 — raise. The /extract daily cap sends
+            #    seconds-until-UTC-midnight, so sleeping it blocks the call for
+            #    most of a day, three times over. The caller gets the true
+            #    retry_after and can schedule the work.
+            #  * 5xx — keep retrying on our own backoff. The server is down,
+            #    not rate-limiting us; a maintenance-window Retry-After of an
+            #    hour shouldn't become an hour-long sleep, but it also
+            #    shouldn't abort a request our backoff might still satisfy.
             if attempt < self._max_retries and (response.status_code >= 500 or response.status_code == 429):
-                ra = response.headers.get("Retry-After")
-                try:
-                    sleep_for = int(ra) if ra else _retry_sleep(attempt)
-                except ValueError:
-                    sleep_for = _retry_sleep(attempt)
-                time.sleep(sleep_for)
-                continue
+                stated = _stated_retry_after(response)
+                if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
+                    time.sleep(stated)
+                    continue
+                if stated is None or response.status_code >= 500:
+                    time.sleep(_retry_sleep(attempt))
+                    continue
 
             raise map_response_to_error(
                 response.status_code,
@@ -818,6 +831,35 @@ class Lenz:
         if last_exc:
             raise LenzAPIError(message=str(last_exc), cause=str(last_exc)) from last_exc
         raise LenzAPIError(message=f"{method} {path} failed without diagnostic")
+
+
+def _stated_retry_after(response: httpx.Response) -> int | None:
+    """Seconds the server says to wait, or None if it didn't say.
+
+    Reads the ``Retry-After`` header first, then the body's
+    ``reset_in_seconds``. Returns None (rather than 0) on an absent or
+    unparseable value so the caller can tell "server stated no wait" apart
+    from "server said wait 0 seconds" and fall back to its own backoff.
+    """
+    raw = response.headers.get("Retry-After")
+    if raw is None or str(raw).strip() == "":
+        try:
+            body = response.json()
+        except Exception:
+            # A non-JSON body is not exceptional — fall back to backoff.
+            return None
+        if not isinstance(body, dict):
+            return None
+        raw = body.get("reset_in_seconds")
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        # Floored at zero: `Retry-After: -5` is malformed, and time.sleep()
+        # raises ValueError on a negative — which would escape the retry
+        # ladder as a bare ValueError, defeating the typed-exception contract.
+        return max(0, int(float(raw)))
+    except (TypeError, ValueError):
+        return None
 
 
 def _retry_sleep(attempt: int) -> float:

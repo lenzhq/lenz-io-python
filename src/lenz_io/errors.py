@@ -20,6 +20,7 @@ Error messages follow the Tier 2 Rust-style format:
 from __future__ import annotations
 
 import json
+import warnings
 from typing import Any
 
 
@@ -38,6 +39,9 @@ class LenzError(Exception):
       * ``doc_url``    — deep link to the relevant docs page
       * ``request_id`` — ``X-Request-ID`` header value; quote on support tickets
       * ``status_code``— HTTP status code (0 for client-side errors)
+      * ``code``       — the server's machine-readable error code, e.g.
+        ``"no_credits"``. Present on 402, 403 and 429; ``""`` when the
+        server sent none. Branch on this rather than on message text.
       * ``body``       — parsed JSON response body if available
     """
 
@@ -50,6 +54,7 @@ class LenzError(Exception):
         doc_url: str = "",
         request_id: str = "",
         status_code: int = 0,
+        code: str = "",
         body: dict[str, Any] | None = None,
         **extra: Any,
     ) -> None:
@@ -60,6 +65,7 @@ class LenzError(Exception):
         self.doc_url = doc_url
         self.request_id = request_id
         self.status_code = status_code
+        self.code = code
         self.body = body
         # Per-subclass enrichment (retry_after, task_id, etc.). Set on the
         # instance so they're accessible as ``exc.task_id`` regardless of
@@ -81,16 +87,71 @@ class LenzError(Exception):
 
 
 class LenzAuthError(LenzError):
-    """401 / 403 — the API key is missing, invalid, or revoked."""
+    """401 / 403 — the API key is missing, invalid, or revoked.
+
+    Note: an out-of-credits response is NOT this error. It used to be —
+    the API returned 403 for quota, which landed here — but the API now
+    returns 402 and that maps to :class:`LenzQuotaExceededError`. If you were
+    catching ``LenzAuthError`` to handle an empty balance, catch the quota
+    error instead. The two do not share a parent on purpose: "fix your key"
+    and "top up your account" are different actions.
+    """
 
 
 class LenzQuotaExceededError(LenzError):
-    """402 — you've spent all your credits this period.
+    """402 — you're out of balance, or your plan doesn't cover this call.
 
-    ``credits_remaining`` is set from the response body.
+    Fields set from the response body:
+
+      * ``upgrade_url``  — where the wall lifts (the plans page).
+      * ``remaining``    — usable capacity left for the capability, or
+        ``None`` when the server didn't say. **Nullable on purpose**: the
+        old ``credits_remaining: int = 0`` could not tell "0 left" apart
+        from "server said nothing", which made it useless to branch on.
+      * ``resets_at``    — ISO-8601 timestamp of the next monthly reset,
+        or ``None``.
+      * ``requested``    — for a batch call, how many units were asked for.
     """
 
-    credits_remaining: int = 0
+    upgrade_url: str = ""
+    remaining: int | None = None
+    resets_at: str | None = None
+    requested: int | None = None
+
+    @property
+    def credits_remaining(self) -> int:
+        """Deprecated alias for ``remaining``. Removed in 3.0.
+
+        Returns 0 when ``remaining`` is unknown, which is exactly the
+        ambiguity ``remaining`` exists to fix — migrate to ``remaining``.
+        """
+        self._warn_credits_remaining()
+        return self.remaining or 0
+
+    @credits_remaining.setter
+    def credits_remaining(self, value: int | None) -> None:
+        """Writes through to ``remaining``.
+
+        A read-only property here would be a breaking change in a MINOR
+        release: ``LenzError.__init__`` splats unknown kwargs onto the
+        instance via ``setattr``, and its docstring advertises that as the
+        forward-compatibility path — so
+        ``LenzQuotaExceededError(credits_remaining=0)`` was legal in 2.6.0 and
+        appears in real test fixtures and retry shims. Without this setter,
+        those raise ``AttributeError`` on upgrade.
+        """
+        self._warn_credits_remaining()
+        self.remaining = value
+
+    @staticmethod
+    def _warn_credits_remaining() -> None:
+        warnings.warn(
+            "credits_remaining is deprecated and will be removed in 3.0; "
+            "use `remaining`, which is None when the server didn't report a "
+            "balance (credits_remaining reports that as 0).",
+            DeprecationWarning,
+            stacklevel=3,
+        )
 
 
 class LenzValidationError(LenzError):
@@ -104,9 +165,25 @@ class LenzValidationError(LenzError):
 
 
 class LenzRateLimitError(LenzError):
-    """429 — rate limited. ``retry_after`` is seconds until the next allowed call."""
+    """429 — rate limited.
+
+      * ``retry_after``       — seconds until the next allowed call, resolved
+        from the ``Retry-After`` header or the body's ``reset_in_seconds``.
+      * ``limit``             — the cap that was hit, when the server states it.
+      * ``reset_in_seconds``  — the body's raw echo of the same wait.
+
+    Seeing this raised does not always mean the automatic retry ladder was
+    exhausted: waits longer than ``MAX_RETRY_AFTER_SLEEP`` raise immediately
+    so a call can't block for hours inside a sleeping retry.
+    """
 
     retry_after: int = 0
+    limit: int | None = None
+    reset_in_seconds: int | None = None
+    #: Where the cap lifts. The server sends this on 429 as well as 402,
+    #: deliberately — someone hitting the daily /extract cap also wants to
+    #: know a paid plan raises it.
+    upgrade_url: str = ""
 
 
 class LenzAPIError(LenzError):
@@ -156,6 +233,18 @@ class LenzWebhookSignatureError(LenzError):
 # sync. Tests pin the mapping (test_errors.py).
 
 _DOCS_BASE = "https://lenz.io/docs"
+
+# NOTE: quota is 402 and only 402. There is deliberately no "403 carrying a
+# quota code also means quota" fallback here — the API emits 402, and the only
+# thing such a fallback would buy is coverage for a server rollback. The MCP
+# server keeps an equivalent branch because it is a separate Cloud Run service
+# that deploys non-atomically alongside the API; an SDK has no such window.
+#
+# Longest Retry-After we'll sleep through inside the automatic retry ladder.
+# The /extract daily cap sends seconds-until-UTC-midnight, so honoring the raw
+# value could block a call for ~24h (three times over). Above this we raise
+# immediately with the true retry_after so the caller can schedule the work.
+MAX_RETRY_AFTER_SLEEP = 60
 
 _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
     401: (
@@ -212,6 +301,12 @@ def map_response_to_error(
     headers = headers or {}
     request_id = headers.get("X-Request-ID") or headers.get("x-request-id") or ""
 
+    # String-typed only, matching the Node SDK: a malformed `code: 42` becomes
+    # "" rather than the string "42", so nothing downstream branches on a
+    # value the server never meant as a code.
+    code_raw = parsed.get("code")
+    code = code_raw if isinstance(code_raw, str) else ""
+
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
     elif 500 <= status_code < 600:
@@ -227,13 +322,24 @@ def map_response_to_error(
         doc_url=doc_url,
         request_id=request_id,
         status_code=status_code,
+        code=code,
         body=parsed,
     )
 
     # Class-specific enrichment from the response body. Each is set on the
     # instance so callers can access via the documented attribute name.
     if isinstance(err, LenzQuotaExceededError):
-        err.credits_remaining = int(parsed.get("credits_remaining", 0) or 0)
+        # String-typed only. `str(...)` on a malformed dict would render
+        # "{'a': 1}" and friendly_text would show that to a user as a URL.
+        upgrade_url = parsed.get("upgrade_url")
+        err.upgrade_url = upgrade_url if isinstance(upgrade_url, str) else ""
+        # None, not 0, when absent — the server omits these rather than
+        # sending null precisely so "unknown" stays distinguishable from
+        # "zero". Collapsing that here would throw the distinction away.
+        err.remaining = _opt_int(parsed.get("remaining"))
+        err.requested = _opt_int(parsed.get("requested"))
+        resets_at = parsed.get("resets_at")
+        err.resets_at = resets_at if isinstance(resets_at, str) and resets_at else None
     elif isinstance(err, LenzValidationError):
         # Ninja returns errors as `detail: [...]` (a list of per-field dicts).
         # Older or alternative shapes can put them under `errors`.
@@ -244,26 +350,73 @@ def map_response_to_error(
         else:
             err.errors = []
     elif isinstance(err, LenzRateLimitError):
-        ra = headers.get("Retry-After") or headers.get("retry-after") or parsed.get("retry_after", 0)
-        try:
-            err.retry_after = int(ra)
-        except (TypeError, ValueError):
+        err.limit = _opt_int(parsed.get("limit"))
+        err.reset_in_seconds = _opt_int(parsed.get("reset_in_seconds"))
+        rl_upgrade_url = parsed.get("upgrade_url")
+        err.upgrade_url = rl_upgrade_url if isinstance(rl_upgrade_url, str) else ""
+        # Header first, then the body. `reset_in_seconds` is what the server
+        # actually sends; `retry_after` was an SDK-side invention that the
+        # server has never emitted — kept last purely as a defensive read.
+        #
+        # Each candidate is COERCED before being accepted, rather than picking
+        # the first truthy raw value and coercing once at the end. `Retry-After`
+        # may legally be an HTTP-date (RFC 7231), and a truthy-but-unparseable
+        # header would otherwise win the `or` chain, coerce to None, and land
+        # on 0 — discarding a perfectly good `reset_in_seconds` and telling the
+        # caller to retry immediately against a server that just throttled it.
+        for candidate in (
+            headers.get("Retry-After"),
+            headers.get("retry-after"),
+            parsed.get("reset_in_seconds"),
+            parsed.get("retry_after"),
+        ):
+            resolved = _opt_int(candidate)
+            if resolved is not None:
+                err.retry_after = resolved
+                break
+        else:
             err.retry_after = 0
 
     return err
+
+
+def _opt_int(value: Any) -> int | None:
+    """Coerce to int, or None when absent/unparseable.
+
+    Blank input returns None rather than 0. In JS ``Number("")`` and
+    ``Number(" ")`` are both ``0``, so the Node counterpart trims before the
+    same check — a whitespace-only ``remaining`` must read as "unknown", not
+    "balance is empty", which is the whole reason these fields are nullable.
+
+    Numeric strings with a fractional part are accepted and truncated, so
+    ``"42.7"`` and ``42.7`` agree. Every field this parses (counts, seconds)
+    is an integer on the wire; a float is malformed either way, and the two
+    SDKs disagreeing about it is worse than either answer.
+    """
+    if isinstance(value, str):
+        value = value.strip()
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
 
 
 def _fix_hint_for(status_code: int) -> str:
     return {
         401: "Generate a new key at https://lenz.io/api-integration.",
         403: "This key doesn't have access to that resource.",
-        402: "Upgrade your plan or wait for the period reset.",
+        402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
         422: "Check the request body against the OpenAPI spec.",
         429: "Wait Retry-After seconds and retry.",
     }.get(status_code, "Retry; if the error persists, file an issue with the Request ID.")
 
 
 __all__ = [
+    "MAX_RETRY_AFTER_SLEEP",
     "LenzAPIError",
     "LenzAuthError",
     "LenzError",
