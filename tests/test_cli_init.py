@@ -11,6 +11,7 @@ expectations, because the two commands are a stated parity pair.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -19,6 +20,7 @@ from lenz_io.cli import _run, init_cmd, normalize_argv
 from lenz_io.cli import config as cfg
 from lenz_io.cli import mcp_config as mcp
 from lenz_io.cli.app import app
+from lenz_io.cli.render import Output
 
 runner = CliRunner()
 
@@ -152,7 +154,9 @@ def test_init_writes_the_config_and_verifies(monkeypatch, tmp_path):
 
     assert result.exit_code == 0, result.output
     written = json.loads((tmp_path / ".mcp.json").read_text())
-    assert written["mcpServers"]["lenz"]["headers"]["Authorization"] == "Bearer lenz_abc"
+    # What goes in the Authorization header has its own tests below — see
+    # test_the_key_stays_out_of_a_project_config.
+    assert written["mcpServers"]["lenz"]["url"] == "https://lenz.io/mcp"
 
 
 def test_init_cursor_creates_the_directory(monkeypatch, tmp_path):
@@ -260,3 +264,146 @@ def test_parity_with_the_node_sdk_server_block():
         "url": "https://lenz.io/mcp",
         "headers": {"Authorization": "Bearer k"},
     }
+
+
+def test_parity_pins_the_shared_constants():
+    """The block above was the only thing pinned, and it is the only thing that
+    never drifted. SETUP_URL meanwhile sat at the pre-rename /welcome/setup in
+    the Node SDK and printed a 404 as the last line of every successful run.
+    ``test/cli.test.ts`` asserts this same table."""
+    assert mcp.MCP_SERVER_URL == "https://lenz.io/mcp"
+    assert mcp.CONSOLE_URL == "https://lenz.io/api-integration"
+    assert mcp.SETUP_URL == "https://lenz.io/setup"
+    assert mcp.KEY_ENV_VAR == "LENZ_API_KEY"
+
+
+def test_parity_pins_the_per_client_placeholder_syntax():
+    """Not interchangeable. Cursor treats a bare ${VAR} as literal text and
+    sends it as the bearer token."""
+    assert mcp.KEY_PLACEHOLDERS["claude-code"] == "${LENZ_API_KEY}"
+    assert mcp.KEY_PLACEHOLDERS["cursor"] == "${env:LENZ_API_KEY}"
+    assert mcp.KEY_PLACEHOLDERS["claude-desktop"] is None
+
+
+# ── where the key ends up ───────────────────────────────────────────────────
+def test_the_key_stays_out_of_a_project_config(monkeypatch, tmp_path):
+    """`.mcp.json` is a file its own docs tell teams to commit. A setup command
+    whose happy path writes a live credential there is handing over a leak."""
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+    _patch_client(monkeypatch, _FakeClient())
+
+    runner.invoke(app, normalize_argv(["init", "--no-verify"]))
+
+    raw = (tmp_path / ".mcp.json").read_text()
+    assert json.loads(raw)["mcpServers"]["lenz"]["headers"]["Authorization"] == "Bearer ${LENZ_API_KEY}"
+    assert "lenz_secret" not in raw
+
+
+def test_cursor_gets_its_own_placeholder_syntax(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+    _patch_client(monkeypatch, _FakeClient())
+
+    runner.invoke(app, normalize_argv(["init", "--client", "cursor", "--no-verify"]))
+
+    written = json.loads((tmp_path / ".cursor" / "mcp.json").read_text())
+    assert written["mcpServers"]["lenz"]["headers"]["Authorization"] == "Bearer ${env:LENZ_API_KEY}"
+
+
+def test_the_export_line_is_printed_with_the_actual_key(capsys):
+    """Otherwise the run reads as finished while the client still has nothing
+    to authenticate with.
+
+    Rendered directly rather than through the runner: Output.json_mode is
+    ``json_mode or not sys.stdout.isatty()``, so under CliRunner this branch
+    never executes. Same approach as the render tests in test_cli.py.
+    """
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+
+    init_cmd.render_success(
+        out,
+        client_name="claude-code",
+        path=Path("/proj/.mcp.json"),
+        verified="42 verify calls remaining",
+        is_placeholder=True,
+        api_key="lenz_secret",
+    )
+
+    printed = capsys.readouterr().out
+    assert "export LENZ_API_KEY=lenz_secret" in printed
+    assert "commonly committed" in printed
+
+
+def test_no_export_line_when_the_key_is_in_the_file(capsys):
+    """--write-key makes the config self-contained; telling them to export a
+    variable nothing reads would just be noise."""
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+
+    init_cmd.render_success(
+        out,
+        client_name="claude-code",
+        path=Path("/proj/.mcp.json"),
+        verified="",
+        is_placeholder=False,
+        api_key="lenz_secret",
+    )
+
+    assert "export LENZ_API_KEY" not in capsys.readouterr().out
+
+
+def test_write_key_puts_the_key_in_the_file(monkeypatch, tmp_path):
+    """The opt-out, for a private checkout."""
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+    _patch_client(monkeypatch, _FakeClient())
+
+    runner.invoke(app, normalize_argv(["init", "--write-key", "--no-verify"]))
+
+    written = json.loads((tmp_path / ".mcp.json").read_text())
+    assert written["mcpServers"]["lenz"]["headers"]["Authorization"] == "Bearer lenz_secret"
+
+
+def test_claude_desktop_gets_the_literal_key():
+    """Launched from the desktop rather than a shell, so it never inherits an
+    exported variable — a placeholder there is simply broken."""
+    value, is_placeholder = mcp.credential_for("claude-desktop", "lenz_secret")
+
+    assert value == "lenz_secret"
+    assert is_placeholder is False
+
+
+def test_print_previews_exactly_what_a_write_would_produce(monkeypatch, tmp_path):
+    """A preview that differs from the write is worse than no preview."""
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+
+    result = runner.invoke(app, normalize_argv(["init", "--client", "cursor", "--print"]))
+
+    printed = json.loads(result.stdout)
+    assert printed["mcpServers"]["lenz"]["headers"]["Authorization"] == "Bearer ${env:LENZ_API_KEY}"
+
+
+def test_json_mode_says_whether_the_key_is_in_the_config(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+    _patch_client(monkeypatch, _FakeClient())
+
+    result = runner.invoke(app, normalize_argv(["--json", "init", "--no-verify"]))
+
+    payload = json.loads(result.stdout)
+    assert payload["key_in_config"] is False
+    assert payload["key_env_var"] == "LENZ_API_KEY"
+
+
+def test_write_config_is_owner_only(tmp_path):
+    """With --write-key this file holds a live credential. mkstemp gives 0600
+    and os.replace preserves it; a refactor to path.write_text would quietly
+    widen it to 0644."""
+    path = tmp_path / "mcp.json"
+
+    mcp.write_config(path, {"a": 1})
+
+    assert path.stat().st_mode & 0o777 == 0o600

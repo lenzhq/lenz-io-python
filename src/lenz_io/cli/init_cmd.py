@@ -14,6 +14,8 @@ other must not get two different results. Change them together.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from lenz_io import Lenz
@@ -26,13 +28,17 @@ from .mcp_config import (
     CLIENT_LABELS,
     CLIENT_RESTART_NOTES,
     CONSOLE_URL,
+    KEY_ENV_VAR,
+    KEY_PLACEHOLDERS,
     SETUP_URL,
     ConfigUnreadable,
     config_path_for,
+    credential_for,
     merge_config,
     read_existing,
     write_config,
 )
+from .render import Output
 
 
 def init(
@@ -45,6 +51,14 @@ def init(
     ),
     print_only: bool = typer.Option(False, "--print", help="Print the config JSON and exit, writing nothing."),
     no_verify: bool = typer.Option(False, "--no-verify", help="Skip the authenticated check."),
+    write_key: bool = typer.Option(
+        False,
+        "--write-key",
+        help=(
+            f"Write the key itself into the config. Off by default: project configs "
+            f"are commonly committed, so they get a ${KEY_ENV_VAR} reference instead."
+        ),
+    ),
 ) -> None:
     """Write the Lenz MCP server into an AI client's config, then check the key works.
 
@@ -65,9 +79,15 @@ def init(
 
     # --print needs no key: its whole purpose is handing someone a config to
     # paste and fill in themselves, including for clients we don't support.
+    # What it prints must be what a write for the SAME client would produce,
+    # or it stops being a preview.
     if print_only:
-        key = state.api_key.strip() or "${LENZ_API_KEY}"
-        out.emit_json(merge_config(None, key))
+        api_key = state.api_key.strip()
+        if api_key:
+            credential, _ = credential_for(client_name, api_key, write_key=write_key)
+        else:
+            credential = KEY_PLACEHOLDERS.get(client_name) or f"${{{KEY_ENV_VAR}}}"
+        out.emit_json(merge_config(None, credential))
         raise SystemExit(0)
 
     if state.key_source == "none":
@@ -96,7 +116,8 @@ def init(
             fix="Fix or move that file, then re-run — refusing to overwrite a config we can't read.",
         ) from None
 
-    write_config(path, merge_config(existing, state.api_key))
+    credential, is_placeholder = credential_for(client_name, state.api_key, write_key=write_key)
+    write_config(path, merge_config(existing, credential))
 
     verified = ""
     if not no_verify:
@@ -109,13 +130,56 @@ def init(
                 "client": client_name,
                 "config_file": str(path),
                 "verified": bool(verified) if not no_verify else None,
+                # So a script can tell whether the config is self-contained or
+                # still needs the variable exported.
+                "key_in_config": not is_placeholder,
+                "key_env_var": KEY_ENV_VAR if is_placeholder else None,
             }
         )
         return
 
+    render_success(
+        out,
+        client_name=client_name,
+        path=path,
+        verified=verified,
+        is_placeholder=is_placeholder,
+        api_key=state.api_key,
+    )
+
+
+def render_success(
+    out: Output,
+    *,
+    client_name: str,
+    path: Path,
+    verified: str,
+    is_placeholder: bool,
+    api_key: str,
+) -> None:
+    """The human-readable tail of a successful init.
+
+    A separate function because ``Output.json_mode`` is ``json_mode or not
+    sys.stdout.isatty()``, so under CliRunner it is always JSON and this branch
+    is unreachable through ``runner.invoke``. Same shape the render tests in
+    ``tests/test_cli.py`` use.
+    """
     out.console.print(f"Wrote Lenz MCP server to [bold]{path}[/bold]")
     if verified:
         out.console.print(f"[green]Key verified[/green] — {verified}.")
+    if is_placeholder:
+        # Without this the run reads as finished — "wrote the config, key
+        # verified" — while the client still has nothing to authenticate with.
+        out.console.print(
+            f"\nThat config references ${KEY_ENV_VAR} instead of storing your key, because "
+            f"{path.name} lives in your project and is commonly committed."
+        )
+        out.console.print("Export the key where your client will see it:\n")
+        out.console.print(f"  export {KEY_ENV_VAR}={api_key}\n")
+        out.console.print(
+            "Add that to your shell profile to make it stick, or re-run with "
+            "--write-key to put the key in the file instead.\n"
+        )
     out.console.print(CLIENT_RESTART_NOTES[client_name])
     out.console.print(f"More setup notes: {SETUP_URL}")
 
@@ -145,4 +209,4 @@ def _verify_key(state: CLIState) -> str:
     return f"{remaining} verify calls remaining" if isinstance(remaining, int) else "key accepted"
 
 
-__all__ = ["init"]
+__all__ = ["init", "render_success"]

@@ -22,6 +22,10 @@ MCP_SERVER_URL = "https://lenz.io/mcp"
 CONSOLE_URL = "https://lenz.io/api-integration"
 SETUP_URL = "https://lenz.io/setup"
 
+# The environment variable the SDK already reads, and the one the placeholders
+# below name. Shared with the Node SDK — see KEY_PLACEHOLDERS.
+KEY_ENV_VAR = "LENZ_API_KEY"
+
 CLIENT_CHOICES = ("claude-code", "claude-desktop", "cursor")
 
 CLIENT_LABELS = {
@@ -29,6 +33,25 @@ CLIENT_LABELS = {
     "claude-desktop": "Claude Desktop",
     "cursor": "Cursor",
 }
+
+# How each client spells an environment-variable reference inside a config
+# value — None when it cannot resolve one at all.
+#
+# The syntaxes are NOT interchangeable. Claude Code takes ``${VAR}``; Cursor
+# takes ``${env:VAR}`` and treats a bare ``${VAR}`` as literal text, which
+# reaches the server as a nonsense bearer token and 401s with no clue why.
+#
+# Claude Desktop is None because it is launched from the desktop rather than a
+# shell and so never inherits an exported variable: it is the one client that
+# must get the key itself.
+KEY_PLACEHOLDERS: dict[str, str | None] = {
+    "claude-code": f"${{{KEY_ENV_VAR}}}",
+    "cursor": f"${{env:{KEY_ENV_VAR}}}",
+    "claude-desktop": None,
+}
+
+# (No separate "is project-scoped" set: a non-None placeholder above IS that
+# fact. Two tables encoding the same thing is two tables that can disagree.)
 
 # Printed after a successful write — every one of these clients reads its MCP
 # config at launch only, so "it didn't work" is nearly always "didn't restart".
@@ -46,6 +69,24 @@ def build_server_config(api_key: str) -> dict[str, Any]:
         "url": MCP_SERVER_URL,
         "headers": {"Authorization": f"Bearer {api_key}"},
     }
+
+
+def credential_for(client: str, api_key: str, *, write_key: bool = False) -> tuple[str, bool]:
+    """Return ``(value_for_the_header, is_placeholder)``.
+
+    Project-scoped configs get an environment-variable reference rather than
+    the key, because ``.mcp.json`` is a file its own documentation tells teams
+    to commit: "Check .mcp.json into version control so everyone on your team
+    gets the same MCP tools and services." A setup command whose happy path
+    writes a live credential into a tracked file is handing the user a leak.
+
+    ``write_key`` is the opt-out, for a private checkout or a machine where
+    exporting a variable is more friction than it is worth.
+    """
+    placeholder = KEY_PLACEHOLDERS.get(client)
+    if placeholder and not write_key:
+        return placeholder, True
+    return api_key, False
 
 
 def merge_config(existing: Any, api_key: str) -> dict[str, Any]:
@@ -124,7 +165,15 @@ def write_config(path: Path, data: Any) -> None:
 
     Temp file in the same directory + replace, so a crash mid-write cannot
     leave a truncated config behind — and same-directory keeps the replace on
-    one filesystem, where ``os.replace`` is atomic.
+    one filesystem, where ``os.replace`` is atomic. Staging in the system temp
+    directory instead would raise ``OSError: [Errno 18] Invalid cross-device
+    link`` anywhere /tmp is its own filesystem, which is most Linux distros and
+    every container.
+
+    ``mkstemp`` creates the file 0600 and ``os.replace`` preserves that mode.
+    Load-bearing, not incidental: with ``--write-key`` this file holds a live
+    credential, and a refactor to ``path.write_text`` would quietly widen it to
+    0644. ``test_write_config_is_owner_only`` is the guard.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".lenz-mcp-", suffix=".json")
@@ -142,11 +191,14 @@ __all__ = [
     "CLIENT_LABELS",
     "CLIENT_RESTART_NOTES",
     "CONSOLE_URL",
+    "KEY_ENV_VAR",
+    "KEY_PLACEHOLDERS",
     "MCP_SERVER_URL",
     "SETUP_URL",
     "ConfigUnreadable",
     "build_server_config",
     "config_path_for",
+    "credential_for",
     "merge_config",
     "read_existing",
     "write_config",

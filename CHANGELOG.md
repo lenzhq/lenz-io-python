@@ -20,7 +20,18 @@ Adds a setup command. The SDK surface is unchanged.
   configures. Existing MCP servers in the target file are preserved — only the
   `lenz` key is written — and a file that exists but does not parse as JSON is
   refused rather than overwritten, since guessing there could silently discard
-  servers configured by hand. Writes are atomic (temp file + replace).
+  servers configured by hand. Writes are atomic (temp file + replace) and the
+  file is created `0600`.
+
+  **The key is not written into the project configs.** `.mcp.json` is a file
+  Claude Code's documentation tells teams to check into version control, so
+  writing a live credential there by default would be handing the user a leak.
+  Claude Code and Cursor get an environment-variable reference instead — in
+  each client's own syntax, `${LENZ_API_KEY}` and `${env:LENZ_API_KEY}`, which
+  are not interchangeable — and the command prints the `export` line to run.
+  `--write-key` opts out, for a private checkout. Claude Desktop still gets the
+  key itself: its config is global and the app never sees an exported variable.
+  `--json` reports which happened as `key_in_config` / `key_env_var`.
 
   A failed key check is reported as a key problem, not a failed init: the
   config is already written and correct at that point, and saying which of the

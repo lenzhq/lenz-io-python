@@ -82,10 +82,27 @@ lenz init --client claude-desktop  # writes the global Claude Desktop config
 lenz init --print                  # print the JSON, write nothing
 ```
 
+**Your key does not go into the project configs.** `.mcp.json` and
+`.cursor/mcp.json` live in your repo, and Claude Code's documentation says to
+check `.mcp.json` into version control so your team shares the same servers. So
+those two get an environment-variable reference, and you export the key:
+
+```bash
+export LENZ_API_KEY=lenz_...   # add to your shell profile to make it stick
+```
+
+Each client spells that reference differently — `${LENZ_API_KEY}` for Claude
+Code, `${env:LENZ_API_KEY}` for Cursor — and `init` writes the right one. Pass
+`--write-key` to put the key in the file instead, for a private checkout.
+Claude Desktop always gets the key itself: its config is global, and the app is
+launched from the desktop rather than a shell, so it never sees an exported
+variable.
+
 Existing MCP servers in that file are preserved — only the `lenz` key is
 written. A file that exists but isn't valid JSON is refused rather than
 overwritten, because guessing there could silently discard servers you
-configured by hand. Writes are atomic (temp file + replace).
+configured by hand. Writes are atomic (temp file + replace) and the file is
+created `0600`.
 
 `npx lenz-io init` in the [Node SDK](https://github.com/lenzhq/lenz-io-node)
 is the same command, writing the same block to the same places — use whichever
