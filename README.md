@@ -31,6 +31,7 @@ pip install "lenz-io[cli]"       # or into your current environment
 
 ```bash
 lenz login                       # paste an API key (free — get one at lenz.io/api-integration)
+lenz init                        # wire Lenz into Claude Code / Claude Desktop / Cursor
 lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
@@ -66,6 +67,29 @@ them; resolve it non-interactively by index (spawns one verification per pick):
 ```bash
 lenz verify --resume "$tid" --claim 1,3 --detach --json   # → spawned task_ids
 ```
+
+### `lenz init` — wire Lenz into an MCP client
+
+The one command here that **configures rather than calls**. It writes the Lenz
+MCP server into an AI client's config and checks the key with one authenticated
+request, so Claude Code, Claude Desktop or Cursor can fact-check inside a
+conversation.
+
+```bash
+lenz init                          # writes ./.mcp.json (Claude Code)
+lenz init --client cursor          # writes ./.cursor/mcp.json
+lenz init --client claude-desktop  # writes the global Claude Desktop config
+lenz init --print                  # print the JSON, write nothing
+```
+
+Existing MCP servers in that file are preserved — only the `lenz` key is
+written. A file that exists but isn't valid JSON is refused rather than
+overwritten, because guessing there could silently discard servers you
+configured by hand. Writes are atomic (temp file + replace).
+
+`npx lenz-io init` in the [Node SDK](https://github.com/lenzhq/lenz-io-node)
+is the same command, writing the same block to the same places — use whichever
+runtime you already have.
 
 ## Quickstart — the canonical integration
 

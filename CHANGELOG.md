@@ -4,6 +4,32 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.8.0] - 2026-08-13
+
+Adds a setup command. The SDK surface is unchanged.
+
+### Added
+
+- **`lenz init` — wire Lenz into an MCP client.** Writes the Lenz MCP server
+  block into Claude Code (`./.mcp.json`), Cursor (`./.cursor/mcp.json`) or
+  Claude Desktop (the platform's global config), then verifies the key with
+  one authenticated request. `--print` emits the JSON without touching
+  anything, which is also the answer for clients this doesn't know about.
+
+  The odd one out among the verbs: every other command calls the API, this one
+  configures. Existing MCP servers in the target file are preserved — only the
+  `lenz` key is written — and a file that exists but does not parse as JSON is
+  refused rather than overwritten, since guessing there could silently discard
+  servers configured by hand. Writes are atomic (temp file + replace).
+
+  A failed key check is reported as a key problem, not a failed init: the
+  config is already written and correct at that point, and saying which of the
+  two broke stops people re-running `init` at something it cannot fix.
+
+  Parity: `npx lenz-io init` in the Node SDK is the same command, writing the
+  same block to the same locations. A developer who set one machine up with
+  each must not get two different results — change them together.
+
 ## [2.7.0] - 2026-08-10
 
 Quota errors are now a first-class, typed condition instead of an

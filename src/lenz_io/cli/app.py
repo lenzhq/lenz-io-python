@@ -14,7 +14,7 @@ import typer
 from lenz_io import __version__
 from lenz_io.client import DEFAULT_BASE_URL
 
-from . import commands
+from . import commands, init_cmd
 from . import verify as verify_mod
 from .config import ENV_BASE_URL, ConfigError, resolve_all
 from .context import CLIState
@@ -72,6 +72,10 @@ app.command("verify")(verify_mod.verify)
 app.command("status")(commands.status)
 app.command("show")(commands.show)
 app.command("ask")(commands.ask)
+# `init` configures rather than calls — it wires Lenz into an MCP client.
+# Listed right after the verbs so it is visible to someone who has just
+# installed the CLI and is looking for what to do next.
+app.command("init")(init_cmd.init)
 app.command("login")(commands.login)
 app.command("logout")(commands.logout)
 app.command("config")(commands.config_status)
