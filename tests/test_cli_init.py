@@ -108,12 +108,16 @@ def test_project_scoped_paths(tmp_path):
     assert mcp.config_path_for("cursor", cwd=tmp_path) == tmp_path / ".cursor" / "mcp.json"
 
 
-def test_claude_desktop_path_is_global(monkeypatch):
-    monkeypatch.setattr("platform.system", lambda: "Darwin")
-    path = mcp.config_path_for("claude-desktop")
-    assert path is not None
-    assert path.name == "claude_desktop_config.json"
-    assert "Application Support" in str(path)
+def test_claude_desktop_has_no_config_file():
+    """claude_desktop_config.json is documented for local STDIO servers only.
+    A remote streamable-HTTP server is added through Settings → Connectors, so
+    writing that file put a live key somewhere nothing reads it."""
+    assert mcp.config_path_for("claude-desktop") is None
+    assert "claude-desktop" in mcp.MANUAL_CLIENTS
+
+
+def test_codex_is_project_scoped_toml(tmp_path):
+    assert mcp.config_path_for("codex", cwd=tmp_path) == tmp_path / ".codex" / "config.toml"
 
 
 def test_unknown_client_has_no_path():
@@ -279,10 +283,13 @@ def test_parity_pins_the_shared_constants():
 
 def test_parity_pins_the_per_client_placeholder_syntax():
     """Not interchangeable. Cursor treats a bare ${VAR} as literal text and
-    sends it as the bearer token."""
+    sends it as the bearer token.
+
+    Only the JSON clients are here: Codex names the variable in a field of its
+    own, and Claude Desktop takes no config file at all."""
     assert mcp.KEY_PLACEHOLDERS["claude-code"] == "${LENZ_API_KEY}"
     assert mcp.KEY_PLACEHOLDERS["cursor"] == "${env:LENZ_API_KEY}"
-    assert mcp.KEY_PLACEHOLDERS["claude-desktop"] is None
+    assert sorted(mcp.KEY_PLACEHOLDERS) == ["claude-code", "cursor"]
 
 
 # ── where the key ends up ───────────────────────────────────────────────────
@@ -407,3 +414,73 @@ def test_write_config_is_owner_only(tmp_path):
     mcp.write_config(path, {"a": 1})
 
     assert path.stat().st_mode & 0o777 == 0o600
+
+
+# ── codex: TOML, merged as text ─────────────────────────────────────────────
+def test_codex_append_preserves_everything_the_user_wrote(tmp_path):
+    """Deliberately not a parse → mutate → re-serialize round trip: every TOML
+    library drops comments and reflows formatting, and handing someone back a
+    file that is equivalent but visibly not theirs is the same failure as
+    clobbering it."""
+    existing = '# my own notes\nmodel = "gpt-5"\n\n[mcp_servers.github]\nurl = "https://example.com/mcp"\n'
+
+    merged = mcp.merge_toml_config(existing, mcp.build_codex_block("lenz_abc"))
+
+    assert merged.startswith(existing.rstrip())
+    assert "# my own notes" in merged
+    assert "[mcp_servers.lenz]" in merged
+
+
+def test_codex_refuses_a_second_lenz_table(tmp_path):
+    """TOML rejects duplicate tables outright, so appending blindly would stop
+    the WHOLE file parsing — every other server in it included."""
+    with pytest.raises(mcp.DuplicateCodexTable):
+        mcp.merge_toml_config('[mcp_servers.lenz]\nurl = "x"\n', mcp.build_codex_block("k"))
+
+
+def test_codex_block_names_the_env_var_rather_than_the_key():
+    block = mcp.build_codex_block("lenz_secret")
+
+    assert 'bearer_token_env_var = "LENZ_API_KEY"' in block
+    assert "lenz_secret" not in block
+
+
+def test_codex_write_key_uses_http_headers():
+    """The other documented Codex auth field."""
+    block = mcp.build_codex_block("lenz_secret", write_key=True)
+
+    assert 'http_headers = { "Authorization" = "Bearer lenz_secret" }' in block
+    assert "bearer_token_env_var" not in block
+
+
+def test_codex_init_writes_valid_toml_without_the_key(monkeypatch, tmp_path):
+    import tomllib
+
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+    _patch_client(monkeypatch, _FakeClient())
+
+    result = runner.invoke(app, normalize_argv(["init", "--client", "codex", "--no-verify"]))
+
+    assert result.exit_code == 0, result.output
+    raw = (tmp_path / ".codex" / "config.toml").read_text()
+    assert "lenz_secret" not in raw
+    parsed = tomllib.loads(raw)
+    assert parsed["mcp_servers"]["lenz"]["url"] == "https://lenz.io/mcp"
+
+
+def test_claude_desktop_init_writes_nothing_and_prints_the_flow(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    cfg.save_api_key("lenz_secret")
+
+    result = runner.invoke(app, normalize_argv(["init", "--client", "claude-desktop"]))
+
+    assert result.exit_code == 0, result.output
+    # No MCP config of any shape. (tmp_path also holds the CLI's own
+    # config.json, written by the save_api_key above — not ours to assert on.)
+    assert not (tmp_path / ".mcp.json").exists()
+    assert not (tmp_path / ".codex").exists()
+    assert not (tmp_path / "claude_desktop_config.json").exists()
+    # A flow that never takes a key must not echo one.
+    assert "lenz_secret" not in result.output
+    assert "Add custom connector" in result.output

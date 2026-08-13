@@ -26,17 +26,24 @@ from .errors import CLIError
 from .mcp_config import (
     CLIENT_CHOICES,
     CLIENT_LABELS,
+    CLIENT_MANUAL_STEPS,
     CLIENT_RESTART_NOTES,
+    CODEX_TABLE,
     CONSOLE_URL,
     KEY_ENV_VAR,
     KEY_PLACEHOLDERS,
+    MANUAL_CLIENTS,
     SETUP_URL,
     ConfigUnreadable,
+    DuplicateCodexTable,
+    build_codex_block,
     config_path_for,
     credential_for,
     merge_config,
+    merge_toml_config,
     read_existing,
     write_config,
+    write_text_config,
 )
 from .render import Output
 
@@ -77,12 +84,31 @@ def init(
             exit_code=2,
         )
 
+    # Clients with no config file: print the route and stop. Nothing to write,
+    # nothing to verify against — the connector flow runs its own sign-in.
+    if client_name in MANUAL_CLIENTS:
+        if out.json_mode:
+            out.emit_json(
+                {
+                    "status": "manual",
+                    "client": client_name,
+                    "config_file": None,
+                    "instructions": CLIENT_MANUAL_STEPS[client_name],
+                }
+            )
+        else:
+            out.console.print(CLIENT_MANUAL_STEPS[client_name])
+        raise SystemExit(0)
+
     # --print needs no key: its whole purpose is handing someone a config to
     # paste and fill in themselves, including for clients we don't support.
     # What it prints must be what a write for the SAME client would produce,
     # or it stops being a preview.
     if print_only:
         api_key = state.api_key.strip()
+        if client_name == "codex":
+            out.console.print(build_codex_block(api_key, write_key=write_key))
+            raise SystemExit(0)
         if api_key:
             credential, _ = credential_for(client_name, api_key, write_key=write_key)
         else:
@@ -106,18 +132,37 @@ def init(
             fix="Run `lenz init --print` and paste the JSON in yourself.",
         )
 
-    try:
-        existing = read_existing(path)
-    except ConfigUnreadable as exc:
-        # Refuse rather than clobber — see mcp_config.read_existing.
-        raise CLIError(
-            f"{path} exists but is not valid JSON ({exc}).",
-            code="config_unreadable",
-            fix="Fix or move that file, then re-run — refusing to overwrite a config we can't read.",
-        ) from None
+    if client_name == "codex":
+        # TOML merges as TEXT — see mcp_config.merge_toml_config.
+        try:
+            merged = merge_toml_config(
+                path.read_text(encoding="utf-8") if path.exists() else "",
+                build_codex_block(state.api_key, write_key=write_key),
+            )
+        except DuplicateCodexTable:
+            raise CLIError(
+                f"{path} already has a {CODEX_TABLE} entry.",
+                code="duplicate_codex_table",
+                fix=(
+                    "Edit or remove it and re-run — a second copy is a duplicate-table "
+                    "error and would stop the whole file parsing."
+                ),
+            ) from None
+        write_text_config(path, merged)
+        is_placeholder = not write_key
+    else:
+        try:
+            existing = read_existing(path)
+        except ConfigUnreadable as exc:
+            # Refuse rather than clobber — see mcp_config.read_existing.
+            raise CLIError(
+                f"{path} exists but is not valid JSON ({exc}).",
+                code="config_unreadable",
+                fix="Fix or move that file, then re-run — refusing to overwrite a config we can't read.",
+            ) from None
 
-    credential, is_placeholder = credential_for(client_name, state.api_key, write_key=write_key)
-    write_config(path, merge_config(existing, credential))
+        credential, is_placeholder = credential_for(client_name, state.api_key, write_key=write_key)
+        write_config(path, merge_config(existing, credential))
 
     verified = ""
     if not no_verify:

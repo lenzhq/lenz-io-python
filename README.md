@@ -78,9 +78,23 @@ conversation.
 ```bash
 lenz init                          # writes ./.mcp.json (Claude Code)
 lenz init --client cursor          # writes ./.cursor/mcp.json
-lenz init --client claude-desktop  # writes the global Claude Desktop config
-lenz init --print                  # print the JSON, write nothing
+lenz init --client codex           # appends to ./.codex/config.toml
+lenz init --client claude-desktop  # prints the connector steps
+lenz init --print                  # print the config, write nothing
 ```
+
+**Codex is TOML.** The Lenz table is appended to your existing
+`.codex/config.toml` as text rather than parsed and rewritten, so comments and
+formatting survive untouched, and a config already declaring
+`[mcp_servers.lenz]` is refused rather than given a second one — TOML rejects
+duplicate tables, and a second copy would stop the whole file parsing. Codex
+takes `bearer_token_env_var`, so no key is written there at all.
+
+**Claude Desktop takes no config file.** `claude_desktop_config.json` is for
+local stdio servers; a remote server like Lenz is added through Settings →
+Connectors → "Add custom connector", or in one click from
+[the directory](https://claude.ai/directory/connectors/lenz). `lenz init
+--client claude-desktop` prints those steps rather than writing anything.
 
 **Your key does not go into the project configs.** `.mcp.json` and
 `.cursor/mcp.json` live in your repo, and Claude Code's documentation says to
