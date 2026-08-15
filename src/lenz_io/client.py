@@ -259,8 +259,8 @@ class _LibraryNamespace:
         ``curated`` restricts to one or more named curated collections, e.g.
         ``["trivia"]`` (the pool behind the open-source quiz demo). ``verdict``
         filters by comma-separated labels, e.g. ``"True,False"``. ``sort`` also
-        accepts ``"random"`` alongside ``recent`` / ``popular`` / ``most_true``
-        / ``most_untrue`` / ``relevance``.
+        accepts ``"random"`` alongside ``recent`` / ``most_true`` /
+        ``most_untrue`` / ``relevance``.
         """
         params: dict[str, Any] = {
             "page": page,
