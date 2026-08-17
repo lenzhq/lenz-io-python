@@ -30,7 +30,7 @@ pip install "lenz-io[cli]"       # or into your current environment
 ```
 
 ```bash
-lenz login                       # paste an API key (free — get one at lenz.io/api-integration)
+lenz login                       # paste an API key (free — get one at lenz.io/api-credentials)
 lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
@@ -122,7 +122,7 @@ for source in v.sources[:3]:
 The demo claim is pre-cached so this returns in ~1.5s. Your own claims
 hit the full pipeline (~60-90s) — use webhooks for production async flows.
 
-> **Get your webhook secret here →** [lenz.io/api-integration](https://lenz.io/api-integration)
+> **Get your webhook secret here →** [lenz.io/api-credentials](https://lenz.io/api-credentials)
 
 ## What you get on the client
 
@@ -237,7 +237,7 @@ except LenzAuthError as exc:
     print(exc)
     # Unauthorized
     #   Cause:  Invalid api key
-    #   Fix:    Generate a new key at https://lenz.io/api-integration.
+    #   Fix:    Generate a new key at https://lenz.io/api-credentials.
     #   Docs:   https://lenz.io/docs/auth
     #   Request ID: req_abc123
 except LenzRateLimitError as exc:

@@ -407,7 +407,7 @@ def _opt_int(value: Any) -> int | None:
 
 def _fix_hint_for(status_code: int) -> str:
     return {
-        401: "Generate a new key at https://lenz.io/api-integration.",
+        401: "Generate a new key at https://lenz.io/api-credentials.",
         403: "This key doesn't have access to that resource.",
         402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
         422: "Check the request body against the OpenAPI spec.",
