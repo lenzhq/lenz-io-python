@@ -61,7 +61,7 @@ class TestConstruction:
     def test_auth_required_method_without_key_raises_with_clear_message(self, unauth_client):
         with pytest.raises(LenzAuthError) as ei:
             unauth_client.verifications.list()
-        assert "/api-integration" in str(ei.value)
+        assert "/api-credentials" in str(ei.value)
 
     def test_api_key_armed_methods(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

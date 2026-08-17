@@ -21,7 +21,7 @@ Replay protection: the signed payload includes ``delivered_at`` (ISO
 ``replay_window_seconds`` (default 300s / 5 minutes).
 
 Customers MUST register the same secret with us via the
-``/api-integration`` page. Rotating the secret on Lenz's side invalidates
+``/api-credentials`` page. Rotating the secret on Lenz's side invalidates
 old deliveries.
 """
 
@@ -63,7 +63,7 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
         raise LenzWebhookSignatureError(
             message="Missing webhook signature",
             cause=f"No {SIGNATURE_HEADER} header on the request.",
-            fix="Inspect the webhook delivery in /api-integration to confirm the secret is set.",
+            fix="Inspect the webhook delivery in /api-credentials to confirm the secret is set.",
             doc_url="https://lenz.io/docs/webhooks",
         )
     if not isinstance(raw_body, (bytes, bytearray)):
@@ -79,7 +79,7 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
         raise LenzWebhookSignatureError(
             message="Webhook signature mismatch",
             cause="HMAC of the raw body using your secret does not match X-Lenz-Signature.",
-            fix="Verify the secret in /api-integration matches the one you configured here.",
+            fix="Verify the secret in /api-credentials matches the one you configured here.",
             doc_url="https://lenz.io/docs/webhooks",
         )
     return True
@@ -214,7 +214,7 @@ class LenzWebhooks:
         replay_window_seconds: int = DEFAULT_REPLAY_WINDOW_SECONDS,
     ) -> None:
         if not secret:
-            raise ValueError("LenzWebhooks requires a non-empty secret. Get it from /api-integration.")
+            raise ValueError("LenzWebhooks requires a non-empty secret. Get it from /api-credentials.")
         self._secret = secret
         self._replay_window = replay_window_seconds
 

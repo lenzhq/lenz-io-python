@@ -10,7 +10,7 @@ Run:
     uvicorn examples.core.fastapi_webhook:app --host 0.0.0.0 --port 8000
 
 Then point your Lenz API key's webhook URL at https://<your-host>/lenz-webhook
-on the /api-integration page, or pass `webhook_url=...` on individual
+on the /api-credentials page, or pass `webhook_url=...` on individual
 verify() calls.
 """
 

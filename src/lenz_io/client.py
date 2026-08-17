@@ -289,7 +289,7 @@ class Lenz:
     The constructor accepts ``api_key=None`` so library endpoints work
     without authentication (sandbox path for developers exploring before
     sign-up). Auth-required methods on an un-keyed client raise
-    ``LenzAuthError`` with a link to ``/api-integration``.
+    ``LenzAuthError`` with a link to ``/api-credentials``.
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed.
     """
@@ -763,7 +763,7 @@ class Lenz:
                 cause="This method requires authentication; no API key was provided.",
                 fix=(
                     "Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at "
-                    "https://lenz.io/api-integration. Library endpoints work without a key."
+                    "https://lenz.io/api-credentials. Library endpoints work without a key."
                 ),
                 doc_url="https://lenz.io/docs/auth",
             )

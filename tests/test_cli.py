@@ -1146,7 +1146,7 @@ def test_login_json_no_key_points_to_dashboard():
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
     assert payload["status"] == "no_key"
-    assert "api-integration" in payload["dashboard"]
+    assert "api-credentials" in payload["dashboard"]
 
 
 def test_login_write_failure_is_friendly(monkeypatch):

@@ -161,7 +161,7 @@ def usage(ctx: typer.Context) -> None:
 
 def _dashboard_url(base_url: str) -> str:
     parts = urlsplit(base_url)
-    return urlunsplit((parts.scheme, parts.netloc, "/api-integration", "", ""))
+    return urlunsplit((parts.scheme, parts.netloc, "/api-credentials", "", ""))
 
 
 def login(ctx: typer.Context) -> None:
