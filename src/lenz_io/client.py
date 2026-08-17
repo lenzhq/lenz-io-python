@@ -384,7 +384,7 @@ class Lenz:
 
     def extract(self, *, text: str, language: str = "") -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
-        1000 calls/key/day.
+        1000 calls/account/day (shared across your API keys).
 
         ``language`` (optional): return extracted claims in the target
         language. Domain / status enums stay English.

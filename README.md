@@ -4,7 +4,7 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 
 **Four API primitives, one research-depth ladder.**
 
-- `extract` — pull verifiable claims out of any text. Free, 1000 calls/key/day.
+- `extract` — pull verifiable claims out of any text. Free, 1000 calls/account/day (shared across your API keys).
 - `assess` — fast 3-model panel verdict in ~5-10s. Sync, paid.
 - `verify` — full 8-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification.
@@ -126,7 +126,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 
 ## What you get on the client
 
-- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/key/day.
+- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day.
 - **`client.assess(text=...)`** → `AssessResponse`. Sync, ~5-10s, returns one entry per identified claim.
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
