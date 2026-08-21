@@ -46,6 +46,7 @@ from .errors import (
     LenzQuotaExceededError,
     LenzRateLimitError,
     LenzTimeoutError,
+    LenzUpstreamUnavailableError,
     LenzValidationError,
     LenzWebhookSignatureError,
 )
@@ -114,6 +115,7 @@ __all__ = [
     "LenzQuotaExceededError",
     "LenzRateLimitError",
     "LenzTimeoutError",
+    "LenzUpstreamUnavailableError",
     "LenzValidationError",
     "LenzWebhookSignatureError",
     "LenzWebhooks",

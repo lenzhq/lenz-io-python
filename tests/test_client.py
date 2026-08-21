@@ -974,15 +974,68 @@ class TestAutoRetry:
         assert slept == [5]
 
     def test_5xx_with_a_long_retry_after_keeps_retrying_on_backoff(self, client, monkeypatch):
-        """Unlike 429, a 5xx is not the caller's fault and our own backoff may
-        still satisfy it — so a maintenance-window hour becomes backoff, not
-        an abort and not an hour-long sleep."""
+        """Unlike 429 (and, since 2.8.0, 503), a 5xx is not the server pacing
+        us and our own backoff may still satisfy it — so a maintenance-window
+        hour becomes backoff, not an abort and not an hour-long sleep."""
         slept = []
         monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.get("/me/usage")
             route.side_effect = [
-                httpx.Response(503, json={"detail": "down"}, headers={"Retry-After": "3600"}),
+                httpx.Response(500, json={"detail": "down"}, headers={"Retry-After": "3600"}),
+                httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
+            ]
+            client.usage()
+        assert slept == [RETRY_BACKOFF[0]]
+
+    def test_503_with_a_long_retry_after_raises_immediately_with_the_true_wait(self, client, monkeypatch):
+        """2.8.0: the server's own shed/exhaustion 503s state 90-120s waits.
+        Burning the 1/2/4s ladder against them is the opposite of what the
+        header asks — raise at once with the wait, exactly like 429."""
+        from lenz_io import LenzAPIError, LenzUpstreamUnavailableError
+
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/me/usage").respond(
+                503,
+                json={"detail": "at capacity", "code": "capacity", "retry_after": 90},
+                headers={"Retry-After": "90"},
+            )
+            with pytest.raises(LenzUpstreamUnavailableError) as exc_info:
+                client.usage()
+        assert slept == []
+        assert exc_info.value.retry_after == 90
+        assert exc_info.value.code == "capacity"
+        assert isinstance(exc_info.value, LenzAPIError)  # existing handlers still catch it
+
+    def test_503_reads_the_wait_from_the_body_retry_after_key(self, client, monkeypatch):
+        """The 503 bodies carry ``retry_after`` (429 carries ``reset_in_seconds``);
+        a proxy that strips the header must not demote the stated wait to the
+        blind ladder."""
+        from lenz_io import LenzUpstreamUnavailableError
+
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/me/usage").respond(
+                503,
+                json={"detail": "providers down", "code": "upstream_unavailable", "retry_after": 90},
+            )
+            with pytest.raises(LenzUpstreamUnavailableError) as exc_info:
+                client.usage()
+        assert slept == []
+        assert exc_info.value.retry_after == 90
+
+    def test_plain_503_without_a_stated_wait_keeps_the_ladder(self, client, monkeypatch):
+        """Regression pin: a bare 503 (no header, no body key) is still 'server
+        down' and keeps the backoff ladder as before 2.8.0."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/me/usage")
+            route.side_effect = [
+                httpx.Response(503, json={"detail": "down"}),
                 httpx.Response(200, json={"plan": "free", "credits_used": 0, "credits_total": 10}),
             ]
             client.usage()

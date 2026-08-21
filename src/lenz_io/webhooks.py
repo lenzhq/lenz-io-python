@@ -111,9 +111,17 @@ class VerificationCompleted(WebhookEvent):
 
 @dataclass
 class VerificationFailed(WebhookEvent):
-    """``event=verification.failed`` — the pipeline terminated without a verdict."""
+    """``event=verification.failed`` — the pipeline terminated without a verdict.
+
+    ``failure_class`` is WHY (closed set — ``upstream_unavailable`` |
+    ``insufficient_evidence`` | ``invalid_input`` | ``cancelled`` |
+    ``internal``); ``retryable`` is the derived signal (true iff
+    ``upstream_unavailable``). Both default when an older server omits them.
+    """
 
     error: str = ""
+    failure_class: str = ""
+    retryable: bool | None = None
 
 
 @dataclass
@@ -160,6 +168,8 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             status=status,
             raw=payload,
             error=str(payload.get("error") or ""),
+            failure_class=str(payload.get("failure_class") or ""),
+            retryable=payload.get("retryable") if isinstance(payload.get("retryable"), bool) else None,
         )
     if event == "verification.needs_input":
         return VerificationNeedsInput(

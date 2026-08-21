@@ -1,0 +1,14 @@
+{
+  "event": "verification.failed",
+  "verification_id": null,
+  "task_id": "tsk_abc123",
+  "batch_id": null,
+  "status": "failed",
+  "result": null,
+  "needs_input": null,
+  "error": "conclusion_failed",
+  "failure_class": "upstream_unavailable",
+  "retryable": true,
+  "attempt": 1,
+  "delivered_at": "2026-08-21T12:01:00Z"
+}

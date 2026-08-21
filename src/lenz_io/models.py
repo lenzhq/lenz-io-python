@@ -300,6 +300,11 @@ class TaskStatus(_Lax):
     error: str = ""
     failure_reason: str = ""
     failure_detail: str = ""
+    # WHY it failed — closed set: upstream_unavailable | insufficient_evidence
+    # | invalid_input | cancelled | internal — and the derived retry signal
+    # (true iff upstream_unavailable). Rows predating 2026-08 omit both.
+    failure_class: str = ""
+    retryable: bool | None = None
 
 
 class BatchItemResult(_Lax):

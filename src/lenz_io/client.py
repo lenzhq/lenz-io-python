@@ -648,13 +648,19 @@ class Lenz:
         # failed. Server sends the diagnostic under ``error``; fall back to the
         # legacy fields for resilience.
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
+        if status.retryable:
+            fix = "Transient provider outage — retry the same request after a short wait."
+        else:
+            fix = "Retry with a different claim, or check status.error for the diagnostic."
         raise LenzPipelineError(
             message=f"Pipeline failed: {detail}",
             cause=detail,
-            fix="Retry with a different claim, or check status.error for the diagnostic.",
+            fix=fix,
             doc_url="https://lenz.io/docs/errors",
             task_id=task_id,
             failure_reason=status.failure_reason,
+            failure_class=status.failure_class,
+            retryable=status.retryable,
         )
 
     # ── account ──
@@ -817,7 +823,15 @@ class Lenz:
                 if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
                     time.sleep(stated)
                     continue
-                if stated is None or response.status_code >= 500:
+                # A stated wait past the cap: 429 raises with the true
+                # retry_after (the /extract daily cap sends most of a day),
+                # and 503 now does too — the server's own shed/exhaustion
+                # responses state 90-120s, and burning the 1/2/4s ladder
+                # against them is the opposite of what the header asks
+                # (map_response_to_error types it LenzUpstreamUnavailableError).
+                # Other 5xx, or no stated wait at all, keep the ladder: the
+                # server is down, not pacing us.
+                if stated is None or (response.status_code >= 500 and response.status_code != 503):
                     time.sleep(_retry_sleep(attempt))
                     continue
 
@@ -837,9 +851,11 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
     """Seconds the server says to wait, or None if it didn't say.
 
     Reads the ``Retry-After`` header first, then the body's
-    ``reset_in_seconds``. Returns None (rather than 0) on an absent or
-    unparseable value so the caller can tell "server stated no wait" apart
-    from "server said wait 0 seconds" and fall back to its own backoff.
+    ``reset_in_seconds`` (429 shapes), then the body's ``retry_after``
+    (the 503 shapes carry the wait under that key). Returns None (rather
+    than 0) on an absent or unparseable value so the caller can tell
+    "server stated no wait" apart from "server said wait 0 seconds" and
+    fall back to its own backoff.
     """
     raw = response.headers.get("Retry-After")
     if raw is None or str(raw).strip() == "":
@@ -851,6 +867,8 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         if not isinstance(body, dict):
             return None
         raw = body.get("reset_in_seconds")
+        if raw is None or str(raw).strip() == "":
+            raw = body.get("retry_after")
     if raw is None or str(raw).strip() == "":
         return None
     try:

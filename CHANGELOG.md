@@ -4,6 +4,42 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.8.0] - 2026-08-21
+
+The server now says WHY a verification failed and states honest waits when it
+is overloaded; the SDK types both.
+
+### Added
+- **`failure_class` + `retryable` on failed verifications.** `TaskStatus`, the
+  `VerificationFailed` webhook event, and `LenzPipelineError` all carry
+  `failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
+  | `invalid_input` | `cancelled` | `internal`) and `retryable` (true iff
+  `upstream_unavailable` — resubmitting the same claim is the right move).
+  Older servers omit both; the fields default rather than break.
+- **`LenzUpstreamUnavailableError`** — a `LenzAPIError` subclass for 503s with
+  `code` `upstream_unavailable` (model/search providers exhausted; the request
+  was not charged) or `capacity` (submission shed at the door; nothing was
+  accepted). Carries `retry_after`.
+
+### Changed
+- **A 503 whose stated `Retry-After` exceeds 60s now raises immediately**
+  (as `LenzUpstreamUnavailableError`, with the true `retry_after`) instead of
+  silently burning the 1s/2s/4s backoff ladder against a server that asked
+  for 90-120s — the same rule 429 has always had. 503s with waits ≤ 60s are
+  still slept through and retried; other 5xx keep the ladder unchanged. If
+  you relied on long-stated-wait 503s being retried blindly, catch
+  `LenzUpstreamUnavailableError` (existing `except LenzAPIError` handlers
+  keep catching it).
+- The stated wait is now also read from the 503 body's `retry_after` key
+  (previously only the `Retry-After` header and the 429 body's
+  `reset_in_seconds`), so a proxy that strips headers can't demote an honest
+  wait to blind backoff.
+
+### Fixed
+- Contract fixtures refreshed to the live failed-status body; added the
+  `verification.failed` webhook payload and both 503 envelopes (shared
+  byte-identically with the Node SDK, as ever).
+
 ## [2.7.1] - 2026-08-15
 
 ### Fixed

@@ -190,6 +190,24 @@ class LenzAPIError(LenzError):
     """500 / 502 / 503 / 504 / catch-all for unexpected server errors."""
 
 
+class LenzUpstreamUnavailableError(LenzAPIError):
+    """503 with ``code`` ``upstream_unavailable`` or ``capacity``.
+
+    The server is telling you the truth about a *transient* condition: its
+    model/search providers are exhausted (``upstream_unavailable`` — nothing
+    was charged, the same request succeeds once they recover) or the pipeline
+    is at capacity (``capacity`` — nothing was accepted or charged). Retry the
+    SAME request after ``retry_after`` seconds.
+
+    Subclasses :class:`LenzAPIError`, so existing ``except LenzAPIError``
+    handlers keep catching it. Waits up to ``MAX_RETRY_AFTER_SLEEP`` are
+    already slept through by the automatic retry ladder — seeing this raised
+    means the stated wait was longer, and ``retry_after`` carries it.
+    """
+
+    retry_after: int | None = None
+
+
 class LenzTimeoutError(LenzError):
     """``verify_and_wait`` exceeded the configured timeout.
 
@@ -212,10 +230,19 @@ class LenzNeedsInputError(LenzError):
 
 
 class LenzPipelineError(LenzError):
-    """``verify_and_wait`` saw a terminal ``failed`` state from the pipeline."""
+    """``verify_and_wait`` saw a terminal ``failed`` state from the pipeline.
+
+    ``failure_class`` says WHY (closed set: ``upstream_unavailable`` |
+    ``insufficient_evidence`` | ``invalid_input`` | ``cancelled`` |
+    ``internal``); ``retryable`` is the derived signal — ``True`` means a
+    transient provider-side exhaustion where resubmitting the same claim is
+    the right move. ``None`` when an older server didn't say.
+    """
 
     task_id: str = ""
     failure_reason: str = ""
+    failure_class: str = ""
+    retryable: bool | None = None
 
 
 class LenzWebhookSignatureError(LenzError):
@@ -309,6 +336,12 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
+    elif status_code == 503 and code in ("upstream_unavailable", "capacity"):
+        cls, default_msg, doc_url = (
+            LenzUpstreamUnavailableError,
+            "Service temporarily unavailable",
+            f"{_DOCS_BASE}/errors#unavailable",
+        )
     elif 500 <= status_code < 600:
         cls, default_msg, doc_url = LenzAPIError, "Server error", f"{_DOCS_BASE}/errors"
     else:
@@ -328,6 +361,14 @@ def map_response_to_error(
 
     # Class-specific enrichment from the response body. Each is set on the
     # instance so callers can access via the documented attribute name.
+    if isinstance(err, LenzUpstreamUnavailableError):
+        # Body ``retry_after`` first (both 503 shapes carry it), header as
+        # the fallback for any proxy that strips the body.
+        stated = _opt_int(parsed.get("retry_after"))
+        if stated is None:
+            stated = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+        err.retry_after = stated
+
     if isinstance(err, LenzQuotaExceededError):
         # String-typed only. `str(...)` on a malformed dict would render
         # "{'a': 1}" and friendly_text would show that to a user as a URL.
