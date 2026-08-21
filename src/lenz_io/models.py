@@ -35,6 +35,23 @@ class _Lax(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
+#: Closed set of failure causes on a ``failed`` verification, mirroring the
+#: Node SDK's ``FailureClass`` union. Exported for callers who want exhaustive
+#: matching:
+#:
+#:     from lenz_io import FailureClass
+#:
+#: The model fields themselves stay ``str`` — the SDK must not reject a class
+#: the server adds after this release was cut.
+FailureClass = Literal[
+    "upstream_unavailable",
+    "insufficient_evidence",
+    "invalid_input",
+    "cancelled",
+    "internal",
+]
+
+
 class Source(_Lax):
     """A single citation backing a verification."""
 
@@ -300,6 +317,14 @@ class TaskStatus(_Lax):
     error: str = ""
     failure_reason: str = ""
     failure_detail: str = ""
+    # WHY it failed — the closed set is ``FailureClass`` (import it for
+    # exhaustive matching). The annotation stays ``str`` on purpose: a
+    # ``Literal`` here would make an unknown class the server adds later a
+    # hard ValidationError, and every other field on this model is lax.
+    # Rows predating 2026-08 omit this and ``retryable`` (the derived retry
+    # signal — true iff ``upstream_unavailable``).
+    failure_class: str = ""
+    retryable: bool | None = None
 
 
 class BatchItemResult(_Lax):
@@ -434,6 +459,7 @@ __all__ = [
     "EntityRef",
     "ExtractedClaims",
     "ExtractedEntity",
+    "FailureClass",
     "LibraryItem",
     "LibraryList",
     "RelatedVerifications",

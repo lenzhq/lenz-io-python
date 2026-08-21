@@ -1,0 +1,6 @@
+{
+  "detail": "Our model providers are temporarily unavailable. Please retry shortly.",
+  "code": "upstream_unavailable",
+  "retry_after": 90,
+  "doc_url": "https://lenz.io/docs/errors#unavailable"
+}

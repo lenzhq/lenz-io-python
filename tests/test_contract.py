@@ -225,3 +225,53 @@ def test_rate_limit_429_envelope_maps_every_field():
 
     handled = {"detail", "code", "limit", "reset_in_seconds", "upgrade_url", "doc_url"}
     assert not set(fixture) - handled
+
+
+@pytest.mark.parametrize(
+    "fixture_name,expected_code,expected_retry_after",
+    [
+        ("error_upstream_unavailable_503.json", "upstream_unavailable", 90),
+        ("error_capacity_503.json", "capacity", 105),
+    ],
+)
+def test_unavailable_503_envelope_maps_every_field(fixture_name, expected_code, expected_retry_after):
+    """The two 503 shapes (provider exhaustion on the sync endpoints; the
+    admission-control shed on /verify) map to LenzUpstreamUnavailableError —
+    a LenzAPIError subclass so existing handlers keep catching it."""
+    from lenz_io.errors import LenzAPIError, LenzUpstreamUnavailableError, map_response_to_error
+
+    fixture = _load(fixture_name)
+    err = map_response_to_error(503, json.dumps(fixture), {})
+
+    assert isinstance(err, LenzUpstreamUnavailableError)
+    assert isinstance(err, LenzAPIError)
+    assert err.message == fixture["detail"]
+    assert err.code == expected_code
+    assert err.retry_after == expected_retry_after
+    assert err.body == fixture
+
+    handled = {"detail", "code", "retry_after", "doc_url"}
+    assert not set(fixture) - handled
+
+
+def test_webhook_payload_failed_maps_every_field():
+    """Every key of the failed-event payload is consumed by a typed
+    VerificationFailed attribute (or is one of the always-present-but-null
+    payload slots that belong to the other events)."""
+    import dataclasses
+
+    from lenz_io.webhooks import VerificationFailed, _build_event
+
+    payload = _load("webhook_payload_failed.json")
+    event = _build_event(payload)
+    assert isinstance(event, VerificationFailed)
+    assert event.error == payload["error"]
+    assert event.failure_class == payload["failure_class"]
+    assert event.retryable is payload["retryable"]
+    assert event.status == "failed"
+
+    typed = {f.name for f in dataclasses.fields(VerificationFailed)}
+    # `result` / `needs_input` ride as null on the failed event — the wire
+    # payload has one field set per event kind.
+    handled = typed | {"result", "needs_input"}
+    assert not set(payload) - handled

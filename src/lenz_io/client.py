@@ -70,6 +70,7 @@ import httpx
 from . import __version__
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
+    UPSTREAM_503_CODES,
     LenzAPIError,
     LenzError,
     LenzNeedsInputError,
@@ -648,13 +649,21 @@ class Lenz:
         # failed. Server sends the diagnostic under ``error``; fall back to the
         # legacy fields for resilience.
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
+        if status.retryable:
+            fix = "Transient provider outage — retry the same request after a short wait."
+        else:
+            fix = "Retry with a different claim, or check status.error for the diagnostic."
         raise LenzPipelineError(
             message=f"Pipeline failed: {detail}",
             cause=detail,
-            fix="Retry with a different claim, or check status.error for the diagnostic.",
+            fix=fix,
             doc_url="https://lenz.io/docs/errors",
             task_id=task_id,
             failure_reason=status.failure_reason,
+            failure_class=status.failure_class,
+            # Coerce like the Node SDK: only a real boolean is a retry signal;
+            # anything else (a stringy "true", a future enum) reads as unknown.
+            retryable=status.retryable if isinstance(status.retryable, bool) else None,
         )
 
     # ── account ──
@@ -802,22 +811,32 @@ class Lenz:
             # Error path. Retry on 5xx and 429; otherwise raise immediately.
             #
             # A stated wait is honored only up to MAX_RETRY_AFTER_SLEEP. Past
-            # that the two statuses part ways, because the right answer differs:
+            # that, whether we abort or keep retrying is decided by the typed
+            # body ``code`` — NOT by the status number:
             #
             #  * 429 — raise. The /extract daily cap sends
             #    seconds-until-UTC-midnight, so sleeping it blocks the call for
             #    most of a day, three times over. The caller gets the true
             #    retry_after and can schedule the work.
-            #  * 5xx — keep retrying on our own backoff. The server is down,
-            #    not rate-limiting us; a maintenance-window Retry-After of an
-            #    hour shouldn't become an hour-long sleep, but it also
-            #    shouldn't abort a request our backoff might still satisfy.
+            #  * 503 carrying a Lenz code in UPSTREAM_503_CODES
+            #    (``upstream_unavailable`` / ``capacity``) — raise, same
+            #    reasoning. These are the server's own shed/exhaustion
+            #    responses; they state an honest 90-120s and burning the
+            #    1/2/4s ladder against them is the opposite of what the header
+            #    asks (map_response_to_error types them
+            #    LenzUpstreamUnavailableError, carrying the true retry_after).
+            #  * every other 5xx, including an UNTYPED 503 — keep retrying on
+            #    our own backoff. A Cloud Run / CDN / load-balancer
+            #    maintenance-or-overload 503 states a long wait and carries no
+            #    Lenz code; the server is down, not pacing us, so an hour-long
+            #    Retry-After must become backoff — not an hour-long sleep, and
+            #    not an abort of a request our ladder might still satisfy.
             if attempt < self._max_retries and (response.status_code >= 500 or response.status_code == 429):
                 stated = _stated_retry_after(response)
                 if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
                     time.sleep(stated)
                     continue
-                if stated is None or response.status_code >= 500:
+                if stated is None or not _aborts_on_long_stated_wait(response):
                     time.sleep(_retry_sleep(attempt))
                     continue
 
@@ -837,9 +856,11 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
     """Seconds the server says to wait, or None if it didn't say.
 
     Reads the ``Retry-After`` header first, then the body's
-    ``reset_in_seconds``. Returns None (rather than 0) on an absent or
-    unparseable value so the caller can tell "server stated no wait" apart
-    from "server said wait 0 seconds" and fall back to its own backoff.
+    ``reset_in_seconds`` (429 shapes), then the body's ``retry_after``
+    (the 503 shapes carry the wait under that key). Returns None (rather
+    than 0) on an absent or unparseable value so the caller can tell
+    "server stated no wait" apart from "server said wait 0 seconds" and
+    fall back to its own backoff.
     """
     raw = response.headers.get("Retry-After")
     if raw is None or str(raw).strip() == "":
@@ -851,6 +872,8 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         if not isinstance(body, dict):
             return None
         raw = body.get("reset_in_seconds")
+        if raw is None or str(raw).strip() == "":
+            raw = body.get("retry_after")
     if raw is None or str(raw).strip() == "":
         return None
     try:
@@ -860,6 +883,35 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         return max(0, int(float(raw)))
     except (TypeError, ValueError):
         return None
+
+
+def _body_error_code(response: httpx.Response) -> str:
+    """The server's machine-readable ``code`` from the body, or ``""``.
+
+    Reads it exactly the way ``map_response_to_error`` does — string-typed
+    only, so a malformed ``code: 42`` reads as ``""`` rather than ``"42"``
+    and nothing branches on a value the server never meant as a code.
+    """
+    try:
+        body = response.json()
+    except Exception:
+        return ""
+    if not isinstance(body, dict):
+        return ""
+    code = body.get("code")
+    return code if isinstance(code, str) else ""
+
+
+def _aborts_on_long_stated_wait(response: httpx.Response) -> bool:
+    """Whether a stated wait past the cap should abort instead of back off.
+
+    True for 429 (always) and for a 503 the server typed as its own
+    shed/exhaustion response. An untyped 503 — the ordinary proxy /
+    maintenance shape — is deliberately False: it keeps the ladder.
+    """
+    if response.status_code == 429:
+        return True
+    return response.status_code == 503 and _body_error_code(response) in UPSTREAM_503_CODES
 
 
 def _retry_sleep(attempt: int) -> float:

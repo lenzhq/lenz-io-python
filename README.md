@@ -189,7 +189,7 @@ Every claim-shaped response shares these fields at top level:
 ### Webhooks
 
 ```python
-from lenz_io import LenzWebhooks, VerificationCompleted, VerificationNeedsInput
+from lenz_io import LenzWebhooks, VerificationCompleted, VerificationFailed, VerificationNeedsInput
 
 webhooks = LenzWebhooks(secret="whsec_...")
 
@@ -201,6 +201,13 @@ if isinstance(event, VerificationCompleted):
 elif isinstance(event, VerificationNeedsInput):
     tid, ni = event.task_id, event.needs_input
     ...
+elif isinstance(event, VerificationFailed):
+    # event.error is WHERE the pipeline stopped; event.failure_class is WHY
+    # (closed set) and event.retryable tells you what to do about it.
+    if event.retryable:
+        resubmit_later(event.task_id)  # transient provider outage
+    else:
+        log_permanent_failure(event.task_id, event.error)
 ```
 
 If you're on Python 3.10+ a `match` statement reads even cleaner — events are
@@ -223,6 +230,7 @@ from lenz_io import (
     LenzAuthError,
     LenzQuotaExceededError,
     LenzRateLimitError,
+    LenzUpstreamUnavailableError,
     LenzValidationError,
 )
 
@@ -248,7 +256,20 @@ except LenzRateLimitError as exc:
 except LenzValidationError as exc:
     for field_err in exc.errors:
         print(field_err["loc"], field_err["msg"])
+except LenzUpstreamUnavailableError as exc:
+    # HTTP 503, code "upstream_unavailable" (model/search providers
+    # exhausted) or "capacity" (submissions shed at the door). Nothing was
+    # charged. Waits up to 60s are already slept through by the automatic
+    # retry ladder; reaching here means the server stated a longer one.
+    schedule_retry_in(exc.retry_after)  # typically 90-120s
 ```
+
+A failed *verification* (as opposed to a failed HTTP call) raises
+`LenzPipelineError` from `verify_and_wait` / `wait`. Since 2.8.0 it carries
+`failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
+| `invalid_input` | `cancelled` | `internal`) and `retryable` — `True` means
+a transient provider-side exhaustion where resubmitting the same claim is the
+right move; older servers leave it `None`.
 
 `LenzQuotaExceededError` is a **sibling** of `LenzAuthError`, not a subclass —
 "fix your key" and "top up your account" are different actions. So if you were

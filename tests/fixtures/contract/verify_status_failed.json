@@ -1,4 +1,7 @@
 {
   "status": "failed",
-  "error": "Pipeline stopped at: research_empty"
+  "error": "Pipeline stopped at: research_empty",
+  "failure_reason": "research_empty",
+  "failure_class": "upstream_unavailable",
+  "retryable": true
 }
