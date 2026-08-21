@@ -273,6 +273,16 @@ _DOCS_BASE = "https://lenz.io/docs"
 # immediately with the true retry_after so the caller can schedule the work.
 MAX_RETRY_AFTER_SLEEP = 60
 
+# The body ``code`` values the server sends on a 503 it produced deliberately:
+# providers exhausted mid-pipeline, or a submission shed at the door. Both map
+# to LenzUpstreamUnavailableError and both state an honest wait.
+#
+# The retry ladder in ``client.py`` keys its immediate-abort decision on THIS,
+# not on the status number: an ordinary Cloud Run / CDN / load-balancer 503
+# carries no Lenz code, states a maintenance-window wait, and must keep being
+# retried exactly as it was before 2.8.0.
+UPSTREAM_503_CODES = ("upstream_unavailable", "capacity")
+
 _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
     401: (
         LenzAuthError,
@@ -336,7 +346,7 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
-    elif status_code == 503 and code in ("upstream_unavailable", "capacity"):
+    elif status_code == 503 and code in UPSTREAM_503_CODES:
         cls, default_msg, doc_url = (
             LenzUpstreamUnavailableError,
             "Service temporarily unavailable",

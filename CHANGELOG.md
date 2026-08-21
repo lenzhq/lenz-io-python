@@ -15,19 +15,30 @@ is overloaded; the SDK types both.
   `failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
   | `invalid_input` | `cancelled` | `internal`) and `retryable` (true iff
   `upstream_unavailable` — resubmitting the same claim is the right move).
-  Older servers omit both; the fields default rather than break.
+  Older servers omit both; the fields default rather than break. The closed
+  set is also exported as the `FailureClass` `Literal` alias
+  (`from lenz_io import FailureClass`) for exhaustive matching — the model
+  field itself stays `str` so a class the server adds later can't turn into a
+  `ValidationError`.
 - **`LenzUpstreamUnavailableError`** — a `LenzAPIError` subclass for 503s with
   `code` `upstream_unavailable` (model/search providers exhausted; the request
   was not charged) or `capacity` (submission shed at the door; nothing was
   accepted). Carries `retry_after`.
 
 ### Changed
-- **A 503 whose stated `Retry-After` exceeds 60s now raises immediately**
-  (as `LenzUpstreamUnavailableError`, with the true `retry_after`) instead of
+- **A 503 that Lenz itself typed — body `code` `upstream_unavailable` or
+  `capacity` — and that asks for more than 60s now raises immediately**, as
+  `LenzUpstreamUnavailableError` carrying the true `retry_after`, instead of
   silently burning the 1s/2s/4s backoff ladder against a server that asked
-  for 90-120s — the same rule 429 has always had. 503s with waits ≤ 60s are
-  still slept through and retried; other 5xx keep the ladder unchanged. If
-  you relied on long-stated-wait 503s being retried blindly, catch
+  for 90-120s. That is the same rule 429 has always had. The decision is
+  gated on the body code, not on the status number:
+  - typed 503, stated wait ≤ 60s → still slept through and retried (unchanged);
+  - **untyped 503** — an ordinary proxy / load-balancer / maintenance
+    response with no Lenz `code` — → **backoff ladder, exactly as before**,
+    however long a `Retry-After` it states;
+  - every other 5xx → backoff ladder, unchanged.
+
+  If you relied on long-stated-wait typed 503s being retried blindly, catch
   `LenzUpstreamUnavailableError` (existing `except LenzAPIError` handlers
   keep catching it).
 - The stated wait is now also read from the 503 body's `retry_after` key
@@ -36,6 +47,8 @@ is overloaded; the SDK types both.
   wait to blind backoff.
 
 ### Fixed
+- `LenzPipelineError.retryable` now coerces a non-boolean server value to
+  `None` instead of passing it through (parity with the Node SDK).
 - Contract fixtures refreshed to the live failed-status body; added the
   `verification.failed` webhook payload and both 503 envelopes (shared
   byte-identically with the Node SDK, as ever).
