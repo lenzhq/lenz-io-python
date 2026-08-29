@@ -66,6 +66,95 @@ class TestMapResponseToError:
         assert e.remaining is None
         assert e.resets_at is None
         assert e.requested is None
+        assert e.credit_balance is None
+        assert e.cost is None
+
+    def test_402_carries_the_credit_pool_and_the_calls_price(self):
+        """`remaining` is in the capability's unit, `credit_balance` and `cost`
+        are in credits — together they say "4 credits, and this verify wants
+        10", which "0 verifications left" alone cannot."""
+        e = map_response_to_error(
+            402,
+            _body(
+                {
+                    "detail": "No remaining claim checks.",
+                    "code": "no_credits",
+                    "remaining": 0,
+                    "credits_remaining": 4,
+                    "cost": 10,
+                }
+            ),
+            {},
+        )
+        assert e.remaining == 0  # verifications
+        assert e.credit_balance == 4  # credits
+        assert e.cost == 10  # credits this call would have taken
+
+    def test_402_cost_is_depth_aware_for_a_low_verify(self):
+        """A rejected `depth="low"` verify reports 5, not the standard 10.
+
+        `cost` is what the server would actually have charged, so a client
+        must read it rather than multiplying `requested` by a price it
+        assumed. The charge follows the depth REQUESTED — a `low` request the
+        server could have answered from a cached `standard` verdict is still
+        priced at `low`."""
+        e = map_response_to_error(
+            402,
+            _body(
+                {
+                    "detail": "No remaining claim checks.",
+                    "code": "no_credits",
+                    "remaining": 0,
+                    "requested": 1,
+                    "credits_remaining": 4,
+                    "cost": 5,
+                }
+            ),
+            {},
+        )
+        assert e.cost == 5
+        assert e.credit_balance == 4
+        # 4 credits cannot buy even the half-price call — that is the whole
+        # point of publishing both numbers.
+        assert e.cost > e.credit_balance
+
+    def test_402_cost_for_a_mixed_depth_batch_is_the_summed_total(self):
+        """A batch may mix depths; `cost` is the real sum, not n x one price.
+
+        Three standard (30) + two low (10) = 40, which is neither 5 x 10 nor
+        5 x 5. Deriving the cost from `requested` would be wrong in both
+        directions."""
+        e = map_response_to_error(
+            402,
+            _body(
+                {
+                    "detail": "batch too big",
+                    "code": "no_credits",
+                    "requested": 5,
+                    "remaining": 2,
+                    "credits_remaining": 25,
+                    "cost": 40,
+                }
+            ),
+            {},
+        )
+        assert e.cost == 40
+        assert e.cost != e.requested * 10
+        assert e.cost != e.requested * 5
+
+    def test_credit_balance_does_not_hijack_the_deprecated_alias(self):
+        """The body's `credits_remaining` (the pool) must NOT land on the
+        SDK's same-named deprecated property, which aliases `remaining` and
+        means a different quantity. Silently repointing it would change the
+        number under everyone still on the deprecated path."""
+        e = map_response_to_error(
+            402,
+            _body({"detail": "out", "remaining": 0, "credits_remaining": 4, "cost": 10}),
+            {},
+        )
+        with pytest.deprecated_call():
+            assert e.credits_remaining == 0  # still `remaining`, not the pool's 4
+        assert e.credit_balance == 4
 
     def test_402_requested_echoed_for_batch_shortfall(self):
         e = map_response_to_error(

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _Lax(BaseModel):
@@ -383,25 +383,99 @@ class BatchItemResult(_Lax):
     status_detail: TaskStatus | None = None
 
 
+class UsageCredits(_Lax):
+    """The account's credit balance — the one pool every capability spends.
+
+    Every billable call debits this pool at the weight in :attr:`Usage.costs`
+    (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
+    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    free). Two buckets: the monthly allowance for the current plan, which
+    resets at ``resets_at``, and non-expiring ``bonus`` credits from grants and
+    top-ups, spent only once the allowance is gone. ``remaining`` covers both
+    and is what a call is checked against.
+
+    Servers predating the credit pool (before 2026-08-29) don't send this block
+    at all, and it then reads as all-zero — check ``usage.credits.total``
+    before trusting the balance.
+    """
+
+    total: int = 0
+    used: int = 0
+    remaining: int = 0
+    bonus: int = 0
+    resets_at: str | None = None
+
+
 class UsageCapacity(_Lax):
-    """Per-capability remaining capacity (``verify`` / ``ask``).
+    """DEPRECATED. One capability's share of the pool, in that capability's unit.
 
-    Two buckets, kept separate on purpose:
+    **Removed 2026-11-29**, together with the per-block ``credits`` alias.
+    Read :attr:`Usage.credits` and :attr:`Usage.costs` and do the division —
+    it is the same one this block does::
 
-    - ``quota_*``  — the recurring monthly allowance for the current plan;
-      resets every period (see :attr:`Usage.quota_resets_at`).
-      ``quota_remaining`` is ``quota_total - quota_used`` (never negative).
-    - ``credits``  — one-off top-up credits that do NOT reset monthly; spent
-      only after the monthly quota is exhausted.
+        remaining = u.credits.remaining // u.costs[capability]
+        total     = u.credits.total     // u.costs[capability]
+        used      = total - remaining
 
-    ``remaining`` is the true usable capacity: ``quota_remaining + credits``.
+    Two capabilities at the same price emit identical objects — ``ask`` and
+    ``assess`` are both 1 credit — because there is one balance behind all of
+    them, not a per-capability allowance.
+
+    These are **projections, not allowances**. Every billable capability draws
+    on the single balance in :attr:`Usage.credits`, at the weight in
+    :attr:`Usage.costs`; this block answers "how many ``/verify`` calls could I
+    still make if I spent everything on them". Spending on any capability moves
+    every block, and the division floors — a ``verify`` block (weight 10) ticks
+    once per 10 credits spent anywhere.
+
+    - ``quota_*``  — the monthly allowance projected into this unit; resets
+      every period (see :attr:`Usage.quota_resets_at`). ``quota_used`` is
+      derived as ``quota_total - quota_remaining``, so ``quota_used +
+      quota_remaining == quota_total`` always holds.
+    - ``bonus``    — the non-expiring top-up bucket, in this unit. A user
+      holding 5 bonus credits sees ``assess.bonus == 5`` and
+      ``verify.bonus == 0``: 5 credits does not buy a verification.
+
+    ``remaining`` is the usable capacity across both buckets.
     """
 
     quota_used: int = 0
     quota_total: int = 0
     quota_remaining: int = 0
-    credits: int = 0
+    bonus: int = 0
+    #: **Deprecated** alias of :attr:`bonus`, removed on 2026-11-29. It never
+    #: meant the credit pool — before the pool existed it meant this
+    #: capability's one-off top-up balance, which is exactly what ``bonus``
+    #: reports. Reading it emits a ``DeprecationWarning``; it stays in
+    #: ``model_dump()`` output (unwarned) for as long as the server sends it.
+    credits: int = Field(
+        default=0,
+        deprecated=(
+            "UsageCapacity.credits is deprecated and will be removed on 2026-11-29; "
+            "use `bonus` — the same number, this capability's non-expiring top-up "
+            "balance. The credit pool itself is `Usage.credits`."
+        ),
+    )
     remaining: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mirror_bonus_and_credits(cls, data: Any) -> Any:
+        """Keep ``bonus`` and its deprecated alias in step, in both directions.
+
+        A server predating the credit pool sends only ``credits``; a server
+        after the 2026-11-29 removal sends only ``bonus``. Mirroring here means
+        both attributes read correctly either way, so the SDK never depends on
+        which side of an API deploy it is talking to.
+        """
+        if not isinstance(data, dict):
+            return data
+        has_bonus, has_credits = data.get("bonus") is not None, data.get("credits") is not None
+        if has_bonus and not has_credits:
+            return {**data, "credits": data["bonus"]}
+        if has_credits and not has_bonus:
+            return {**data, "bonus": data["credits"]}
+        return data
 
 
 class UsageExtract(_Lax):
@@ -413,19 +487,77 @@ class UsageExtract(_Lax):
 
 
 class Usage(_Lax):
-    """Returned by ``GET /me/usage`` — usage + remaining capacity for the key.
+    """Returned by ``GET /me/usage`` — the account's balance and what it buys.
 
-    Monthly quota (resets at ``quota_resets_at``) and one-off top-up credits are
-    reported separately per capability so callers can tell a recurring allowance
-    apart from a purchased balance. ``assess`` is quota-only — there is no
-    one-off assess credit pool, so its ``credits`` is always 0 and
-    ``remaining == quota_remaining`` (not a bug).
+    ``credits`` is the balance and ``costs`` is the price list (credits per
+    call, keyed by capability). The ``verify`` / ``ask`` / ``assess`` blocks
+    are **projections** of that one pool into each capability's unit — read
+    whichever is convenient, they all describe the same money, and spending on
+    one moves all of them.
+
+    ``extract`` is free at the pool (``costs["extract"] == 0``) and is bounded
+    by a per-account daily fair-use cap instead; it rejects with 429, never
+    402.
+
+    ``costs`` names capabilities, one entry each, at the default price.
+    Prices that depend on a request PARAMETER live in :attr:`cost_options`,
+    nested capability → parameter → value. Divide ``credits.remaining`` by one
+    of those yourself for the low-depth count — there is deliberately no
+    ``verify_low`` block beside ``verify``.
     """
 
+    #: The tier slug — ``"free"`` | ``"plus"`` | ``"developer"`` | ``"scale"``.
+    #: This is the field to branch on; it is stable.
     plan: str = ""
+    #: The same tier as display copy (``"Developer"``). Separate from
+    #: :attr:`plan` on purpose: this one is copy and may be reworded, so
+    #: comparing against it will break on a rename that ought to be free.
+    #: Empty on servers predating this field — fall back to :attr:`plan`.
+    plan_label: str = ""
     quota_resets_at: str | None = None
+    #: The credit balance — the authoritative number. Empty on older servers.
+    credits: UsageCredits = Field(default_factory=UsageCredits)
+    #: Credits per call, keyed by CAPABILITY, at its default price:
+    #: ``{"verify": 10, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: servers. Read the weight from here rather than hard-coding it — new
+    #: keys appear without an SDK release, and the SDK never rewrites the
+    #: server's own key names.
+    #:
+    #: Contains capability names and nothing else. Prices that depend on a
+    #: request parameter are in :attr:`cost_options`.
+    costs: dict[str, int] = Field(default_factory=dict)
+    #: Prices that depend on a request PARAMETER, nested capability →
+    #: parameter → value::
+    #:
+    #:     {"verify": {"depth": {"standard": 10, "low": 5}}}
+    #:
+    #: Read as "on ``verify``, the ``depth`` parameter prices like this".
+    #: Empty on servers predating this field.
+    #:
+    #: Every capability here also appears in :attr:`costs` at its default
+    #: price, so reading only ``costs`` is imprecise, never wrong. A caller
+    #: wanting "how many low-depth verifications can I afford" divides
+    #: ``credits.remaining`` by ``cost_options["verify"]["depth"]["low"]``.
+    #:
+    #: Nested rather than flat so that a future request parameter adds a key
+    #: under its capability instead of a new top-level entry — ``costs`` stays
+    #: a list of capability names, safe to iterate.
+    #:
+    #: You are charged for the depth you **requested**, not the one served: a
+    #: ``low`` request answered from a cached ``standard`` verdict still costs
+    #: the ``low`` price. The ``depth`` echoed on a completed verification is
+    #: what the verdict was PRODUCED with, so it can read ``standard`` on a
+    #: ``low`` request — the echo describes the evidence, the charge follows
+    #: the request.
+    cost_options: dict[str, dict[str, dict[str, int]]] = Field(default_factory=dict)
+    #: DEPRECATED — removed 2026-11-29. Derive from :attr:`credits` and
+    #: :attr:`costs` instead::
+    #:
+    #:     left = u.credits.remaining // u.costs["verify"]
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
+    #: DEPRECATED — removed 2026-11-29. See :attr:`verify`.
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
+    #: DEPRECATED — removed 2026-11-29. See :attr:`verify`.
     assess: UsageCapacity = Field(default_factory=UsageCapacity)
     extract: UsageExtract = Field(default_factory=UsageExtract)
     # Whether this key has a webhook signing secret provisioned. ``POST /verify``
@@ -503,6 +635,9 @@ __all__ = [
     "TaskAccepted",
     "TaskStatus",
     "Usage",
+    "UsageCapacity",
+    "UsageCredits",
+    "UsageExtract",
     "Verification",
     "VerificationList",
     "VerificationListItem",

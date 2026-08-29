@@ -4,5 +4,7 @@
   "doc_url": "https://lenz.io/docs/errors#quota",
   "upgrade_url": "https://lenz.io/plans",
   "remaining": 0,
+  "credits_remaining": 4,
+  "cost": 10,
   "resets_at": "2026-09-01T00:00:00+00:00"
 }

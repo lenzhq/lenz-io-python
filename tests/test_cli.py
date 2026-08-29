@@ -41,6 +41,7 @@ from lenz_io.models import (
     TaskStatus,
     Usage,
     UsageCapacity,
+    UsageCredits,
     UsageExtract,
     Verification,
 )
@@ -683,45 +684,36 @@ def test_assess_json_success(monkeypatch):
 
 
 def _usage(**kw):
-    """Build a Usage with the nested per-capability shape (verify/ask/assess/extract)."""
+    """Build a Usage with the pool + per-capability projections the server sends."""
     verify = UsageCapacity(**kw.pop("verify", {}))
     ask = UsageCapacity(**kw.pop("ask", {}))
     assess = UsageCapacity(**kw.pop("assess", {}))
     extract = UsageExtract(**kw.pop("extract", {}))
-    return Usage(verify=verify, ask=ask, assess=assess, extract=extract, **kw)
+    credits = UsageCredits(**kw.pop("credits", {}))
+    costs = kw.pop("costs", {})
+    return Usage(verify=verify, ask=ask, assess=assess, extract=extract, credits=credits, costs=costs, **kw)
 
 
-def test_usage_json_success(monkeypatch):
-    monkeypatch.setenv("LENZ_API_KEY", "k")
-    _patch_client(
-        monkeypatch,
-        FakeClient(
-            usage_result=_usage(
-                plan="developer",
-                quota_resets_at="2026-07-01",
-                verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
-                ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
-                assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
-                extract={"calls_today": 3, "daily_limit": 1000},
-            )
-        ),
-    )
-    result = runner.invoke(app, ["--json", "usage"])
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["plan"] == "developer"
-    assert payload["verify"]["remaining"] == 405
-    assert payload["verify"]["credits"] == 25
-    assert payload["ask"]["quota_total"] == 200
-    assert payload["assess"]["remaining"] == 955
-    assert payload["assess"]["credits"] == 0
-    assert payload["extract"]["calls_today"] == 3
+def _pool_usage(**overrides):
+    """The live developer-plan shape: 5,070 credits = 507 verifies or 5,070 assesses."""
+    payload = {
+        "plan": "developer",
+        "quota_resets_at": "2026-09-01",
+        "credits": {"total": 5200, "used": 130, "remaining": 5070, "bonus": 200, "resets_at": "2026-09-01"},
+        "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
+        "cost_options": {"verify": {"depth": {"standard": 10, "low": 5}}},
+        "verify": {"quota_used": 13, "quota_total": 520, "quota_remaining": 507, "bonus": 20, "remaining": 507},
+        "ask": {"quota_used": 130, "quota_total": 5200, "quota_remaining": 5070, "remaining": 5070},
+        "assess": {"quota_used": 130, "quota_total": 5200, "quota_remaining": 5070, "remaining": 5070},
+        "extract": {"calls_today": 4, "daily_limit": 1000},
+    }
+    payload.update(overrides)
+    return _usage(**payload)
 
 
-def test_usage_pretty_shows_bonus_breakdown():
-    """Human render: per-capability 'remaining left' headline + quota breakdown,
-    with a '+ N bonus' tail when the key holds top-up credits. CliRunner forces
-    json_mode (non-tty stdout), so render directly like other pretty tests."""
+def _render_usage_text(u):
+    """Render the human view to a string. CliRunner forces json_mode (non-tty
+    stdout), so pretty tests render directly."""
     import io
 
     from rich.console import Console
@@ -732,34 +724,131 @@ def test_usage_pretty_shows_bonus_breakdown():
     out = Output(json_mode=False, no_color=True)
     out.json_mode = False  # force pretty even though the test stdout isn't a tty
     out.console = Console(file=buf, no_color=True, width=100)
-    render_usage(
-        out,
-        _usage(
-            plan="developer",
-            quota_resets_at="2026-07-01",
-            verify={"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405},
-            ask={"quota_used": 10, "quota_total": 200, "quota_remaining": 190, "remaining": 190},
-            assess={"quota_used": 45, "quota_total": 1000, "quota_remaining": 955, "remaining": 955},
-            extract={"calls_today": 3, "daily_limit": 1000},
-        ),
-    )
-    text = buf.getvalue()
+    render_usage(out, u)
+    return buf.getvalue()
+
+
+def test_usage_json_success(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient(usage_result=_pool_usage()))
+    result = runner.invoke(app, ["--json", "usage"])
+    assert result.exit_code == 0
+    payload = json.loads(result.stdout)
+    assert payload["plan"] == "developer"
+    # The balance and the price list — the authoritative pair.
+    assert payload["credits"]["remaining"] == 5070
+    assert payload["credits"]["bonus"] == 200
+    assert payload["costs"] == {"verify": 10, "assess": 1, "ask": 1, "extract": 0}
+    assert payload["cost_options"] == {"verify": {"depth": {"standard": 10, "low": 5}}}
+    # Projections of that one pool, in each capability's unit.
+    assert payload["verify"]["remaining"] == 507
+    assert payload["verify"]["bonus"] == 20
+    assert payload["assess"]["remaining"] == 5070
+    assert payload["extract"]["calls_today"] == 4
+    # The deprecated alias is still emitted (server sends it until 2026-11-29)
+    # and dumping it must not warn — see tests/test_usage_models.py.
+    assert payload["verify"]["credits"] == 20
+
+
+def test_usage_pretty_leads_with_the_credit_balance():
+    """One pool funds everything, so the balance is the headline; the
+    per-capability rows below it are projections, each with its price."""
+    text = _render_usage_text(_pool_usage())
     assert "developer plan" in text
-    assert "Verify:" in text
-    assert "405 left" in text  # quota_remaining + bonus
-    assert "120 / 500 quota + 25 bonus" in text  # bonus tail present
-    assert "Ask:" in text
-    assert "190 left" in text
-    assert "Assess:" in text
-    assert "955 left" in text  # quota-only capability, no bonus tail
-    # Row order: Verify → Ask → Assess → Extract
+    assert "5070 credits left" in text
+    assert "≈ 507 verifications · 5070 assessments" in text
+    # Per-capability rows beneath, in order, with the bonus + price tails.
+    assert "507 left" in text
+    assert '13 / 520 quota + 20 bonus · 10 credits each · 5 at depth "low"' in text
+    assert "5070 left" in text
+    assert "1 credit each" in text  # assess/ask are the unit — singular
+    assert text.index("credits left") < text.index("Verify:")
     assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
-    # No bonus tail on Ask or Assess (credits==0 for both)
-    assert "bonus" not in text.split("Ask:")[1].split("Extract")[0]
-    # Humanized: absolute date always present; relative prefix ("in N days")
+    # No bonus tail on Ask (bonus == 0 there)
+    assert "bonus" not in text.split("Ask:")[1].split("Assess:")[0]
+    assert "4 / 1000 today" in text
+    # Humanized: absolute date always present; the relative prefix ("in N days")
     # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
-    assert "Quota resets" in text
-    assert "Jul 1, 2026" in text
+    assert "Credits reset" in text
+    assert "Sep 1, 2026" in text
+
+
+def test_usage_pretty_singularizes_a_lone_verification():
+    text = _render_usage_text(
+        _pool_usage(
+            credits={"total": 100, "used": 90, "remaining": 10, "bonus": 0, "resets_at": "2026-09-01"},
+            verify={"quota_used": 9, "quota_total": 10, "quota_remaining": 1, "remaining": 1},
+            assess={"quota_used": 90, "quota_total": 100, "quota_remaining": 10, "remaining": 10},
+        )
+    )
+    assert "10 credits left" in text
+    assert "≈ 1 verification · 10 assessments" in text
+
+
+def test_usage_pretty_notes_the_low_depth_price_on_the_verify_row():
+    """The low-depth price rides the Verify row's tail, not a row of its own.
+
+    The low-depth price is a PRICE, not a capability: it has no projection block on
+    the server, so rendering it as its own capacity row would invent a second
+    balance that does not exist."""
+    text = _render_usage_text(_pool_usage())
+    verify_row = text.split("Verify:")[1].split("Ask:")[0]
+    assert '10 credits each · 5 at depth "low"' in verify_row
+    # Not a row, and not an extra headline equivalent.
+    assert "Verify low" not in text
+    assert "verify_low" not in text
+    # Exactly three capacity rows — Verify / Ask / Assess. A fourth would mean
+    # someone gave the price its own projection block.
+    rows = [ln.strip().split(":")[0] for ln in text.splitlines() if " quota" in ln]
+    assert rows == ["Verify", "Ask", "Assess"]
+
+
+def test_usage_pretty_omits_the_low_depth_note_on_a_server_without_it():
+    """A server predating depth pricing sends no depth prices. Say nothing
+    rather than assuming half of `verify`."""
+    # `cost_options` empty, not `costs` trimmed: the note reads the nested
+    # map now, so trimming the flat one would leave the note rendering and
+    # the test asserting nothing.
+    text = _render_usage_text(_pool_usage(cost_options={}))
+    assert "10 credits each" in text
+    assert "depth" not in text
+
+
+def test_usage_pretty_omits_a_low_depth_note_that_equals_the_standard_price():
+    """`5 at depth "low"` beside `5 credits each` is noise, not information."""
+    text = _render_usage_text(_pool_usage(cost_options={"verify": {"depth": {"standard": 10, "low": 10}}}))
+    assert "10 credits each" in text
+    assert "depth" not in text
+
+
+def test_usage_pretty_never_reads_the_deprecated_alias():
+    """The renderer must read `bonus`, not the deprecated `credits` alias —
+    otherwise every `lenz usage` run prints a DeprecationWarning."""
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        text = _render_usage_text(_pool_usage())
+    assert "20 bonus" in text
+
+
+def test_usage_pretty_pre_pool_server_has_no_balance_headline():
+    """A server predating the pool sends no `credits` block. Print the rows it
+    did send rather than a confident '0 credits left'."""
+    text = _render_usage_text(
+        _usage(
+            plan="plus",
+            quota_resets_at="2026-09-01",
+            verify={"quota_used": 5, "quota_total": 100, "quota_remaining": 95, "credits": 0, "remaining": 95},
+            ask={"quota_used": 0, "quota_total": 50, "quota_remaining": 50, "remaining": 50},
+            assess={"quota_used": 0, "quota_total": 500, "quota_remaining": 500, "remaining": 500},
+            extract={"calls_today": 0, "daily_limit": 1000},
+        )
+    )
+    assert "credits left" not in text
+    assert "95 left" in text
+    assert "credits each" not in text  # no price list either
+    assert "Credits reset" in text  # falls back to quota_resets_at
 
 
 @pytest.mark.parametrize(

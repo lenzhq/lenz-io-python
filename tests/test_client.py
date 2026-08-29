@@ -70,35 +70,48 @@ class TestConstruction:
                 json={
                     "plan": "plus",
                     "quota_resets_at": "2026-07-01T00:00:00+00:00",
+                    "credits": {
+                        "total": 1000,
+                        "used": 50,
+                        "remaining": 950,
+                        "bonus": 0,
+                        "resets_at": "2026-07-01T00:00:00+00:00",
+                    },
+                    "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
                     "verify": {
                         "quota_used": 5,
                         "quota_total": 100,
                         "quota_remaining": 95,
+                        "bonus": 0,
                         "credits": 0,
                         "remaining": 95,
                     },
                     "ask": {
-                        "quota_used": 0,
-                        "quota_total": 50,
-                        "quota_remaining": 50,
+                        "quota_used": 50,
+                        "quota_total": 1000,
+                        "quota_remaining": 950,
+                        "bonus": 0,
                         "credits": 0,
-                        "remaining": 50,
+                        "remaining": 950,
                     },
                     "assess": {
-                        "quota_used": 0,
-                        "quota_total": 500,
-                        "quota_remaining": 500,
+                        "quota_used": 50,
+                        "quota_total": 1000,
+                        "quota_remaining": 950,
+                        "bonus": 0,
                         "credits": 0,
-                        "remaining": 500,
+                        "remaining": 950,
                     },
                     "extract": {"calls_today": 0, "daily_limit": 1000, "unlimited": False},
                 },
             )
             u = client.usage()
         assert u.plan == "plus"
+        assert u.credits.remaining == 950
+        assert u.costs["verify"] == 10
         assert u.verify.quota_total == 100
         assert u.verify.remaining == 95
-        assert u.assess.credits == 0
+        assert u.assess.bonus == 0
 
     def test_base_url_override_routes_through_alternate_base(self, custom_base_client):
         with respx.mock(base_url="http://localhost:8001/api/v1") as r:

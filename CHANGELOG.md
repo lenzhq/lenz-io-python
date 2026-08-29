@@ -6,12 +6,60 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [2.9.0] - 2026-08-29
 
-`extract` takes a `focus` — say what you are looking for and get back only
-those claims — and `verify` takes a `depth`, so callers can ask for a
-shallower check. Lockstep release with Node 2.9.0.
+One weighted credit pool replaces six per-endpoint quotas; `extract` takes a
+`focus`; `verify` takes a `depth`. Lockstep release with Node 2.9.0 and the
+server-side pool.
 
 ### Added
 
+- **`Usage.credits`** (`UsageCredits`: `total`, `used`, `remaining`, `bonus`,
+  `resets_at`) — the account's balance, and the authoritative number. Every
+  billable call debits it.
+- **`Usage.costs`** — the price list, keyed by **capability** at its default
+  price: `{"verify": 10, "assess": 1, "ask": 1, "extract": 0}`. Read the weight
+  from here rather than hard-coding it; a new capability arrives as a new key.
+  Capability names and nothing else, so it is safe to iterate.
+- **`Usage.cost_options`** — prices that depend on a request **parameter**,
+  nested capability → parameter → value:
+  `{"verify": {"depth": {"standard": 10, "low": 5}}}`. Every capability here
+  also appears in `costs` at its default, so reading only `costs` is imprecise
+  but never wrong. Nested rather than flat so a future parameter adds a key
+  under its capability instead of a new top-level entry.
+  - The low-depth price is a **price, not a capability**: there is deliberately
+    no `usage.verify_low` block beside `usage.verify`, because it would report
+    the same balance in a second unit. Divide `credits.remaining` by it for the
+    low-depth count.
+  - **You are charged for the depth you REQUESTED, not the one you were
+    served.** A `low` request answered from a cached `standard` verdict still
+    costs 5. The `depth` echoed on the completed verification is what the
+    verdict was *produced* with, so it can read `standard` on a `low` request
+    — the echo describes the evidence, the charge follows the request.
+- **`Usage.plan_label`** — the tier as display copy (`"Developer"`), beside the
+  stable `plan` slug. Two fields on purpose: `plan` is what you branch on,
+  `plan_label` is copy and may be reworded.
+- **`UsageCapacity.bonus`** — the non-expiring top-up bucket, in that
+  capability's unit. 200 bonus credits read as `assess.bonus == 200` and
+  `verify.bonus == 20`: 5 credits does not buy a verification.
+- **`LenzQuotaExceededError.credit_balance` and `.cost`** on 402 — the credits
+  left in the pool and what the rejected call would have taken, both in
+  credits, so a client can tell "4 credits, and this verify wants 10" from
+  "empty". `remaining` / `requested` stay in the capability's own unit. Both
+  are `None` when the server omits them, matching `remaining`.
+  - `credit_balance` carries the server's `credits_remaining` body field under
+    a different name **on purpose**: `exc.credits_remaining` has been a
+    deprecated alias of `remaining` since 2.7.0 and means a different quantity
+    (verifications, not credits). Re-pointing it would have silently changed
+    the number under everyone still on the deprecated path. The raw key stays
+    available as `exc.body["credits_remaining"]`.
+  - `cost` is **depth-aware**, not a fixed multiple: a rejected `depth="low"`
+    verify reports 5, and a rejected batch that mixes depths reports its real
+    summed total. Read it rather than multiplying `requested` by an assumed
+    price.
+- `lenz usage` leads with the balance — `5070 credits left (≈ 507
+  verifications · 5070 assessments)` — with the per-capability rows and their
+  per-call price beneath it. The `Verify` row's tail also carries the
+  low-depth price (`· 10 credits each · 5 at depth "low"`) — on the existing
+  row, not one of its own, because there is no separate low-depth allowance.
 - **`focus=` on `extract`.** An optional hint of at most 300 characters —
   `focus="market size, growth and competitors"` — that narrows the result to
   the claims it names. A focus can only SELECT from the claims the extractor
@@ -35,7 +83,8 @@ shallower check. Lockstep release with Node 2.9.0.
 
 - **`depth` on `verify` / `verify_batch`** (and their `_and_wait` helpers) —
   `'standard'` (server default) or `'low'`. `'low'` runs a shallower check:
-  fewer sources, faster. Same models, same quota cost. Batch takes a
+  fewer sources, faster, and **half the credits** — same models throughout;
+  it is not a model downgrade. Batch takes a
   batch-wide `depth`; each item dict may set its own `depth` to override it,
   exactly like `visibility`. Omitted from the request body when unset, so
   existing callers stay byte-identical on the wire and keep working against
@@ -46,14 +95,37 @@ shallower check. Lockstep release with Node 2.9.0.
 - **`lenz verify --depth standard|low`** on the CLI. Claims picked out of a
   multi-claim input inherit the depth of the submission that offered them —
   the server carries it through `/select`, so the flag is sent once.
-
-### Changed
-
 - **`openapi.json` refreshed**, which also catches up on server changes that
   were never re-snapshotted after 2.8.0: `failure_class` / `retryable` on the
   status schema, the 502/503 error rows, and a `/extract` 200 response schema
   where the vendored spec previously had none. No SDK behaviour depends on it —
   the file is documentation and generator input.
+
+### Changed
+
+- The per-capability blocks (`usage.verify` / `ask` / `assess`) are now
+  **projections** of the one balance into each capability's unit, not separate
+  allowances. Every field keeps its name and meaning, and `quota_used +
+  quota_remaining == quota_total` still holds, so code reading
+  `usage.verify.remaining` needs no change — but spending on any capability
+  now moves all of them.
+- Minimum `pydantic` is now **2.7** (was 2.0), for `Field(deprecated=...)`.
+
+### Deprecated
+
+- **The per-capability blocks** `usage.verify` / `ask` / `assess`, and
+  **`UsageCapacity.credits`**, are removed together on **2026-11-29** — one
+  date, one release, rather than two breaking changes months apart.
+  - The blocks are two floor divisions of `credits` by `costs`:
+    `remaining = credits.remaining // costs[capability]`. Two capabilities at
+    the same price emit identical objects (`ask` and `assess` are both 1
+    credit), because there is one balance behind all of them.
+  - `UsageCapacity.credits` is an alias of `bonus`. It never meant the pool:
+    before the pool existed it meant that capability's one-off top-up balance,
+    which is exactly what `bonus` reports. Reading it emits a
+    `DeprecationWarning`; it stays in `model_dump()` output, unwarned, for as
+    long as the server sends it. The two mirror each other in both directions,
+    so the SDK reads correctly against a server on either side of the change.
 
 ## [2.8.0] - 2026-08-21
 

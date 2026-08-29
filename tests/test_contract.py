@@ -202,12 +202,28 @@ def test_quota_402_envelope_maps_every_field():
     assert err.upgrade_url == fixture["upgrade_url"]
     assert err.remaining == fixture["remaining"]
     assert err.resets_at == fixture["resets_at"]
+    # The pool behind the capability figure, and this call's price in credits.
+    # The server's `credits_remaining` lands on `credit_balance`: the SDK's
+    # own `credits_remaining` is an older deprecated alias of `remaining`, in
+    # the capability's unit, and keeps that meaning.
+    assert err.credit_balance == fixture["credits_remaining"]
+    assert err.cost == fixture["cost"]
 
     # Every key the server sends must be consumed by a typed field or
     # deliberately skipped — an unhandled key means the mapper drifted.
     # `doc_url` is intentionally not mapped: the SDK sets its own doc_url from
     # the status table so the link is right even against an older server.
-    handled = {"detail", "code", "upgrade_url", "remaining", "resets_at", "requested", "doc_url"}
+    handled = {
+        "detail",
+        "code",
+        "upgrade_url",
+        "remaining",
+        "credits_remaining",
+        "cost",
+        "resets_at",
+        "requested",
+        "doc_url",
+    }
     assert not set(fixture) - handled
 
 

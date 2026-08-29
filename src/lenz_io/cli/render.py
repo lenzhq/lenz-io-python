@@ -470,16 +470,39 @@ def render_ask(out: Output, reply: Any) -> None:
     out.console.print(Markdown(content))
 
 
-def _capacity_row(out: Output, label: str, cap: UsageCapacity) -> None:
-    """One credit-based capability (verify / ask): usable total + breakdown.
+def _capacity_row(
+    out: Output,
+    label: str,
+    cap: UsageCapacity,
+    cost: int | None = None,
+    *,
+    price_note: str = "",
+) -> None:
+    """One capability's slice of the credit pool: usable total + breakdown.
 
-    ``remaining`` is the headline (monthly quota left + bonus credits); the dim
-    tail shows the split — ``used / total quota`` plus ``+N bonus`` when the key
-    holds one-off top-up credits."""
+    ``remaining`` is how many of THESE calls the balance still buys (monthly
+    allowance + bonus, in this capability's unit); the dim tail shows the split
+    — ``used / total quota``, ``+N bonus`` when the account holds non-expiring
+    top-up credits, and the per-call price when the server states one.
+
+    ``price_note`` appends a second price to that tail (today: the ``verify``
+    row's ``depth="low"`` half price). It rides on the existing row instead of
+    getting a row of its own because it is a PRICE, not a capability — there
+    is no separate low-depth allowance, and printing one would imply a second
+    balance."""
     detail = f"{cap.quota_used} / {cap.quota_total} quota"
-    if cap.credits:
-        detail += f" + {cap.credits} bonus"
+    if cap.bonus:
+        detail += f" + {cap.bonus} bonus"
+    if cost:
+        detail += f" · {_count(cost, 'credit')} each"
+        if price_note:
+            detail += f" · {price_note}"
     out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
+
+
+def _count(n: int, unit: str) -> str:
+    """``1 credit`` / ``10 credits`` — singular when n == 1."""
+    return f"{n} {unit}" if n == 1 else f"{n} {unit}s"
 
 
 def _humanize_reset(iso: str | None, *, now: datetime | None = None) -> str:
@@ -520,18 +543,68 @@ def render_usage(out: Output, u: Usage) -> None:
     if out.json_mode:
         out.emit_json(_model_json(u))
         return
-    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({u.plan or '—'} plan)[/dim]")
-    _capacity_row(out, "Verify", u.verify)
-    _capacity_row(out, "Ask", u.ask)
-    _capacity_row(out, "Assess", u.assess)
+    # Prefer the server's own label. The CLI used to lowercase the slug into
+    # the sentence, which read "developer plan"; the server now sends
+    # "Developer" and owns that copy. Falls back to the slug on older servers.
+    _plan = u.plan_label or u.plan or "—"
+    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({_plan} plan)[/dim]")
+    # The balance leads: one pool funds everything, and the per-capability rows
+    # below are projections of it. Servers predating the pool send no `credits`
+    # block at all — then there is no balance to lead with, so skip the headline
+    # rather than print a confident "0 credits left".
+    if _has_credit_pool(u):
+        verifications = _count(_equivalent(u, "verify"), "verification")
+        assessments = _count(_equivalent(u, "assess"), "assessment")
+        equivalents = f"≈ {verifications} · {assessments}"
+        out.console.print(f"  [bold]{u.credits.remaining} credits left[/bold]  [dim]({equivalents})[/dim]")
+    _capacity_row(out, "Verify", u.verify, u.costs.get("verify"), price_note=_low_depth_note(u))
+    _capacity_row(out, "Ask", u.ask, u.costs.get("ask"))
+    _capacity_row(out, "Assess", u.assess, u.costs.get("assess"))
     ex = u.extract
     label = f"{'Extract:':<9}"
     if ex.unlimited:
         out.console.print(f"  {label} [dim]unlimited[/dim]")
     else:
         out.console.print(f"  {label} {ex.calls_today} / {ex.daily_limit} today  [dim](free — no credit charge)[/dim]")
-    if u.quota_resets_at:
-        out.console.print(f"  [dim]Quota resets {_humanize_reset(u.quota_resets_at)}[/dim]")
+    resets_at = u.credits.resets_at or u.quota_resets_at
+    if resets_at:
+        out.console.print(f"  [dim]Credits reset {_humanize_reset(resets_at)}[/dim]")
+
+
+def _low_depth_note(u: Usage) -> str:
+    """The ``depth="low"`` verify price, for the tail of the Verify row.
+
+    Empty when the server publishes no depth prices (any server before depth
+    pricing shipped) or when the low price matches the standard one — a note
+    saying "5 at depth low" beside "5 credits each" is noise, not information.
+
+    Reads ``cost_options``, which is where prices that depend on a request
+    parameter live. ``costs`` holds one default price per capability.
+    """
+    depth = u.cost_options.get("verify", {}).get("depth", {})
+    low = depth.get("low")
+    if not low or low == u.costs.get("verify"):
+        return ""
+    return f'{low} at depth "low"'
+
+
+def _has_credit_pool(u: Usage) -> bool:
+    """Did this server report a credit pool at all? (False pre-2026-08-29.)"""
+    c = u.credits
+    return bool(c.total or c.remaining or c.used or c.bonus or u.costs)
+
+
+def _equivalent(u: Usage, capability: str) -> int:
+    """How many ``capability`` calls the remaining balance buys.
+
+    The server already projects this per capability, so use its number; derive
+    from the price list only when the block is empty (a capability the server
+    reports a cost for but no projection — a new endpoint, say)."""
+    cap: UsageCapacity = getattr(u, capability, None) or UsageCapacity()
+    if cap.remaining or cap.quota_total:
+        return cap.remaining
+    cost = u.costs.get(capability) or 0
+    return u.credits.remaining // cost if cost > 0 else 0
 
 
 def render_config(out: Output, payload: dict[str, Any]) -> None:
