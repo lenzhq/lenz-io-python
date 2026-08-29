@@ -537,7 +537,11 @@ def render_usage(out: Output, u: Usage) -> None:
     if out.json_mode:
         out.emit_json(_model_json(u))
         return
-    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({u.plan or '—'} plan)[/dim]")
+    # Prefer the server's own label. The CLI used to lowercase the slug into
+    # the sentence, which read "developer plan"; the server now sends
+    # "Developer" and owns that copy. Falls back to the slug on older servers.
+    _plan = u.plan_label or u.plan or "—"
+    out.console.print(f"[bold]Lenz usage[/bold]  [dim]({_plan} plan)[/dim]")
     # The balance leads: one pool funds everything, and the per-capability rows
     # below are projections of it. Servers predating the pool send no `credits`
     # block at all — then there is no balance to lead with, so skip the headline

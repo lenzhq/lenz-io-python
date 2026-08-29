@@ -404,7 +404,7 @@
             }
           }
         },
-        "description": "Return the calling account's credit balance and what it can still buy.\n\n**``credits`` is the balance.** One pool funds every billable capability,\nat the weights in ``costs`` \u2014 today ``verify`` 10, ``assess`` 1, ``ask`` 1.\nIt has two buckets: the monthly allowance for the current ``plan``, which\nresets at ``resets_at``, and non-expiring ``bonus`` credits from grants and\ntop-ups, spent only once the allowance is gone. ``remaining`` is the sum,\nand is what a call is actually checked against.\n\nThe per-capability blocks (``verify`` / ``ask`` / ``assess``) are\n**projections** of that one pool into each capability's own unit \u2014\n\"how many of these could I still make\" \u2014 not separate allowances. Spending\non one moves all of them, and they are floor divisions, so a verify block\nticks once per 10 credits spent anywhere.\n\n``bonus`` in each block is the bonus bucket in that capability's unit. The\nolder key ``credits`` is its deprecated alias, kept until 2026-11-29.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and is bounded by\na per-account daily fair-use cap instead, reported separately here and\nrejected with 429 rather than 402.",
+        "description": "Return the calling account's credit balance and what it can still buy.\n\n**``credits`` is the balance.** One pool funds every billable capability,\nat the weights in ``costs`` \u2014 today ``verify`` 10, ``assess`` 1, ``ask`` 1.\nIt has two buckets: the monthly allowance for the current ``plan``, which\nresets at ``resets_at``, and non-expiring ``bonus`` credits from grants and\ntop-ups, spent only once the allowance is gone. ``remaining`` is the sum,\nand is what a call is actually checked against.\n\n``plan`` is the stable slug to branch on; ``plan_label`` is the same tier\nas display copy (\"Developer\"). Two fields rather than one humanised\nstring, so a reworded label cannot break a client comparing tiers.\n\nThe per-capability blocks (``verify`` / ``ask`` / ``assess``) are\n**projections** of that one pool into each capability's own unit \u2014\n\"how many of these could I still make\" \u2014 not separate allowances. Spending\non one moves all of them, and they are floor divisions, so a verify block\nticks once per 10 credits spent anywhere.\n\n``bonus`` in each block is the bonus bucket in that capability's unit. The\nolder key ``credits`` is its deprecated alias, kept until 2026-11-29.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and is bounded by\na per-account daily fair-use cap instead, reported separately here and\nrejected with 429 rather than 402.",
         "tags": [
           "Account"
         ],
@@ -1273,6 +1273,11 @@
           "plan": {
             "default": "free",
             "title": "Plan",
+            "type": "string"
+          },
+          "plan_label": {
+            "default": "Free",
+            "title": "Plan Label",
             "type": "string"
           },
           "quota_resets_at": {

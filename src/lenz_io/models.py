@@ -459,7 +459,14 @@ class Usage(_Lax):
     the low-depth count.
     """
 
+    #: The tier slug — ``"free"`` | ``"plus"`` | ``"developer"`` | ``"scale"``.
+    #: This is the field to branch on; it is stable.
     plan: str = ""
+    #: The same tier as display copy (``"Developer"``). Separate from
+    #: :attr:`plan` on purpose: this one is copy and may be reworded, so
+    #: comparing against it will break on a rename that ought to be free.
+    #: Empty on servers predating this field — fall back to :attr:`plan`.
+    plan_label: str = ""
     quota_resets_at: str | None = None
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
