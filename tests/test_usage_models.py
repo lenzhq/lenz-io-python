@@ -61,10 +61,9 @@ def test_depth_prices_are_nested_under_cost_options() -> None:
     """The low price lives under ``cost_options``, keyed by the PARAMETER it
     belongs to.
 
-    It was a flat ``costs["verify_low"]`` before release. A capability-keyed
-    map that also holds prices cannot take a second tuning parameter without
-    growing a third sibling, and anything iterating ``costs`` reads prices as
-    capabilities."""
+    ``costs`` stays a map of capability names at their default price, so it
+    is safe to iterate; a parameter that changes the price nests under the
+    capability it belongs to."""
     u = Usage.model_validate(POOL_PAYLOAD)
     depth = u.cost_options["verify"]["depth"]
     assert depth == {"standard": 10, "low": 5}

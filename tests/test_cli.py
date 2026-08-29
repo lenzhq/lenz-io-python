@@ -767,7 +767,7 @@ def test_usage_pretty_omits_a_low_depth_note_that_equals_the_standard_price():
 
 def test_usage_pretty_never_reads_the_deprecated_alias():
     """The renderer must read `bonus`, not the deprecated `credits` alias —
-    otherwise every `lenz usage` prints a DeprecationWarning at our own users."""
+    otherwise every `lenz usage` run prints a DeprecationWarning."""
     import warnings
 
     with warnings.catch_warnings():

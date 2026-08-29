@@ -383,10 +383,9 @@ class UsageCapacity(_Lax):
         total     = u.credits.total     // u.costs[capability]
         used      = total - remaining
 
-    The blocks predate the single pool, when each capability really did have
-    its own allowance. Two capabilities at the same price now emit identical
-    objects — ``ask`` and ``assess`` are both 1 credit — so the shape implies
-    a per-capability allowance that no longer exists.
+    Two capabilities at the same price emit identical objects — ``ask`` and
+    ``assess`` are both 1 credit — because there is one balance behind all of
+    them, not a per-capability allowance.
 
     These are **projections, not allowances**. Every billable capability draws
     on the single balance in :attr:`Usage.credits`, at the weight in
@@ -506,10 +505,9 @@ class Usage(_Lax):
     #: wanting "how many low-depth verifications can I afford" divides
     #: ``credits.remaining`` by ``cost_options["verify"]["depth"]["low"]``.
     #:
-    #: Nested rather than flattened into ``costs`` as ``verify_low``, which is
-    #: what this was at first: a flat map grows one sibling per tuning
-    #: parameter, and anything iterating ``costs`` would count prices as
-    #: capabilities.
+    #: Nested rather than flat so that a future request parameter adds a key
+    #: under its capability instead of a new top-level entry — ``costs`` stays
+    #: a list of capability names, safe to iterate.
     #:
     #: You are charged for the depth you **requested**, not the one served: a
     #: ``low`` request answered from a cached ``standard`` verdict still costs

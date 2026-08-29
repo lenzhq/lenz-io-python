@@ -572,9 +572,8 @@ def _low_depth_note(u: Usage) -> str:
     pricing shipped) or when the low price matches the standard one — a note
     saying "5 at depth low" beside "5 credits each" is noise, not information.
 
-    Reads ``cost_options``, which is where parameter-dependent prices live;
-    the flat ``costs["verify_low"]`` this used was dropped before release
-    because it does not survive a second tuning parameter.
+    Reads ``cost_options``, which is where prices that depend on a request
+    parameter live. ``costs`` holds one default price per capability.
     """
     depth = u.cost_options.get("verify", {}).get("depth", {})
     low = depth.get("low")
