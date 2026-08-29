@@ -134,6 +134,9 @@ class VerifyBatchItem(TypedDict, total=False):
     # 'private' (default) or 'unlisted' (link-readable, never listed).
     # Per-item value overrides the batch-wide ``visibility`` default.
     visibility: str
+    # 'standard' (default) or 'low' (shallower check — fewer sources,
+    # faster). Per-item value overrides the batch-wide ``depth`` default.
+    depth: str
 
 
 class _VerificationsNamespace:
@@ -342,7 +345,9 @@ class Lenz:
 
     # ── marquee verbs (top-level shortcuts) ──
 
-    def verify(self, claim: str, *, language: str = "", visibility: str = "", **kwargs: Any) -> TaskAccepted:
+    def verify(
+        self, claim: str, *, language: str = "", visibility: str = "", depth: str = "", **kwargs: Any
+    ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
 
@@ -352,8 +357,14 @@ class Lenz:
         ``visibility`` (optional): ``'private'`` (default, owner-only) or
         ``'unlisted'`` (readable by verification_id / at the /c/ URL, but
         never surfaced in the Library or search). Omit for private.
+
+        ``depth`` (optional): ``'standard'`` (default) or ``'low'``. ``'low'``
+        runs a shallower check — fewer sources, faster. Same models, same
+        quota cost. The completed ``Verification.depth`` echoes the depth the
+        verdict was actually produced with, which can be ``'standard'`` for a
+        ``'low'`` request served from cache.
         """
-        return self._verify_submit(claim=claim, language=language, visibility=visibility, **kwargs)
+        return self._verify_submit(claim=claim, language=language, visibility=visibility, depth=depth, **kwargs)
 
     def verify_batch(
         self,
@@ -362,6 +373,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
@@ -374,12 +386,17 @@ class Lenz:
         ``visibility`` (optional): batch-wide default, ``'private'`` or
         ``'unlisted'``. Each item dict may set its own ``visibility`` key
         to override the batch-wide value.
+
+        ``depth`` (optional): batch-wide default, ``'standard'`` or ``'low'``
+        (shallower check — fewer sources, faster). Each item dict may set its
+        own ``depth`` key to override the batch-wide value.
         """
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=idempotency_key,
         )
 
@@ -448,6 +465,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -481,6 +499,7 @@ class Lenz:
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=key,
         )
         logger.info("Submitted task: %s", accepted.task_id)
@@ -518,6 +537,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
         timeout: float = 180.0,
     ) -> list[BatchItemResult]:
@@ -534,6 +554,7 @@ class Lenz:
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=idempotency_key,
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
@@ -683,6 +704,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
         payload: dict[str, Any] = {
@@ -697,6 +719,9 @@ class Lenz:
         # Omit-when-empty: the server defaults to 'private'.
         if visibility:
             payload["visibility"] = visibility
+        # Omit-when-empty: the server defaults to 'standard'.
+        if depth:
+            payload["depth"] = depth
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
@@ -710,6 +735,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         # ``webhook_url`` and ``language`` are batch-wide defaults; any
@@ -723,6 +749,8 @@ class Lenz:
             payload["language"] = language
         if visibility:
             payload["visibility"] = visibility
+        if depth:
+            payload["depth"] = depth
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key

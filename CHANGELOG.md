@@ -4,6 +4,25 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.9.0] - 2026-08-29
+
+Callers can now ask for a shallower check.
+
+### Added
+- **`depth` on `verify` / `verify_batch`** (and their `_and_wait` helpers) —
+  `'standard'` (server default) or `'low'`. `'low'` runs a shallower check:
+  fewer sources, faster. Same models, same quota cost. Batch takes a
+  batch-wide `depth`; each item dict may set its own `depth` to override it,
+  exactly like `visibility`. Omitted from the request body when unset, so
+  existing callers stay byte-identical on the wire and keep working against
+  a server that does not know the field yet.
+- **`Verification.depth`** — echoes the depth the verdict was actually
+  produced with. A `'low'` request served from the result cache reads back
+  `'standard'`. `""` on servers that predate the field.
+- **`lenz verify --depth standard|low`** on the CLI. Claims picked out of a
+  multi-claim input inherit the depth of the submission that offered them —
+  the server carries it through `/select`, so the flag is sent once.
+
 ## [2.8.0] - 2026-08-21
 
 The server now says WHY a verification failed and states honest waits when it

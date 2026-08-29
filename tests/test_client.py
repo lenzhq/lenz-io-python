@@ -208,6 +208,48 @@ class TestVerify:
             client.verify_batch(claims=[{"text": "a"}])
         assert "visibility" not in json.loads(route.calls.last.request.content)
 
+    def test_verify_omits_depth_by_default(self, client):
+        """Omit-when-empty: no depth kwarg → no key in the body. The
+        currently-deployed server 422s on unknown fields, so a
+        always-present key would break every call."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            client.verify(claim="x")
+        assert "depth" not in json.loads(route.calls.last.request.content)
+
+    def test_verify_sends_depth_when_set(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            client.verify(claim="x", depth="low")
+        assert json.loads(route.calls.last.request.content)["depth"] == "low"
+
+    def test_verify_batch_depth_batch_wide_and_per_item(self, client):
+        """Batch-wide default is sent once; per-item override rides on the
+        item dict (server is authoritative on the merge)."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
+            client.verify_batch(
+                claims=[{"text": "a"}, {"text": "b", "depth": "standard"}],
+                depth="low",
+            )
+        body = json.loads(route.calls.last.request.content)
+        assert body["depth"] == "low"
+        assert body["claims"][1]["depth"] == "standard"
+
+    def test_verify_batch_omits_depth_by_default(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": []})
+            client.verify_batch(claims=[{"text": "a"}])
+        assert "depth" not in json.loads(route.calls.last.request.content)
+
     def test_extract_returns_identified_claims(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/extract").respond(
@@ -428,6 +470,25 @@ class TestVerifyAndWait:
             client.verify_and_wait(claim="x", timeout=5, idempotency_key="my-key")
         assert submit.calls.last.request.headers["Idempotency-Key"] == "my-key"
 
+    def test_depth_forwarded_to_submit(self, client):
+        """The and_wait helpers plumb depth through to the submit body."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            client.verify_and_wait(claim="x", timeout=5, depth="low")
+        assert json.loads(submit.calls.last.request.content)["depth"] == "low"
+
+    def test_depth_omitted_from_submit_when_unset(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            client.verify_and_wait(claim="x", timeout=5)
+        assert "depth" not in json.loads(submit.calls.last.request.content)
+
     def test_idempotency_off_when_explicitly_disabled(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             submit = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
@@ -610,6 +671,17 @@ class TestVerifyBatchAndWait:
             r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_batch_and_wait(claims=[{"text": "a"}], idempotency_key="k1", timeout=5)
         assert submit.calls.last.request.headers["Idempotency-Key"] == "k1"
+
+    def test_forwards_depth(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "t1", "claim_text": "a"}]}
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            client.verify_batch_and_wait(claims=[{"text": "a"}], depth="low", timeout=5)
+        assert json.loads(submit.calls.last.request.content)["depth"] == "low"
 
 
 # ─────────────────────────────────────────────────── Resources ──
