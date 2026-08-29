@@ -373,7 +373,20 @@ class UsageCredits(_Lax):
 
 
 class UsageCapacity(_Lax):
-    """One capability's share of the credit pool, in that capability's own unit.
+    """DEPRECATED. One capability's share of the pool, in that capability's unit.
+
+    **Removed 2026-11-29**, together with the per-block ``credits`` alias.
+    Read :attr:`Usage.credits` and :attr:`Usage.costs` and do the division —
+    it is the same one this block does::
+
+        remaining = u.credits.remaining // u.costs[capability]
+        total     = u.credits.total     // u.costs[capability]
+        used      = total - remaining
+
+    The blocks predate the single pool, when each capability really did have
+    its own allowance. Two capabilities at the same price now emit identical
+    objects — ``ask`` and ``assess`` are both 1 credit — so the shape implies
+    a per-capability allowance that no longer exists.
 
     These are **projections, not allowances**. Every billable capability draws
     on the single balance in :attr:`Usage.credits`, at the weight in
@@ -505,8 +518,14 @@ class Usage(_Lax):
     #: ``low`` request — the echo describes the evidence, the charge follows
     #: the request.
     cost_options: dict[str, dict[str, dict[str, int]]] = Field(default_factory=dict)
+    #: DEPRECATED — removed 2026-11-29. Derive from :attr:`credits` and
+    #: :attr:`costs` instead::
+    #:
+    #:     left = u.credits.remaining // u.costs["verify"]
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
+    #: DEPRECATED — removed 2026-11-29. See :attr:`verify`.
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
+    #: DEPRECATED — removed 2026-11-29. See :attr:`verify`.
     assess: UsageCapacity = Field(default_factory=UsageCapacity)
     extract: UsageExtract = Field(default_factory=UsageExtract)
     # Whether this key has a webhook signing secret provisioned. ``POST /verify``
