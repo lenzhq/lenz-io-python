@@ -4,6 +4,42 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.9.0] - 2026-08-29
+
+`extract` takes a `focus` — say what you are looking for and get back only
+those claims. Lockstep release with Node 2.9.0.
+
+### Added
+
+- **`focus=` on `extract`.** An optional hint of at most 300 characters —
+  `focus="market size, growth and competitors"` — that narrows the result to
+  the claims it names. A focus can only SELECT from the claims the extractor
+  found: it cannot add a claim, reword one, reorder them, change the output
+  language, or change what counts as a claim, so a claim you get back is one
+  an unfocused call would have returned too, verbatim. Omitted from the
+  request body when empty, so nothing changes for callers who don't use it.
+  There is no client-side length check — the server's 422 is the contract, and
+  a cap duplicated here would drift from it.
+- **`lenz extract --focus`** on the CLI, and a distinct `no_match` line in the
+  pretty renderer: "No claims matched the focus." rather than "No verifiable
+  claim found in that text", which would send you off to fix the wrong thing.
+- **`ExtractStatus`** — `Literal["ready", "not_a_claim", "no_match"]`, exported
+  from `lenz_io` for exhaustive matching. `ExtractedClaims.status` stays `str`
+  (same convention as `FailureClass`): the SDK must not reject a status the
+  server adds after this release was cut.
+- **`no_match`** — the status when the text HAS claims but none fall within
+  your `focus`. It is a successful answer, not an error, and it is never the
+  unfocused list in disguise: `identified_claims` is empty and `claim` is
+  `""`. Widen the focus and call again.
+
+### Changed
+
+- **`openapi.json` refreshed**, which also catches up on server changes that
+  were never re-snapshotted after 2.8.0: `failure_class` / `retryable` on the
+  status schema, the 502/503 error rows, and a `/extract` 200 response schema
+  where the vendored spec previously had none. No SDK behaviour depends on it —
+  the file is documentation and generator input.
+
 ## [2.8.0] - 2026-08-21
 
 The server now says WHY a verification failed and states honest waits when it
