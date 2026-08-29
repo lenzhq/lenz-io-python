@@ -1,0 +1,15 @@
+{
+  "status": "no_match",
+  "claim": "",
+  "identified_claims": [],
+  "candidate_claims": [],
+  "domain": "",
+  "key_entities": [
+    {
+      "name": "Vantablue",
+      "type": "org"
+    }
+  ],
+  "presumed_intent": "Raise a Series A round from investors.",
+  "original_input": "Vantablue is raising a Series A. The global warehouse-management software market was worth USD 4.2 billion in 2025."
+}

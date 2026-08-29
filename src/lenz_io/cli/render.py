@@ -125,6 +125,12 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
             out.console.print(f"  {i}. {claim}")
     elif claims:
         out.console.print(f"[bold]Claim:[/bold] {claims[0]}")
+    elif result.status == "no_match":
+        # Distinct from the empty case below: the text DID have claims, they
+        # just fell outside the focus. Saying "no claim found" here would send
+        # the reader off to fix their document instead of their focus.
+        out.console.print("[dim]No claims matched the focus.[/dim]")
+        return
     else:
         out.console.print("[dim]No verifiable claim found in that text.[/dim]")
         return

@@ -129,6 +129,9 @@ def _load(name: str) -> dict:
     "fixture_name,model_cls",
     [
         ("extract_response.json", ExtractedClaims),
+        # `no_match` (a focus that nothing matched) must validate into the
+        # same model with the same key set — a new status, never a new shape.
+        ("extract_response_no_match.json", ExtractedClaims),
         ("assess_single_claim.json", AssessResponse),
         ("assess_multiclaim.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),

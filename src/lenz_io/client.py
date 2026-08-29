@@ -400,14 +400,28 @@ class Lenz:
             idempotency_key=idempotency_key,
         )
 
-    def extract(self, *, text: str, language: str = "") -> ExtractedClaims:
+    def extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/account/day (shared across your API keys).
 
         ``language`` (optional): return extracted claims in the target
         language. Domain / status enums stay English.
+
+        ``focus`` (optional): narrow the result to the claims it describes,
+        e.g. ``"market size, growth and competitors"``. At most 300
+        characters — a longer focus is rejected with a 422, never truncated.
+
+        A focus can only SELECT from the claims the extractor found: it
+        cannot add a claim, reword one, reorder them, change the output
+        language, or change what counts as a claim. A claim you get back is
+        one an unfocused call would have returned too, verbatim.
+
+        When the text has claims but none fall within the focus, ``status``
+        is ``"no_match"`` and ``identified_claims`` is empty — the unfocused
+        list is never substituted. Widen the focus and call again. A focused
+        call costs the same single unit of the daily cap.
         """
-        return self._extract(text=text, language=language)
+        return self._extract(text=text, language=language, focus=focus)
 
     def assess(self, *, text: str, language: str = "") -> AssessResponse:
         """Fast verdict via a 3-model frontier panel. Sync, ~5-10s.
@@ -757,10 +771,14 @@ class Lenz:
         body = self._request("POST", "/verify/batch", json=payload, headers=headers)
         return BatchAccepted.model_validate(body)
 
-    def _extract(self, *, text: str, language: str = "") -> ExtractedClaims:
+    def _extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
         payload: dict[str, Any] = {"text": text}
         if language:
             payload["language"] = language
+        # No client-side length check on `focus`: the server's 422 is the
+        # contract, and a cap duplicated here would drift from it.
+        if focus:
+            payload["focus"] = focus
         body = self._request("POST", "/extract", json=payload)
         return ExtractedClaims.model_validate(body)
 
