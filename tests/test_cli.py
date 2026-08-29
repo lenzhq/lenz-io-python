@@ -880,6 +880,37 @@ def test_verify_happy_path(monkeypatch):
     assert "idempotency_key" in fake.verify_calls[0][1]
 
 
+def test_verify_depth_flag_maps_through(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(statuses=[TaskStatus(status="completed", result=_verification())]),
+    )
+    result = runner.invoke(app, ["--json", "verify", "claim", "--depth", "low"])
+    assert result.exit_code == 0
+    assert fake.verify_calls[0][1]["depth"] == "low"
+
+
+def test_verify_depth_omitted_sends_empty(monkeypatch):
+    """No --depth → "" so the client leaves the key off the request body."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(statuses=[TaskStatus(status="completed", result=_verification())]),
+    )
+    result = runner.invoke(app, ["--json", "verify", "claim"])
+    assert result.exit_code == 0
+    assert fake.verify_calls[0][1]["depth"] == ""
+
+
+def test_verify_depth_rejects_unknown_value(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient())
+    result = runner.invoke(app, ["--json", "verify", "claim", "--depth", "deep"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"]["code"] == "invalid_depth"
+
+
 def test_verify_multi_claim_with_preselect(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = _patch_client(

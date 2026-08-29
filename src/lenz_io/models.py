@@ -158,6 +158,10 @@ class Verification(_Lax):
     claim: str = ""
     # 'private' | 'unlisted' | 'public'. Read-back of the claim's visibility.
     visibility: str = ""
+    # 'standard' | 'low'. Read-back of the depth the verdict was actually
+    # produced with — a 'low' request served from cache reads 'standard'.
+    # "" on servers that predate the field (``_Lax`` tolerates its absence).
+    depth: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""

@@ -37,6 +37,10 @@ from .render import Output, render_batch_details, render_batch_table, render_ver
 
 POLL_INTERVAL = 2.5  # seconds — never sub-second; the pipeline runs ~90s.
 
+# Accepted --depth values. 'standard' is the server default; 'low' runs a
+# shallower check — fewer sources, faster. Same models, same quota cost.
+DEPTH_CHOICES = ("standard", "low")
+
 # Friendlier spinner copy for the raw pipeline step names the status endpoint
 # reports (a mix of bare 'research' and decorated 'Framing...'). Unknown steps
 # fall back to a cleaned-up version of whatever the server sent.
@@ -68,6 +72,12 @@ def verify(
         None, "--claim", metavar="N|N,M|all", help="Pre-pick claim(s) on a multi-claim input: '2', '1,3', or 'all'."
     ),
     detach: bool = typer.Option(False, "--detach", help="Submit and exit immediately; print the re-attach command."),
+    depth: str = typer.Option(
+        None,
+        "--depth",
+        metavar="standard|low",
+        help="'low' runs a shallower check — fewer sources, faster. Same models, same cost.",
+    ),
 ) -> None:
     """Full fact-check pipeline (~90s). Needs a key; spends a credit on a fresh claim."""
     state: CLIState = ctx.obj
@@ -75,11 +85,14 @@ def verify(
     selection = _parse_claim_selection(pick)
 
     def work(client: Lenz) -> None:
+        # Validated inside ``work`` so a bad value is reported through
+        # ``execute``'s error handler (correct exit code + --json shape).
+        chosen_depth = _parse_depth(depth)
         if resume:
             _resume(client, out, resume, timeout, selection=selection, detach=detach)
             return
         text = read_text_arg(claim)
-        accepted = client.verify(text, idempotency_key=uuid.uuid4().hex)
+        accepted = client.verify(text, depth=chosen_depth, idempotency_key=uuid.uuid4().hex)
         # --detach alone fires off the submitted task immediately. With --claim
         # it instead flows through the multi-claim picker and detaches the
         # selected pipelines (so `--claim 1,3 --detach` submits exactly those).
@@ -89,6 +102,21 @@ def verify(
         _poll(client, out, accepted.task_id, timeout, selection=selection, detach=detach)
 
     execute(state, needs_key=True, work=work)
+
+
+def _parse_depth(raw: str | None) -> str:
+    """Validate ``--depth``. Returns "" when unset so the client omits the
+    key from the request body entirely (the server applies 'standard')."""
+    if raw is None:
+        return ""
+    cleaned = raw.strip().lower()
+    if cleaned not in DEPTH_CHOICES:
+        raise CLIError(
+            f"--depth expects one of {'|'.join(DEPTH_CHOICES)} (got {raw!r}).",
+            code="invalid_depth",
+            exit_code=2,
+        )
+    return cleaned
 
 
 def _parse_claim_selection(raw: str | None) -> list[int] | str | None:
@@ -150,6 +178,8 @@ def _poll(
                 texts = _resolve_multi_claim(out, task_id, st, selection)
                 if not texts:  # cancelled / nothing picked
                     raise SystemExit(0)
+                # Sub-claims inherit the parent submission's depth server-side
+                # (/select reads it off the task meta), so nothing to send here.
                 items = client.select(task_id, texts=texts).items
                 picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts)]
                 # detach, or >1 claim → batch path; exactly one → keep the
