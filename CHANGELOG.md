@@ -4,6 +4,55 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.9.0] - 2026-08-29
+
+Six per-endpoint quotas became one weighted credit pool. The SDK types the
+pool, keeps every existing field working, and says what a rejected call would
+have cost.
+
+### Added
+- **`Usage.credits`** (`UsageCredits`: `total`, `used`, `remaining`, `bonus`,
+  `resets_at`) — the account's balance, and the authoritative number. Every
+  billable call debits it.
+- **`Usage.costs`** — the price list, `{"verify": 10, "assess": 1, "ask": 1,
+  "extract": 0}`. Read the weight from here rather than hard-coding it; a new
+  capability arrives as a new key.
+- **`UsageCapacity.bonus`** — the non-expiring top-up bucket, in that
+  capability's unit. 200 bonus credits read as `assess.bonus == 200` and
+  `verify.bonus == 20`: 5 credits does not buy a verification.
+- **`LenzQuotaExceededError.credit_balance` and `.cost`** on 402 — the credits
+  left in the pool and what the rejected call would have taken, both in
+  credits, so a client can tell "4 credits, and this verify wants 10" from
+  "empty". `remaining` / `requested` stay in the capability's own unit. Both
+  are `None` when the server omits them, matching `remaining`.
+  - `credit_balance` carries the server's `credits_remaining` body field under
+    a different name **on purpose**: `exc.credits_remaining` has been a
+    deprecated alias of `remaining` since 2.7.0 and means a different quantity
+    (verifications, not credits). Re-pointing it would have silently changed
+    the number under everyone still on the deprecated path. The raw key stays
+    available as `exc.body["credits_remaining"]`.
+- `lenz usage` leads with the balance — `5070 credits left (≈ 507
+  verifications · 5070 assessments)` — with the per-capability rows and their
+  per-call price beneath it.
+
+### Changed
+- The per-capability blocks (`usage.verify` / `ask` / `assess`) are now
+  **projections** of the one balance into each capability's unit, not separate
+  allowances. Every field keeps its name and meaning, and `quota_used +
+  quota_remaining == quota_total` still holds, so code reading
+  `usage.verify.remaining` needs no change — but spending on any capability
+  now moves all of them.
+- Minimum `pydantic` is now **2.7** (was 2.0), for `Field(deprecated=...)`.
+
+### Deprecated
+- **`UsageCapacity.credits`** — an alias of `bonus`, removed **2026-11-29**.
+  It never meant the pool: before the pool existed it meant that capability's
+  one-off top-up balance, which is exactly what `bonus` reports. Reading it
+  emits a `DeprecationWarning`; it stays in `model_dump()` output, unwarned,
+  for as long as the server sends it. The two mirror each other in both
+  directions, so the SDK reads correctly against a server on either side of
+  the change.
+
 ## [2.8.0] - 2026-08-21
 
 The server now says WHY a verification failed and states honest waits when it

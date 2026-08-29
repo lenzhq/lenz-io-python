@@ -75,13 +75,16 @@ def test_webhook_signature_roundtrip():
 
 def test_me_usage_returns_populated_structure(smoke_client):
     u = smoke_client.usage()
-    # We don't assert exact values; just the per-capability shape.
+    # We don't assert exact values; just the balance + projection shape.
     assert isinstance(u.plan, str)
+    assert isinstance(u.credits.remaining, int)
+    assert u.costs["verify"] > 0  # the price list is populated
     for cap in (u.verify, u.ask, u.assess):
         assert isinstance(cap.quota_remaining, int)
         assert isinstance(cap.remaining, int)
-    # assess is quota-only — no one-off credit pool.
-    assert u.assess.credits == 0
+        assert isinstance(cap.bonus, int)
+    # assess is the unit, so its block counts the whole pool one-for-one.
+    assert u.assess.remaining == u.credits.remaining // u.costs["assess"]
     assert isinstance(u.extract.daily_limit, int)
 
 

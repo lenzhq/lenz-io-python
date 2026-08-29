@@ -111,12 +111,27 @@ class LenzQuotaExceededError(LenzError):
       * ``resets_at``    — ISO-8601 timestamp of the next monthly reset,
         or ``None``.
       * ``requested``    — for a batch call, how many units were asked for.
+      * ``credit_balance`` — credits left in the account's pool, or ``None``
+        when the server didn't say. This is the server's ``credits_remaining``
+        body field; the SDK spells it differently because
+        ``exc.credits_remaining`` is a long-standing deprecated alias of
+        ``remaining`` with a DIFFERENT meaning (see below). The raw key is
+        always available as ``exc.body["credits_remaining"]``.
+      * ``cost``         — credits the rejected call would have taken (a
+        ``/verify`` is 10, ``/assess`` and ``/ask`` are 1), or ``None``.
+
+    ``remaining`` and ``requested`` are in the **capability's** unit —
+    verifications, assessments, follow-ups. ``credit_balance`` and ``cost``
+    are in **credits**, so together they separate "you have 4 credits and this
+    verify costs 10" from "you have nothing".
     """
 
     upgrade_url: str = ""
     remaining: int | None = None
     resets_at: str | None = None
     requested: int | None = None
+    credit_balance: int | None = None
+    cost: int | None = None
 
     @property
     def credits_remaining(self) -> int:
@@ -124,6 +139,12 @@ class LenzQuotaExceededError(LenzError):
 
         Returns 0 when ``remaining`` is unknown, which is exactly the
         ambiguity ``remaining`` exists to fix — migrate to ``remaining``.
+
+        Note this is NOT the server's ``credits_remaining`` body field, which
+        arrived later and reports the credit POOL. That one is
+        ``credit_balance``. The two differ by the capability's weight — a
+        verify's ``remaining`` of 0 sits next to a ``credit_balance`` of 4 —
+        so this alias is deliberately left pointing where it always pointed.
         """
         self._warn_credits_remaining()
         return self.remaining or 0
@@ -148,7 +169,9 @@ class LenzQuotaExceededError(LenzError):
         warnings.warn(
             "credits_remaining is deprecated and will be removed in 3.0; "
             "use `remaining`, which is None when the server didn't report a "
-            "balance (credits_remaining reports that as 0).",
+            "balance (credits_remaining reports that as 0). It is NOT the "
+            "API's `credits_remaining` body field — that is the credit pool, "
+            "and the SDK reports it as `credit_balance`.",
             DeprecationWarning,
             stacklevel=3,
         )
@@ -389,6 +412,12 @@ def map_response_to_error(
         # "zero". Collapsing that here would throw the distinction away.
         err.remaining = _opt_int(parsed.get("remaining"))
         err.requested = _opt_int(parsed.get("requested"))
+        # The pool behind the capability figure above, and this call's price in
+        # credits. The body's ``credits_remaining`` lands on ``credit_balance``,
+        # NOT on the same-named deprecated property — that one aliases
+        # ``remaining`` and means a different quantity (see the class docstring).
+        err.credit_balance = _opt_int(parsed.get("credits_remaining"))
+        err.cost = _opt_int(parsed.get("cost"))
         resets_at = parsed.get("resets_at")
         err.resets_at = resets_at if isinstance(resets_at, str) and resets_at else None
     elif isinstance(err, LenzValidationError):

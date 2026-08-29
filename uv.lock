@@ -393,7 +393,7 @@ requires-dist = [
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "platformdirs", marker = "extra == 'cli'", specifier = ">=4.0" },
     { name = "platformdirs", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pydantic", specifier = ">=2.0" },
+    { name = "pydantic", specifier = ">=2.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
     { name = "questionary", marker = "extra == 'cli'", specifier = ">=2.0" },

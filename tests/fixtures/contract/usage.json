@@ -1,29 +1,45 @@
 {
   "plan": "developer",
-  "quota_resets_at": "2026-07-01T00:00:00+00:00",
+  "quota_resets_at": "2026-09-01T00:00:00+00:00",
+  "credits": {
+    "total": 5200,
+    "used": 130,
+    "remaining": 5070,
+    "bonus": 200,
+    "resets_at": "2026-09-01T00:00:00+00:00"
+  },
+  "costs": {
+    "verify": 10,
+    "assess": 1,
+    "ask": 1,
+    "extract": 0
+  },
   "verify": {
-    "quota_used": 120,
-    "quota_total": 500,
-    "quota_remaining": 380,
-    "credits": 25,
-    "remaining": 405
+    "quota_used": 13,
+    "quota_total": 520,
+    "quota_remaining": 507,
+    "bonus": 20,
+    "credits": 20,
+    "remaining": 507
   },
   "ask": {
-    "quota_used": 10,
-    "quota_total": 200,
-    "quota_remaining": 190,
-    "credits": 0,
-    "remaining": 190
+    "quota_used": 130,
+    "quota_total": 5200,
+    "quota_remaining": 5070,
+    "bonus": 200,
+    "credits": 200,
+    "remaining": 5070
   },
   "assess": {
-    "quota_used": 45,
-    "quota_total": 1000,
-    "quota_remaining": 955,
-    "credits": 0,
-    "remaining": 955
+    "quota_used": 130,
+    "quota_total": 5200,
+    "quota_remaining": 5070,
+    "bonus": 200,
+    "credits": 200,
+    "remaining": 5070
   },
   "extract": {
-    "calls_today": 3,
+    "calls_today": 4,
     "daily_limit": 1000,
     "unlimited": false
   },

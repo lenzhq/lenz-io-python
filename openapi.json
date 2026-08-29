@@ -3,7 +3,7 @@
   "info": {
     "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 25, most check-worthy first, inputs to 50k chars). Free, 1000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~5-10s. Sync, paid.\n- `POST /verify` \u2014 full 8-model pipeline with citations in ~90s. Async, paid.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on all of them via /assess (~5-10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, 8-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim)\n        print(deep.verdict, deep.lenz_score, deep.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, precision) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`sources`** \u2014 evidence with title, URL, snippet (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep 8-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Ask** \u2014 follow-up questions on a verification.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Account** \u2014 credits and rate-limit usage.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, and \u2014 when resolvable \u2014 `remaining` and `resets_at`. Those two are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nQuota is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 25, most check-worthy first, inputs to 50k chars). Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~5-10s. Sync, 1 credit.\n- `POST /verify` \u2014 full 8-model pipeline with citations in ~90s. Async, 10 credits.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on all of them via /assess (~5-10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, 8-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim)\n        print(deep.verdict, deep.lenz_score, deep.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, precision) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026). `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unresolvable ambiguity, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). New keys may be added to status and webhook bodies without notice \u2014 ignore keys you do not recognise. A failed `/verify` is not charged.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`sources`** \u2014 evidence with title, URL, snippet (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep 8-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /assess` | 1 per claim |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/api-terms"
   },
   "paths": {
@@ -267,7 +267,7 @@
             "description": "OK"
           }
         },
-        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the standalone extraction step (`lenz.extraction`) \u2014 no research,\nno debate, no credit charge. Enumerates every distinct major factual\nclaim in the input (up to 25), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per account per day (resets at 00:00\nUTC) regardless of input length. Keys with admin-set\n``unlimited_extract=True`` bypass the cap.",
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the standalone extraction step (`lenz.extraction`) \u2014 no research,\nno debate, no credit charge. Enumerates every distinct major factual\nclaim in the input (up to 25), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 the cap is shared across all of\nthe account's keys. Keys with admin-set ``unlimited_extract=True``\nbypass the cap.",
         "tags": [
           "Extract"
         ],
@@ -397,7 +397,7 @@
             }
           }
         },
-        "description": "Return the calling key's remaining capacity, per capability.\n\nOne block per capability \u2014 ``verify``, ``ask``, ``assess``, ``extract``.\nFor the quota-backed capabilities the response separates two buckets:\n\n- ``quota_*`` \u2014 the recurring monthly allowance for the current ``plan``.\n  Resets every period (``quota_resets_at``).\n- ``credits`` \u2014 one-off top-up credits that do NOT reset monthly. They are\n  spent only after the monthly quota runs out. ``assess`` has no one-off\n  credit pool, so its ``credits`` is always 0 and ``remaining`` equals its\n  ``quota_remaining``.\n\n``remaining`` is the true usable capacity (``quota_remaining + credits``) \u2014\ne.g. the number of ``/verify`` calls the key can still make. ``extract`` is\na per-day rate limit (not credit-based), so it is reported separately.",
+        "description": "Return the calling account's credit balance and what it can still buy.\n\n**``credits`` is the balance.** One pool funds every billable capability,\nat the weights in ``costs`` \u2014 today ``verify`` 10, ``assess`` 1, ``ask`` 1.\nIt has two buckets: the monthly allowance for the current ``plan``, which\nresets at ``resets_at``, and non-expiring ``bonus`` credits from grants and\ntop-ups, spent only once the allowance is gone. ``remaining`` is the sum,\nand is what a call is actually checked against.\n\nThe per-capability blocks (``verify`` / ``ask`` / ``assess``) are\n**projections** of that one pool into each capability's own unit \u2014\n\"how many of these could I still make\" \u2014 not separate allowances. Spending\non one moves all of them, and they are floor divisions, so a verify block\nticks once per 10 credits spent anywhere.\n\n``bonus`` in each block is the bonus bucket in that capability's unit. The\nolder key ``credits`` is its deprecated alias, kept until 2026-11-29.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and is bounded by\na per-account daily fair-use cap instead, reported separately here and\nrejected with 429 rather than 402.",
         "tags": [
           "Account"
         ],
@@ -409,11 +409,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nu = client.usage()\n# Monthly quota vs one-off top-up credits, separated per capability.\nprint(u.verify.quota_used, \"/\", u.verify.quota_total, \"quota\")\nprint(u.verify.credits, \"top-up credits\")\nprint(u.verify.remaining, \"verify calls left (quota + credits)\")\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nu = client.usage()\n# One credit pool funds every call; `costs` is the price list.\nprint(u.credits.remaining, \"credits left\", u.costs)\n# The same balance, projected into one capability's unit.\nprint(u.verify.remaining, \"verify calls left\")\nprint(u.assess.remaining, \"assess calls left\")\nprint(u.credits.bonus, \"of them non-expiring bonus credits\")\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst u = await client.account.getUsage();\nconsole.log(`${u.verify.quotaUsed} / ${u.verify.quotaTotal} quota`);\nconsole.log(`${u.verify.credits} top-up credits`);\nconsole.log(`${u.verify.remaining} verify calls left`);\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst u = await client.account.getUsage();\nconsole.log(`${u.credits.remaining} credits left`, u.costs);\nconsole.log(`${u.verify.remaining} verify calls left`);\nconsole.log(`${u.assess.remaining} assess calls left`);\n"
           }
         ]
       }
@@ -1081,8 +1081,46 @@
         "title": "SelectIn",
         "type": "object"
       },
+      "MeUsageCreditsOut": {
+        "description": "The account's credit balance \u2014 the one pool every capability spends.\n\nTwo buckets: the monthly allowance for the current plan (resets at\n``resets_at``) and non-expiring ``bonus`` credits from grants and top-ups,\nwhich are spent only once the allowance is gone. ``remaining`` is the sum\nand is what a call is checked against.",
+        "properties": {
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "used": {
+            "default": 0,
+            "title": "Used",
+            "type": "integer"
+          },
+          "remaining": {
+            "default": 0,
+            "title": "Remaining",
+            "type": "integer"
+          },
+          "bonus": {
+            "default": 0,
+            "title": "Bonus",
+            "type": "integer"
+          },
+          "resets_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resets At"
+          }
+        },
+        "title": "MeUsageCreditsOut",
+        "type": "object"
+      },
       "MeUsageExtractOut": {
-        "description": "Daily ``/extract`` usage (rate-limited per day, not credit-based).",
+        "description": "Daily ``/extract`` usage (rate-limited per day, not credit-based).\n\n``calls_today`` is the ACCOUNT's counter, shared across all of its keys;\n``unlimited`` reports whether the CALLING key bypasses the cap.",
         "properties": {
           "calls_today": {
             "default": 0,
@@ -1104,7 +1142,7 @@
         "type": "object"
       },
       "MeUsageOut": {
-        "description": "Per-capability capacity for the calling API key.\n\nOne block per API capability (``verify``, ``ask``, ``assess``, ``extract``).\nFor the quota-backed capabilities, monthly quota (resets at\n``quota_resets_at``) and one-off top-up credits are reported separately so\ncallers can tell a recurring allowance from a purchased balance. ``assess``\nhas no one-off credit pool, so its ``credits`` is always 0 (not a bug).",
+        "description": "The calling account's credit balance, and what it can still buy.\n\n``credits`` is the balance and ``costs`` is the price list. The\n``verify`` / ``ask`` / ``assess`` blocks are projections of that one pool\ninto each capability's unit \u2014 read whichever is convenient, but they all\ndescribe the same money.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and carries a\nper-account daily fair-use cap instead; it rejects with 429, not 402.",
         "properties": {
           "plan": {
             "default": "free",
@@ -1121,6 +1159,16 @@
               }
             ],
             "title": "Quota Resets At"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/MeUsageCreditsOut"
+          },
+          "costs": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Costs",
+            "type": "object"
           },
           "verify": {
             "$ref": "#/components/schemas/MeUsageQuotaOut"
@@ -1141,6 +1189,8 @@
           }
         },
         "required": [
+          "credits",
+          "costs",
           "verify",
           "ask",
           "assess",
@@ -1150,7 +1200,7 @@
         "type": "object"
       },
       "MeUsageQuotaOut": {
-        "description": "Per-capability allowance for the public API key.\n\nTwo distinct buckets, kept separate on purpose:\n- ``quota_*``: the recurring monthly allowance for the current plan. Resets\n  every period (see ``MeUsageOut.quota_resets_at``). ``quota_remaining`` is\n  ``quota_total - quota_used`` (never negative).\n- ``credits``: one-off top-up credits that DO NOT reset monthly. Spent only\n  after the monthly quota is exhausted. Some capabilities have no one-off\n  credit pool (e.g. ``assess``); for those ``credits`` is always 0 and\n  ``remaining == quota_remaining``.\n\n``remaining`` is the true usable capacity: ``quota_remaining + credits``.",
+        "description": "One capability's share of the pool, projected into that capability's unit.\n\nThese are **projections, not allowances**. Every billable capability draws\non the single balance in ``MeUsageOut.credits``, at the weight in\n``MeUsageOut.costs``; this block answers \"how many ``/verify`` calls could\nI still make if I spent everything on them\". Spending on any capability\nmoves every block, and the division floors \u2014 a ``verify`` block whose\nweight is 10 ticks once per 10 credits spent anywhere.\n\n``bonus`` is the non-expiring bucket in this capability's unit.\n``quota_used`` is derived as ``quota_total - quota_remaining``, so\n``used + remaining == total`` always holds.\n\n``credits`` is a DEPRECATED alias of ``bonus``, kept for compatibility\nuntil 2026-11-29. It never meant the pool \u2014 before the pool existed it\nmeant this capability's one-off top-up balance, which is exactly what\n``bonus`` now reports.",
         "properties": {
           "quota_used": {
             "default": 0,
@@ -1165,6 +1215,11 @@
           "quota_remaining": {
             "default": 0,
             "title": "Quota Remaining",
+            "type": "integer"
+          },
+          "bonus": {
+            "default": 0,
+            "title": "Bonus",
             "type": "integer"
           },
           "credits": {
@@ -1661,6 +1716,37 @@
             "default": null,
             "title": "Error"
           },
+          "failure_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "upstream_unavailable",
+                  "insufficient_evidence",
+                  "invalid_input",
+                  "cancelled",
+                  "internal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Failure Class"
+          },
+          "retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Retryable"
+          },
           "attempt": {
             "title": "Attempt",
             "type": "integer"
@@ -1697,7 +1783,7 @@
   "tags": [
     {
       "name": "Extract",
-      "description": "Pull verifiable claims out of any text. Free, 1000/account/day."
+      "description": "Pull verifiable claims out of any text. Costs no credits; fair-use cap 1,000/account/day."
     },
     {
       "name": "Assess",
@@ -1721,7 +1807,7 @@
     },
     {
       "name": "Account",
-      "description": "Subscription credits and rate-limit usage."
+      "description": "Your credit balance, the price list, and rate-limit usage."
     },
     {
       "name": "Discovery",

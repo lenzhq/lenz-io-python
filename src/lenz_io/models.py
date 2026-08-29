@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class _Lax(BaseModel):
@@ -349,25 +349,86 @@ class BatchItemResult(_Lax):
     status_detail: TaskStatus | None = None
 
 
+class UsageCredits(_Lax):
+    """The account's credit balance — the one pool every capability spends.
+
+    Every billable call debits this pool at the weight in :attr:`Usage.costs`
+    (``/verify`` is 10 credits, ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    free). Two buckets: the monthly allowance for the current plan, which
+    resets at ``resets_at``, and non-expiring ``bonus`` credits from grants and
+    top-ups, spent only once the allowance is gone. ``remaining`` covers both
+    and is what a call is checked against.
+
+    Servers predating the credit pool (before 2026-08-29) don't send this block
+    at all, and it then reads as all-zero — check ``usage.credits.total``
+    before trusting the balance.
+    """
+
+    total: int = 0
+    used: int = 0
+    remaining: int = 0
+    bonus: int = 0
+    resets_at: str | None = None
+
+
 class UsageCapacity(_Lax):
-    """Per-capability remaining capacity (``verify`` / ``ask``).
+    """One capability's share of the credit pool, in that capability's own unit.
 
-    Two buckets, kept separate on purpose:
+    These are **projections, not allowances**. Every billable capability draws
+    on the single balance in :attr:`Usage.credits`, at the weight in
+    :attr:`Usage.costs`; this block answers "how many ``/verify`` calls could I
+    still make if I spent everything on them". Spending on any capability moves
+    every block, and the division floors — a ``verify`` block (weight 10) ticks
+    once per 10 credits spent anywhere.
 
-    - ``quota_*``  — the recurring monthly allowance for the current plan;
-      resets every period (see :attr:`Usage.quota_resets_at`).
-      ``quota_remaining`` is ``quota_total - quota_used`` (never negative).
-    - ``credits``  — one-off top-up credits that do NOT reset monthly; spent
-      only after the monthly quota is exhausted.
+    - ``quota_*``  — the monthly allowance projected into this unit; resets
+      every period (see :attr:`Usage.quota_resets_at`). ``quota_used`` is
+      derived as ``quota_total - quota_remaining``, so ``quota_used +
+      quota_remaining == quota_total`` always holds.
+    - ``bonus``    — the non-expiring top-up bucket, in this unit. A user
+      holding 5 bonus credits sees ``assess.bonus == 5`` and
+      ``verify.bonus == 0``: 5 credits does not buy a verification.
 
-    ``remaining`` is the true usable capacity: ``quota_remaining + credits``.
+    ``remaining`` is the usable capacity across both buckets.
     """
 
     quota_used: int = 0
     quota_total: int = 0
     quota_remaining: int = 0
-    credits: int = 0
+    bonus: int = 0
+    #: **Deprecated** alias of :attr:`bonus`, removed on 2026-11-29. It never
+    #: meant the credit pool — before the pool existed it meant this
+    #: capability's one-off top-up balance, which is exactly what ``bonus``
+    #: reports. Reading it emits a ``DeprecationWarning``; it stays in
+    #: ``model_dump()`` output (unwarned) for as long as the server sends it.
+    credits: int = Field(
+        default=0,
+        deprecated=(
+            "UsageCapacity.credits is deprecated and will be removed on 2026-11-29; "
+            "use `bonus` — the same number, this capability's non-expiring top-up "
+            "balance. The credit pool itself is `Usage.credits`."
+        ),
+    )
     remaining: int = 0
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mirror_bonus_and_credits(cls, data: Any) -> Any:
+        """Keep ``bonus`` and its deprecated alias in step, in both directions.
+
+        A server predating the credit pool sends only ``credits``; a server
+        after the 2026-11-29 removal sends only ``bonus``. Mirroring here means
+        both attributes read correctly either way, so the SDK never depends on
+        which side of an API deploy it is talking to.
+        """
+        if not isinstance(data, dict):
+            return data
+        has_bonus, has_credits = data.get("bonus") is not None, data.get("credits") is not None
+        if has_bonus and not has_credits:
+            return {**data, "credits": data["bonus"]}
+        if has_credits and not has_bonus:
+            return {**data, "bonus": data["credits"]}
+        return data
 
 
 class UsageExtract(_Lax):
@@ -379,17 +440,27 @@ class UsageExtract(_Lax):
 
 
 class Usage(_Lax):
-    """Returned by ``GET /me/usage`` — usage + remaining capacity for the key.
+    """Returned by ``GET /me/usage`` — the account's balance and what it buys.
 
-    Monthly quota (resets at ``quota_resets_at``) and one-off top-up credits are
-    reported separately per capability so callers can tell a recurring allowance
-    apart from a purchased balance. ``assess`` is quota-only — there is no
-    one-off assess credit pool, so its ``credits`` is always 0 and
-    ``remaining == quota_remaining`` (not a bug).
+    ``credits`` is the balance and ``costs`` is the price list (credits per
+    call, keyed by capability). The ``verify`` / ``ask`` / ``assess`` blocks
+    are **projections** of that one pool into each capability's unit — read
+    whichever is convenient, they all describe the same money, and spending on
+    one moves all of them.
+
+    ``extract`` is free at the pool (``costs["extract"] == 0``) and is bounded
+    by a per-account daily fair-use cap instead; it rejects with 429, never
+    402.
     """
 
     plan: str = ""
     quota_resets_at: str | None = None
+    #: The credit balance — the authoritative number. Empty on older servers.
+    credits: UsageCredits = Field(default_factory=UsageCredits)
+    #: Credits per call, per capability: ``{"verify": 10, "assess": 1,
+    #: "ask": 1, "extract": 0}``. Empty on older servers. Read the weight from
+    #: here rather than hard-coding it — new capabilities appear as new keys.
+    costs: dict[str, int] = Field(default_factory=dict)
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
     assess: UsageCapacity = Field(default_factory=UsageCapacity)
@@ -468,6 +539,9 @@ __all__ = [
     "TaskAccepted",
     "TaskStatus",
     "Usage",
+    "UsageCapacity",
+    "UsageCredits",
+    "UsageExtract",
     "Verification",
     "VerificationList",
     "VerificationListItem",

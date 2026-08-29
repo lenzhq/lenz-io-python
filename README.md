@@ -38,7 +38,7 @@ lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
-lenz usage                       # plan, remaining quota, and when it resets
+lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
 
@@ -46,7 +46,19 @@ Every command takes `--json` for a clean machine-readable object (also emitted
 automatically when stdout is not a TTY, so pipes Just Work). Errors in `--json`
 mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
 exit (an out-of-credits run reports `"code": "no_credits"` and adds
-`upgrade_url`). `verify` blocks with a progress spinner; Ctrl-C prints a
+`upgrade_url`). `lenz usage` leads with the balance:
+
+```text
+Lenz usage  (developer plan)
+  5070 credits left  (≈ 507 verifications · 5070 assessments)
+  Verify:   507 left  (13 / 520 quota + 20 bonus · 10 credits each)
+  Ask:      5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
+  Assess:   5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
+  Extract:  4 / 1000 today  (free — no credit charge)
+  Credits reset in 3 days (Sep 1, 2026)
+```
+
+`verify` blocks with a progress spinner; Ctrl-C prints a
 `lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
 order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
 
@@ -136,7 +148,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** → browse the public catalog (no API key needed).
-- **`client.usage()`** → remaining capacity per capability (`verify` / `ask` / `assess` quota + top-up credits, and the daily `extract` rate limit). Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
+- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
 
@@ -220,6 +232,31 @@ See [`examples/core/fastapi_webhook.py`](examples/core/fastapi_webhook.py)
 for a runnable FastAPI receiver, and [`examples/core/verify_llm_output.py`](examples/core/verify_llm_output.py)
 for the headline assess-then-escalate pattern.
 
+## Credits
+
+One pool per account funds every billable call, at a fixed weight: a `verify`
+is 10 credits (×N for a batch), an `assess` or an `ask` is 1, and `extract` is
+0 — free at the pool, bounded by the daily fair-use cap instead.
+
+```python
+u = client.usage()
+print(u.credits.remaining, "credits")  # the balance — the authoritative number
+print(u.costs["verify"], "credits per verification")  # the price list
+print(u.verify.remaining, "verifications left")  # a projection of that balance
+print(u.credits.bonus, "of them non-expiring")  # grants + top-ups
+```
+
+The `verify` / `ask` / `assess` blocks are **projections** of the one balance
+into each capability's unit — how many of those calls the remaining credits
+would buy — not separate allowances. Spending on any one of them moves all of
+them.
+
+Per-capability `bonus` is that capability's share of the non-expiring bucket,
+so 200 bonus credits read as `assess.bonus == 200` and `verify.bonus == 20`.
+The old `capability.credits` field is a deprecated alias of `bonus` (it never
+meant the pool); reading it emits a `DeprecationWarning` and it goes away on
+2026-11-29.
+
 ## Errors
 
 Every error subclass is typed and carries a `request_id` you can quote on
@@ -237,8 +274,10 @@ from lenz_io import (
 try:
     client.verify_and_wait(claim="...")
 except LenzQuotaExceededError as exc:
-    # HTTP 402. Out of balance — retrying will not clear it.
-    print(exc.remaining)  # 0, or None if the server didn't report a balance
+    # HTTP 402. Out of credits — retrying will not clear it.
+    print(exc.remaining)  # 0 verifications, or None if the server didn't say
+    print(exc.credit_balance)  # 4 — credits left in the pool, or None
+    print(exc.cost)  # 10 — credits this call would have taken, or None
     print(exc.resets_at)  # "2026-09-01T00:00:00+00:00", or None
     print(exc.upgrade_url)  # https://lenz.io/plans
 except LenzAuthError as exc:
