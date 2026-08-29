@@ -31,6 +31,11 @@ from .render import (
 def extract(
     ctx: typer.Context,
     text: str = typer.Argument(None, help="Text to extract claims from ('-' or pipe = stdin)."),
+    focus: str = typer.Option(
+        "",
+        "--focus",
+        help='Narrow to the claims that matter, e.g. "market size and competitors".',
+    ),
 ) -> None:
     """Pull verifiable claims out of text. No credit charge (1000/day) — but needs a key."""
     state: CLIState = ctx.obj
@@ -39,7 +44,7 @@ def extract(
     def work(client: Lenz) -> None:
         payload = read_text_arg(text)
         with out.working("Extracting claims…"):
-            result = client.extract(text=payload)
+            result = client.extract(text=payload, focus=focus)
         render_extract(out, result)
 
     execute(state, needs_key=True, work=work)

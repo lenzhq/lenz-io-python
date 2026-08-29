@@ -208,6 +208,28 @@ class TestVerify:
             client.verify_batch(claims=[{"text": "a"}])
         assert "visibility" not in json.loads(route.calls.last.request.content)
 
+    def test_extract_no_match_validates(self, client):
+        """`no_match` is a successful answer, not an error, and never the
+        unfocused list in disguise."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/extract").respond(
+                200,
+                json={
+                    "status": "no_match",
+                    "claim": "",
+                    "identified_claims": [],
+                    "candidate_claims": [],
+                    "domain": "",
+                    "key_entities": [],
+                    "presumed_intent": "Raise a Series A round from investors.",
+                    "original_input": "...",
+                },
+            )
+            out = client.extract(text="...", focus="claims about cricket")
+        assert out.status == "no_match"
+        assert out.identified_claims == []
+        assert out.claim == ""
+
     def test_extract_returns_identified_claims(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/extract").respond(
