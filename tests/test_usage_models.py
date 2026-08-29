@@ -25,7 +25,8 @@ POOL_PAYLOAD = {
         "bonus": 200,
         "resets_at": "2026-09-01T00:00:00+00:00",
     },
-    "costs": {"verify": 10, "verify_low": 5, "assess": 1, "ask": 1, "extract": 0},
+    "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
+    "cost_options": {"verify": {"depth": {"standard": 10, "low": 5}}},
     "verify": {
         "quota_used": 13,
         "quota_total": 520,
@@ -53,21 +54,40 @@ def test_credit_pool_and_price_list_parse():
     assert (u.credits.total, u.credits.used, u.credits.remaining) == (5200, 130, 5070)
     assert u.credits.bonus == 200
     assert u.credits.resets_at == "2026-09-01T00:00:00+00:00"
-    assert u.costs == {"verify": 10, "verify_low": 5, "assess": 1, "ask": 1, "extract": 0}
+    assert u.costs == {"verify": 10, "assess": 1, "ask": 1, "extract": 0}
 
 
-def test_costs_carries_the_low_depth_verify_price():
-    """``verify_low`` is half a standard verify and rides in the same map.
+def test_depth_prices_are_nested_under_cost_options() -> None:
+    """The low price lives under ``cost_options``, keyed by the PARAMETER it
+    belongs to.
 
-    ``costs`` is an open ``dict[str, int]``, so a new price key needs no model
-    change — this test is the tripwire that it actually survives parsing
-    rather than being dropped into ``__pydantic_extra__``."""
+    It was a flat ``costs["verify_low"]`` before release. A capability-keyed
+    map that also holds prices cannot take a second tuning parameter without
+    growing a third sibling, and anything iterating ``costs`` reads prices as
+    capabilities."""
     u = Usage.model_validate(POOL_PAYLOAD)
-    assert u.costs["verify_low"] == 5
-    assert u.costs["verify_low"] * 2 == u.costs["verify"]
+    depth = u.cost_options["verify"]["depth"]
+    assert depth == {"standard": 10, "low": 5}
+    assert depth["low"] * 2 == u.costs["verify"]
+    # `costs` names capabilities and nothing else.
+    assert "verify_low" not in u.costs
 
 
-def test_verify_low_is_a_price_not_a_capability():
+def test_the_default_price_is_also_in_costs() -> None:
+    """What lets a client read only ``costs`` and still be right."""
+    u = Usage.model_validate(POOL_PAYLOAD)
+    for capability, params in u.cost_options.items():
+        assert capability in u.costs
+        for prices in params.values():
+            assert u.costs[capability] in prices.values()
+
+
+def test_cost_options_defaults_to_empty_on_an_older_server() -> None:
+    u = Usage.model_validate({"plan": "free"})
+    assert u.cost_options == {}
+
+
+def test_the_low_depth_price_is_not_a_capability():
     """There is deliberately no ``verify_low`` projection block.
 
     A block would report the same balance in a second unit. Clients that want
@@ -79,7 +99,8 @@ def test_verify_low_is_a_price_not_a_capability():
     assert not hasattr(u, "verify_low")
     # The count is a division the caller does, and it is not verify x 2:
     # flooring is against the balance, not against the standard projection.
-    assert u.credits.remaining // u.costs["verify_low"] == 1014
+    low = u.cost_options["verify"]["depth"]["low"]
+    assert u.credits.remaining // low == 1014
 
 
 def test_capability_blocks_are_projections_of_the_one_pool():

@@ -354,7 +354,7 @@ class UsageCredits(_Lax):
 
     Every billable call debits this pool at the weight in :attr:`Usage.costs`
     (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
-    ``costs["verify_low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
     resets at ``resets_at``, and non-expiring ``bonus`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
@@ -453,10 +453,11 @@ class Usage(_Lax):
     by a per-account daily fair-use cap instead; it rejects with 429, never
     402.
 
-    ``costs`` also carries ``verify_low``, the ``depth="low"`` verify price —
-    a **price, not a capability**, so there is deliberately no ``verify_low``
-    block beside ``verify``. Divide ``credits.remaining`` by it yourself for
-    the low-depth count.
+    ``costs`` names capabilities, one entry each, at the default price.
+    Prices that depend on a request PARAMETER live in :attr:`cost_options`,
+    nested capability → parameter → value. Divide ``credits.remaining`` by one
+    of those yourself for the low-depth count — there is deliberately no
+    ``verify_low`` block beside ``verify``.
     """
 
     #: The tier slug — ``"free"`` | ``"plus"`` | ``"developer"`` | ``"scale"``.
@@ -470,26 +471,40 @@ class Usage(_Lax):
     quota_resets_at: str | None = None
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
-    #: Credits per call, keyed by capability: ``{"verify": 10,
-    #: "verify_low": 5, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: Credits per call, keyed by CAPABILITY, at its default price:
+    #: ``{"verify": 10, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
     #: servers. Read the weight from here rather than hard-coding it — new
     #: keys appear without an SDK release, and the SDK never rewrites the
     #: server's own key names.
     #:
-    #: ``verify_low`` is the ``depth="low"`` verify price — half of
-    #: ``verify``. It is a **price, not a capability**: there is deliberately
-    #: no ``verify_low`` projection block beside :attr:`verify`, because it
-    #: would report the same balance in a second unit. A caller wanting "how
-    #: many low-depth verifications can I still afford" divides
-    #: ``credits.remaining`` by it.
+    #: Contains capability names and nothing else. Prices that depend on a
+    #: request parameter are in :attr:`cost_options`.
+    costs: dict[str, int] = Field(default_factory=dict)
+    #: Prices that depend on a request PARAMETER, nested capability →
+    #: parameter → value::
+    #:
+    #:     {"verify": {"depth": {"standard": 10, "low": 5}}}
+    #:
+    #: Read as "on ``verify``, the ``depth`` parameter prices like this".
+    #: Empty on servers predating this field.
+    #:
+    #: Every capability here also appears in :attr:`costs` at its default
+    #: price, so reading only ``costs`` is imprecise, never wrong. A caller
+    #: wanting "how many low-depth verifications can I afford" divides
+    #: ``credits.remaining`` by ``cost_options["verify"]["depth"]["low"]``.
+    #:
+    #: Nested rather than flattened into ``costs`` as ``verify_low``, which is
+    #: what this was at first: a flat map grows one sibling per tuning
+    #: parameter, and anything iterating ``costs`` would count prices as
+    #: capabilities.
     #:
     #: You are charged for the depth you **requested**, not the one served: a
     #: ``low`` request answered from a cached ``standard`` verdict still costs
-    #: ``verify_low``. The ``depth`` echoed on a completed verification is what
-    #: the verdict was PRODUCED with, so it can read ``standard`` on a ``low``
-    #: request — the echo describes the evidence, the charge follows the
-    #: request.
-    costs: dict[str, int] = Field(default_factory=dict)
+    #: the ``low`` price. The ``depth`` echoed on a completed verification is
+    #: what the verdict was PRODUCED with, so it can read ``standard`` on a
+    #: ``low`` request — the echo describes the evidence, the charge follows
+    #: the request.
+    cost_options: dict[str, dict[str, dict[str, int]]] = Field(default_factory=dict)
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
     assess: UsageCapacity = Field(default_factory=UsageCapacity)

@@ -568,11 +568,16 @@ def render_usage(out: Output, u: Usage) -> None:
 def _low_depth_note(u: Usage) -> str:
     """The ``depth="low"`` verify price, for the tail of the Verify row.
 
-    Empty when the server doesn't publish ``verify_low`` (any server before
-    the depth pricing shipped) or when it matches the standard price — a note
+    Empty when the server publishes no depth prices (any server before depth
+    pricing shipped) or when the low price matches the standard one — a note
     saying "5 at depth low" beside "5 credits each" is noise, not information.
+
+    Reads ``cost_options``, which is where parameter-dependent prices live;
+    the flat ``costs["verify_low"]`` this used was dropped before release
+    because it does not survive a second tuning parameter.
     """
-    low = u.costs.get("verify_low")
+    depth = u.cost_options.get("verify", {}).get("depth", {})
+    low = depth.get("low")
     if not low or low == u.costs.get("verify"):
         return ""
     return f'{low} at depth "low"'

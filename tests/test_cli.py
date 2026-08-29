@@ -644,7 +644,8 @@ def _pool_usage(**overrides):
         "plan": "developer",
         "quota_resets_at": "2026-09-01",
         "credits": {"total": 5200, "used": 130, "remaining": 5070, "bonus": 200, "resets_at": "2026-09-01"},
-        "costs": {"verify": 10, "verify_low": 5, "assess": 1, "ask": 1, "extract": 0},
+        "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
+        "cost_options": {"verify": {"depth": {"standard": 10, "low": 5}}},
         "verify": {"quota_used": 13, "quota_total": 520, "quota_remaining": 507, "bonus": 20, "remaining": 507},
         "ask": {"quota_used": 130, "quota_total": 5200, "quota_remaining": 5070, "remaining": 5070},
         "assess": {"quota_used": 130, "quota_total": 5200, "quota_remaining": 5070, "remaining": 5070},
@@ -681,7 +682,8 @@ def test_usage_json_success(monkeypatch):
     # The balance and the price list — the authoritative pair.
     assert payload["credits"]["remaining"] == 5070
     assert payload["credits"]["bonus"] == 200
-    assert payload["costs"] == {"verify": 10, "verify_low": 5, "assess": 1, "ask": 1, "extract": 0}
+    assert payload["costs"] == {"verify": 10, "assess": 1, "ask": 1, "extract": 0}
+    assert payload["cost_options"] == {"verify": {"depth": {"standard": 10, "low": 5}}}
     # Projections of that one pool, in each capability's unit.
     assert payload["verify"]["remaining"] == 507
     assert payload["verify"]["bonus"] == 20
@@ -730,7 +732,7 @@ def test_usage_pretty_singularizes_a_lone_verification():
 def test_usage_pretty_notes_the_low_depth_price_on_the_verify_row():
     """The low-depth price rides the Verify row's tail, not a row of its own.
 
-    ``verify_low`` is a PRICE, not a capability: it has no projection block on
+    The low-depth price is a PRICE, not a capability: it has no projection block on
     the server, so rendering it as its own capacity row would invent a second
     balance that does not exist."""
     text = _render_usage_text(_pool_usage())
@@ -746,16 +748,19 @@ def test_usage_pretty_notes_the_low_depth_price_on_the_verify_row():
 
 
 def test_usage_pretty_omits_the_low_depth_note_on_a_server_without_it():
-    """A server predating depth pricing sends no `verify_low`. Say nothing
+    """A server predating depth pricing sends no depth prices. Say nothing
     rather than assuming half of `verify`."""
-    text = _render_usage_text(_pool_usage(costs={"verify": 10, "assess": 1, "ask": 1, "extract": 0}))
+    # `cost_options` empty, not `costs` trimmed: the note reads the nested
+    # map now, so trimming the flat one would leave the note rendering and
+    # the test asserting nothing.
+    text = _render_usage_text(_pool_usage(cost_options={}))
     assert "10 credits each" in text
     assert "depth" not in text
 
 
 def test_usage_pretty_omits_a_low_depth_note_that_equals_the_standard_price():
     """`5 at depth "low"` beside `5 credits each` is noise, not information."""
-    text = _render_usage_text(_pool_usage(costs={"verify": 10, "verify_low": 10, "assess": 1, "ask": 1, "extract": 0}))
+    text = _render_usage_text(_pool_usage(cost_options={"verify": {"depth": {"standard": 10, "low": 10}}}))
     assert "10 credits each" in text
     assert "depth" not in text
 
