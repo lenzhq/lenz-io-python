@@ -98,6 +98,7 @@ class FakeClient:
         self.verifications = verifications or _FakeVerifications()
         self._usage = usage_result
         self._raises = raises or {}
+        self.extract_calls: list = []
         self.verify_calls: list = []
         self.select_calls: list = []
         self.status_calls: list = []
@@ -106,8 +107,9 @@ class FakeClient:
         if name in self._raises:
             raise self._raises[name]
 
-    def extract(self, *, text, language=""):
+    def extract(self, *, text, language="", focus=""):
         self._maybe_raise("extract")
+        self.extract_calls.append({"text": text, "language": language, "focus": focus})
         return self._extract
 
     def assess(self, *, text, language=""):
@@ -413,6 +415,60 @@ def test_extract_json_success(monkeypatch):
     result = runner.invoke(app, ["--json", "extract", "some text"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["identified_claims"] == ["Earth is round", "Sky is blue"]
+
+
+def test_extract_passes_focus_through(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "some text", "--focus", "market size"])
+    assert result.exit_code == 0
+    assert fake.extract_calls[-1]["focus"] == "market size"
+
+
+def test_extract_omits_focus_by_default(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "some text"])
+    assert result.exit_code == 0
+    assert fake.extract_calls[-1]["focus"] == ""
+
+
+def test_extract_pretty_renders_no_match_distinctly():
+    """no_match must not read as 'nothing to check here' — the document HAD
+    claims, they just fell outside the focus."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_extract
+
+    extracted = ExtractedClaims.model_validate({"status": "no_match", "claim": "", "identified_claims": []})
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_extract(out, extracted)
+    text = buf.getvalue()
+    assert "No claims matched the focus." in text
+    assert "No verifiable claim" not in text
+
+
+def test_extract_pretty_still_says_no_claim_without_a_focus():
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_extract
+
+    extracted = ExtractedClaims.model_validate({"status": "not_a_claim", "claim": "", "identified_claims": []})
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=100)
+    render_extract(out, extracted)
+    assert "No verifiable claim" in buf.getvalue()
 
 
 def test_extract_reads_stdin(monkeypatch):
@@ -911,6 +967,37 @@ def test_verify_happy_path(monkeypatch):
     assert json.loads(result.stdout)["verdict"] == "False"
     # idempotency key is sent on submit (avoids dup paid pipeline on retry)
     assert "idempotency_key" in fake.verify_calls[0][1]
+
+
+def test_verify_depth_flag_maps_through(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(statuses=[TaskStatus(status="completed", result=_verification())]),
+    )
+    result = runner.invoke(app, ["--json", "verify", "claim", "--depth", "low"])
+    assert result.exit_code == 0
+    assert fake.verify_calls[0][1]["depth"] == "low"
+
+
+def test_verify_depth_omitted_sends_empty(monkeypatch):
+    """No --depth → "" so the client leaves the key off the request body."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = _patch_client(
+        monkeypatch,
+        FakeClient(statuses=[TaskStatus(status="completed", result=_verification())]),
+    )
+    result = runner.invoke(app, ["--json", "verify", "claim"])
+    assert result.exit_code == 0
+    assert fake.verify_calls[0][1]["depth"] == ""
+
+
+def test_verify_depth_rejects_unknown_value(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(monkeypatch, FakeClient())
+    result = runner.invoke(app, ["--json", "verify", "claim", "--depth", "deep"])
+    assert result.exit_code == 2
+    assert json.loads(result.stdout)["error"]["code"] == "invalid_depth"
 
 
 def test_verify_multi_claim_with_preselect(monkeypatch):

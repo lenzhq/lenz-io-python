@@ -6,29 +6,37 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [2.9.0] - 2026-08-29
 
-Six per-endpoint quotas became one weighted credit pool. The SDK types the
-pool, keeps every existing field working, and says what a rejected call would
-have cost.
+One weighted credit pool replaces six per-endpoint quotas; `extract` takes a
+`focus`; `verify` takes a `depth`. Lockstep release with Node 2.9.0 and the
+server-side pool.
 
 ### Added
+
 - **`Usage.credits`** (`UsageCredits`: `total`, `used`, `remaining`, `bonus`,
   `resets_at`) — the account's balance, and the authoritative number. Every
   billable call debits it.
-- **`Usage.costs`** — the price list, `{"verify": 10, "verify_low": 5,
-  "assess": 1, "ask": 1, "extract": 0}`. Read the weight from here rather than
-  hard-coding it; a new capability arrives as a new key.
-- **`costs["verify_low"]`** — the `depth="low"` verify price, half a standard
-  one. `low` caps research breadth while every reasoning step runs the same
-  models; it is not a model downgrade. It is a **price, not a capability**:
-  there is deliberately no `usage.verify_low` block beside `usage.verify`,
-  because it would report the same balance in a second unit. Divide
-  `credits.remaining` by it for the low-depth count. `costs` was already an
-  open `dict[str, int]`, so this is additive and needed no type change.
+- **`Usage.costs`** — the price list, keyed by **capability** at its default
+  price: `{"verify": 10, "assess": 1, "ask": 1, "extract": 0}`. Read the weight
+  from here rather than hard-coding it; a new capability arrives as a new key.
+  Capability names and nothing else, so it is safe to iterate.
+- **`Usage.cost_options`** — prices that depend on a request **parameter**,
+  nested capability → parameter → value:
+  `{"verify": {"depth": {"standard": 10, "low": 5}}}`. Every capability here
+  also appears in `costs` at its default, so reading only `costs` is imprecise
+  but never wrong. Nested rather than flat so a future parameter adds a key
+  under its capability instead of a new top-level entry.
+  - The low-depth price is a **price, not a capability**: there is deliberately
+    no `usage.verify_low` block beside `usage.verify`, because it would report
+    the same balance in a second unit. Divide `credits.remaining` by it for the
+    low-depth count.
   - **You are charged for the depth you REQUESTED, not the one you were
     served.** A `low` request answered from a cached `standard` verdict still
     costs 5. The `depth` echoed on the completed verification is what the
     verdict was *produced* with, so it can read `standard` on a `low` request
     — the echo describes the evidence, the charge follows the request.
+- **`Usage.plan_label`** — the tier as display copy (`"Developer"`), beside the
+  stable `plan` slug. Two fields on purpose: `plan` is what you branch on,
+  `plan_label` is copy and may be reworded.
 - **`UsageCapacity.bonus`** — the non-expiring top-up bucket, in that
   capability's unit. 200 bonus credits read as `assess.bonus == 200` and
   `verify.bonus == 20`: 5 credits does not buy a verification.
@@ -52,8 +60,49 @@ have cost.
   per-call price beneath it. The `Verify` row's tail also carries the
   low-depth price (`· 10 credits each · 5 at depth "low"`) — on the existing
   row, not one of its own, because there is no separate low-depth allowance.
+- **`focus=` on `extract`.** An optional hint of at most 300 characters —
+  `focus="market size, growth and competitors"` — that narrows the result to
+  the claims it names. A focus can only SELECT from the claims the extractor
+  found: it cannot add a claim, reword one, reorder them, change the output
+  language, or change what counts as a claim, so a claim you get back is one
+  an unfocused call would have returned too, verbatim. Omitted from the
+  request body when empty, so nothing changes for callers who don't use it.
+  There is no client-side length check — the server's 422 is the contract, and
+  a cap duplicated here would drift from it.
+- **`lenz extract --focus`** on the CLI, and a distinct `no_match` line in the
+  pretty renderer: "No claims matched the focus." rather than "No verifiable
+  claim found in that text", which would send you off to fix the wrong thing.
+- **`ExtractStatus`** — `Literal["ready", "not_a_claim", "no_match"]`, exported
+  from `lenz_io` for exhaustive matching. `ExtractedClaims.status` stays `str`
+  (same convention as `FailureClass`): the SDK must not reject a status the
+  server adds after this release was cut.
+- **`no_match`** — the status when the text HAS claims but none fall within
+  your `focus`. It is a successful answer, not an error, and it is never the
+  unfocused list in disguise: `identified_claims` is empty and `claim` is
+  `""`. Widen the focus and call again.
+
+- **`depth` on `verify` / `verify_batch`** (and their `_and_wait` helpers) —
+  `'standard'` (server default) or `'low'`. `'low'` runs a shallower check:
+  fewer sources, faster, and **half the credits** — same models throughout;
+  it is not a model downgrade. Batch takes a
+  batch-wide `depth`; each item dict may set its own `depth` to override it,
+  exactly like `visibility`. Omitted from the request body when unset, so
+  existing callers stay byte-identical on the wire and keep working against
+  a server that does not know the field yet.
+- **`Verification.depth`** — echoes the depth the verdict was actually
+  produced with. A `'low'` request served from the result cache reads back
+  `'standard'`. `""` on servers that predate the field.
+- **`lenz verify --depth standard|low`** on the CLI. Claims picked out of a
+  multi-claim input inherit the depth of the submission that offered them —
+  the server carries it through `/select`, so the flag is sent once.
+- **`openapi.json` refreshed**, which also catches up on server changes that
+  were never re-snapshotted after 2.8.0: `failure_class` / `retryable` on the
+  status schema, the 502/503 error rows, and a `/extract` 200 response schema
+  where the vendored spec previously had none. No SDK behaviour depends on it —
+  the file is documentation and generator input.
 
 ### Changed
+
 - The per-capability blocks (`usage.verify` / `ask` / `assess`) are now
   **projections** of the one balance into each capability's unit, not separate
   allowances. Every field keeps its name and meaning, and `quota_used +
@@ -63,13 +112,20 @@ have cost.
 - Minimum `pydantic` is now **2.7** (was 2.0), for `Field(deprecated=...)`.
 
 ### Deprecated
-- **`UsageCapacity.credits`** — an alias of `bonus`, removed **2026-11-29**.
-  It never meant the pool: before the pool existed it meant that capability's
-  one-off top-up balance, which is exactly what `bonus` reports. Reading it
-  emits a `DeprecationWarning`; it stays in `model_dump()` output, unwarned,
-  for as long as the server sends it. The two mirror each other in both
-  directions, so the SDK reads correctly against a server on either side of
-  the change.
+
+- **The per-capability blocks** `usage.verify` / `ask` / `assess`, and
+  **`UsageCapacity.credits`**, are removed together on **2026-11-29** — one
+  date, one release, rather than two breaking changes months apart.
+  - The blocks are two floor divisions of `credits` by `costs`:
+    `remaining = credits.remaining // costs[capability]`. Two capabilities at
+    the same price emit identical objects (`ask` and `assess` are both 1
+    credit), because there is one balance behind all of them.
+  - `UsageCapacity.credits` is an alias of `bonus`. It never meant the pool:
+    before the pool existed it meant that capability's one-off top-up balance,
+    which is exactly what `bonus` reports. Reading it emits a
+    `DeprecationWarning`; it stays in `model_dump()` output, unwarned, for as
+    long as the server sends it. The two mirror each other in both directions,
+    so the SDK reads correctly against a server on either side of the change.
 
 ## [2.8.0] - 2026-08-21
 

@@ -158,6 +158,10 @@ class Verification(_Lax):
     claim: str = ""
     # 'private' | 'unlisted' | 'public'. Read-back of the claim's visibility.
     visibility: str = ""
+    # 'standard' | 'low'. Read-back of the depth the verdict was actually
+    # produced with — a 'low' request served from cache reads 'standard'.
+    # "" on servers that predate the field (``_Lax`` tolerates its absence).
+    depth: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
@@ -235,8 +239,38 @@ class ExtractedEntity(_Lax):
     type: str = ""
 
 
+#: The ``ExtractedClaims.status`` values this release knows about:
+#:
+#:     from lenz_io import ExtractStatus
+#:
+#: - ``ready`` — claims were found (and, with a ``focus``, at least one matched).
+#: - ``not_a_claim`` — the text holds no verifiable factual claim at all.
+#: - ``no_match`` — claims were found, but none fall within the ``focus``.
+#:
+#: A DOCUMENTATION constant, not a guarantee. The model field stays ``str``,
+#: because the SDK must not reject a status the server adds after this release
+#: was cut — so ``result.status`` will NOT type-check where an
+#: ``ExtractStatus`` is expected, and ``result.status == "no_matchh"`` is a
+#: perfectly legal comparison. Use it to annotate your own handlers and to
+#: enumerate the cases; do not expect it to catch a typo.
+#:
+#: The Node SDK's ``ExtractStatus`` is a union with an open ``string`` arm, so
+#: it behaves the same way at the usage site for the same reason.
+ExtractStatus = Literal[
+    "ready",
+    "not_a_claim",
+    "no_match",
+]
+
+
 class ExtractedClaims(_Lax):
-    """Output of ``POST /extract``."""
+    """Output of ``POST /extract``.
+
+    ``status`` is one of ``ExtractStatus``: ``ready``, ``not_a_claim``, or —
+    when a ``focus`` was given and no claim fell within it — ``no_match``.
+    ``no_match`` is a successful answer, not an error: ``identified_claims``
+    is empty and the unfocused list is never substituted for it.
+    """
 
     status: str = ""
     claim: str = ""
@@ -589,6 +623,7 @@ __all__ = [
     "CandidateClaim",
     "DebateSide",
     "EntityRef",
+    "ExtractStatus",
     "ExtractedClaims",
     "ExtractedEntity",
     "FailureClass",

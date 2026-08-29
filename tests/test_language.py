@@ -88,6 +88,44 @@ class TestOmitLanguageWireFormatRegression:
             client.extract(text="The earth is flat")
         assert "language" not in self._body(route)
 
+    def test_extract_no_focus_key_when_omitted(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+            )
+            client.extract(text="The earth is flat")
+        assert "focus" not in self._body(route)
+
+    def test_extract_does_not_send_an_empty_focus(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+            )
+            client.extract(text="x", focus="")
+        assert "focus" not in self._body(route)
+
+    def test_extract_sends_focus(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+            )
+            client.extract(text="x", focus="market size and competitors")
+        assert self._body(route)["focus"] == "market size and competitors"
+
+    def test_extract_sends_focus_and_language_together(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+            )
+            client.extract(text="x", language="es", focus="competidores")
+        body = self._body(route)
+        assert body["language"] == "es"
+        assert body["focus"] == "competidores"
+
     def test_ask_send_no_language_key_when_omitted(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/ask/v1").respond(200, json={"reply": "ok"})

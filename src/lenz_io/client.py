@@ -134,6 +134,9 @@ class VerifyBatchItem(TypedDict, total=False):
     # 'private' (default) or 'unlisted' (link-readable, never listed).
     # Per-item value overrides the batch-wide ``visibility`` default.
     visibility: str
+    # 'standard' (default) or 'low' (shallower check — fewer sources,
+    # faster). Per-item value overrides the batch-wide ``depth`` default.
+    depth: str
 
 
 class _VerificationsNamespace:
@@ -342,7 +345,9 @@ class Lenz:
 
     # ── marquee verbs (top-level shortcuts) ──
 
-    def verify(self, claim: str, *, language: str = "", visibility: str = "", **kwargs: Any) -> TaskAccepted:
+    def verify(
+        self, claim: str, *, language: str = "", visibility: str = "", depth: str = "", **kwargs: Any
+    ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
 
@@ -352,8 +357,14 @@ class Lenz:
         ``visibility`` (optional): ``'private'`` (default, owner-only) or
         ``'unlisted'`` (readable by verification_id / at the /c/ URL, but
         never surfaced in the Library or search). Omit for private.
+
+        ``depth`` (optional): ``'standard'`` (default) or ``'low'``. ``'low'``
+        runs a shallower check — fewer sources, faster. Same models, same
+        quota cost. The completed ``Verification.depth`` echoes the depth the
+        verdict was actually produced with, which can be ``'standard'`` for a
+        ``'low'`` request served from cache.
         """
-        return self._verify_submit(claim=claim, language=language, visibility=visibility, **kwargs)
+        return self._verify_submit(claim=claim, language=language, visibility=visibility, depth=depth, **kwargs)
 
     def verify_batch(
         self,
@@ -362,6 +373,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
@@ -374,23 +386,42 @@ class Lenz:
         ``visibility`` (optional): batch-wide default, ``'private'`` or
         ``'unlisted'``. Each item dict may set its own ``visibility`` key
         to override the batch-wide value.
+
+        ``depth`` (optional): batch-wide default, ``'standard'`` or ``'low'``
+        (shallower check — fewer sources, faster). Each item dict may set its
+        own ``depth`` key to override the batch-wide value.
         """
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=idempotency_key,
         )
 
-    def extract(self, *, text: str, language: str = "") -> ExtractedClaims:
+    def extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/account/day (shared across your API keys).
 
         ``language`` (optional): return extracted claims in the target
         language. Domain / status enums stay English.
+
+        ``focus`` (optional): narrow the result to the claims it describes,
+        e.g. ``"market size, growth and competitors"``. At most 300
+        characters — a longer focus is rejected with a 422, never truncated.
+
+        A focus can only SELECT from the claims the extractor found: it
+        cannot add a claim, reword one, reorder them, change the output
+        language, or change what counts as a claim. A claim you get back is
+        one an unfocused call would have returned too, verbatim.
+
+        When the text has claims but none fall within the focus, ``status``
+        is ``"no_match"`` and ``identified_claims`` is empty — the unfocused
+        list is never substituted. Widen the focus and call again. A focused
+        call costs the same single unit of the daily cap.
         """
-        return self._extract(text=text, language=language)
+        return self._extract(text=text, language=language, focus=focus)
 
     def assess(self, *, text: str, language: str = "") -> AssessResponse:
         """Fast verdict via a 3-model frontier panel. Sync, ~5-10s.
@@ -448,6 +479,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -481,6 +513,7 @@ class Lenz:
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=key,
         )
         logger.info("Submitted task: %s", accepted.task_id)
@@ -518,6 +551,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
         timeout: float = 180.0,
     ) -> list[BatchItemResult]:
@@ -534,6 +568,7 @@ class Lenz:
             webhook_url=webhook_url,
             language=language,
             visibility=visibility,
+            depth=depth,
             idempotency_key=idempotency_key,
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
@@ -683,6 +718,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> TaskAccepted:
         payload: dict[str, Any] = {
@@ -697,6 +733,9 @@ class Lenz:
         # Omit-when-empty: the server defaults to 'private'.
         if visibility:
             payload["visibility"] = visibility
+        # Omit-when-empty: the server defaults to 'standard'.
+        if depth:
+            payload["depth"] = depth
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
@@ -710,6 +749,7 @@ class Lenz:
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
+        depth: str = "",
         idempotency_key: str | None = None,
     ) -> BatchAccepted:
         # ``webhook_url`` and ``language`` are batch-wide defaults; any
@@ -723,16 +763,22 @@ class Lenz:
             payload["language"] = language
         if visibility:
             payload["visibility"] = visibility
+        if depth:
+            payload["depth"] = depth
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         body = self._request("POST", "/verify/batch", json=payload, headers=headers)
         return BatchAccepted.model_validate(body)
 
-    def _extract(self, *, text: str, language: str = "") -> ExtractedClaims:
+    def _extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
         payload: dict[str, Any] = {"text": text}
         if language:
             payload["language"] = language
+        # No client-side length check on `focus`: the server's 422 is the
+        # contract, and a cap duplicated here would drift from it.
+        if focus:
+            payload["focus"] = focus
         body = self._request("POST", "/extract", json=payload)
         return ExtractedClaims.model_validate(body)
 
