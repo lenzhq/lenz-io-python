@@ -464,18 +464,33 @@ def render_ask(out: Output, reply: Any) -> None:
     out.console.print(Markdown(content))
 
 
-def _capacity_row(out: Output, label: str, cap: UsageCapacity, cost: int | None = None) -> None:
+def _capacity_row(
+    out: Output,
+    label: str,
+    cap: UsageCapacity,
+    cost: int | None = None,
+    *,
+    price_note: str = "",
+) -> None:
     """One capability's slice of the credit pool: usable total + breakdown.
 
     ``remaining`` is how many of THESE calls the balance still buys (monthly
     allowance + bonus, in this capability's unit); the dim tail shows the split
     — ``used / total quota``, ``+N bonus`` when the account holds non-expiring
-    top-up credits, and the per-call price when the server states one."""
+    top-up credits, and the per-call price when the server states one.
+
+    ``price_note`` appends a second price to that tail (today: the ``verify``
+    row's ``depth="low"`` half price). It rides on the existing row instead of
+    getting a row of its own because it is a PRICE, not a capability — there
+    is no separate low-depth allowance, and printing one would imply a second
+    balance."""
     detail = f"{cap.quota_used} / {cap.quota_total} quota"
     if cap.bonus:
         detail += f" + {cap.bonus} bonus"
     if cost:
         detail += f" · {_count(cost, 'credit')} each"
+        if price_note:
+            detail += f" · {price_note}"
     out.console.print(f"  {label + ':':<9} {cap.remaining} left  [dim]({detail})[/dim]")
 
 
@@ -532,7 +547,7 @@ def render_usage(out: Output, u: Usage) -> None:
         assessments = _count(_equivalent(u, "assess"), "assessment")
         equivalents = f"≈ {verifications} · {assessments}"
         out.console.print(f"  [bold]{u.credits.remaining} credits left[/bold]  [dim]({equivalents})[/dim]")
-    _capacity_row(out, "Verify", u.verify, u.costs.get("verify"))
+    _capacity_row(out, "Verify", u.verify, u.costs.get("verify"), price_note=_low_depth_note(u))
     _capacity_row(out, "Ask", u.ask, u.costs.get("ask"))
     _capacity_row(out, "Assess", u.assess, u.costs.get("assess"))
     ex = u.extract
@@ -544,6 +559,19 @@ def render_usage(out: Output, u: Usage) -> None:
     resets_at = u.credits.resets_at or u.quota_resets_at
     if resets_at:
         out.console.print(f"  [dim]Credits reset {_humanize_reset(resets_at)}[/dim]")
+
+
+def _low_depth_note(u: Usage) -> str:
+    """The ``depth="low"`` verify price, for the tail of the Verify row.
+
+    Empty when the server doesn't publish ``verify_low`` (any server before
+    the depth pricing shipped) or when it matches the standard price — a note
+    saying "5 at depth low" beside "5 credits each" is noise, not information.
+    """
+    low = u.costs.get("verify_low")
+    if not low or low == u.costs.get("verify"):
+        return ""
+    return f'{low} at depth "low"'
 
 
 def _has_credit_pool(u: Usage) -> bool:

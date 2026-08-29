@@ -353,7 +353,8 @@ class UsageCredits(_Lax):
     """The account's credit balance — the one pool every capability spends.
 
     Every billable call debits this pool at the weight in :attr:`Usage.costs`
-    (``/verify`` is 10 credits, ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
+    ``costs["verify_low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
     resets at ``resets_at``, and non-expiring ``bonus`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
@@ -451,15 +452,36 @@ class Usage(_Lax):
     ``extract`` is free at the pool (``costs["extract"] == 0``) and is bounded
     by a per-account daily fair-use cap instead; it rejects with 429, never
     402.
+
+    ``costs`` also carries ``verify_low``, the ``depth="low"`` verify price —
+    a **price, not a capability**, so there is deliberately no ``verify_low``
+    block beside ``verify``. Divide ``credits.remaining`` by it yourself for
+    the low-depth count.
     """
 
     plan: str = ""
     quota_resets_at: str | None = None
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
-    #: Credits per call, per capability: ``{"verify": 10, "assess": 1,
-    #: "ask": 1, "extract": 0}``. Empty on older servers. Read the weight from
-    #: here rather than hard-coding it — new capabilities appear as new keys.
+    #: Credits per call, keyed by capability: ``{"verify": 10,
+    #: "verify_low": 5, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: servers. Read the weight from here rather than hard-coding it — new
+    #: keys appear without an SDK release, and the SDK never rewrites the
+    #: server's own key names.
+    #:
+    #: ``verify_low`` is the ``depth="low"`` verify price — half of
+    #: ``verify``. It is a **price, not a capability**: there is deliberately
+    #: no ``verify_low`` projection block beside :attr:`verify`, because it
+    #: would report the same balance in a second unit. A caller wanting "how
+    #: many low-depth verifications can I still afford" divides
+    #: ``credits.remaining`` by it.
+    #:
+    #: You are charged for the depth you **requested**, not the one served: a
+    #: ``low`` request answered from a cached ``standard`` verdict still costs
+    #: ``verify_low``. The ``depth`` echoed on a completed verification is what
+    #: the verdict was PRODUCED with, so it can read ``standard`` on a ``low``
+    #: request — the echo describes the evidence, the charge follows the
+    #: request.
     costs: dict[str, int] = Field(default_factory=dict)
     verify: UsageCapacity = Field(default_factory=UsageCapacity)
     ask: UsageCapacity = Field(default_factory=UsageCapacity)

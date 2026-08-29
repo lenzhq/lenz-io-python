@@ -10,6 +10,7 @@
   },
   "costs": {
     "verify": 10,
+    "verify_low": 5,
     "assess": 1,
     "ask": 1,
     "extract": 0

@@ -124,6 +124,14 @@ class LenzQuotaExceededError(LenzError):
     verifications, assessments, follow-ups. ``credit_balance`` and ``cost``
     are in **credits**, so together they separate "you have 4 credits and this
     verify costs 10" from "you have nothing".
+
+    ``cost`` is **depth-aware**, not a fixed multiple of the standard price: a
+    rejected ``depth="low"`` verify reports 5, and a rejected batch that mixes
+    depths reports its real summed total rather than ``n x 10`` or ``n x 5``.
+    Read it rather than recomputing it from ``requested`` and a price you
+    assumed. The charge follows the depth **requested** — a ``low`` request is
+    priced at ``low`` even when the server could have answered it from a
+    cached ``standard`` verdict.
     """
 
     upgrade_url: str = ""

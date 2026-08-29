@@ -51,7 +51,7 @@ exit (an out-of-credits run reports `"code": "no_credits"` and adds
 ```text
 Lenz usage  (developer plan)
   5070 credits left  (≈ 507 verifications · 5070 assessments)
-  Verify:   507 left  (13 / 520 quota + 20 bonus · 10 credits each)
+  Verify:   507 left  (13 / 520 quota + 20 bonus · 10 credits each · 5 at depth "low")
   Ask:      5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
   Assess:   5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
   Extract:  4 / 1000 today  (free — no credit charge)
@@ -148,7 +148,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** → browse the public catalog (no API key needed).
-- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
+- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `verify_low` 5, `assess` 1, `ask` 1, `extract` 0), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
 
@@ -234,14 +234,21 @@ for the headline assess-then-escalate pattern.
 
 ## Credits
 
-One pool per account funds every billable call, at a fixed weight: a `verify`
-is 10 credits (×N for a batch), an `assess` or an `ask` is 1, and `extract` is
-0 — free at the pool, bounded by the daily fair-use cap instead.
+One pool per account funds every billable call, at a fixed weight:
+
+| Call | Credits |
+|---|---|
+| `verify` (and `verify_batch`, `select`) | **10** per claim |
+| `verify` with `depth="low"` | **5** per claim |
+| `assess` | 1 per claim |
+| `ask` | 1 |
+| `extract` | 0 — free at the pool, bounded by the daily fair-use cap instead |
 
 ```python
 u = client.usage()
 print(u.credits.remaining, "credits")  # the balance — the authoritative number
 print(u.costs["verify"], "credits per verification")  # the price list
+print(u.costs["verify_low"], "at depth low")  # 5 — half price
 print(u.verify.remaining, "verifications left")  # a projection of that balance
 print(u.credits.bonus, "of them non-expiring")  # grants + top-ups
 ```
@@ -256,6 +263,28 @@ so 200 bonus credits read as `assess.bonus == 200` and `verify.bonus == 20`.
 The old `capability.credits` field is a deprecated alias of `bonus` (it never
 meant the pool); reading it emits a `DeprecationWarning` and it goes away on
 2026-11-29.
+
+### Depth pricing
+
+`costs["verify_low"]` is the price of a `depth="low"` verification — half a
+standard one. `low` caps research breadth (fewer discovery queries, a hard
+extraction ceiling, no recovery fetch tiers) while every reasoning step runs
+the same models; it is not a model downgrade.
+
+It is a **price, not a capability**. There is deliberately no `usage.verify_low`
+block beside `usage.verify` — it would report the same balance in a second
+unit. Divide the balance yourself when you want the count:
+
+```python
+low_depth_left = u.credits.remaining // u.costs["verify_low"]  # 1014
+```
+
+**You are charged for the depth you requested, not the one you were served.**
+A `low` request answered from a cached `standard` verdict still costs 5. The
+`depth` echoed on the completed verification is what the verdict was *produced*
+with, so it can read `standard` on a `low` request — the echo describes the
+evidence behind the answer, the charge follows the request. A batch may mix
+depths and is billed per item.
 
 ## Errors
 
@@ -278,6 +307,9 @@ except LenzQuotaExceededError as exc:
     print(exc.remaining)  # 0 verifications, or None if the server didn't say
     print(exc.credit_balance)  # 4 — credits left in the pool, or None
     print(exc.cost)  # 10 — credits this call would have taken, or None
+    # `cost` is depth-aware: a rejected depth="low" verify reports 5, and a
+    # rejected batch mixing depths reports its real summed total. Read it
+    # rather than multiplying `requested` by a price you assumed.
     print(exc.resets_at)  # "2026-09-01T00:00:00+00:00", or None
     print(exc.upgrade_url)  # https://lenz.io/plans
 except LenzAuthError as exc:

@@ -14,9 +14,21 @@ have cost.
 - **`Usage.credits`** (`UsageCredits`: `total`, `used`, `remaining`, `bonus`,
   `resets_at`) — the account's balance, and the authoritative number. Every
   billable call debits it.
-- **`Usage.costs`** — the price list, `{"verify": 10, "assess": 1, "ask": 1,
-  "extract": 0}`. Read the weight from here rather than hard-coding it; a new
-  capability arrives as a new key.
+- **`Usage.costs`** — the price list, `{"verify": 10, "verify_low": 5,
+  "assess": 1, "ask": 1, "extract": 0}`. Read the weight from here rather than
+  hard-coding it; a new capability arrives as a new key.
+- **`costs["verify_low"]`** — the `depth="low"` verify price, half a standard
+  one. `low` caps research breadth while every reasoning step runs the same
+  models; it is not a model downgrade. It is a **price, not a capability**:
+  there is deliberately no `usage.verify_low` block beside `usage.verify`,
+  because it would report the same balance in a second unit. Divide
+  `credits.remaining` by it for the low-depth count. `costs` was already an
+  open `dict[str, int]`, so this is additive and needed no type change.
+  - **You are charged for the depth you REQUESTED, not the one you were
+    served.** A `low` request answered from a cached `standard` verdict still
+    costs 5. The `depth` echoed on the completed verification is what the
+    verdict was *produced* with, so it can read `standard` on a `low` request
+    — the echo describes the evidence, the charge follows the request.
 - **`UsageCapacity.bonus`** — the non-expiring top-up bucket, in that
   capability's unit. 200 bonus credits read as `assess.bonus == 200` and
   `verify.bonus == 20`: 5 credits does not buy a verification.
@@ -31,9 +43,15 @@ have cost.
     (verifications, not credits). Re-pointing it would have silently changed
     the number under everyone still on the deprecated path. The raw key stays
     available as `exc.body["credits_remaining"]`.
+  - `cost` is **depth-aware**, not a fixed multiple: a rejected `depth="low"`
+    verify reports 5, and a rejected batch that mixes depths reports its real
+    summed total. Read it rather than multiplying `requested` by an assumed
+    price.
 - `lenz usage` leads with the balance — `5070 credits left (≈ 507
   verifications · 5070 assessments)` — with the per-capability rows and their
-  per-call price beneath it.
+  per-call price beneath it. The `Verify` row's tail also carries the
+  low-depth price (`· 10 credits each · 5 at depth "low"`) — on the existing
+  row, not one of its own, because there is no separate low-depth allowance.
 
 ### Changed
 - The per-capability blocks (`usage.verify` / `ask` / `assess`) are now
