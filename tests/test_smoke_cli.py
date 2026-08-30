@@ -13,7 +13,7 @@ suite; run on demand / in the release workflow:
 Skipped if no key is set. Token-minimizing, mirroring the SDK smoke:
   - ``verify`` uses the pre-cached quickstart claim -> cache hit, < 30s, no
     fresh 8-model pipeline burned.
-  - ``assess`` reuses the same claim (sync, ~5-10s).
+  - ``assess`` reuses the same claim (sync, ~10s).
   - ``extract`` is free (no credit charge).
   - ``--version`` needs no API call at all.
   - No live ``ask`` (it would burn a fresh exchange) — its thin CLI layer is
