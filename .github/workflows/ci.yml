@@ -62,3 +62,25 @@ jobs:
           /tmp/bareenv/bin/pip install "$(ls dist/*.whl)"
           /tmp/bareenv/bin/lenz 2>/tmp/err.txt && exit 1 || true
           grep -q 'lenz-io\[cli\]' /tmp/err.txt
+
+  ci-ok:
+    # Aggregate gate. Branch protection requires THIS check and nothing else, so
+    # the matrix above can gain or drop a cell without anyone touching the
+    # protection rule. Requiring the matrix jobs by name pins those names: drop
+    # a Python version and the stale required check never reports again, which
+    # blocks every subsequent pull request until someone edits repository
+    # settings.
+    #
+    # `if: always()` is required — without it this job is skipped when a needed
+    # job fails, and a skipped check is not a passing one, so the failure would
+    # present as a stuck PR rather than a red gate.
+    name: ci-ok
+    if: always()
+    needs: [test, cli-wheel-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every upstream job to have succeeded
+        run: |
+          echo "test=${{ needs.test.result }} cli-wheel-smoke=${{ needs.cli-wheel-smoke.result }}"
+          [ "${{ needs.test.result }}" = "success" ] || exit 1
+          [ "${{ needs.cli-wheel-smoke.result }}" = "success" ] || exit 1
