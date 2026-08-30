@@ -35,6 +35,7 @@ lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
+lenz verify  "<claim>" --depth low                          # shallower, faster, half the credits
 lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
@@ -150,7 +151,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** → browse the public catalog (no API key needed).
-- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `verify_low` 5, `assess` 1, `ask` 1, `extract` 0), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
+- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
 
@@ -250,7 +251,7 @@ One pool per account funds every billable call, at a fixed weight:
 u = client.usage()
 print(u.credits.remaining, "credits")  # the balance — the authoritative number
 print(u.costs["verify"], "credits per verification")  # the price list
-print(u.costs["verify_low"], "at depth low")  # 5 — half price
+print(u.cost_options["verify"]["depth"]["low"], "at depth low")  # 5 — half price
 print(u.verify.remaining, "verifications left")  # a projection of that balance
 print(u.credits.bonus, "of them non-expiring")  # grants + top-ups
 ```
@@ -268,17 +269,22 @@ meant the pool); reading it emits a `DeprecationWarning` and it goes away on
 
 ### Depth pricing
 
-`costs["verify_low"]` is the price of a `depth="low"` verification — half a
-standard one. `low` caps research breadth (fewer discovery queries, a hard
-extraction ceiling, no recovery fetch tiers) while every reasoning step runs
-the same models; it is not a model downgrade.
+`cost_options["verify"]["depth"]["low"]` is the price of a `depth="low"`
+verification — half a standard one. `low` caps research breadth (fewer
+discovery queries, a hard extraction ceiling, no recovery fetch tiers) while
+every reasoning step runs the same models; it is not a model downgrade.
 
-It is a **price, not a capability**. There is deliberately no `usage.verify_low`
-block beside `usage.verify` — it would report the same balance in a second
-unit. Divide the balance yourself when you want the count:
+It is a **price, not a capability**, which is why it is nested under
+`cost_options` rather than sitting in `costs` beside the four capability
+names. There is deliberately no `usage.verify_low` block beside
+`usage.verify` — it would report the same balance in a second unit. Divide
+the balance yourself when you want the count:
 
 ```python
-low_depth_left = u.credits.remaining // u.costs["verify_low"]  # 1014
+# Every level is optional: a server predating this field sends `{}`, and
+# the capability's default price in `costs` is the right fallback.
+low = u.cost_options.get("verify", {}).get("depth", {}).get("low") or u.costs["verify"]
+low_depth_left = u.credits.remaining // low  # 1014
 ```
 
 **You are charged for the depth you requested, not the one you were served.**
