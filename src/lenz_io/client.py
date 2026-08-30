@@ -22,7 +22,7 @@ Shape (four-primitive ladder + the supporting reads):
 
     # Marquee verbs — top-level (the four-primitive ladder)
     out = client.extract(text="...")                       # find claims
-    r = client.assess(text="...")                          # fast 3-model verdict, ~5-10s
+    r = client.assess(text="...")                          # fast 3-model verdict, ~10s
     v = client.verify_and_wait(claim="...")                # full 8-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
@@ -424,7 +424,7 @@ class Lenz:
         return self._extract(text=text, language=language, focus=focus)
 
     def assess(self, *, text: str, language: str = "") -> AssessResponse:
-        """Fast verdict via a 3-model frontier panel. Sync, ~5-10s.
+        """Fast verdict via a 3-model frontier panel. Sync, ~10s.
 
         Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
         claim that framing identified. Each claim has a ``verdict``
