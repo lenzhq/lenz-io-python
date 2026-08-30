@@ -1,5 +1,6 @@
 {
   "plan": "developer",
+  "plan_label": "Developer",
   "quota_resets_at": "2026-09-01T00:00:00+00:00",
   "credits": {
     "total": 5200,
@@ -10,10 +11,12 @@
   },
   "costs": {
     "verify": 10,
-    "verify_low": 5,
     "assess": 1,
     "ask": 1,
     "extract": 0
+  },
+  "cost_options": {
+    "verify": { "depth": { "standard": 10, "low": 5 } }
   },
   "verify": {
     "quota_used": 13,
