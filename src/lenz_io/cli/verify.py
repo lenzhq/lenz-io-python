@@ -38,7 +38,9 @@ from .render import Output, render_batch_details, render_batch_table, render_ver
 POLL_INTERVAL = 2.5  # seconds — never sub-second; the pipeline runs ~90s.
 
 # Accepted --depth values. 'standard' is the server default; 'low' runs a
-# shallower check — fewer sources, faster. Same models, same quota cost.
+# shallower check — fewer sources, faster. Same models, half the credits
+# (`lenz usage` prints both prices). The charge follows the depth you ask
+# for, not the one the verdict was produced with.
 DEPTH_CHOICES = ("standard", "low")
 
 # Friendlier spinner copy for the raw pipeline step names the status endpoint
@@ -76,10 +78,10 @@ def verify(
         None,
         "--depth",
         metavar="standard|low",
-        help="'low' runs a shallower check — fewer sources, faster. Same models, same cost.",
+        help="'low' runs a shallower check — fewer sources, faster, same models, half the credits.",
     ),
 ) -> None:
-    """Full fact-check pipeline (~90s). Needs a key; spends a credit on a fresh claim."""
+    """Full fact-check pipeline (~90s). Needs a key; a fresh claim costs 10 credits (5 at --depth low)."""
     state: CLIState = ctx.obj
     out = state.output
     selection = _parse_claim_selection(pick)

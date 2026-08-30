@@ -4,6 +4,21 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.9.1] - 2026-08-30
+
+Documentation only; no behaviour changes.
+
+### Fixed
+
+- **CLI `--depth` help** said `low` costs the same as `standard`. It costs
+  half: 10 credits at `standard`, 5 at `low` (`lenz usage` prints both).
+  The `lenz verify` summary now says the same, and the quickstart shows
+  `--depth low`.
+- **README** documented a `costs["verify_low"]` key that does not exist —
+  `costs` holds capability names only. The low-depth price lives at
+  `cost_options["verify"]["depth"]["low"]`, as the model and the 2.9.0
+  notes already describe.
+
 ## [2.9.0] - 2026-08-29
 
 One weighted credit pool replaces six per-endpoint quotas; `extract` takes a
