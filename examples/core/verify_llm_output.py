@@ -32,12 +32,17 @@ def main() -> None:
     # straight to ``assess`` is framed with a fixed claim budget and the
     # rest is dropped; ``extract`` enumerates everything.
     out = client.extract(text=LLM_OUTPUT)
-    claims = out.identified_claims or [out.claim]
+    claims = [c for c in (out.identified_claims or [out.claim]) if c]
 
     # Step 2: assess each claim (~10s, one credit per claim). The calls are
-    # independent, so run them side by side.
-    with ThreadPoolExecutor() as pool:
-        quick = list(pool.map(lambda c: client.assess(claim=c).claims[0], claims))
+    # independent; run at most 5 at a time — the server's own fan-out cap.
+    # ``/assess`` answers ``claims: []`` when nothing is checkable, so guard it.
+    def assess_one(c):
+        r = client.assess(claim=c)
+        return r.claims[0] if r.claims else None
+
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        quick = [q for q in pool.map(assess_one, claims) if q]
     print(f"Assessed {len(quick)} claims:\n")
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")

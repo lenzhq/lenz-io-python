@@ -91,15 +91,19 @@ client = Lenz(api_key="lenz_...")
 # 1. extract — pull verifiable claims out of any text (free)
 #    add focus="..." to narrow it to the claims you care about
 out = client.extract(text=llm_output)
-claims = out.identified_claims or [out.claim]
+claims = [c for c in (out.identified_claims or [out.claim]) if c]
 
 # 2. assess — fast 3-model verdict on each (~10s, sync, one credit per claim).
-#    Assess the extracted claims, not the document: the calls are independent,
-#    so run them side by side.
+#    Assess the extracted claims, not the document. The calls are independent;
+#    run at most 5 at a time (the server's own fan-out cap).
 from concurrent.futures import ThreadPoolExecutor
 
-with ThreadPoolExecutor() as pool:
-    quick = list(pool.map(lambda c: client.assess(claim=c).claims[0], claims))
+def assess_one(c):
+    r = client.assess(claim=c)
+    return r.claims[0] if r.claims else None   # [] when nothing is checkable
+
+with ThreadPoolExecutor(max_workers=5) as pool:
+    quick = [q for q in pool.map(assess_one, claims) if q]
 for c in quick:
     print(c.verdict, c.confidence, c.claim)
 
@@ -111,8 +115,8 @@ for r in results:
         print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
 
 # 4. ask — follow-up grounded on a verification
-v = results[0].verification
-reply = client.ask.send(v.verification_id, message="Which source is strongest?")
+deep = next((r.verification for r in results if r.verification), None)
+reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 print(reply.content)
 ```
 
