@@ -182,7 +182,7 @@ def _poll(
                     raise SystemExit(0)
                 # Sub-claims inherit the parent submission's depth server-side
                 # (/select reads it off the task meta), so nothing to send here.
-                items = client.select(task_id, texts=texts).items
+                items = client.select(task_id, claims=texts).items
                 picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts)]
                 # detach, or >1 claim → batch path; exactly one → keep the
                 # single-verdict flow (nicer than a 1-row table).
@@ -292,7 +292,7 @@ def _needs_input_single(
         else:
             idx = _choose(out, "Ambiguous — pick a reading:", options)
         _validate_index(idx, options)
-        return client.select(task_id, texts=[options[idx]]).items[0].task_id
+        return client.select(task_id, claims=[options[idx]]).items[0].task_id
 
     if reason == "duplicate_found":
         if out.json_mode:

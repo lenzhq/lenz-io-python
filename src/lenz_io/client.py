@@ -21,8 +21,8 @@ Shape (four-primitive ladder + the supporting reads):
     client = Lenz(api_key="lenz_...")
 
     # Marquee verbs — top-level (the four-primitive ladder)
-    out = client.extract(text="...")                       # find claims
-    r = client.assess(text="...")                          # fast 3-model verdict, ~10s
+    out = client.extract(text="...")                       # find claims in a document
+    r = client.assess(claim="...")                         # fast 3-model verdict, ~10s
     v = client.verify_and_wait(claim="...")                # full 8-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
@@ -32,7 +32,7 @@ Shape (four-primitive ladder + the supporting reads):
     batch = client.verify_batch(claims=[...])
     results = client.verify_batch_and_wait(claims=[...])   # submit + poll all
     status = client.get_status(task_id)      # single non-blocking poll
-    client.select(task_id, texts=["The earth is flat."])  # pick one or more
+    client.select(task_id, claims=["The earth is flat."])  # pick one or more
 
     # Resource namespaces
     client.verifications.list()
@@ -40,6 +40,11 @@ Shape (four-primitive ladder + the supporting reads):
     client.ask.history(id) / send(id, message=...) / reset(id)
     client.library.list()
     client.usage()
+
+Naming: ``text`` is a document, ``claim`` is a claim. ``extract`` takes
+``text``; ``assess``, ``verify``, batch items and ``select`` take ``claim`` /
+``claims``. The older spellings (``text=`` on assess / verify / batch items,
+``texts=`` on select) are accepted as aliases and are not going away.
 
 Design decisions:
 
@@ -112,13 +117,30 @@ def _user_agent() -> str:
     return f"lenz-io-python/{__version__} (httpx {httpx.__version__})"
 
 
+def _batch_item_body(item: Any) -> Any:
+    """The wire shape of one batch item.
+
+    An item without ``claim`` is forwarded verbatim, so every existing caller
+    keeps a byte-identical request body. An item with ``claim`` is sent as
+    ``text`` — the wire key the server has always accepted.
+    """
+    if "claim" not in item:
+        return item
+    body = {k: v for k, v in item.items() if k != "claim"}
+    body["text"] = item["claim"] or item.get("text", "")
+    return body
+
+
 class VerifyBatchItem(TypedDict, total=False):
     """Per-item shape for ``verify_batch``.
 
     All fields optional — callers can pass any subset. Type-only:
     the SDK accepts plain dicts at runtime and does no Pydantic
     coercion. The TypedDict exists purely so IDEs autocomplete the
-    per-item keys (``text``, ``language``, …).
+    per-item keys (``claim``, ``language``, …).
+
+    ``claim`` is the item's claim; ``text`` is accepted as an alias
+    (``claim`` wins if both are given).
 
     Precedence on conflicting language: per-item ``language`` overrides
     the batch-wide ``language`` kwarg on ``verify_batch``, which overrides
@@ -126,6 +148,7 @@ class VerifyBatchItem(TypedDict, total=False):
     server is authoritative on the merge.
     """
 
+    claim: str
     text: str
     language: str
     source_url: str
@@ -346,10 +369,20 @@ class Lenz:
     # ── marquee verbs (top-level shortcuts) ──
 
     def verify(
-        self, claim: str, *, language: str = "", visibility: str = "", depth: str = "", **kwargs: Any
+        self,
+        claim: str = "",
+        *,
+        text: str = "",
+        language: str = "",
+        visibility: str = "",
+        depth: str = "",
+        **kwargs: Any,
     ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
+
+        ``claim``: the statement to check. ``text=`` is accepted as an alias
+        (``claim`` wins if both are given).
 
         ``language`` (optional): output language for the verification's
         prose fields. See module docstring for supported codes.
@@ -364,7 +397,9 @@ class Lenz:
         verdict was actually produced with, which can be ``'standard'`` for a
         ``'low'`` request served from cache.
         """
-        return self._verify_submit(claim=claim, language=language, visibility=visibility, depth=depth, **kwargs)
+        return self._verify_submit(
+            claim=claim, text=text, language=language, visibility=visibility, depth=depth, **kwargs
+        )
 
     def verify_batch(
         self,
@@ -423,8 +458,12 @@ class Lenz:
         """
         return self._extract(text=text, language=language, focus=focus)
 
-    def assess(self, *, text: str, language: str = "") -> AssessResponse:
+    def assess(self, claim: str = "", *, text: str = "", language: str = "") -> AssessResponse:
         """Fast verdict via a 3-model frontier panel. Sync, ~10s.
+
+        ``claim``: the statement to check. If it contains several atomic
+        claims, each is verdicted separately. ``text=`` is accepted as an
+        alias (``claim`` wins if both are given).
 
         Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
         claim that framing identified. Each claim has a ``verdict``
@@ -446,24 +485,26 @@ class Lenz:
         Paid quota — see ``client.usage()``. Quota debits per atomic
         claim that framing produces (multiclaim inputs consume N units).
         """
-        return self._assess(text=text, language=language)
+        return self._assess(text=claim or text, language=language)
 
-    def select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
+    def select(self, task_id: str, *, claims: list[str] | None = None, texts: list[str] | None = None) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
 
-        Pass ``texts=`` — the exact wording of the claim(s) you're choosing
+        Pass ``claims=`` — the exact wording of the claim(s) you're choosing
         (entries from the prior status's ``claims`` / ``candidates``). Each
         selected claim fans out into its own pipeline; the returned
         ``BatchAccepted`` carries one ``items`` entry (each with its own
         ``task_id``) per claim. Poll each via ``get_status`` / ``wait``.
+        ``texts=`` is accepted as an alias (``claims`` wins if both are given).
 
-        Selection is by text, not index. Every text must match a claim that was
+        Selection is by text, not index. Every claim must match one that was
         offered in the prior interrupt — the server rejects anything else with
         a 422. To resolve a single claim, pass a one-element list.
         """
-        if not texts:
-            raise ValueError("select requires a non-empty texts=[...]")
-        return self._select(task_id, texts=texts)
+        chosen = claims or texts
+        if not chosen:
+            raise ValueError("select requires a non-empty claims=[...]")
+        return self._select(task_id, texts=chosen)
 
     def get_status(self, task_id: str) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
@@ -473,8 +514,9 @@ class Lenz:
 
     def verify_and_wait(
         self,
-        claim: str,
+        claim: str = "",
         *,
+        text: str = "",
         source_url: str = "",
         webhook_url: str = "",
         language: str = "",
@@ -509,6 +551,7 @@ class Lenz:
             key = uuid.uuid4().hex
         accepted = self._verify_submit(
             claim=claim,
+            text=text,
             source_url=source_url,
             webhook_url=webhook_url,
             language=language,
@@ -758,7 +801,7 @@ class Lenz:
         # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
         # (revised SDK plan decision 1C — no Pydantic coercion, keep the
         # runtime contract a plain dict).
-        payload: dict[str, Any] = {"claims": list(claims), "webhook_url": webhook_url}
+        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims], "webhook_url": webhook_url}
         if language:
             payload["language"] = language
         if visibility:

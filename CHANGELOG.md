@@ -4,6 +4,30 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.10.0] - 2026-09-01
+
+One input vocabulary: **`text` is a document, `claim` is a claim.** `extract`
+takes `text`; `assess`, `verify`, batch items and `select` take `claim` /
+`claims`. Lockstep release with Node 2.10.0. No request body changes: every
+call still serialises to the wire keys it always has, so this release works
+against any server version.
+
+### Added
+
+- **`client.assess(claim=...)`** — `claim` is now the first (positional)
+  parameter. `text=` keeps working as an alias; `claim` wins if both are given.
+- **`client.verify(text=...)`** / **`verify_and_wait(text=...)`** — `text` is
+  accepted as an explicit keyword alias for `claim`.
+- **`VerifyBatchItem.claim`** — batch items take `claim`; `text` stays as an
+  alias. Items without `claim` are forwarded byte-for-byte as before.
+- **`client.select(task_id, claims=[...])`** — `texts=` keeps working as an
+  alias. The `ValueError` for an empty selection now names `claims`.
+
+### Changed
+
+- The CLI's `lenz assess` and the multi-claim picker call the new names.
+  Behaviour is unchanged.
+
 ## [2.9.1] - 2026-08-30
 
 Documentation only; no behaviour changes.
