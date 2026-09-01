@@ -1,0 +1,9 @@
+{
+  "claims": [
+    {"claim": "Water boils at 100 °C at sea level.", "language": "en", "verdict": "True", "confidence": "high", "verification_url": null, "error_code": null, "candidate_claims": [], "identified_claims": [], "hint": null},
+    {"claim": "Bilingual children develop stronger executive function.", "language": "en", "verdict": "Mixed", "confidence": "medium", "verification_url": "https://lenz.io/api/v1/verifications/3f9a1c2e", "error_code": null, "candidate_claims": [], "identified_claims": ["Bilingual children learn to read later than monolingual peers."], "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest."},
+    {"claim": "this is fine", "language": "en", "verdict": "Error", "confidence": "low", "verification_url": null, "error_code": "no_claim", "candidate_claims": [], "identified_claims": [], "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run a longer text through /extract."},
+    {"claim": "RAM prices have more than doubled", "language": "en", "verdict": "Error", "confidence": "low", "verification_url": null, "error_code": "ambiguous", "candidate_claims": ["Average U.S. retail prices for consumer DDR4 desktop RAM have more than doubled between 2021 and 2026.", "Global DRAM contract prices have more than doubled between 2021 and 2026."], "identified_claims": [], "hint": "Ambiguous: Which memory market / form factor? Send one of candidate_claims as its own item."}
+  ],
+  "error": null
+}

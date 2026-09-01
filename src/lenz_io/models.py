@@ -289,6 +289,15 @@ class AssessClaim(_Lax):
     ``verification_url`` (when present) points at the full
     ``ClaimDetailOut`` payload at ``GET /api/v1/verifications/{id}`` for
     callers that want citations and the full audit trail.
+
+    A row with ``verdict == "Error"`` could not be given a verdict. On a
+    list call it stays in position (one row per item sent), is not charged,
+    and says why: ``error_code`` names the cause, ``candidate_claims`` holds
+    the readings when the cause is ``ambiguous``, and ``hint`` is one
+    sentence on what to send next. A compound input is assessed on its main
+    claim; the other claims found in it are listed in ``identified_claims``
+    (also with a ``hint``). All four default empty so older servers that
+    don't send them still parse.
     """
 
     claim: str = ""
@@ -298,17 +307,32 @@ class AssessClaim(_Lax):
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
+    # Only on ``verdict == "Error"`` rows: 'no_claim' | 'ambiguous' |
+    # 'framing_failed' | 'upstream_unavailable' (the retryable one).
+    error_code: str | None = None
+    # Readings to choose from when ``error_code == "ambiguous"``; else empty.
+    candidate_claims: list[str] = Field(default_factory=list)
+    # Other claims found in the input that were NOT assessed; else empty.
+    identified_claims: list[str] = Field(default_factory=list)
+    # One sentence on what to send next. Set on every Error row and on a row
+    # with a non-empty ``identified_claims``; ``None`` on a plain verdict row.
+    hint: str | None = None
 
 
 class AssessResponse(_Lax):
     """Output of ``POST /assess``.
 
-    ``claims`` is one entry per atomic_claim that framing identified in
-    the input. Multiclaim inputs return N entries. ``error`` is set when
-    framing returns zero claims.
+    Single form (``assess(claim=...)``): ``claims`` is one entry per
+    atomic_claim that framing identified in the input. Multiclaim inputs
+    return N entries. ``error`` is set when framing returns zero claims.
 
-    When ``claims`` is empty, ``error_code`` disambiguates why:
-    ``'ambiguous'`` → the input was vague but framing produced specific
+    List form (``assess(claims=[...])``): exactly one entry per item sent,
+    in the order sent. An item that could not be given a verdict is an
+    ``"Error"`` row in position (see ``AssessClaim``), never a missing one;
+    the top-level ``error`` stays ``None``.
+
+    When ``claims`` is empty (single form), ``error_code`` disambiguates
+    why: ``'ambiguous'`` → the input was vague but framing produced specific
     readings in ``candidate_claims`` (assess one of them); ``'no_claim'``
     → genuinely not a checkable claim. Both fields default empty, so older
     servers that don't send them degrade to the plain ``error`` message.
@@ -337,6 +361,11 @@ class TaskStatus(_Lax):
 
     status: str = ""  # processing | needs_input | completed | failed
     reason: str = ""  # populated when status == 'needs_input'
+    # One sentence on what was unclear and how to resolve it. Set on a
+    # ``needs_input`` (``multi_claim`` / ``clarification_required``) and on a
+    # ``failed`` with ``failure_reason == "not_a_claim"``; ``""`` otherwise
+    # and from older servers.
+    hint: str = ""
     progress: dict[str, Any] = Field(default_factory=dict)
     result: Verification | None = None
     # needs_input branches

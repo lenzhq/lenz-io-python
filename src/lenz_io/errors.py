@@ -252,11 +252,14 @@ class LenzNeedsInputError(LenzError):
     """``verify_and_wait`` paused because the pipeline needs caller input.
 
     Carries ``task_id``, ``kind`` ("multi_claim" / "clarification_required" /
-    "duplicate_found"), and ``payload`` (the full status response).
+    "duplicate_found"), ``hint`` (one sentence on what was unclear and how to
+    resolve it via ``client.select`` — ``""`` from older servers) and
+    ``payload`` (the full status response).
     """
 
     task_id: str = ""
     kind: str = ""
+    hint: str = ""
     payload: dict[str, Any] = {}  # noqa: RUF012 — overridden per-instance
 
 

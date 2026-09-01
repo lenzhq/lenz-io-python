@@ -165,7 +165,20 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         return
     for c in claims:
         color = _VERDICT_COLOR.get(c.verdict, "white")
-        out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({c.confidence}) — {c.claim}")
+        # An Error row (list form) names its cause in place of the confidence,
+        # which is meaningless there.
+        detail = c.error_code if c.verdict == "Error" and c.error_code else c.confidence
+        out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({detail}) — {c.claim}")
+        if c.candidate_claims:
+            out.console.print("    [dim]readings:[/dim]")
+            for reading in c.candidate_claims:
+                out.console.print(f"      • {reading}")
+        if c.identified_claims:
+            out.console.print("    [dim]also found:[/dim]")
+            for other in c.identified_claims:
+                out.console.print(f"      • {other}")
+        if c.hint:
+            out.console.print(f"    [dim]{c.hint}[/dim]")
         vid = _verification_id_from_url(getattr(c, "verification_url", ""))
         _ask_hint(out, vid, indent="    ")
 

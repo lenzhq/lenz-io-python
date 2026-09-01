@@ -21,9 +21,10 @@ from lenz_io import (
     LenzPipelineError,
     LenzRateLimitError,
     LenzTimeoutError,
+    LenzValidationError,
     TaskAccepted,
 )
-from lenz_io.client import API_VERSION, RETRY_BACKOFF
+from lenz_io.client import API_VERSION, ASSESS_LIST_TIMEOUT, DEFAULT_TIMEOUT, RETRY_BACKOFF
 from lenz_io.errors import MAX_RETRY_AFTER_SLEEP
 
 DEFAULT_BASE = "https://lenz.io/api/v1"
@@ -459,6 +460,152 @@ class TestAssess:
         assert r2.claims == []
         assert r2.error == "No verifiable claim detected"
 
+    def test_single_form_wire_body_is_unchanged(self, client):
+        """The single form still sends exactly ``{"text": ...}`` — no ``claims``
+        key, no new keys — and rides the client-wide timeout."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claim="The earth is flat.")
+            assert json.loads(route.calls.last.request.content) == {"text": "The earth is flat."}
+            client.assess(claim="La tierra es plana.", language="es")
+            assert json.loads(route.calls.last.request.content) == {"text": "La tierra es plana.", "language": "es"}
+        timeout = route.calls.last.request.extensions["timeout"]
+        assert timeout["read"] == DEFAULT_TIMEOUT
+
+    def test_row_fields_default_when_an_older_server_omits_them(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(
+                200,
+                json={"claims": [{"claim": "x", "verdict": "True", "confidence": "high"}], "error": None},
+            )
+            c = client.assess(claim="x").claims[0]
+        assert c.error_code is None
+        assert c.candidate_claims == []
+        assert c.identified_claims == []
+        assert c.hint is None
+
+    # ── list form: assess(claims=[...]) ──
+
+    def test_claims_list_sends_claims_key_and_never_text(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claims=["A is true.", "B is false."])
+        body = json.loads(route.calls.last.request.content)
+        assert body == {"claims": ["A is true.", "B is false."]}
+        assert "text" not in body
+
+    def test_claims_list_forwards_language(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claims=["A."], language="de")
+        assert json.loads(route.calls.last.request.content) == {"claims": ["A."], "language": "de"}
+
+    def test_claims_list_one_row_per_item_in_order_with_row_fields(self, client):
+        rows = [
+            {
+                "claim": "Water boils at 100 °C at sea level.",
+                "language": "en",
+                "verdict": "True",
+                "confidence": "high",
+                "verification_url": None,
+                "error_code": None,
+                "candidate_claims": [],
+                "identified_claims": [],
+                "hint": None,
+            },
+            {
+                "claim": "Bilingual children develop stronger executive function.",
+                "language": "en",
+                "verdict": "Mixed",
+                "confidence": "medium",
+                "verification_url": "https://lenz.io/api/v1/verifications/3f9a1c2e",
+                "error_code": None,
+                "candidate_claims": [],
+                "identified_claims": ["Bilingual children learn to read later than monolingual peers."],
+                "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest.",
+            },
+            {
+                "claim": "this is fine",
+                "language": "en",
+                "verdict": "Error",
+                "confidence": "low",
+                "verification_url": None,
+                "error_code": "no_claim",
+                "candidate_claims": [],
+                "identified_claims": [],
+                "hint": "No factual statement that can be checked against evidence was found in the input.",
+            },
+            {
+                "claim": "RAM prices have more than doubled",
+                "language": "en",
+                "verdict": "Error",
+                "confidence": "low",
+                "verification_url": None,
+                "error_code": "ambiguous",
+                "candidate_claims": ["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled."],
+                "identified_claims": [],
+                "hint": "Ambiguous: Which memory market / form factor? Send one of candidate_claims as its own item.",
+            },
+        ]
+        sent = [row["claim"] for row in rows]
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(200, json={"claims": rows, "error": None})
+            out = client.assess(claims=sent)
+        # One row per item, in the order sent — Error rows hold their position.
+        assert [c.claim for c in out.claims] == sent
+        assert out.error is None
+        plain, compound, no_claim, ambiguous = out.claims
+        assert (plain.verdict, plain.confidence) == ("True", "high")
+        assert plain.error_code is None and plain.hint is None
+        assert plain.candidate_claims == [] and plain.identified_claims == []
+        assert compound.identified_claims == ["Bilingual children learn to read later than monolingual peers."]
+        assert compound.hint.startswith("Assessed the main claim only.")
+        assert compound.verification_url == "https://lenz.io/api/v1/verifications/3f9a1c2e"
+        assert (no_claim.verdict, no_claim.error_code) == ("Error", "no_claim")
+        assert no_claim.hint
+        assert (ambiguous.verdict, ambiguous.error_code) == ("Error", "ambiguous")
+        assert len(ambiguous.candidate_claims) == 2
+        assert ambiguous.hint.startswith("Ambiguous")
+
+    def test_claims_list_gets_the_longer_default_timeout(self, client):
+        """One parallel wave takes ~10-25s, so a list call rides
+        ``ASSESS_LIST_TIMEOUT`` rather than the 30s client default."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claims=["A.", "B."])
+        timeout = route.calls.last.request.extensions["timeout"]
+        assert timeout["read"] == ASSESS_LIST_TIMEOUT == 45.0
+        assert timeout["connect"] == ASSESS_LIST_TIMEOUT
+
+    def test_explicit_timeout_overrides_the_default_for_that_call_only(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claims=["A."], timeout=90)
+            assert route.calls.last.request.extensions["timeout"]["read"] == 90.0
+            client.assess(claim="A.", timeout=5)
+            assert route.calls.last.request.extensions["timeout"]["read"] == 5.0
+            # The next call is back on the client default — nothing leaked.
+            client.assess(claim="A.")
+            assert route.calls.last.request.extensions["timeout"]["read"] == DEFAULT_TIMEOUT
+
+    def test_claims_with_claim_or_text_raises(self, client):
+        with pytest.raises(ValueError, match="either one claim"):
+            client.assess("A.", claims=["B."])
+        with pytest.raises(ValueError, match="either one claim"):
+            client.assess(text="A.", claims=["B."])
+
+    def test_claims_list_is_not_checked_client_side(self, client):
+        """Count and length limits are the server's 422 (``too_many_items``,
+        ``item_too_long``, ``blank_item``) — the SDK forwards the list as is."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(
+                422, json={"detail": "At most 20 claims per call.", "code": "too_many_items"}
+            )
+            with pytest.raises(LenzValidationError) as ei:
+                client.assess(claims=["x"] * 21)
+        assert len(json.loads(route.calls.last.request.content)["claims"]) == 21
+        assert ei.value.status_code == 422
+
 
 # ─────────────────────────────────────────────────── verify_and_wait ──
 
@@ -539,6 +686,7 @@ class TestVerifyAndWait:
                 json={
                     "status": "needs_input",
                     "reason": "multi_claim",
+                    "hint": "The input holds two distinct claims. Pick the one to verify via /select.",
                     "claims": [{"text": "A", "domain": "X"}, {"text": "B", "domain": "Y"}],
                 },
             )
@@ -546,6 +694,33 @@ class TestVerifyAndWait:
                 client.verify_and_wait(claim="x", timeout=5)
         assert ei.value.task_id == "t"
         assert ei.value.kind == "multi_claim"
+        assert ei.value.hint == "The input holds two distinct claims. Pick the one to verify via /select."
+        assert ei.value.payload["hint"] == ei.value.hint
+
+    def test_needs_input_hint_is_empty_from_an_older_server(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            r.get("/verify/status/t").respond(
+                200, json={"status": "needs_input", "reason": "clarification_required", "candidates": ["A", "B"]}
+            )
+            with pytest.raises(LenzNeedsInputError) as ei:
+                client.verify_and_wait(claim="x", timeout=5)
+        assert ei.value.hint == ""
+
+    def test_status_carries_hint_on_not_a_claim_failure(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(
+                200,
+                json={
+                    "status": "failed",
+                    "failure_reason": "not_a_claim",
+                    "error": "Not a checkable claim.",
+                    "hint": "Send one factual claim, or run a longer text through /extract.",
+                },
+            )
+            st = client.get_status("t")
+        assert st.status == "failed"
+        assert st.hint == "Send one factual claim, or run a longer text through /extract."
 
     def test_failed_pipeline_raises(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

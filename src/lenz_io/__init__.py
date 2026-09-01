@@ -9,18 +9,20 @@ ladder — find claims, judge them fast, prove them deep, follow up:
     client = Lenz(api_key="lenz_...")
 
     # 1. /extract — pull verifiable claims out of text (free, 1000/day)
-    claims = client.extract(text=llm_output).identified_claims
+    out = client.extract(text=llm_output)
+    claims = out.identified_claims or [out.claim]
 
-    # 2. /assess — fast 3-model verdict on each (~10s, paid)
-    quick = client.assess(text=llm_output)
+    # 2. /assess — one call over the claims (up to 20), one row per claim, same order (paid)
+    quick = client.assess(claims=claims).claims
+    # a row with verdict == "Error" got no verdict: see its error_code and hint;
+    # a compound item lists the claims it did not assess in identified_claims
 
-    # 3. /verify — escalate low-confidence to the full pipeline (~90s, paid)
-    for c in quick.claims:
-        if c.confidence == "low":
-            deep = client.verify_and_wait(claim=c.claim)
-            print(deep.verdict, deep.lenz_score)
+    # 3. /verify — escalate the low-confidence rows to the full pipeline (~90s, paid)
+    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+    results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
     # 4. /ask — follow-up questions grounded on a verification
+    deep = results[0].verification
     reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
 See https://lenz.io/api/v1/docs/ for the full API reference.

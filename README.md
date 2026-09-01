@@ -34,6 +34,7 @@ lenz login                       # paste an API key (free — get one at lenz.io
 lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
 lenz assess  "The Great Wall is visible from space"          # fast verdict
+lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
 lenz verify  "<claim>" --depth low                          # shallower, faster, half the credits
 lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
@@ -91,22 +92,36 @@ client = Lenz(api_key="lenz_...")
 # 1. extract — pull verifiable claims out of any text (free)
 #    add focus="..." to narrow it to the claims you care about
 out = client.extract(text=llm_output)
+claims = out.identified_claims or [out.claim]
 
-# 2. assess — fast 3-model verdict on each (~10s, sync)
-quick = client.assess(claim=llm_output)
-for c in quick.claims:
+# 2. assess — ONE call over the extracted claims (up to 20), one row per claim, same order
+quick = client.assess(claims=claims).claims
+for c in quick:
     print(c.verdict, c.confidence, c.claim)
 
-# 3. verify — escalate low-confidence claims to the full panel + citations
-for c in quick.claims:
-    if c.confidence == "low":
-        v = client.verify_and_wait(claim=c.claim)
-        print(v.verdict, v.lenz_score, v.executive_summary)
+# 3. verify — escalate the low-confidence rows to the full panel + citations
+doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
+for r in results:
+    if r.verification:
+        print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
 
 # 4. ask — follow-up grounded on a verification
+v = results[0].verification
 reply = client.ask.send(v.verification_id, message="Which source is strongest?")
 print(reply.content)
 ```
+
+`assess(claims=[...])` takes up to 20 claims per call and always answers
+with exactly one row per claim, in the order sent. A row that could not be
+given a verdict comes back in position with `verdict == "Error"`, an
+`error_code` (`no_claim` / `ambiguous` / `framing_failed` /
+`upstream_unavailable` — the retryable one), `candidate_claims` when it was
+ambiguous, and a one-sentence `hint` on what to send next; it is not
+charged. A compound item is assessed on its main claim and lists the other
+claims it found in `identified_claims` (also with a `hint`) — send those as
+their own items to check the rest. `assess(claim="...")` still takes a
+single statement and is unchanged.
 
 `assess` and `verify` share a result cache server-side: if a claim
 already has a deep verification, `assess` returns it via
@@ -142,7 +157,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract).
-- **`client.assess(claim=...)`** → `AssessResponse`. Sync, ~10s, returns one entry per identified claim. (`text=` is accepted as an alias: a document is `text`, a claim is `claim`.)
+- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~10s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~10-25s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (a list call defaults to 45s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
@@ -233,7 +248,7 @@ you and rejects tampered or replayed payloads.
 
 See [`examples/core/fastapi_webhook.py`](examples/core/fastapi_webhook.py)
 for a runnable FastAPI receiver, and [`examples/core/verify_llm_output.py`](examples/core/verify_llm_output.py)
-for the headline assess-then-escalate pattern.
+for the headline extract → assess → escalate pattern.
 
 ## Credits
 
@@ -243,7 +258,7 @@ One pool per account funds every billable call, at a fixed weight:
 |---|---|
 | `verify` (and `verify_batch`, `select`) | **10** per claim |
 | `verify` with `depth="low"` | **5** per claim |
-| `assess` | 1 per claim |
+| `assess` | 1 per claim; `"Error"` rows are free |
 | `ask` | 1 |
 | `extract` | 0 — free at the pool, bounded by the daily fair-use cap instead |
 
