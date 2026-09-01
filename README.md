@@ -116,8 +116,9 @@ for r in results:
 
 # 4. ask — follow-up grounded on a verification
 deep = next((r.verification for r in results if r.verification), None)
-reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
-print(reply.content)
+if deep:   # step 3 escalated at least one claim
+    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
+    print(reply.content)
 ```
 
 `assess` and `verify` share a result cache server-side: if a claim

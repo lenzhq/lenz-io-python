@@ -31,7 +31,8 @@ ladder — find claims, judge them fast, prove them deep, follow up:
 
     # 4. /ask — follow-up questions grounded on a verification
     deep = next((r.verification for r in results if r.verification), None)
-    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
+    if deep:
+        reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """
