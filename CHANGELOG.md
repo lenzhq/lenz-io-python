@@ -22,11 +22,40 @@ against any server version.
   alias. Items without `claim` are forwarded byte-for-byte as before.
 - **`client.select(task_id, claims=[...])`** — `texts=` keeps working as an
   alias. The `ValueError` for an empty selection now names `claims`.
+- **`client.assess(claims=[...])`** — up to 20 claims in one call, one
+  parallel wave (~10-25s). Exactly one `AssessClaim` per item, in the order
+  sent; an item that got no verdict comes back in position as an `"Error"`
+  row (not charged) rather than being dropped. Mutually exclusive with
+  `claim=` / `text=` — passing both raises `ValueError`. The single form's
+  request body is unchanged. Sends `{"claims": [...]}`, which servers before
+  the list form reject with a 422 — needs a Lenz API with the list form live.
+  The CLI's `lenz assess "a" "b" "c"` uses it (one positional keeps the
+  single form).
+- **`AssessClaim.error_code` / `.candidate_claims` / `.identified_claims` /
+  `.hint`** — why an `"Error"` row got no verdict (`no_claim` / `ambiguous` /
+  `framing_failed` / `upstream_unavailable`, the retryable one), the readings
+  when it was ambiguous, the other claims found in a compound item that were
+  not assessed, and one sentence on what to send next (`None` on a plain
+  verdict row). All default empty, so older servers still parse. `lenz
+  assess` prints the hint under a row and lists `identified_claims` as
+  "also found:".
+- **`hint` on `needs_input`** — `TaskStatus.hint`, `LenzNeedsInputError.hint`
+  and `VerificationNeedsInput.hint` (read from the webhook's `needs_input`
+  block): one sentence on what was unclear and how to resolve it via
+  `select`. `TaskStatus.hint` is also set on a `failed` status with
+  `failure_reason == "not_a_claim"`. `""` from older servers.
+- **`assess(..., timeout=)`** — a per-call HTTP timeout overriding the client
+  default for that one request. A list call defaults to 45s
+  (`lenz_io.client.ASSESS_LIST_TIMEOUT`).
 
 ### Changed
 
 - The CLI's `lenz assess` and the multi-claim picker call the new names.
   Behaviour is unchanged.
+- The documented ladder is now extract → **one** `assess(claims=...)` over
+  the extracted claims → `verify_batch_and_wait` for the low-confidence rows
+  → `ask` (README, `examples/core/quickstart.py`,
+  `examples/core/verify_llm_output.py`, the module and method docstrings).
 
 ## [2.9.1] - 2026-08-30
 

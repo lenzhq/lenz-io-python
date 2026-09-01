@@ -111,6 +111,19 @@ class TestLenzWebhooks:
         event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})
         assert isinstance(event, VerificationNeedsInput)
         assert event.needs_input["reason"] == "multi_claim"
+        assert event.hint == ""  # an older server sends no hint
+
+    def test_parse_needs_input_event_lifts_hint(self):
+        hint = "The input holds two distinct claims. Pick the one to verify via /select."
+        body = _payload(
+            "verification.needs_input",
+            needs_input={"reason": "multi_claim", "claims": [{"text": "A", "domain": "x"}], "hint": hint},
+        )
+        wh = LenzWebhooks(secret=SECRET)
+        event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})
+        assert isinstance(event, VerificationNeedsInput)
+        assert event.hint == hint
+        assert event.needs_input["hint"] == hint  # the raw block still carries it too
 
     def test_tampered_body_raises_with_clear_message(self):
         body = _payload("verification.completed")

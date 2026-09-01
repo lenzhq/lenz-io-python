@@ -22,7 +22,8 @@ Shape (four-primitive ladder + the supporting reads):
 
     # Marquee verbs — top-level (the four-primitive ladder)
     out = client.extract(text="...")                       # find claims in a document
-    r = client.assess(claim="...")                         # fast 3-model verdict, ~10s
+    r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
+    r = client.assess(claim="...")                         # ...or a single claim, ~10s
     v = client.verify_and_wait(claim="...")                # full 8-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
@@ -107,6 +108,10 @@ API_VERSION = "2026-05-13"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
 DEFAULT_TIMEOUT = 30.0
+# ``assess(claims=[...])`` runs one parallel wave over the whole list
+# (~10-25s), so a list call gets more room than the client default unless
+# the caller passes an explicit ``timeout=``.
+ASSESS_LIST_TIMEOUT = 45.0
 DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
@@ -458,22 +463,52 @@ class Lenz:
         """
         return self._extract(text=text, language=language, focus=focus)
 
-    def assess(self, claim: str = "", *, text: str = "", language: str = "") -> AssessResponse:
-        """Fast verdict via a 3-model frontier panel. Sync, ~10s.
+    def assess(
+        self,
+        claim: str = "",
+        *,
+        text: str = "",
+        claims: list[str] | None = None,
+        language: str = "",
+        timeout: float | None = None,
+    ) -> AssessResponse:
+        """Fast verdict via a 3-model frontier panel. Sync, ~10s per call.
 
-        ``claim``: the statement to check. If it contains several atomic
-        claims, each is verdicted separately. ``text=`` is accepted as an
-        alias (``claim`` wins if both are given).
+        Two input forms, one response shape:
 
-        Returns ``AssessResponse`` with one ``AssessClaim`` per atomic
-        claim that framing identified. Each claim has a ``verdict``
-        ("True" / "Mostly True" / "Mixed" / "Mostly False" / "False" / "Error"),
-        a categorical ``confidence`` ("high" / "medium" / "low"), and
-        an optional ``verification_url`` pointing at the deep
-        ``Verification`` when /assess found a matching stored claim.
+        * ``claim``: one statement to check. If it contains several atomic
+          claims, each is verdicted separately. ``text=`` is accepted as an
+          alias (``claim`` wins if both are given).
+        * ``claims``: a list of up to 20 statements, assessed in one call
+          (one parallel wave, ~10-25s). Exactly one ``AssessClaim`` comes
+          back per item, in the order sent. This is the step after
+          ``extract`` in the ladder::
 
-        Use ``confidence`` to decide when to escalate: ``"low"`` claims
-        are worth re-running through ``verify_and_wait`` for the deep
+              out = client.extract(text=llm_output)
+              claims = out.identified_claims or [out.claim]
+              quick = client.assess(claims=claims).claims   # one row per claim
+
+          The two forms are mutually exclusive — passing ``claims`` together
+          with a non-empty ``claim`` / ``text`` raises ``ValueError``.
+
+        Each ``AssessClaim`` has a ``verdict`` ("True" / "Mostly True" /
+        "Mixed" / "Mostly False" / "False" / "Error"), a categorical
+        ``confidence`` ("high" / "medium" / "low"), and an optional
+        ``verification_url`` pointing at the deep ``Verification`` when
+        /assess found a matching stored claim.
+
+        A row with ``verdict == "Error"`` could not be given a verdict. It
+        stays in position, is not charged, and says why: ``error_code`` is
+        ``no_claim`` / ``ambiguous`` / ``framing_failed`` /
+        ``upstream_unavailable`` (the retryable one), ``candidate_claims``
+        lists the readings when ``ambiguous``, and ``hint`` is one sentence on
+        what to send next. A compound list item is assessed on its main
+        claim; the other claims found in it are listed on that row in
+        ``identified_claims`` (with a ``hint``) — send them as their own
+        items to check the rest. ``hint`` is ``None`` on a plain verdict row.
+
+        Use ``confidence`` to decide when to escalate: ``"low"`` rows are
+        worth re-running through ``verify_batch_and_wait`` for the deep
         8-model pipeline with citations.
 
         ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
@@ -482,10 +517,20 @@ class Lenz:
         Empty string omits the field from the request body — preserves
         byte-identical behavior for existing English callers.
 
-        Paid quota — see ``client.usage()``. Quota debits per atomic
-        claim that framing produces (multiclaim inputs consume N units).
+        ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
+        the client default for this one request. A list call defaults to
+        ``ASSESS_LIST_TIMEOUT`` (45s) because one wave takes longer than the
+        30s client default leaves margin for.
+
+        Paid — see ``client.usage()``. 1 credit per claim assessed; a
+        single-string input that framing splits into N atomic claims costs
+        N; ``Error`` rows are free.
         """
-        return self._assess(text=claim or text, language=language)
+        if claims is not None:
+            if claim or text:
+                raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
+            return self._assess(claims=claims, language=language, timeout=timeout)
+        return self._assess(text=claim or text, language=language, timeout=timeout)
 
     def select(self, task_id: str, *, claims: list[str] | None = None, texts: list[str] | None = None) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
@@ -722,6 +767,7 @@ class Lenz:
                 doc_url="https://lenz.io/docs/verify#needs-input",
                 task_id=task_id,
                 kind=status.reason,
+                hint=status.hint,
                 payload=status.model_dump(),
             )
         # failed. Server sends the diagnostic under ``error``; fall back to the
@@ -825,11 +871,29 @@ class Lenz:
         body = self._request("POST", "/extract", json=payload)
         return ExtractedClaims.model_validate(body)
 
-    def _assess(self, *, text: str, language: str = "") -> AssessResponse:
-        payload: dict[str, Any] = {"text": text}
+    def _assess(
+        self,
+        *,
+        text: str = "",
+        claims: list[str] | None = None,
+        language: str = "",
+        timeout: float | None = None,
+    ) -> AssessResponse:
+        # The single form keeps its historical wire body (`text`). The list
+        # form sends `claims` and never `text` — the server rejects a body
+        # carrying both with a 422. No client-side count / length checks on
+        # the list: the server's 422 is the contract, and a cap duplicated
+        # here would drift from it.
+        payload: dict[str, Any]
+        if claims is not None:
+            payload = {"claims": list(claims)}
+            if timeout is None:
+                timeout = ASSESS_LIST_TIMEOUT
+        else:
+            payload = {"text": text}
         if language:
             payload["language"] = language
-        body = self._request("POST", "/assess", json=payload)
+        body = self._request("POST", "/assess", json=payload, timeout=timeout)
         return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
@@ -852,6 +916,7 @@ class Lenz:
         headers: dict[str, str] | None = None,
         auth_required: bool = True,
         auth_optional: bool = False,
+        timeout: float | None = None,
     ) -> dict[str, Any]:
         if auth_required and not self._api_key:
             from .errors import LenzAuthError
@@ -877,11 +942,16 @@ class Lenz:
         if self._api_key and (auth_required or auth_optional):
             req_headers["Authorization"] = f"Bearer {self._api_key}"
         req_headers.setdefault("Content-Type", "application/json")
+        # A per-call ``timeout`` overrides the client-wide one for this request
+        # only; ``None`` keeps httpx on the client default.
+        req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else httpx.Timeout(timeout)
 
         last_exc: Exception | None = None
         for attempt in range(self._max_retries + 1):
             try:
-                response = self._client.request(method, url, json=json, params=params, headers=req_headers)
+                response = self._client.request(
+                    method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
+                )
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
                 if attempt >= self._max_retries:

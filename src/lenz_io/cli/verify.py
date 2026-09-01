@@ -402,6 +402,7 @@ def _emit_needs_input(out: Output, task_id: str, st: TaskStatus) -> None:
         {
             "status": "needs_input",
             "reason": st.reason,
+            "hint": st.hint,
             "task_id": task_id,
             "claims": [c.model_dump(mode="json") for c in st.claims],
             "candidates": list(st.candidates),

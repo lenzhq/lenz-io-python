@@ -134,6 +134,9 @@ def _load(name: str) -> dict:
         ("extract_response_no_match.json", ExtractedClaims),
         ("assess_single_claim.json", AssessResponse),
         ("assess_multiclaim.json", AssessResponse),
+        # The list form: one row per item, Error rows in position with their
+        # cause, readings and hint. Same fixture as the Node SDK.
+        ("assess_claims_list.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
         ("verifications_detail.json", Verification),
@@ -182,6 +185,34 @@ def test_assess_multiclaim_round_trips():
     assert parsed.claims[0].verdict == "True"
     assert parsed.claims[0].confidence == "high"
     assert parsed.claims[0].verification_url is not None
+
+
+def test_assess_claims_list_rows_carry_cause_readings_and_hint():
+    """The list form's per-row fields: a plain verdict row has all four
+    empty, a compound row lists the rest under ``identified_claims`` with a
+    hint, and an Error row names its cause (and its readings when
+    ambiguous) — every row in the position it was sent."""
+    payload = _load("assess_claims_list.json")
+    parsed = AssessResponse.model_validate(payload)
+    assert parsed.error is None
+    assert [c.verdict for c in parsed.claims] == ["True", "Mixed", "Error", "Error"]
+
+    plain, compound, no_claim, ambiguous = parsed.claims
+    assert plain.error_code is None
+    assert plain.candidate_claims == []
+    assert plain.identified_claims == []
+    assert plain.hint is None
+
+    assert compound.identified_claims == ["Bilingual children learn to read later than monolingual peers."]
+    assert compound.hint  # a compound item carries a hint about the rest
+
+    assert no_claim.error_code == "no_claim"
+    assert no_claim.candidate_claims == []
+    assert no_claim.hint
+
+    assert ambiguous.error_code == "ambiguous"
+    assert len(ambiguous.candidate_claims) == 2
+    assert ambiguous.hint.startswith("Ambiguous")
 
 
 # ── Error envelopes ─────────────────────────────────────────────────────────

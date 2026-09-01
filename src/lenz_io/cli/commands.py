@@ -52,16 +52,26 @@ def extract(
 
 def assess(
     ctx: typer.Context,
-    claim: str = typer.Argument(None, help="Claim to assess ('-' or pipe = stdin)."),
+    claim: list[str] = typer.Argument(  # noqa: B008 — typer declares defaults this way
+        None,
+        help="Claim to assess ('-' or pipe = stdin). Several claims = one call, one verdict per claim (up to 20).",
+    ),
 ) -> None:
     """Fast 3-model verdict (cheaper/quicker than `verify`). Needs a key."""
     state: CLIState = ctx.obj
     out = state.output
 
     def work(client: Lenz) -> None:
-        payload = read_text_arg(claim)
-        with out.working("Assessing… (~10s)"):
-            result = client.assess(claim=payload)
+        items = list(claim or [])
+        if len(items) > 1:
+            # Several positionals → the list form: one row per claim, in
+            # order, from a single call.
+            with out.working(f"Assessing {len(items)} claims… (~20s)"):
+                result = client.assess(claims=items)
+        else:
+            payload = read_text_arg(items[0] if items else None)
+            with out.working("Assessing… (~10s)"):
+                result = client.assess(claim=payload)
         render_assess(out, result)
 
     execute(state, needs_key=True, work=work)

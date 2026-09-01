@@ -99,6 +99,7 @@ class FakeClient:
         self._usage = usage_result
         self._raises = raises or {}
         self.extract_calls: list = []
+        self.assess_calls: list = []
         self.verify_calls: list = []
         self.select_calls: list = []
         self.status_calls: list = []
@@ -112,8 +113,13 @@ class FakeClient:
         self.extract_calls.append({"text": text, "language": language, "focus": focus})
         return self._extract
 
-    def assess(self, claim="", *, text="", language=""):
+    def assess(self, claim="", *, text="", claims=None, language="", timeout=None):
+        # Same signature as the real client: one claim (`claim`, `text` alias)
+        # or a list (`claims`), never both.
         self._maybe_raise("assess")
+        if claims is not None and (claim or text):
+            raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
+        self.assess_calls.append({"claim": claim or text, "claims": claims, "language": language, "timeout": timeout})
         return self._assess
 
     def verify(self, claim, **kwargs):
@@ -608,6 +614,59 @@ def test_render_assess_ambiguous_shows_readings():
     assert "lenz assess" in out  # next step
 
 
+def test_render_assess_list_rows_show_hint_readings_and_also_found():
+    """List-form rows: an Error row names its cause instead of a confidence
+    and prints its hint (plus its readings when ambiguous); a compound row
+    lists the claims it did not assess under 'also found:'; a plain row
+    prints neither."""
+    from lenz_io.cli.render import render_assess
+
+    out = _render(
+        render_assess,
+        AssessResponse(
+            claims=[
+                AssessClaim(claim="Water boils at 100 °C at sea level.", verdict="True", confidence="high"),
+                AssessClaim(
+                    claim="Bilingual children develop stronger executive function.",
+                    verdict="Mixed",
+                    confidence="medium",
+                    identified_claims=["Bilingual children learn to read later than monolingual peers."],
+                    hint="Assessed the main claim only. Send identified_claims as their own items to check the rest.",
+                ),
+                AssessClaim(
+                    claim="this is fine",
+                    verdict="Error",
+                    confidence="low",
+                    error_code="no_claim",
+                    hint="No factual statement that can be checked against evidence was found in the input.",
+                ),
+                AssessClaim(
+                    claim="RAM prices have more than doubled",
+                    verdict="Error",
+                    confidence="low",
+                    error_code="ambiguous",
+                    candidate_claims=["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled."],
+                    hint="Ambiguous: Which memory market / form factor? Send one of candidate_claims as its own item.",
+                ),
+            ]
+        ),
+    )
+    lines = out.splitlines()
+    assert lines[0].startswith("True (high) — Water boils")
+    assert "also found:" in out
+    assert "Bilingual children learn to read later than monolingual peers." in out
+    assert "Assessed the main claim only." in out
+    assert "Error (no_claim) — this is fine" in out
+    assert "No factual statement that can be checked" in out
+    assert "Error (ambiguous) — RAM prices" in out
+    assert "readings:" in out
+    assert "DDR4 desktop RAM prices doubled 2021-2026." in out
+    assert "Ambiguous: Which memory market" in out
+    # The plain row gets no hint / no 'also found:' line under it.
+    assert "also found:" not in lines[0] and "also found:" not in lines[1]
+    assert lines[1].startswith("Mixed (medium)")
+
+
 def test_render_verification_full():
     from lenz_io.cli.render import render_verification
 
@@ -677,13 +736,36 @@ def test_render_extract_ambiguous_candidates():
 
 def test_assess_json_success(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
-    _patch_client(
+    fake = _patch_client(
         monkeypatch,
         FakeClient(assess_result=AssessResponse(claims=[AssessClaim(claim="c", verdict="False", confidence="high")])),
     )
     result = runner.invoke(app, ["--json", "assess", "c"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["claims"][0]["verdict"] == "False"
+    # One positional → the single form, exactly as before.
+    assert fake.assess_calls == [{"claim": "c", "claims": None, "language": "", "timeout": None}]
+
+
+def test_assess_several_positionals_use_the_list_form(monkeypatch):
+    """`lenz assess "a" "b" "c"` is one call with `claims=[...]` — one row per
+    claim, in order — not three calls and not one concatenated claim."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    rows = [
+        AssessClaim(claim="a", verdict="True", confidence="high"),
+        AssessClaim(
+            claim="b", verdict="Error", confidence="low", error_code="no_claim", hint="Send one factual claim."
+        ),
+        AssessClaim(claim="c", verdict="False", confidence="medium"),
+    ]
+    fake = _patch_client(monkeypatch, FakeClient(assess_result=AssessResponse(claims=rows)))
+    result = runner.invoke(app, ["--json", "assess", "a", "b", "c"])
+    assert result.exit_code == 0, result.stdout
+    assert fake.assess_calls == [{"claim": "", "claims": ["a", "b", "c"], "language": "", "timeout": None}]
+    payload = json.loads(result.stdout)
+    assert [row["claim"] for row in payload["claims"]] == ["a", "b", "c"]
+    assert payload["claims"][1]["error_code"] == "no_claim"
+    assert payload["claims"][1]["hint"] == "Send one factual claim."
 
 
 def _usage(**kw):

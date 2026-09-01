@@ -131,9 +131,14 @@ class VerificationNeedsInput(WebhookEvent):
     Resolve by calling ``client.select(task_id, ...)``. Then a new
     pipeline run produces a ``verification.completed`` (or another
     ``needs_input``) event.
+
+    ``hint`` is one sentence on what was unclear and how to resolve it
+    (``needs_input["hint"]`` on the wire); ``""`` when an older server omits
+    it or the reason is ``duplicate_found``.
     """
 
     needs_input: dict[str, Any] = field(default_factory=dict)
+    hint: str = ""
 
 
 def _build_event(payload: dict[str, Any]) -> WebhookEvent:
@@ -172,6 +177,7 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             retryable=payload.get("retryable") if isinstance(payload.get("retryable"), bool) else None,
         )
     if event == "verification.needs_input":
+        needs_input = payload.get("needs_input") or {}
         return VerificationNeedsInput(
             event=event,
             task_id=task_id,
@@ -181,7 +187,8 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             batch_id=batch_id,
             status=status,
             raw=payload,
-            needs_input=payload.get("needs_input") or {},
+            needs_input=needs_input,
+            hint=str(needs_input.get("hint") or "") if isinstance(needs_input, dict) else "",
         )
     # Unknown event type — return generic. Future-compatible.
     return WebhookEvent(
