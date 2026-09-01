@@ -93,7 +93,7 @@ client = Lenz(api_key="lenz_...")
 out = client.extract(text=llm_output)
 
 # 2. assess — fast 3-model verdict on each (~10s, sync)
-quick = client.assess(text=llm_output)
+quick = client.assess(claim=llm_output)
 for c in quick.claims:
     print(c.verdict, c.confidence, c.claim)
 
@@ -142,7 +142,7 @@ hit the full pipeline (~60-90s) — use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract).
-- **`client.assess(text=...)`** → `AssessResponse`. Sync, ~10s, returns one entry per identified claim.
+- **`client.assess(claim=...)`** → `AssessResponse`. Sync, ~10s, returns one entry per identified claim. (`text=` is accepted as an alias: a document is `text`, a claim is `claim`.)
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
@@ -448,8 +448,8 @@ Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`, `nl`, `sv`, `da`,
 ```python
 batch = client.verify_batch(
     claims=[
-        {"text": "Coffee causes cancer."},  # en (batch default)
-        {"text": "El café causa cáncer.", "language": "es"},  # overrides
+        {"claim": "Coffee causes cancer."},  # en (batch default)
+        {"claim": "El café causa cáncer.", "language": "es"},  # overrides
     ],
     language="en",
 )

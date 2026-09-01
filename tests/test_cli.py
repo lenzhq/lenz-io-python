@@ -112,7 +112,7 @@ class FakeClient:
         self.extract_calls.append({"text": text, "language": language, "focus": focus})
         return self._extract
 
-    def assess(self, *, text, language=""):
+    def assess(self, claim="", *, text="", language=""):
         self._maybe_raise("assess")
         return self._assess
 
@@ -125,13 +125,16 @@ class FakeClient:
         self._maybe_raise("get_status")
         return self._statuses.pop(0)
 
-    def select(self, task_id, *, texts):
-        self.select_calls.append((task_id, texts))
+    def select(self, task_id, *, claims=None, texts=None):
+        # Same signature as the real client (2.10.0): `claims` is the name,
+        # `texts` the alias. The CLI calls `claims=`.
+        chosen = claims or texts
+        self.select_calls.append((task_id, chosen))
         if self._select_task is not None:
             return self._select_task
         return BatchAccepted(
             batch_id="b-1",
-            items=[TaskAccepted(task_id=f"sel-{i + 1}", claim_text=t) for i, t in enumerate(texts)],
+            items=[TaskAccepted(task_id=f"sel-{i + 1}", claim_text=t) for i, t in enumerate(chosen)],
         )
 
     def usage(self):

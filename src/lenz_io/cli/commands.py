@@ -61,7 +61,7 @@ def assess(
     def work(client: Lenz) -> None:
         payload = read_text_arg(claim)
         with out.working("Assessing… (~10s)"):
-            result = client.assess(text=payload)
+            result = client.assess(claim=payload)
         render_assess(out, result)
 
     execute(state, needs_key=True, work=work)
