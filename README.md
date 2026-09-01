@@ -91,19 +91,27 @@ client = Lenz(api_key="lenz_...")
 # 1. extract — pull verifiable claims out of any text (free)
 #    add focus="..." to narrow it to the claims you care about
 out = client.extract(text=llm_output)
+claims = out.identified_claims or [out.claim]
 
-# 2. assess — fast 3-model verdict on each (~10s, sync)
-quick = client.assess(claim=llm_output)
-for c in quick.claims:
+# 2. assess — fast 3-model verdict on each (~10s, sync, one credit per claim).
+#    Assess the extracted claims, not the document: the calls are independent,
+#    so run them side by side.
+from concurrent.futures import ThreadPoolExecutor
+
+with ThreadPoolExecutor() as pool:
+    quick = list(pool.map(lambda c: client.assess(claim=c).claims[0], claims))
+for c in quick:
     print(c.verdict, c.confidence, c.claim)
 
-# 3. verify — escalate low-confidence claims to the full panel + citations
-for c in quick.claims:
-    if c.confidence == "low":
-        v = client.verify_and_wait(claim=c.claim)
-        print(v.verdict, v.lenz_score, v.executive_summary)
+# 3. verify — escalate the low-confidence ones to the full panel + citations, in one batch
+doubtful = [{"claim": c.claim} for c in quick if c.confidence == "low"]
+results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
+for r in results:
+    if r.verification:
+        print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
 
 # 4. ask — follow-up grounded on a verification
+v = results[0].verification
 reply = client.ask.send(v.verification_id, message="Which source is strongest?")
 print(reply.content)
 ```
