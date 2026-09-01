@@ -58,7 +58,7 @@ async def lenz_webhook(request: Request) -> dict[str, str]:
     elif isinstance(event, VerificationNeedsInput):
         logger.info("Needs input on %s: %s", event.task_id, event.needs_input.get("reason"))
         # TODO: surface the candidate claims to the user, then call
-        # client.select(task_id, text=...) to resolve.
+        # client.select(task_id, claims=[...]) to resolve.
     elif isinstance(event, VerificationFailed):
         logger.warning("Pipeline failed: %s (%s)", event.task_id, event.error)
     else:
