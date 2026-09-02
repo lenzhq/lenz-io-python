@@ -53,6 +53,7 @@ cli = [
 dev = [
   "pytest>=8.0",
   "pytest-asyncio>=0.23",
+  "pytest-cov>=5.0",
   "responses>=0.25",
   "respx>=0.21",
   "ruff>=0.6",
@@ -117,7 +118,24 @@ files = ["src/lenz_io"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-q --strict-markers"
+# The coverage gate rides here rather than in ci.yml so a bare `pytest`
+# reproduces CI exactly on a contributor's machine — that property is worth
+# more than the tidiness of keeping CI concerns in the workflow file.
+#
+# `--cov-branch` matters as much as the floor. A line counts as covered the
+# moment it executes once, so an `if` whose `else` is never taken still reads
+# green — and a client library is mostly branches: retries, error mapping,
+# optional parameters, pagination.
+#
+# 82 is a floor derived from the first measurement (85% combined on
+# 2026-09-02), not a target. It answers "did this get worse", never "is this
+# good enough", and is a ratchet: raise it when the measured number pulls
+# away. A floor that can never fire is decoration.
+#
+# Running a SUBSET (`pytest -k ...`, a single file) measures coverage over
+# only what that subset touched and will trip the floor. Pass `--no-cov` for
+# those runs — see CONTRIBUTING.md.
+addopts = "-q --strict-markers --cov=lenz_io --cov-branch --cov-report=term-missing --cov-fail-under=82"
 markers = [
   "smoke: opt-in tests that hit a real Lenz staging environment (require LENZ_E2E_KEY)",
 ]
