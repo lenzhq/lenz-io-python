@@ -546,8 +546,13 @@ def test_extract_pretty_multi_claim_includes_primary():
 
 
 # ── render layer (pretty / TTY output) ───────────────────────────────────────
-def _render(fn, *args):
-    """Run a render_* function in pretty mode, capturing both consoles."""
+def _pretty_output():
+    """An ``Output`` forced into pretty mode with both consoles captured.
+
+    Returns ``(out, buf)``. Used directly by tests that drive something taking
+    an ``Output`` but returning nothing renderable (the batch pollers), and by
+    ``_render`` below.
+    """
     import io
 
     from rich.console import Console
@@ -559,7 +564,24 @@ def _render(fn, *args):
     out.json_mode = False
     out.console = Console(file=buf, no_color=True, width=100)
     out.err = Console(file=buf, no_color=True, width=100)
-    fn(out, *args)
+    return out, buf
+
+
+def _render(fn, *args, **kwargs):
+    """Run a render_* function in pretty mode, capturing both consoles."""
+    out, buf = _pretty_output()
+    fn(out, *args, **kwargs)
+    return buf.getvalue()
+
+
+def _render_renderable(renderable, width=100):
+    """Render a bare Rich renderable (a Table, a Spinner) to plain text."""
+    import io
+
+    from rich.console import Console
+
+    buf = io.StringIO()
+    Console(file=buf, no_color=True, width=width).print(renderable)
     return buf.getvalue()
 
 
@@ -1720,3 +1742,403 @@ def test_lazy_import_guard(monkeypatch, capsys):
         lenz_io.cli.main()
     assert exc.value.code == 1
     assert "lenz-io[cli]" in capsys.readouterr().err
+
+
+# ── batch verify: N claims, N independent pipelines ──────────────────────────
+# `lenz verify` fans out to a batch whenever a multi-claim input resolves to
+# more than one pick (or `--detach` is set). Each row polls, renders and fails
+# on its own; these tests pin the row-level contracts — the JSON shape per row,
+# what the live table cell says, the compact final block, and the Ctrl-C
+# detach promise ("these keep running, here's how to re-attach").
+
+
+def _batch_client(script):
+    """A client answering ``get_status`` per task_id from ``script``.
+
+    ``script`` is ``{task_id: [status, ...]}``; the last entry repeats. Keyed
+    by task rather than a shared FIFO because ``_poll_all`` iterates a *set* of
+    pending ids — a positional queue would make these tests depend on set
+    ordering, which Python randomises per run.
+    """
+    fake = FakeClient()
+
+    def get_status(tid):
+        fake.status_calls.append(tid)
+        queue = script[tid]
+        return queue.pop(0) if len(queue) > 1 else queue[0]
+
+    fake.get_status = get_status
+    return fake
+
+
+# ── _batch_item_json: one row of the --json array ───────────────────────────
+def test_batch_item_json_never_polled_reads_as_timeout():
+    from lenz_io.cli.verify import _batch_item_json
+
+    assert _batch_item_json("t-9", "a claim", None) == {
+        "task_id": "t-9",
+        "claim": "a claim",
+        "status": "timeout",
+    }
+
+
+def test_batch_item_json_completed_embeds_the_whole_verification():
+    from lenz_io.cli.verify import _batch_item_json
+
+    row = _batch_item_json("t-1", "a claim", TaskStatus(status="completed", result=_verification()))
+    assert row["status"] == "completed"
+    assert row["claim"] == "a claim"
+    # the full verification, JSON-safe (not a repr of the pydantic model)
+    assert row["verification"]["verdict"] == "False"
+    assert row["verification"]["verification_id"] == "v-1"
+
+
+def test_batch_item_json_failed_falls_back_from_error_to_failure_detail():
+    from lenz_io.cli.verify import _batch_item_json
+
+    row = _batch_item_json("t-1", "c", TaskStatus(status="failed", error="boom"))
+    assert row["status"] == "failed" and row["error"] == "boom"
+
+    # `error` empty → the server's failure_detail is the message, not None
+    row = _batch_item_json("t-1", "c", TaskStatus(status="failed", failure_detail="all providers down"))
+    assert row["error"] == "all providers down"
+
+
+def test_batch_item_json_completed_without_a_result_carries_no_verification_key():
+    """A `completed` status that somehow arrives with no result must not produce
+    a half-built row — it falls through to the plain status echo, so consumers
+    that see `status == "completed"` still have to check for `verification`."""
+    from lenz_io.cli.verify import _batch_item_json
+
+    row = _batch_item_json("t-1", "c", TaskStatus(status="completed", result=None))
+    assert row["status"] == "completed"
+    assert "verification" not in row
+
+
+def test_batch_item_json_echoes_a_non_terminal_status_and_defaults_to_unknown():
+    from lenz_io.cli.verify import _batch_item_json
+
+    assert _batch_item_json("t", "c", TaskStatus(status="processing"))["status"] == "processing"
+    assert _batch_item_json("t", "c", TaskStatus(status=""))["status"] == "unknown"
+
+
+# ── _batch_status_cell / _truncate / render_batch_table: the live table ──────
+def test_batch_status_cell_pending_row_spins_with_a_generic_label():
+    from rich.spinner import Spinner
+
+    from lenz_io.cli.render import _batch_status_cell
+
+    cell = _batch_status_cell(None)
+    assert isinstance(cell, Spinner)
+    assert "Verifying" in cell.text.plain
+
+
+def test_batch_status_cell_processing_row_spins_with_the_friendly_step():
+    """The cell shows the step name only — the "Verifying… " prefix that the
+    single-claim spinner carries would repeat on every row of the table."""
+    from rich.spinner import Spinner
+
+    from lenz_io.cli.render import _batch_status_cell
+
+    cell = _batch_status_cell(TaskStatus(status="processing", progress={"step": "research"}))
+    assert isinstance(cell, Spinner)
+    assert cell.text.plain == "Gathering evidence"
+
+    # an unmapped step still renders, cleaned up rather than raw
+    cell = _batch_status_cell(TaskStatus(status="processing", progress={"step": "some_new_step"}))
+    assert cell.text.plain == "Some new step"
+
+
+def test_batch_status_cell_completed_shows_verdict_confidence_score_and_color():
+    from lenz_io.cli.render import _batch_status_cell
+
+    cell = _batch_status_cell(TaskStatus(status="completed", result=_verification()))
+    assert cell.plain == "False (high) 1/10"
+    assert cell.style == "bold red"  # the verdict colour is the at-a-glance signal
+
+    mixed = _verification().model_copy(update={"verdict": "Mixed", "lenz_score": 5})
+    assert _batch_status_cell(TaskStatus(status="completed", result=mixed)).style == "bold yellow"
+
+
+def test_batch_status_cell_completed_without_a_score_omits_it():
+    from lenz_io.cli.render import _batch_status_cell
+
+    v = _verification().model_copy(update={"lenz_score": None})
+    assert _batch_status_cell(TaskStatus(status="completed", result=v)).plain == "False (high)"
+
+
+def test_batch_status_cell_failed_and_other_states_are_plain_text():
+    from lenz_io.cli.render import _batch_status_cell
+
+    failed = _batch_status_cell(TaskStatus(status="failed"))
+    assert failed.plain == "failed" and failed.style == "red"
+    # anything else (e.g. a needs_input we can't service mid-batch) echoes
+    assert _batch_status_cell(TaskStatus(status="needs_input")).plain == "needs_input"
+
+
+def test_truncate_collapses_whitespace_and_never_exceeds_the_width():
+    from lenz_io.cli.render import _truncate
+
+    assert _truncate("a  b\n\tc") == "a b c"  # a pasted paragraph must stay one row
+    assert _truncate("short", 60) == "short"
+    clipped = _truncate("x" * 100, 10)
+    assert clipped == "x" * 9 + "…"
+    assert len(clipped) == 10  # the column width is a hard cap, ellipsis included
+    assert _truncate("", 10) == ""
+
+
+def test_render_batch_table_is_one_row_per_claim_with_a_position_marker():
+    from lenz_io.cli.render import render_batch_table
+
+    picks = [("t-1", "the first claim"), ("t-2", "second claim " * 20)]
+    table = render_batch_table(picks, {"t-1": TaskStatus(status="completed", result=_verification())})
+    assert table.row_count == 2
+
+    text = _render_renderable(table)
+    assert "[1/2]" in text and "[2/2]" in text
+    assert "the first claim" in text
+    assert "False (high) 1/10" in text  # the resolved row shows its verdict
+    assert "…" in text  # the long claim is truncated, not wrapped across rows
+
+
+def test_render_batch_table_tolerates_a_task_with_no_status_yet():
+    """Rows are keyed by task_id off a dict that starts empty — a missing key
+    must render the pending spinner, not raise."""
+    from lenz_io.cli.render import render_batch_table
+
+    text = _render_renderable(render_batch_table([("t-1", "a claim")], {}))
+    assert "a claim" in text
+
+
+# ── render_batch_details / _batch_verdict_block: the final verdicts ──────────
+def _details(picks, statuses):
+    from lenz_io.cli.render import render_batch_details
+
+    return _render(render_batch_details, picks, statuses)
+
+
+def test_render_batch_details_completed_row_is_deliberately_compact():
+    text = _details([("t-1", "the claim")], {"t-1": TaskStatus(status="completed", result=_verification())})
+    assert "[1/1] the claim" in text
+    assert "False" in text and "(high)" in text and "score 1/10" in text
+    assert "Nope." in text  # executive_summary when there's no key_finding
+    assert "2 sources" in text
+    assert "verification_id: v-1" in text
+    # the compact block omits what single-claim verify shows — in a batch of N
+    # the source list and the ask hint repeat into a wall
+    assert "https://a.test" not in text
+    assert "lenz ask" not in text
+
+
+def test_render_batch_details_prefers_the_key_finding_over_the_summary():
+    v = _verification().model_copy(update={"key_finding": "Sharks do get cancer."})
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="completed", result=v)})
+    assert "Sharks do get cancer." in text
+    assert "Nope." not in text  # only one of the two, never both
+
+
+def test_render_batch_details_singularizes_a_lone_source():
+    v = _verification().model_copy(update={"sources": [Source(title="A", url="https://a.test")]})
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="completed", result=v)})
+    assert "1 source" in text and "1 sources" not in text
+
+
+def test_render_batch_details_omits_the_footer_when_there_is_nothing_in_it():
+    v = _verification().model_copy(update={"sources": [], "verification_id": ""})
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="completed", result=v)})
+    assert "source" not in text and "verification_id" not in text
+
+
+def test_render_batch_details_failed_row_shows_the_reason():
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="failed", error="pipeline exploded")})
+    assert "Failed:" in text and "pipeline exploded" in text
+
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="failed", failure_detail="upstream gone")})
+    assert "upstream gone" in text
+
+    # neither field set → a generic reason, never an empty "Failed:" line
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="failed")})
+    assert "pipeline error" in text
+
+
+def test_render_batch_details_unfinished_rows_offer_a_resume_command():
+    """A row that never resolved is the one place the batch must hand back a
+    handle — the work is still running server-side and is already paid for."""
+    text = _details([("t-1", "c")], {"t-1": None})
+    assert "timed out" in text
+    assert "lenz verify --resume t-1" in text
+
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="processing")})
+    assert "processing" in text
+    assert "lenz verify --resume t-1" in text
+
+
+def test_render_batch_details_separates_rows_but_does_not_lead_with_a_rule():
+    st = TaskStatus(status="completed", result=_verification())
+    text = _details([("t-1", "first"), ("t-2", "second")], {"t-1": st, "t-2": st})
+    assert "[1/2] first" in text and "[2/2] second" in text
+    assert "─" in text
+    assert text.index("[1/2]") < text.index("─") < text.index("[2/2]")
+
+
+# ── _emit_detached_batch: --detach over N claims ─────────────────────────────
+def test_emit_detached_batch_pretty_prints_a_resume_command_per_claim():
+    from lenz_io.cli.verify import _emit_detached_batch
+
+    text = _render(_emit_detached_batch, [("t-1", "claim A"), ("t-2", "claim B")])
+    assert "Started 2 verification(s):" in text
+    assert "claim A" in text and "claim B" in text
+    assert "lenz verify --resume t-1" in text
+    assert "lenz verify --resume t-2" in text
+
+
+def test_resume_hint_pretty_prints_the_reattach_command():
+    """The single-claim Ctrl-C promise. Its --json half is covered by
+    test_verify_ctrl_c_prints_resume_handle; this is the human half."""
+    text = _render(lambda out, tid: out.resume_hint(tid), "t-7")
+    assert "Still running server-side." in text
+    assert "lenz verify --resume t-7" in text
+
+
+# ── _poll_all: N tasks polled to terminal, or detached ───────────────────────
+def test_poll_all_stops_polling_a_task_once_it_resolves():
+    from lenz_io.cli.verify import _poll_all
+
+    out, _ = _pretty_output()
+    picks = [("t-1", "A"), ("t-2", "B")]
+    fake = _batch_client(
+        {
+            "t-1": [TaskStatus(status="completed", result=_verification())],
+            "t-2": [TaskStatus(status="processing"), TaskStatus(status="failed", error="boom")],
+        }
+    )
+    statuses = {"t-1": None, "t-2": None}
+
+    _poll_all(fake, out, picks, 30.0, statuses, on_update=None)
+
+    # t-1 resolved on the first round and is never polled again; t-2 needed two
+    assert fake.status_calls.count("t-1") == 1
+    assert fake.status_calls.count("t-2") == 2
+    assert statuses["t-1"].status == "completed"
+    assert statuses["t-2"].status == "failed"
+
+
+def test_poll_all_refreshes_the_live_table_once_per_round():
+    """``on_update`` is how the Live table redraws. It must fire per round, not
+    per task — otherwise the table repaints N times a round for no reason."""
+    from lenz_io.cli.verify import _poll_all
+
+    out, _ = _pretty_output()
+    ticks = []
+    fake = _batch_client(
+        {
+            "t-1": [TaskStatus(status="completed", result=_verification())],
+            "t-2": [TaskStatus(status="processing"), TaskStatus(status="completed", result=_verification())],
+        }
+    )
+    _poll_all(
+        fake,
+        out,
+        [("t-1", "A"), ("t-2", "B")],
+        30.0,
+        {"t-1": None, "t-2": None},
+        on_update=lambda: ticks.append(1),
+    )
+    assert len(ticks) == 2
+
+
+def test_poll_all_past_its_deadline_polls_nothing_and_every_row_reads_as_timeout(monkeypatch):
+    from lenz_io.cli.verify import _batch_item_json, _poll_all
+
+    seq = iter([0.0, 99.0])  # deadline computed, then the first while-check is already past it
+    monkeypatch.setattr(verify_mod.time, "monotonic", lambda: next(seq, 999.0))
+    out, _ = _pretty_output()
+    fake = _batch_client({"t-1": [TaskStatus(status="processing")], "t-2": [TaskStatus(status="processing")]})
+    statuses = {"t-1": None, "t-2": None}
+
+    _poll_all(fake, out, [("t-1", "A"), ("t-2", "B")], 10.0, statuses, on_update=None)
+
+    assert fake.status_calls == []
+    assert statuses == {"t-1": None, "t-2": None}
+    assert _batch_item_json("t-1", "A", statuses["t-1"])["status"] == "timeout"
+
+
+def test_poll_all_keeps_the_last_seen_status_of_a_task_that_outruns_the_deadline(monkeypatch):
+    """A task polled at least once ends at its last-seen status (`processing`),
+    NOT None — only a never-polled task reads as `timeout`. Either way the row
+    is non-terminal, so render_batch_details offers a resume command."""
+    from lenz_io.cli.verify import _batch_item_json, _poll_all
+
+    seq = iter([0.0, 1.0, 99.0])  # deadline, round-1 check, round-2 check is past it
+    monkeypatch.setattr(verify_mod.time, "monotonic", lambda: next(seq, 999.0))
+    out, _ = _pretty_output()
+    fake = _batch_client({"t-1": [TaskStatus(status="processing")]})
+    statuses = {"t-1": None}
+
+    _poll_all(fake, out, [("t-1", "A")], 10.0, statuses, on_update=None)
+
+    assert fake.status_calls == ["t-1"]
+    assert statuses["t-1"].status == "processing"
+    assert _batch_item_json("t-1", "A", statuses["t-1"])["status"] == "processing"
+
+
+def test_poll_all_ctrl_c_detaches_only_the_tasks_still_running():
+    """Ctrl-C mid-batch exits 130 and prints a re-attach line for each task that
+    is still running — and none for one that already finished, where a resume
+    would just be a confusing extra round-trip."""
+    from lenz_io.cli.verify import _poll_all
+
+    out, buf = _pretty_output()
+    picks = [("t-1", "A"), ("t-2", "B"), ("t-3", "C")]
+    fake = FakeClient()
+    done = TaskStatus(status="completed", result=_verification())
+
+    def get_status(tid):
+        fake.status_calls.append(tid)
+        # Interrupt only once every task has been polled once, so t-1 is out of
+        # `pending` no matter which order the set iterates in.
+        if len(fake.status_calls) > len(picks):
+            raise KeyboardInterrupt
+        return done if tid == "t-1" else TaskStatus(status="processing")
+
+    fake.get_status = get_status
+
+    with pytest.raises(SystemExit) as exc:
+        _poll_all(fake, out, picks, 30.0, {t: None for t, _ in picks}, on_update=None)
+
+    assert exc.value.code == 130
+    text = buf.getvalue()
+    assert "Detached — these keep running. Re-attach:" in text
+    assert "lenz verify --resume t-1" not in text  # already completed
+    assert "lenz verify --resume t-2" in text
+    assert "lenz verify --resume t-3" in text
+    # printed in the order the user picked them, not the poll set's order
+    assert text.index("t-2") < text.index("t-3")
+
+
+def test_verify_batch_ctrl_c_exits_130(monkeypatch):
+    """The same detach contract end-to-end through the CLI: a multi-claim pick
+    fans out to a batch, Ctrl-C during the batch poll exits 130 (not 1, and not
+    a traceback)."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(
+        statuses=[
+            TaskStatus(
+                status="needs_input",
+                reason="multi_claim",
+                claims=[CandidateClaim(text="A"), CandidateClaim(text="B")],
+            )
+        ]
+    )
+    real_get_status = fake.get_status
+
+    def get_status(task_id):
+        if fake.select_calls:  # past the picker → we're in the batch poll
+            raise KeyboardInterrupt
+        return real_get_status(task_id)
+
+    fake.get_status = get_status
+    _patch_client(monkeypatch, fake)
+
+    result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "all"])
+    assert result.exit_code == 130

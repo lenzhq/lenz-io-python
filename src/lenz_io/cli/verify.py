@@ -351,8 +351,10 @@ def _poll_all(
     """Poll every task concurrently until all reach a terminal state (or timeout).
 
     Mutates ``statuses`` in place so the live table reflects each task's own
-    progress; tasks still pending at the deadline stay ``None`` (rendered as a
-    timeout)."""
+    progress. A task that outruns the deadline keeps its last-seen status
+    (``processing``); only one never polled at all stays ``None`` and renders
+    as a timeout. Either way the row is non-terminal and carries a resume
+    handle, so the distinction is cosmetic — but it is not "pending → None"."""
     deadline = time.monotonic() + timeout
     pending = {tid for tid, _ in picks}
     try:
