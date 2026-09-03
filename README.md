@@ -292,16 +292,16 @@ elif isinstance(event, VerificationFailed):
 If you're on Python 3.10+ a `match` statement reads even cleaner — events are
 plain dataclasses, so structural pattern matching works.
 
-**If you rely on the warranty, publish on `CertificateAnchored`, not on
+**If you rely on the warranty, publish on `CertificateTimestamped`, not on
 `VerificationCompleted`.** Cover requires the certificate's qualified
 timestamp to precede what you publish or send, so a pipeline keyed on
 `completed` races the anchor and can put the statement out before cover
 exists:
 
 ```python
-from lenz_io import CertificateAnchored
+from lenz_io import CertificateTimestamped
 
-if isinstance(event, CertificateAnchored):
+if isinstance(event, CertificateTimestamped):
     # The timestamp landed; cover is in force. Safe to publish now.
     publish(event.verification_id, certificate=event.coverage["certificate_url"])
 ```

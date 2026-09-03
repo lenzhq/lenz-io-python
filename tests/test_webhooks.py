@@ -167,8 +167,8 @@ class TestLenzWebhooks:
         assert isinstance(event, VerificationCompleted)
 
 
-class TestCertificateAnchored:
-    """`certificate.anchored` — the event publishers must key on.
+class TestCertificateTimestamped:
+    """`certificate.timestamped` — the event publishers must key on.
 
     The warranty requires the certificate's timestamp to PRECEDE what the
     customer publishes. A pipeline that publishes on `verification.completed`
@@ -178,7 +178,7 @@ class TestCertificateAnchored:
 
     def _payload(self, **overrides):
         payload = {
-            "event": "certificate.anchored",
+            "event": "certificate.timestamped",
             "task_id": "t_1",
             "verification_id": "a1b2c3d4",
             "status": "completed",
@@ -199,10 +199,10 @@ class TestCertificateAnchored:
         return payload
 
     def test_it_parses_as_its_own_type(self):
-        from lenz_io.webhooks import CertificateAnchored, _build_event
+        from lenz_io.webhooks import CertificateTimestamped, _build_event
 
         event = _build_event(self._payload())
-        assert isinstance(event, CertificateAnchored)
+        assert isinstance(event, CertificateTimestamped)
         assert event.verification_id == "a1b2c3d4"
         assert event.coverage["certificate_id"] == "9f2c"
         assert event.coverage["cap"] == 10000
@@ -211,10 +211,10 @@ class TestCertificateAnchored:
         """`result` is null on this event — it reports a timestamp landing, not
         a verdict being produced. A caller reaching for `result` here gets
         nothing, which is why the block has its own field."""
-        from lenz_io.webhooks import CertificateAnchored, _build_event
+        from lenz_io.webhooks import CertificateTimestamped, _build_event
 
         event = _build_event(self._payload(result=None))
-        assert isinstance(event, CertificateAnchored)
+        assert isinstance(event, CertificateTimestamped)
         assert not hasattr(event, "result")
         assert event.coverage["status"] == "covered"
 

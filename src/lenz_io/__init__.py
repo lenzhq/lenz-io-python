@@ -90,7 +90,7 @@ from .models import (
     VerificationListItem,
 )
 from .webhooks import (
-    CertificateAnchored,
+    CertificateTimestamped,
     LenzWebhooks,
     VerificationCompleted,
     VerificationFailed,
@@ -114,7 +114,7 @@ __all__ = [
     "BatchItemResult",
     "CandidateClaim",
     "Certificate",
-    "CertificateAnchored",
+    "CertificateTimestamped",
     "Coverage",
     "CoverageReason",
     "CoverageStatus",

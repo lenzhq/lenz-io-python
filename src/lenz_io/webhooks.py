@@ -142,8 +142,8 @@ class VerificationNeedsInput(WebhookEvent):
 
 
 @dataclass
-class CertificateAnchored(WebhookEvent):
-    """``event=certificate.anchored`` — the qualified timestamp landed.
+class CertificateTimestamped(WebhookEvent):
+    """``event=certificate.timestamped`` — the qualified timestamp landed.
 
     **This is the event to publish on, not ``verification.completed``.** The
     warranty requires the certificate's timestamp to PRECEDE what you publish
@@ -208,8 +208,8 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             needs_input=needs_input,
             hint=str(needs_input.get("hint") or "") if isinstance(needs_input, dict) else "",
         )
-    if event == "certificate.anchored":
-        return CertificateAnchored(
+    if event == "certificate.timestamped":
+        return CertificateTimestamped(
             event=event,
             task_id=task_id,
             attempt=attempt,

@@ -76,7 +76,7 @@ breaks against a server that has never heard of the feature.
 - **`CoverageStatus`** and **`CoverageReason`** literals, exported for
   exhaustive matching. The model fields stay `str` / `list[str]` so the SDK
   never rejects a value the server adds after this release was cut.
-- **`CertificateAnchored`** — the `certificate.anchored` webhook event, typed.
+- **`CertificateTimestamped`** — the `certificate.timestamped` webhook event, typed.
   **This is the event to publish on, not `verification.completed`.** The
   warranty requires the certificate's timestamp to PRECEDE what you publish or
   send, so a pipeline keyed on `completed` races the anchor and can put the
