@@ -127,15 +127,16 @@ asyncio_mode = "auto"
 # green — and a client library is mostly branches: retries, error mapping,
 # optional parameters, pagination.
 #
-# 82 is a floor derived from the first measurement (85% combined on
-# 2026-09-02), not a target. It answers "did this get worse", never "is this
-# good enough", and is a ratchet: raise it when the measured number pulls
-# away. A floor that can never fire is decoration.
+# 87 is a floor derived from the measured number (90% combined on
+# 2026-09-02, after the batch-verify CLI tests landed), not a target. It
+# answers "did this get worse", never "is this good enough", and is a ratchet:
+# raise it when the measured number pulls away. A floor that can never fire is
+# decoration. It started at 82 against an 85% measurement.
 #
 # Running a SUBSET (`pytest -k ...`, a single file) measures coverage over
 # only what that subset touched and will trip the floor. Pass `--no-cov` for
 # those runs — see CONTRIBUTING.md.
-addopts = "-q --strict-markers --cov=lenz_io --cov-branch --cov-report=term-missing --cov-fail-under=82"
+addopts = "-q --strict-markers --cov=lenz_io --cov-branch --cov-report=term-missing --cov-fail-under=87"
 markers = [
   "smoke: opt-in tests that hit a real Lenz staging environment (require LENZ_E2E_KEY)",
 ]
