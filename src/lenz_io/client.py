@@ -91,6 +91,7 @@ from .models import (
     AssessResponse,
     BatchAccepted,
     BatchItemResult,
+    Certificate,
     ExtractedClaims,
     LibraryList,
     Progress,
@@ -216,6 +217,27 @@ class _VerificationsNamespace:
             auth_optional=True,  # send the key if we have one → owner sees private rows
         )
         return Verification.model_validate(body)
+
+    def get_certificate(self, verification_id: str) -> Certificate:
+        """Download the warranty certificate for a covered verification.
+
+        Resolved by (verification, ACCOUNT), not by verification alone: one
+        cached analysis can have several holders, each with their own
+        certificate and their own cap, so this returns YOUR certificate over
+        this analysis and never another customer's.
+
+        Raises ``LenzError`` with status 404 when this verification carries no
+        certificate for your account — which is also what an uncovered verdict
+        returns, so check ``verification.coverage.status`` first rather than
+        using a 404 here to mean "not covered".
+
+        The document is byte-identical to the public
+        ``/certificate/<certificate_id>.json``, so it verifies with the
+        published open-source checker without involving Lenz. A withdrawn
+        certificate is still served — it is the record of what was warranted.
+        """
+        body = self._p._request("GET", f"/verifications/{verification_id}/certificate")
+        return Certificate.model_validate(body)
 
     def delete(self, verification_id: str) -> bool:
         """Idempotent. Retry-on-404 returns True ("already deleted")."""

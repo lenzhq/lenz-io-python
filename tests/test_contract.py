@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 from lenz_io.models import (
     AssessResponse,
+    Certificate,
     ExtractedClaims,
     TaskStatus,
     Usage,
@@ -144,6 +145,14 @@ def _load(name: str) -> dict:
         # `result` — the fixtures are the two halves of that contract.
         ("verify_status_processing.json", TaskStatus),
         ("verifications_detail.json", Verification),
+        # Both halves of the coverage contract. The server omits `coverage`
+        # entirely when the feature is off (that is `verifications_detail`),
+        # emits a full block with a certificate when a verdict qualifies, and
+        # a full block with `reasons` and null certificate fields when it does
+        # not — three shapes one optional model has to absorb.
+        ("verifications_detail_covered.json", Verification),
+        ("verifications_detail_uncovered.json", Verification),
+        ("certificate.json", Certificate),
         ("usage.json", Usage),
     ],
 )
