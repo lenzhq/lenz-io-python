@@ -1,0 +1,11 @@
+{
+  "status": "processing",
+  "task_id": "tsk_abc123",
+  "progress": {
+    "step": "research",
+    "index": 2,
+    "total": 5,
+    "elapsed_seconds": 42,
+    "poll_after_seconds": 5
+  }
+}

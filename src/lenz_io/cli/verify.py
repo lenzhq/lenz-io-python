@@ -43,9 +43,11 @@ POLL_INTERVAL = 2.5  # seconds — never sub-second; the pipeline runs ~90s.
 # for, not the one the verdict was produced with.
 DEPTH_CHOICES = ("standard", "low")
 
-# Friendlier spinner copy for the raw pipeline step names the status endpoint
-# reports (a mix of bare 'research' and decorated 'Framing...'). Unknown steps
-# fall back to a cleaned-up version of whatever the server sent.
+# Friendlier spinner copy for the pipeline step names the status endpoint
+# reports. Since 2026-09 those are a closed set of bare identifiers; the
+# server used to mix in decorated sentences ('Framing...', 'Starting...') and
+# the fallback below is what rendered those. Keep it: an SDK that breaks on a
+# stage name the server adds later is worse than one that prints it.
 _STEP_LABELS = {
     "starting": "Starting",
     "framing": "Framing the claim",
@@ -57,11 +59,13 @@ _STEP_LABELS = {
 }
 
 
-def _step_label(step: str | None) -> str:
+def _step_label(step: str | None, index: int | None = None, total: int | None = None) -> str:
     if not step:
         return "Verifying… (~90s)"
     key = step.strip().rstrip(".").strip().lower()
     pretty = _STEP_LABELS.get(key) or key.replace("_", " ").capitalize() or "Working"
+    if index and total:
+        return f"Verifying… {pretty} ({index}/{total})"
     return f"Verifying… {pretty}"
 
 
@@ -231,8 +235,8 @@ def _wait_until_actionable(
                     out.err.print("[dim]Ctrl-C to detach — the verification keeps running.[/dim]")
                     hint["shown"] = True
                 if spinner is not None:
-                    step = (st.progress or {}).get("step")
-                    spinner.update(_step_label(step))
+                    p = st.progress
+                    spinner.update(_step_label(p.step, p.index, p.total))
                 time.sleep(POLL_INTERVAL)
     except KeyboardInterrupt:
         out.resume_hint(task_id)

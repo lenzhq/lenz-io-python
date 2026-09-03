@@ -1,7 +1,9 @@
 {
   "status": "failed",
+  "task_id": "tsk_abc123",
   "error": "Pipeline stopped at: research_empty",
   "failure_reason": "research_empty",
   "failure_class": "upstream_unavailable",
-  "retryable": true
+  "retryable": true,
+  "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
 }

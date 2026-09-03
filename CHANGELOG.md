@@ -4,6 +4,53 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.11.0] - 2026-09-03
+
+**`progress` on `GET /verify/status` is now a documented object.** It was
+previously an untyped bag whose contents were a server implementation detail,
+so nothing about it was safe to depend on. It now carries five typed fields —
+`step`, `index`, `total`, `elapsed_seconds`, `poll_after_seconds` — and this
+SDK models them. Lockstep release with Node 2.11.0.
+
+Works against any server version: an older server simply never sends
+`index` / `total` / `poll_after_seconds`, and the SDK falls back to its own
+backoff ladder.
+
+### Added
+
+- **`Progress`** — `step`, `index`, `total`, `elapsed_seconds`,
+  `poll_after_seconds`. `step` is one of `starting` / `framing` / `research` /
+  `debate` / `adjudication` / `conclusion`; `index` is the 1-based stage
+  position out of `total`. It is typed `str`, not a `Literal`, so a stage the
+  server adds later passes through rather than raising.
+- **`on_progress=` on `verify_and_wait`, `wait` and `verify_batch_and_wait`** —
+  called as `on_progress(task_id, progress)` once per poll while a run is
+  still going. It takes the `task_id` because the batch helper round-robins
+  several ids in one loop. Without this the stage is invisible to anyone
+  using the documented happy path, since these helpers do the polling. An
+  exception raised inside your callback is logged at DEBUG and swallowed; it
+  never breaks the poll.
+- **Honouring `progress.poll_after_seconds`** — the poll loop uses the
+  server's suggested interval in place of the fixed 2/4/8s ladder when it is
+  present and within bounds. A batch waits the shortest hint in flight.
+- **`TaskStatus.task_id`** — echoed by the server on every status shape.
+- **`TaskStatus.docs_url`** — on a `failed` status, the page explaining that
+  `failure_class`.
+
+### Changed
+
+- **`TaskStatus.progress` is a `Progress` model, not a `dict`.** Attribute
+  access (`status.progress.step`) is the supported form. The dict access
+  patterns — `progress["step"]`, `progress.get("step")`, `"step" in progress`,
+  `progress.keys()` / `.values()` / `.items()`, `dict(progress)` — all keep
+  working and are **deprecated; they go in 3.0.0**.
+- **A completed status body no longer carries a `progress` key at all** (the
+  server omits unset fields). `TaskStatus.progress` defaults to an empty
+  `Progress`, so reading `.step` or `.get("step")` on one returns `""` rather
+  than raising.
+- `lenz verify` and `lenz status` render the stage as `Gathering evidence
+  (2/5)` when the server sends `index` / `total`.
+
 ## [2.10.0] - 2026-09-01
 
 One input vocabulary: **`text` is a document, `claim` is a claim.** `extract`

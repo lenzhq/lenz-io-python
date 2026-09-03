@@ -139,6 +139,10 @@ def _load(name: str) -> dict:
         ("assess_claims_list.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
+        # The `processing` body. Under the server's `exclude_unset` a
+        # completed body has no `progress` key at all and this one has no
+        # `result` — the fixtures are the two halves of that contract.
+        ("verify_status_processing.json", TaskStatus),
         ("verifications_detail.json", Verification),
         ("usage.json", Usage),
     ],
@@ -160,6 +164,53 @@ def test_contract_no_unknown_fields(fixture_name, model_cls):
         pytest.fail("\n".join([f"{fixture_name} → {model_cls.__name__}:", *errors]))
     # Sanity: model_validate also succeeds (smoke against the lax model)
     model_cls.model_validate(payload)
+
+
+def test_completed_body_keeps_modified_at_null():
+    """The server serialises with ``exclude_unset``, not ``exclude_none``.
+
+    ``exclude_none`` applies recursively and would strip ``modified_at``
+    whenever it is null — which is every same-day completion. If this key
+    disappears from the fixture, the server changed the wrong flag.
+    """
+    payload = _load("verify_status_completed.json")
+    assert "modified_at" in payload["result"]
+    assert payload["result"]["modified_at"] is None
+    # …and the unset branch fields are genuinely absent, not null.
+    for absent in ("progress", "claims", "candidates", "error"):
+        assert absent not in payload
+
+
+def test_progress_is_typed_not_a_bag():
+    """`progress` was `dict[str, Any]` up to 2.10.0. It has a shape now, and
+    the dict access patterns still work for one more major."""
+    parsed = TaskStatus.model_validate(_load("verify_status_processing.json"))
+    assert parsed.progress.step == "research"
+    assert (parsed.progress.index, parsed.progress.total) == (2, 5)
+    assert parsed.progress.poll_after_seconds == 5
+    # Deprecated dict shim — every access pattern a dict supported.
+    assert parsed.progress["step"] == "research"
+    assert parsed.progress.get("step") == "research"
+    assert parsed.progress.get("nope", "fallback") == "fallback"
+    assert "step" in parsed.progress
+    assert "model_dump" not in parsed.progress
+    assert set(parsed.progress.keys()) == {
+        "step",
+        "index",
+        "total",
+        "elapsed_seconds",
+        "poll_after_seconds",
+    }
+    assert dict(parsed.progress)["index"] == 2
+
+
+def test_progress_defaults_to_empty_on_a_terminal_body():
+    """A completed body carries no `progress` key, and reading it must not
+    raise for anyone who kept the old `.get("step")` call."""
+    parsed = TaskStatus.model_validate(_load("verify_status_completed.json"))
+    assert parsed.progress.step == ""
+    assert parsed.progress.get("step") == ""
+    assert parsed.progress.index is None
 
 
 def test_webhook_payload_completed_walks_result_as_verification():

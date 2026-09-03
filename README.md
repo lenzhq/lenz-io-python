@@ -200,6 +200,26 @@ for r in results:
         print(r.claim_text, "→", r.status)  # needs_input | failed | timeout
 ```
 
+A verify takes ~90 seconds, so show your users where it is. `on_progress` fires
+once per poll while the run is going — it takes the `task_id` as well, because
+the batch helper round-robins several ids in one loop:
+
+```python
+client.verify_and_wait(
+    claim="Sharks don't get cancer",
+    on_progress=lambda task_id, p: print(f"{p.step} — step {p.index} of {p.total}"),
+)
+# framing — step 1 of 5
+# research — step 2 of 5
+# ...
+```
+
+`p.step` is one of `starting` / `framing` / `research` / `debate` /
+`adjudication` / `conclusion`. `p.index` is stage **position**, not elapsed
+work — the stages are uneven, so a bar driven by it sits on `research` for
+roughly half the run. An exception raised inside your callback never breaks
+the poll.
+
 Prefer **webhooks** for production async flows (no long-lived HTTP connection);
 prefer **polling** for scripts, notebooks, and request/response handlers where
 blocking is fine. If you want full control over the loop, call `get_status(task_id)`
