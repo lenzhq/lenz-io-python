@@ -26,13 +26,28 @@ pytest
 ## Running tests
 
 ```bash
-pytest                    # all unit tests (no network)
-pytest -k webhooks        # subset
-pytest -m smoke           # opt-in staging smoke (needs LENZ_E2E_KEY)
+pytest                            # all unit tests (no network), with coverage
+pytest -k webhooks --no-cov       # subset
+pytest -m smoke --no-cov          # opt-in staging smoke (needs LENZ_E2E_KEY)
 ```
 
 The unit suite is fully mocked. The smoke suite runs against `lenz.io` (or
 a staging URL via `LENZ_BASE_URL`) and is opt-in via the `smoke` marker.
+
+## Coverage
+
+A bare `pytest` measures branch coverage over `lenz_io` and fails under a
+floor, because that is exactly what CI runs — the `--cov` options live in
+`addopts` in `pyproject.toml`, not in the workflow, so there is nothing to
+reproduce by hand.
+
+**Pass `--no-cov` when running a subset.** Coverage over a handful of tests
+measures only what that subset touched, so the floor trips on a run that
+proves nothing. Only the full suite produces a number worth reading.
+
+The floor is a ratchet, not a target: it says "do not get worse". If you add
+a feature, add the tests that keep the number where it was — and when the
+measured value pulls away from the floor, raise the floor.
 
 ## Style
 

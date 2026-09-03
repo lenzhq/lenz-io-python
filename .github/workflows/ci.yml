@@ -31,7 +31,11 @@ jobs:
         # mypy strict only on hand-written code; generated _generated/ (if added later) is excluded via pyproject.
         run: mypy src/lenz_io
       - name: Test
-        run: pytest -q
+        # `--no-cov` because the coverage gate lives in `addopts` and would
+        # otherwise run in all eight matrix cells. Coverage does not vary
+        # meaningfully by OS or interpreter version, so paying for it eight
+        # times buys nothing; the dedicated `coverage` job below measures once.
+        run: pytest -q --no-cov
 
   cli-wheel-smoke:
     name: cli wheel smoke
@@ -63,6 +67,30 @@ jobs:
           /tmp/bareenv/bin/lenz 2>/tmp/err.txt && exit 1 || true
           grep -q 'lenz-io\[cli\]' /tmp/err.txt
 
+  coverage:
+    # One cell, deliberately — see the `--no-cov` note on the matrix above.
+    #
+    # A separate job rather than a conditional step inside the matrix: the step
+    # form needs an `if:` naming one specific Python version, which silently
+    # stops running the moment that version leaves the matrix.
+    name: coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Test with coverage
+        # No flags: the `--cov` options and the floor come from `addopts` in
+        # pyproject.toml, so this is byte-identical to what a contributor runs.
+        # `term-missing` prints the uncovered lines into this log, so a reviewer
+        # can see them without re-running anything locally.
+        run: pytest -q
+
   ci-ok:
     # Aggregate gate. Branch protection requires THIS check and nothing else, so
     # the matrix above can gain or drop a cell without anyone touching the
@@ -76,11 +104,12 @@ jobs:
     # present as a stuck PR rather than a red gate.
     name: ci-ok
     if: always()
-    needs: [test, cli-wheel-smoke]
+    needs: [test, cli-wheel-smoke, coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Require every upstream job to have succeeded
         run: |
-          echo "test=${{ needs.test.result }} cli-wheel-smoke=${{ needs.cli-wheel-smoke.result }}"
+          echo "test=${{ needs.test.result }} cli-wheel-smoke=${{ needs.cli-wheel-smoke.result }} coverage=${{ needs.coverage.result }}"
           [ "${{ needs.test.result }}" = "success" ] || exit 1
           [ "${{ needs.cli-wheel-smoke.result }}" = "success" ] || exit 1
+          [ "${{ needs.coverage.result }}" = "success" ] || exit 1
