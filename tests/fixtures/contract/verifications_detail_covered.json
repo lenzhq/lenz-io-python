@@ -1,0 +1,55 @@
+{
+  "verification_id": "a1b2c3d4",
+  "claim": "The Eiffel Tower is in Paris.",
+  "visibility": "private",
+  "depth": "standard",
+  "domain": "General",
+  "entities": [],
+  "presumed_intent": "verify",
+  "verdict": "True",
+  "confidence": "high",
+  "lenz_score": 10,
+  "key_finding": "The Eiffel Tower stands on the Champ de Mars in Paris.",
+  "executive_summary": "Every source places it in the 7th arrondissement.",
+  "warnings": [
+    "Measured at the base."
+  ],
+  "sources": [
+    {
+      "source_name": "Ville de Paris",
+      "title": "Tour Eiffel",
+      "url": "https://example.org/a",
+      "snippet": "Supporting text.",
+      "date": "2026-01-15"
+    }
+  ],
+  "audit": {
+    "adjudication_summary": "Unanimous: claim holds under standard conditions.",
+    "assessments": [],
+    "debate_pro": {
+      "role": "",
+      "argument": "",
+      "rebuttal": ""
+    },
+    "debate_con": {
+      "role": "",
+      "argument": "",
+      "rebuttal": ""
+    },
+    "panel_agreement": "unanimous"
+  },
+  "created_at": "2026-09-03T10:00:00Z",
+  "modified_at": null,
+  "language": "en",
+  "coverage": {
+    "status": "covered",
+    "reasons": [],
+    "certificate_id": "9f2c1e4a7b30d5c68e91af22b4d70e13",
+    "certificate_url": "https://lenz.io/certificate/9f2c1e4a7b30d5c68e91af22b4d70e13",
+    "as_of": "2026-09-03T10:00:00+00:00",
+    "currency": "EUR",
+    "cap": 10000,
+    "aggregate": 500000,
+    "terms_version": "v1"
+  }
+}

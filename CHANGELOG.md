@@ -51,6 +51,54 @@ backoff ladder.
 - `lenz verify` and `lenz status` render the stage as `Gathering evidence
   (2/5)` when the server sends `index` / `total`.
 
+**Covered verification: the warranty block and the certificate.** Qualifying
+verdicts on paid Developer and Scale plans carry a contractual warranty from
+Lenz. This release types the `coverage` block that says whether a given verdict
+carries it, and adds `get_certificate()` to download the signed, timestamped
+document.
+
+**Not yet live.** The server gates all of this behind a flag that is off, so
+`coverage` is `None` on every response until Lenz enables it. Nothing here
+breaks against a server that has never heard of the feature.
+
+### Added — covered verification
+
+
+- **`Coverage`** on `Verification.coverage` — `status`, `reasons`,
+  `certificate_id`, `certificate_url`, `as_of`, `currency`, `cap`,
+  `aggregate`, `terms_version`. `None` when Lenz is not operating the
+  warranty, and on unauthenticated calls.
+- **`Certificate`** and **`client.verifications.get_certificate(id)`** — the
+  signed record, byte-identical to the public document, with `leaf`,
+  `signature`, `anchors` (an eIDAS-qualified RFC 3161 timestamp plus an
+  OpenTimestamps receipt), and `verifier_url` / `keys_url` so you can check it
+  with the published open-source verifier **without involving Lenz**.
+- **`CoverageStatus`** and **`CoverageReason`** literals, exported for
+  exhaustive matching. The model fields stay `str` / `list[str]` so the SDK
+  never rejects a value the server adds after this release was cut.
+- **`CertificateTimestamped`** — the `certificate.timestamped` webhook event, typed.
+  **This is the event to publish on, not `verification.completed`.** The
+  warranty requires the certificate's timestamp to PRECEDE what you publish or
+  send, so a pipeline keyed on `completed` races the anchor and can put the
+  statement out before cover exists. It carries `coverage` instead of
+  `result` — it reports a timestamp landing, not a verdict being produced.
+
+### Notes for callers — covered verification
+- **`coverage is None` and `status == "uncovered"` are different facts.** The
+  first means Lenz is not operating the warranty, or you called without a key;
+  the second means it IS operating and this verdict did not qualify —
+  `reasons` says why. Do not conflate them.
+- **The money fields are three, not two.** `currency` is ISO 4217 and the
+  amounts are integers in **major units** — `cap=10000` means ten thousand,
+  not a hundred. They are contract figures, not amounts a payment processor
+  charges. Read `currency`; do not assume EUR.
+- **A 404 from `get_certificate()` is not a reliable "not covered" signal** —
+  it is also what you get for a verification that has no certificate for your
+  account. Check `coverage.status` first.
+- A **withdrawn** certificate is still returned, with `withdrawn_at` set. It is
+  the record of what was warranted, and use before the withdrawal notice can
+  still be covered.
+
 ## [2.10.0] - 2026-09-01
 
 One input vocabulary: **`text` is a document, `claim` is a claim.** `extract`

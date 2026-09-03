@@ -1,0 +1,50 @@
+{
+  "document_version": 1,
+  "certificate_id": "0f3f8fed527643011fd1e8a7b00a218d",
+  "record_version": "1",
+  "payload": {
+    "cap": 10000,
+    "as_of": "2026-09-03T10:00:00+00:00",
+    "sources": [
+      {
+        "url": "https://example.com/a",
+        "title": "A",
+        "snippet": "text"
+      }
+    ],
+    "verdict": "True",
+    "currency": "EUR",
+    "warnings": [
+      "Measured at the base."
+    ],
+    "aggregate": 500000,
+    "issued_at": "2026-09-03T10:00:05+00:00",
+    "confidence": 8.3,
+    "lenz_score": 10,
+    "atomic_claim": "The Eiffel Tower is in Paris.",
+    "gate_version": "1",
+    "terms_version": "v1",
+    "record_version": "1",
+    "warranted_pole": "True",
+    "executive_summary": "It is.",
+    "analysis_completed_at": "2026-09-03T10:00:00+00:00"
+  },
+  "leaf": "092daa1473e026948d01f43df2253d76e7989837d249e4634b957cf913bf2894",
+  "signature": "MEUCIQ...",
+  "key_id": "projects/lenz/locations/eu/keyRings/coverage/cryptoKeys/cert/cryptoKeyVersions/1",
+  "anchors": {
+    "rfc3161": {
+      "authority": "example-qtsp",
+      "token": "MIIF...",
+      "certificate_chain": "-----BEGIN CERTIFICATE-----",
+      "timestamped_at": "2026-09-03T10:00:20+00:00"
+    },
+    "opentimestamps": {
+      "proof": "AE9w...",
+      "upgraded_at": null
+    }
+  },
+  "withdrawn_at": null,
+  "keys_url": "http://192.168.35.239:8000/.well-known/lenz-certificate-keys.json",
+  "verifier_url": "http://192.168.35.239:8000/verify_certificate.py"
+}

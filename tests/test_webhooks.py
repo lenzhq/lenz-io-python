@@ -165,3 +165,68 @@ class TestLenzWebhooks:
         # Header name lowercased (Flask / WSGI sometimes)
         event = wh.parse(body, {"x-lenz-signature": _sign(body)})
         assert isinstance(event, VerificationCompleted)
+
+
+class TestCertificateTimestamped:
+    """`certificate.timestamped` — the event publishers must key on.
+
+    The warranty requires the certificate's timestamp to PRECEDE what the
+    customer publishes. A pipeline that publishes on `verification.completed`
+    races the anchor and can put the statement out before cover exists, so an
+    SDK that leaves this event untyped quietly encourages the wrong ordering.
+    """
+
+    def _payload(self, **overrides):
+        payload = {
+            "event": "certificate.timestamped",
+            "task_id": "t_1",
+            "verification_id": "a1b2c3d4",
+            "status": "completed",
+            "attempt": 1,
+            "coverage": {
+                "status": "covered",
+                "reasons": [],
+                "certificate_id": "9f2c",
+                "certificate_url": "https://lenz.io/certificate/9f2c",
+                "as_of": "2026-09-03T10:00:00+00:00",
+                "currency": "EUR",
+                "cap": 10000,
+                "aggregate": 500000,
+                "terms_version": "v1",
+            },
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_it_parses_as_its_own_type(self):
+        from lenz_io.webhooks import CertificateTimestamped, _build_event
+
+        event = _build_event(self._payload())
+        assert isinstance(event, CertificateTimestamped)
+        assert event.verification_id == "a1b2c3d4"
+        assert event.coverage["certificate_id"] == "9f2c"
+        assert event.coverage["cap"] == 10000
+
+    def test_it_carries_coverage_instead_of_result(self):
+        """`result` is null on this event — it reports a timestamp landing, not
+        a verdict being produced. A caller reaching for `result` here gets
+        nothing, which is why the block has its own field."""
+        from lenz_io.webhooks import CertificateTimestamped, _build_event
+
+        event = _build_event(self._payload(result=None))
+        assert isinstance(event, CertificateTimestamped)
+        assert not hasattr(event, "result")
+        assert event.coverage["status"] == "covered"
+
+    def test_a_missing_coverage_block_is_an_empty_dict_not_a_crash(self):
+        from lenz_io.webhooks import _build_event
+
+        event = _build_event(self._payload(coverage=None))
+        assert event.coverage == {}
+
+    def test_an_unknown_event_still_falls_through_to_the_base(self):
+        """Adding a fourth branch must not break forward compatibility."""
+        from lenz_io.webhooks import WebhookEvent, _build_event
+
+        event = _build_event({"event": "something.new", "task_id": "t_2"})
+        assert type(event) is WebhookEvent

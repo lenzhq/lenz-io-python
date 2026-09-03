@@ -136,6 +136,89 @@ class SimilarVerification(_Lax):
     distance: float = 0.0
 
 
+#: Closed set of ``coverage.status`` values. Exported for exhaustive matching;
+#: the model field stays ``str`` so the SDK never rejects a status the server
+#: adds after this release was cut.
+CoverageStatus = Literal["covered", "uncovered", "pending_timestamp"]
+
+#: Closed set of ``coverage.reasons`` values — why a verdict is NOT covered.
+#: Deliberately smaller than the internal gate's vocabulary: ``plan`` and
+#: ``depth`` are actionable, ``verdict`` is a product rule you design around,
+#: ``quality`` covers everything you can neither act on nor define, and
+#: ``withdrawn`` / ``issue_failed`` are statements about Lenz rather than about
+#: your claim.
+CoverageReason = Literal[
+    "plan",
+    "depth",
+    "verdict",
+    "quality",
+    "withdrawn",
+    "issue_failed",
+]
+
+
+class Coverage(_Lax):
+    """Whether this verdict carries Lenz's warranty, for YOUR account.
+
+    Present only when covered verification is enabled on the account's plan;
+    ``None`` otherwise. It describes the pair (your account, this analysis),
+    not the analysis alone — two accounts can hold two certificates over one
+    cached verdict, so the block you see is never another customer's.
+
+    ``reasons`` is empty exactly when ``status`` is not ``"uncovered"``.
+
+    The money fields are three, not two: ``currency`` is ISO 4217 and the
+    amounts are integers in **major units** — ``cap=10000`` means ten
+    thousand, not a hundred. They are contract figures, not amounts a payment
+    processor charges. Read ``currency``; do not assume EUR.
+    """
+
+    status: str = "uncovered"
+    reasons: list[str] = Field(default_factory=list)
+    certificate_id: str | None = None
+    certificate_url: str | None = None
+    #: The date the verdict is warranted AS OF — the analysis time, not the
+    #: issue time. ``None`` when there is no certificate.
+    as_of: str | None = None
+    currency: str = ""
+    cap: int = 0
+    aggregate: int = 0
+    terms_version: str = ""
+
+
+class Certificate(_Lax):
+    """The signed warranty certificate, byte-identical to the public document.
+
+    Everything needed to verify the record **without Lenz**: ``leaf`` is the
+    digest the ``signature`` is over, ``anchors`` carries the qualified
+    (RFC 3161 / eIDAS) timestamp and the OpenTimestamps receipt, and
+    ``verifier_url`` / ``keys_url`` point at the open-source checker and the
+    published keys.
+
+    A withdrawn certificate is still served — it is the record of what was
+    warranted, and ``withdrawn_at`` is on it.
+    """
+
+    #: An INT on the wire, unlike ``record_version`` which is a string. Not a
+    #: tidy asymmetry, but it is what the server sends: `record_version` is
+    #: part of the signed leaf and has always been a string, while
+    #: `document_version` versions the envelope around it.
+    document_version: int = 0
+    certificate_id: str = ""
+    record_version: str = ""
+    #: The signed payload: the exact statement, verdict, warnings, sources and
+    #: caps. This is what the leaf is computed over — treat it as opaque and
+    #: pass it to the verifier rather than reconstructing it.
+    payload: dict[str, Any] = Field(default_factory=dict)
+    leaf: str = ""
+    signature: str | None = None
+    key_id: str | None = None
+    anchors: dict[str, Any] = Field(default_factory=dict)
+    withdrawn_at: str | None = None
+    keys_url: str = ""
+    verifier_url: str = ""
+
+
 class Verification(_Lax):
     """Full verification report — returned by ``verify_and_wait``,
     ``verifications.get``, the ``/verify/status/{task_id}`` polling
@@ -184,6 +267,15 @@ class Verification(_Lax):
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
     # older cached payloads that lack the field.
     language: str = "en"
+    #: Warranty state for YOUR account over this analysis.
+    #:
+    #: ``None`` for two reasons that are NOT "this verdict does not qualify":
+    #: Lenz is not operating the warranty, or the call was unauthenticated
+    #: (``verifications.get`` accepts anonymous callers, and an anonymous
+    #: caller has no account for a warranty to attach to). A verdict that does
+    #: not qualify carries the block with ``status="uncovered"`` and the
+    #: reasons why.
+    coverage: Coverage | None = None
 
 
 class VerificationListItem(_Lax):

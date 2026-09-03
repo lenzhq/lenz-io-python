@@ -236,6 +236,35 @@ Every claim-shaped response shares these fields at top level:
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
+### The warranty (`coverage`)
+
+Qualifying verdicts on paid Developer and Scale plans carry a contractual
+warranty from Lenz. Every verification tells you where it stands:
+
+```python
+v = client.verifications.get("a1b2c3d4")
+
+if v.coverage is None:
+    ...  # Lenz is not operating the warranty, or you called without a key
+elif v.coverage.status == "covered":
+    cert = client.verifications.get_certificate(v.verification_id)
+    # cert.leaf / cert.signature / cert.anchors — verifiable WITHOUT Lenz,
+    # with the script at cert.verifier_url and the keys at cert.keys_url.
+else:
+    print(v.coverage.reasons)  # e.g. ["plan"] or ["verdict"]
+```
+
+Three things worth getting right:
+
+- **`coverage is None` and `status == "uncovered"` are different facts.** The
+  first means Lenz is not operating the warranty, or the call was
+  unauthenticated; the second means it IS, and this verdict did not qualify.
+- **The money fields are three, not two.** `currency` is ISO 4217, and `cap` /
+  `aggregate` are integers in **major units** — `cap=10000` means ten
+  thousand, not a hundred. Read `currency`; do not assume EUR.
+- **A 404 from `get_certificate()` does not mean "not covered"** — check
+  `coverage.status` for that.
+
 ### Webhooks
 
 ```python
@@ -262,6 +291,23 @@ elif isinstance(event, VerificationFailed):
 
 If you're on Python 3.10+ a `match` statement reads even cleaner — events are
 plain dataclasses, so structural pattern matching works.
+
+**If you rely on the warranty, publish on `CertificateTimestamped`, not on
+`VerificationCompleted`.** Cover requires the certificate's qualified
+timestamp to precede what you publish or send, so a pipeline keyed on
+`completed` races the anchor and can put the statement out before cover
+exists:
+
+```python
+from lenz_io import CertificateTimestamped
+
+if isinstance(event, CertificateTimestamped):
+    # The timestamp landed; cover is in force. Safe to publish now.
+    publish(event.verification_id, certificate=event.coverage["certificate_url"])
+```
+
+It carries `coverage` instead of `result` — it reports a timestamp landing,
+not a verdict being produced.
 
 Signature verification is HMAC-SHA256 over the raw body; the SDK does it for
 you and rejects tampered or replayed payloads.

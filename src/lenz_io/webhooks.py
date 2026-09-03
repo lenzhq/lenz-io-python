@@ -141,6 +141,25 @@ class VerificationNeedsInput(WebhookEvent):
     hint: str = ""
 
 
+@dataclass
+class CertificateTimestamped(WebhookEvent):
+    """``event=certificate.timestamped`` — the qualified timestamp landed.
+
+    **This is the event to publish on, not ``verification.completed``.** The
+    warranty requires the certificate's timestamp to PRECEDE what you publish
+    or send, so a pipeline that publishes on `completed` races the anchor and
+    can put the statement out before cover exists. `completed` says a verdict
+    was produced; this says the qualified timestamp is in hand and cover is in
+    force.
+
+    Carries ``coverage`` INSTEAD of ``result``: the event reports that a
+    timestamp landed, not that a verdict was produced, so ``result`` is null
+    on this event and reading it will not give you the verification.
+    """
+
+    coverage: dict[str, Any] = field(default_factory=dict)
+
+
 def _build_event(payload: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
     event = str(payload.get("event") or "")
@@ -189,6 +208,18 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             raw=payload,
             needs_input=needs_input,
             hint=str(needs_input.get("hint") or "") if isinstance(needs_input, dict) else "",
+        )
+    if event == "certificate.timestamped":
+        return CertificateTimestamped(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            coverage=payload.get("coverage") or {},
         )
     # Unknown event type — return generic. Future-compatible.
     return WebhookEvent(

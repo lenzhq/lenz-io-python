@@ -17,6 +17,7 @@ import respx
 from lenz_io import (
     Lenz,
     LenzAuthError,
+    LenzError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRateLimitError,
@@ -1539,3 +1540,133 @@ class TestConnectionReuse:
             client.verify_and_wait(claim="x", timeout=5)
         # INFO-level log of the task_id (for support recovery)
         assert any("tsk_log_test" in r.message for r in caplog.records)
+
+
+class TestCoverage:
+    """The warranty block and the certificate download.
+
+    Three states the SDK has to keep apart, because conflating the first two
+    is the mistake a caller makes: `coverage is None` means the feature is not
+    enabled for this account at all, `status == "uncovered"` means it IS
+    enabled and this verdict did not qualify, and `status == "covered"` means
+    a certificate exists. Only the third has a certificate to fetch.
+    """
+
+    def _detail(self, coverage):
+        body = {"verification_id": "vid_c", "claim": "x", "verdict": "True", "language": "en"}
+        if coverage is not None:
+            body["coverage"] = coverage
+        return body
+
+    def test_absent_block_is_none_not_an_empty_coverage(self, client):
+        """`None` and `status="uncovered"` are different facts. A model that
+        defaulted to an empty Coverage would make them indistinguishable, and
+        a caller would read "not enabled" as "does not qualify"."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c").respond(200, json=self._detail(None))
+            v = client.verifications.get("vid_c")
+        assert v.coverage is None
+
+    def test_a_covered_verdict_carries_its_certificate_and_the_caps(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c").respond(
+                200,
+                json=self._detail(
+                    {
+                        "status": "covered",
+                        "reasons": [],
+                        "certificate_id": "9f2c",
+                        "certificate_url": "https://lenz.io/certificate/9f2c",
+                        "as_of": "2026-09-03T10:00:00+00:00",
+                        "currency": "EUR",
+                        "cap": 10000,
+                        "aggregate": 500000,
+                        "terms_version": "v1",
+                    }
+                ),
+            )
+            v = client.verifications.get("vid_c")
+        assert v.coverage.status == "covered"
+        assert v.coverage.certificate_id == "9f2c"
+        assert v.coverage.reasons == []
+        # Major units, and the currency is read rather than assumed.
+        assert (v.coverage.currency, v.coverage.cap, v.coverage.aggregate) == ("EUR", 10000, 500000)
+
+    def test_an_uncovered_verdict_says_why(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c").respond(
+                200,
+                json=self._detail(
+                    {
+                        "status": "uncovered",
+                        "reasons": ["plan", "verdict"],
+                        "certificate_id": None,
+                        "certificate_url": None,
+                        "as_of": None,
+                        "currency": "EUR",
+                        "cap": 10000,
+                        "aggregate": 500000,
+                        "terms_version": "v1",
+                    }
+                ),
+            )
+            v = client.verifications.get("vid_c")
+        assert v.coverage.status == "uncovered"
+        assert v.coverage.reasons == ["plan", "verdict"]
+        assert v.coverage.certificate_id is None
+
+    def test_an_unknown_status_does_not_break_the_client(self, client):
+        """`CoverageStatus` is exported for exhaustive matching, but the field
+        stays `str` — the SDK must never reject a status added server-side
+        after this release was cut."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c").respond(200, json=self._detail({"status": "something_new", "reasons": []}))
+            v = client.verifications.get("vid_c")
+        assert v.coverage.status == "something_new"
+
+    def test_get_certificate_returns_the_verifiable_document(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.get("/verifications/vid_c/certificate").respond(
+                200,
+                json={
+                    "document_version": "1",
+                    "certificate_id": "9f2c",
+                    "record_version": "1",
+                    "payload": {"atomic_claim": "x", "verdict": "True", "currency": "EUR", "cap": 10000},
+                    "leaf": "0" * 64,
+                    "signature": "MEUCIQ",
+                    "key_id": "projects/.../cryptoKeyVersions/1",
+                    "anchors": {"qualified_timestamp": {"authority": "qtsp"}, "opentimestamps": {}},
+                    "withdrawn_at": None,
+                    "keys_url": "https://lenz.io/.well-known/lenz-certificate-keys.json",
+                    "verifier_url": "https://lenz.io/verify_certificate.py",
+                },
+            )
+            cert = client.verifications.get_certificate("vid_c")
+        # Authenticated: the certificate is resolved by (verification, ACCOUNT),
+        # so an anonymous fetch would be the wrong document or none.
+        assert "Authorization" in route.calls.last.request.headers
+        assert cert.certificate_id == "9f2c"
+        assert cert.leaf == "0" * 64
+        # The pointers that make it checkable WITHOUT Lenz.
+        assert cert.verifier_url.endswith("verify_certificate.py")
+        assert cert.keys_url.endswith("lenz-certificate-keys.json")
+
+    def test_a_withdrawn_certificate_is_still_returned(self, client):
+        """It is the record of what WAS warranted, and reliance before the
+        notice can still be covered — so the SDK must not treat withdrawal as
+        an error."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c/certificate").respond(
+                200,
+                json={"certificate_id": "9f2c", "leaf": "0" * 64, "withdrawn_at": "2026-10-01T09:00:00+00:00"},
+            )
+            cert = client.verifications.get_certificate("vid_c")
+        assert cert.withdrawn_at == "2026-10-01T09:00:00+00:00"
+
+    def test_no_certificate_raises_rather_than_returning_an_empty_one(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_c/certificate").respond(404, json={"detail": "Not found."})
+            with pytest.raises(LenzError) as exc:
+                client.verifications.get_certificate("vid_c")
+        assert exc.value.status_code == 404
