@@ -139,7 +139,7 @@ class SimilarVerification(_Lax):
 #: Closed set of ``coverage.status`` values. Exported for exhaustive matching;
 #: the model field stays ``str`` so the SDK never rejects a status the server
 #: adds after this release was cut.
-CoverageStatus = Literal["covered", "uncovered", "pending_anchor"]
+CoverageStatus = Literal["covered", "uncovered", "pending_timestamp"]
 
 #: Closed set of ``coverage.reasons`` values — why a verdict is NOT covered.
 #: Deliberately smaller than the internal gate's vocabulary: ``plan`` and
@@ -199,7 +199,11 @@ class Certificate(_Lax):
     warranted, and ``withdrawn_at`` is on it.
     """
 
-    document_version: str = ""
+    #: An INT on the wire, unlike ``record_version`` which is a string. Not a
+    #: tidy asymmetry, but it is what the server sends: `record_version` is
+    #: part of the signed leaf and has always been a string, while
+    #: `document_version` versions the envelope around it.
+    document_version: int = 0
     certificate_id: str = ""
     record_version: str = ""
     #: The signed payload: the exact statement, verdict, warnings, sources and

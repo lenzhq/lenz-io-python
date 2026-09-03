@@ -149,7 +149,8 @@ class CertificateTimestamped(WebhookEvent):
     warranty requires the certificate's timestamp to PRECEDE what you publish
     or send, so a pipeline that publishes on `completed` races the anchor and
     can put the statement out before cover exists. `completed` says a verdict
-    was produced; this says the record is anchored and the cover is in force.
+    was produced; this says the qualified timestamp is in hand and cover is in
+    force.
 
     Carries ``coverage`` INSTEAD of ``result``: the event reports that a
     timestamp landed, not that a verdict was produced, so ``result`` is null

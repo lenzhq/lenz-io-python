@@ -1,43 +1,43 @@
 {
-  "document_version": "1",
-  "certificate_id": "9f2c1e4a7b30d5c68e91af22b4d70e13",
+  "document_version": 1,
+  "certificate_id": "0f3f8fed527643011fd1e8a7b00a218d",
   "record_version": "1",
   "payload": {
-    "record_version": "1",
-    "atomic_claim": "The Eiffel Tower is in Paris.",
+    "cap": 10000,
+    "as_of": "2026-09-03T10:00:00+00:00",
+    "sources": [
+      {
+        "url": "https://example.com/a",
+        "title": "A",
+        "snippet": "text"
+      }
+    ],
     "verdict": "True",
-    "warranted_pole": "True",
-    "lenz_score": 10,
-    "confidence": 8.3,
-    "executive_summary": "Every source places it in the 7th arrondissement.",
+    "currency": "EUR",
     "warnings": [
       "Measured at the base."
     ],
-    "sources": [
-      {
-        "url": "https://example.org/a",
-        "title": "A source",
-        "snippet": "Supporting text."
-      }
-    ],
-    "analysis_completed_at": "2026-09-03T10:00:00+00:00",
-    "issued_at": "2026-09-03T10:00:05+00:00",
-    "as_of": "2026-09-03T10:00:00+00:00",
-    "terms_version": "v1",
-    "currency": "EUR",
-    "cap": 10000,
     "aggregate": 500000,
-    "gate_version": "1"
+    "issued_at": "2026-09-03T10:00:05+00:00",
+    "confidence": 8.3,
+    "lenz_score": 10,
+    "atomic_claim": "The Eiffel Tower is in Paris.",
+    "gate_version": "1",
+    "terms_version": "v1",
+    "record_version": "1",
+    "warranted_pole": "True",
+    "executive_summary": "It is.",
+    "analysis_completed_at": "2026-09-03T10:00:00+00:00"
   },
-  "leaf": "0000000000000000000000000000000000000000000000000000000000000000",
+  "leaf": "092daa1473e026948d01f43df2253d76e7989837d249e4634b957cf913bf2894",
   "signature": "MEUCIQ...",
   "key_id": "projects/lenz/locations/eu/keyRings/coverage/cryptoKeys/cert/cryptoKeyVersions/1",
   "anchors": {
-    "qualified_timestamp": {
+    "rfc3161": {
       "authority": "example-qtsp",
       "token": "MIIF...",
       "certificate_chain": "-----BEGIN CERTIFICATE-----",
-      "anchored_at": "2026-09-03T10:00:20+00:00"
+      "timestamped_at": "2026-09-03T10:00:20+00:00"
     },
     "opentimestamps": {
       "proof": "AE9w...",
@@ -45,6 +45,6 @@
     }
   },
   "withdrawn_at": null,
-  "keys_url": "https://lenz.io/.well-known/lenz-certificate-keys.json",
-  "verifier_url": "https://lenz.io/verify_certificate.py"
+  "keys_url": "http://192.168.35.239:8000/.well-known/lenz-certificate-keys.json",
+  "verifier_url": "http://192.168.35.239:8000/verify_certificate.py"
 }
