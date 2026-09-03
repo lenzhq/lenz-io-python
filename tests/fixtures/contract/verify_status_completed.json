@@ -1,7 +1,6 @@
 {
   "status": "completed",
-  "reason": "",
-  "progress": {},
+  "task_id": "tsk_abc123",
   "result": {
     "verification_id": "a1b2c3d4",
     "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",

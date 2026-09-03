@@ -18,6 +18,7 @@ Vocabulary (applies across every claim-shaped response):
 
 from __future__ import annotations
 
+from collections.abc import ItemsView, KeysView, ValuesView
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -356,17 +357,82 @@ class BatchAccepted(_Lax):
     items: list[TaskAccepted] = Field(default_factory=list)
 
 
+class Progress(_Lax):
+    """Where a running verification has got to. Advisory — never results.
+
+    ``step`` is one of ``starting`` / ``framing`` / ``research`` / ``debate``
+    / ``adjudication`` / ``conclusion``. ``index`` is the 1-based stage
+    position (0 while ``starting``) out of ``total``; read ``total`` off the
+    response rather than hard-coding it. ``poll_after_seconds`` is how long
+    to wait before looking again — :meth:`Lenz.verify_and_wait` honours it
+    for you. ``elapsed_seconds`` is how long the run has been going, a
+    measurement rather than an estimate of what is left.
+
+    ``index`` is stage POSITION, not elapsed work: the stages are uneven, so
+    a bar driven by it sits on ``research`` for roughly half the run.
+
+    ``step`` stays a plain ``str``, not a ``Literal`` — an SDK that
+    hard-rejects a stage name the server adds later is worse than one that
+    passes it through.
+
+    This was a plain ``dict`` up to 2.10.0. The mapping methods below keep
+    ``p["step"]``, ``"step" in p``, ``p.keys()`` and ``dict(p)`` working on a
+    2.x minor; they are deprecated and go in 3.0.0. Use attributes.
+    """
+
+    step: str = ""
+    index: int | None = None
+    total: int | None = None
+    elapsed_seconds: int | None = None
+    poll_after_seconds: int | None = None
+
+    # ── dict compatibility shim (deprecated, removed in 3.0.0) ──
+    #
+    # `.get()` alone would have been the worst option available: the
+    # changelog would say "minor", the shim would look like it handled
+    # compatibility, and a caller doing `progress["step"]` would find out in
+    # production. `dict` has four access patterns; support all of them.
+
+    # Everything routes through model_dump() rather than getattr, so the key
+    # set is the FIELDS (plus any extras the server sent) — `"model_dump" in
+    # progress` must not answer True.
+
+    def __getitem__(self, key: str) -> Any:
+        return self.model_dump()[key]
+
+    def get(self, key: str, default: Any = None) -> Any:
+        return self.model_dump().get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self.model_dump()
+
+    def keys(self) -> KeysView[str]:
+        return self.model_dump().keys()
+
+    def values(self) -> ValuesView[Any]:
+        return self.model_dump().values()
+
+    def items(self) -> ItemsView[str, Any]:
+        return self.model_dump().items()
+
+
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
 
     status: str = ""  # processing | needs_input | completed | failed
+    # Echoed on every shape since 2026-09, so a caller polling several
+    # verifications in one loop can tell the replies apart. ``""`` from
+    # older servers.
+    task_id: str = ""
     reason: str = ""  # populated when status == 'needs_input'
     # One sentence on what was unclear and how to resolve it. Set on a
     # ``needs_input`` (``multi_claim`` / ``clarification_required``) and on a
     # ``failed`` with ``failure_reason == "not_a_claim"``; ``""`` otherwise
     # and from older servers.
     hint: str = ""
-    progress: dict[str, Any] = Field(default_factory=dict)
+    # Present on ``processing``; an empty ``Progress`` on every other status
+    # (the server omits the key entirely there since 2026-09).
+    progress: Progress = Field(default_factory=lambda: Progress())
     result: Verification | None = None
     # needs_input branches
     claims: list[CandidateClaim] = Field(default_factory=list)
@@ -388,6 +454,8 @@ class TaskStatus(_Lax):
     # signal — true iff ``upstream_unavailable``).
     failure_class: str = ""
     retryable: bool | None = None
+    # Where this ``failure_class`` is explained. ``""`` from older servers.
+    docs_url: str = ""
 
 
 class BatchItemResult(_Lax):

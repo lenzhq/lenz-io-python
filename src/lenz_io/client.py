@@ -69,6 +69,7 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import Callable
 from typing import Any, TypedDict
 
 import httpx
@@ -92,6 +93,7 @@ from .models import (
     BatchItemResult,
     ExtractedClaims,
     LibraryList,
+    Progress,
     RelatedVerifications,
     TaskAccepted,
     TaskStatus,
@@ -116,6 +118,29 @@ DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
 POLL_BACKOFF_CAP = 10.0
+# Bounds on the server's ``progress.poll_after_seconds``. A hint outside
+# them is treated as garbage and the local ladder is used instead — the
+# floor stops a bad value turning the poll loop into a hot loop, the
+# ceiling stops it stalling a wait well inside its own timeout.
+POLL_HINT_MIN = 1.0
+POLL_HINT_MAX = 30.0
+
+
+def _poll_hint(progress: Any) -> float | None:
+    """The server's suggested wait before the next poll, or None.
+
+    Distinct from ``_retry_after_seconds``, which is the error-retry ladder's
+    "you errored, back off". This one means "you are fine, look again shortly"
+    and rides in the body rather than a header — ``Retry-After`` on a 200 is
+    off-spec enough that a proxy may drop it, and a header never appears in
+    the OpenAPI schema.
+    """
+    value = getattr(progress, "poll_after_seconds", None)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not POLL_HINT_MIN <= value <= POLL_HINT_MAX:
+        return None
+    return float(value)
 
 
 def _user_agent() -> str:
@@ -570,6 +595,7 @@ class Lenz:
         timeout: float = 120.0,
         idempotency: bool = True,
         idempotency_key: str | None = None,
+        on_progress: Callable[[str, Progress], None] | None = None,
     ) -> Verification:
         """Submit + poll until the pipeline terminates.
 
@@ -586,6 +612,15 @@ class Lenz:
         ``idempotency=True`` (default) auto-generates a key per call so a
         network drop after submit doesn't spawn a duplicate verification
         on retry. Customer can pin via ``idempotency_key="..."``.
+
+        ``on_progress(task_id, progress)`` fires once per poll while the run
+        is still going — the only way to see the stage during the ~90s wait,
+        since this helper does the polling for you::
+
+            client.verify_and_wait(
+                claim="...",
+                on_progress=lambda tid, p: print(f"{p.step} {p.index}/{p.total}"),
+            )
 
         Equivalent to ``wait(verify(claim, ...))`` — the idempotency-key
         handling (auto-generate / pin / disable) lives here because
@@ -605,9 +640,15 @@ class Lenz:
             idempotency_key=key,
         )
         logger.info("Submitted task: %s", accepted.task_id)
-        return self.wait(accepted, timeout=timeout)
+        return self.wait(accepted, timeout=timeout, on_progress=on_progress)
 
-    def wait(self, task: str | TaskAccepted, *, timeout: float = 120.0) -> Verification:
+    def wait(
+        self,
+        task: str | TaskAccepted,
+        *,
+        timeout: float = 120.0,
+        on_progress: Callable[[str, Progress], None] | None = None,
+    ) -> Verification:
         """Block until an already-submitted task terminates, then return its
         ``Verification``.
 
@@ -621,7 +662,7 @@ class Lenz:
         task_id = task if isinstance(task, str) else task.task_id
         if not task_id:
             raise ValueError("wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
-        terminal, timed_out = self._poll_to_terminal([task_id], timeout)
+        terminal, timed_out = self._poll_to_terminal([task_id], timeout, on_progress)
         if task_id in timed_out:
             raise LenzTimeoutError(
                 message=f"wait timed out after {timeout}s",
@@ -642,6 +683,7 @@ class Lenz:
         depth: str = "",
         idempotency_key: str | None = None,
         timeout: float = 180.0,
+        on_progress: Callable[[str, Progress], None] | None = None,
     ) -> list[BatchItemResult]:
         """Submit a batch and poll every item to a terminal state.
 
@@ -650,6 +692,9 @@ class Lenz:
         for input, or times out becomes a ``BatchItemResult`` with the matching
         ``status`` rather than an exception. (Transport/auth errors on the
         initial submit still raise.)
+
+        ``on_progress(task_id, progress)`` fires per still-running item per
+        round; the ``task_id`` is what tells you which claim moved.
         """
         accepted = self._verify_batch(
             claims=claims,
@@ -660,7 +705,7 @@ class Lenz:
             idempotency_key=idempotency_key,
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
-        terminal, timed_out = self._poll_to_terminal(ids, timeout)
+        terminal, timed_out = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
         for it in accepted.items:  # preserve input order
@@ -692,7 +737,12 @@ class Lenz:
 
     # ── poll engine (shared by wait + verify_batch_and_wait) ──
 
-    def _poll_to_terminal(self, task_ids: list[str], timeout: float) -> tuple[dict[str, TaskStatus], set[str]]:
+    def _poll_to_terminal(
+        self,
+        task_ids: list[str],
+        timeout: float,
+        on_progress: Callable[[str, Progress], None] | None = None,
+    ) -> tuple[dict[str, TaskStatus], set[str]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
         (completed / needs_input / failed) or the deadline elapses.
 
@@ -713,6 +763,17 @@ class Lenz:
         outlived ``_request``'s own retries) does not abort the other ids: that
         id stays pending and is retried next round. A persistent error
         therefore surfaces as a timeout once the deadline passes.
+
+        ``on_progress(task_id, progress)`` fires once per still-running poll.
+        It takes the id as well as the object because this loop round-robins a
+        whole batch — without it a caller cannot tell which claim moved. An
+        exception inside the callback must not kill the poll, so it is logged
+        at DEBUG and swallowed: a library has no business writing to a caller's
+        stderr for a bug in their own callback, and DEBUG keeps it silent
+        under default configuration while still being findable.
+
+        The server's ``progress.poll_after_seconds`` replaces the fixed 2/4/8…
+        ladder when it is present and sane; garbage falls back to the ladder.
         """
         pending = list(task_ids)
         terminal: dict[str, TaskStatus] = {}
@@ -721,6 +782,7 @@ class Lenz:
         backoff_idx = 0
         while pending:
             still_pending: list[str] = []
+            server_hint: float | None = None
             for task_id in pending:
                 try:
                     status = self._get_status(task_id)
@@ -733,6 +795,17 @@ class Lenz:
                     terminal[task_id] = status
                 else:
                     still_pending.append(task_id)
+                    hint = _poll_hint(status.progress)
+                    # The shortest hint wins: with a batch in flight, waiting
+                    # the longest one would starve the fastest claim.
+                    if hint is not None and (server_hint is None or hint < server_hint):
+                        server_hint = hint
+                    if on_progress is not None:
+                        try:
+                            # A copy — a caller must not be able to mutate our state.
+                            on_progress(task_id, status.progress.model_copy(deep=True))
+                        except Exception:
+                            logger.debug("on_progress callback raised for task %s", task_id, exc_info=True)
             pending = still_pending
             if not pending:
                 break
@@ -740,7 +813,10 @@ class Lenz:
             if remaining <= 0:
                 timed_out.update(pending)
                 break
-            sleep_for = min(POLL_BACKOFF[min(backoff_idx, len(POLL_BACKOFF) - 1)], POLL_BACKOFF_CAP)
+            if server_hint is not None:
+                sleep_for = server_hint
+            else:
+                sleep_for = min(POLL_BACKOFF[min(backoff_idx, len(POLL_BACKOFF) - 1)], POLL_BACKOFF_CAP)
             sleep_for = min(sleep_for, remaining)
             time.sleep(sleep_for)
             backoff_idx += 1

@@ -349,7 +349,8 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
     if state == "processing":
         from lenz_io.cli.verify import _step_label  # local: avoids a render↔verify import cycle
 
-        label = _step_label((st.progress or {}).get("step")).removeprefix("Verifying… ")
+        p = st.progress
+        label = _step_label(p.step, p.index, p.total).removeprefix("Verifying… ")
         out.console.print(f"[yellow]processing[/yellow]  [dim]— {label}[/dim]")
     elif state == "completed":
         v = st.result
@@ -398,10 +399,10 @@ def _batch_status_cell(st: Any) -> Any:
     if st is None:
         return Spinner("dots", text=Text("Verifying…", style="dim"))
     if st.status == "processing":
-        step = (st.progress or {}).get("step")
         from lenz_io.cli.verify import _step_label  # local: friendly step copy
 
-        label = _step_label(step).removeprefix("Verifying… ")
+        p = st.progress
+        label = _step_label(p.step, p.index, p.total).removeprefix("Verifying… ")
         return Spinner("dots", text=Text(label, style="dim"))
     if st.status == "completed" and st.result is not None:
         v = st.result

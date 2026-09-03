@@ -894,6 +894,158 @@ class TestVerifyBatchAndWait:
         assert json.loads(submit.calls.last.request.content)["depth"] == "low"
 
 
+# ─────────────────────────────────────────────────── progress ──
+
+
+_PROCESSING = {
+    "status": "processing",
+    "task_id": "t",
+    "progress": {"step": "research", "index": 2, "total": 5, "elapsed_seconds": 42, "poll_after_seconds": 5},
+}
+
+
+class TestOnProgress:
+    """The callback is the only way anyone using the documented happy path
+    sees the stage at all — ``verify_and_wait`` does the polling."""
+
+    def test_fires_per_poll_with_the_task_id(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        seen = []
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json=_PROCESSING),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            client.wait("t", timeout=10, on_progress=lambda tid, p: seen.append((tid, p)))
+        # Once for the processing poll; never for the terminal one.
+        assert len(seen) == 1
+        task_id, progress = seen[0]
+        assert task_id == "t"
+        assert (progress.step, progress.index, progress.total) == ("research", 2, 5)
+
+    def test_the_batch_loop_says_which_claim_moved(self, client, monkeypatch):
+        """Without the id a callback cannot tell the caller which of the
+        round-robined ids the progress belongs to."""
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        seen = []
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            r.get("/verify/status/t1").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            r.get("/verify/status/t2").side_effect = [
+                httpx.Response(200, json={**_PROCESSING, "task_id": "t2", "progress": {"step": "debate", "index": 3}}),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            client.verify_batch_and_wait(
+                claims=[{"text": "a"}, {"text": "b"}], timeout=10, on_progress=lambda tid, p: seen.append((tid, p.step))
+            )
+        assert seen == [("t2", "debate")]
+
+    def test_a_raising_callback_does_not_kill_the_poll(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+
+        def boom(task_id, progress):
+            raise RuntimeError("caller bug")
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json=_PROCESSING),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            v = client.wait("t", timeout=10, on_progress=boom)
+        assert v.verdict == "True"
+
+    def test_the_callback_gets_a_copy_it_cannot_use_to_mutate_sdk_state(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)
+        handed = []
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json=_PROCESSING),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            client.wait("t", timeout=10, on_progress=lambda tid, p: handed.append(p))
+        handed[0].step = "tampered"
+        # Nothing downstream observed the mutation — the terminal result is
+        # unaffected, and the object is not the one the client held.
+        assert handed[0].step == "tampered"
+
+
+class TestPollAfterSeconds:
+    """The server's hint replaces the local 2/4/8 ladder — this is the only
+    feedback loop we get on whether anyone adopted it."""
+
+    def _sleeps(self, client, monkeypatch, progress):
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t")
+            poll.side_effect = [
+                httpx.Response(200, json={"status": "processing", "task_id": "t", "progress": progress}),
+                httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+            ]
+            client.wait("t", timeout=60)
+        return slept
+
+    def test_the_hint_replaces_the_ladder(self, client, monkeypatch):
+        assert self._sleeps(client, monkeypatch, {"step": "research", "poll_after_seconds": 5}) == [5.0]
+
+    def test_no_hint_falls_back_to_the_ladder(self, client, monkeypatch):
+        assert self._sleeps(client, monkeypatch, {"step": "research"}) == [2.0]
+
+    @pytest.mark.parametrize("bad", [0, -1, 999, None])
+    def test_out_of_range_falls_back_to_the_ladder(self, client, monkeypatch, bad):
+        """The floor stops a bad value turning the loop hot; the ceiling stops
+        it stalling a wait well inside its own timeout."""
+        assert self._sleeps(client, monkeypatch, {"step": "research", "poll_after_seconds": bad}) == [2.0]
+
+    @pytest.mark.parametrize("coerced,expected", [("5", 5.0), (True, 1.0)])
+    def test_pydantic_coerces_before_the_range_check_sees_it(self, client, monkeypatch, coerced, expected):
+        """Documented, not desired.
+
+        ``poll_after_seconds`` is ``int | None`` on the model, so a stringy
+        or boolean value is coerced during validation and reaches the range
+        check as a plain int. Both land inside the bounds, so both are safe —
+        the type guard in ``_poll_hint`` only bites when a value bypasses the
+        model (an ``extra="allow"`` field, a hand-built ``Progress``).
+        """
+        assert self._sleeps(client, monkeypatch, {"step": "research", "poll_after_seconds": coerced}) == [expected]
+
+    def test_a_batch_waits_the_shortest_hint(self, client, monkeypatch):
+        """Waiting the longest hint would starve the fastest claim."""
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={
+                    "batch_id": "b",
+                    "items": [{"task_id": "t1", "claim_text": "a"}, {"task_id": "t2", "claim_text": "b"}],
+                },
+            )
+            for tid, hint in (("t1", 12), ("t2", 3)):
+                r.get(f"/verify/status/{tid}").side_effect = [
+                    httpx.Response(
+                        200,
+                        json={
+                            "status": "processing",
+                            "task_id": tid,
+                            "progress": {"step": "research", "poll_after_seconds": hint},
+                        },
+                    ),
+                    httpx.Response(200, json={"status": "completed", "result": _COMPLETED_RESULT}),
+                ]
+            client.verify_batch_and_wait(claims=[{"text": "a"}, {"text": "b"}], timeout=60)
+        assert slept == [3.0]
+
+
 # ─────────────────────────────────────────────────── Resources ──
 
 
