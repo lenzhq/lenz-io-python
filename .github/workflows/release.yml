@@ -25,10 +25,19 @@ jobs:
       - name: Run smoke tests against staging
         # Tests under -m smoke require LENZ_E2E_KEY; if absent, this step
         # passes (the marker is skipped).
+        #
+        # --no-cov is load-bearing. pyproject's addopts carry
+        # --cov-fail-under=87, which applies to EVERY pytest invocation; a
+        # 9-test smoke subset covers ~33% of the package and can never reach
+        # the floor. Without this, the gate fails a release whose smoke tests
+        # all passed and skips the publish — which is exactly what happened to
+        # v2.11.0, the first tag after the coverage gate landed. Coverage is
+        # measured on the full suite by the `coverage` job in ci.yml; that is
+        # the gate that means something.
         env:
           LENZ_E2E_KEY: ${{ secrets.LENZ_E2E_KEY }}
           LENZ_BASE_URL: ${{ vars.LENZ_BASE_URL }}
-        run: pytest -m smoke -q
+        run: pytest -m smoke -q --no-cov
 
   publish:
     name: publish to PyPI
