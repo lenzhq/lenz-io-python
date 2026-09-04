@@ -4,7 +4,7 @@ The headline integration story: your model emits an answer, Lenz pulls
 the verifiable claims out of it (``extract``), ONE ``assess`` call gives
 you a fast verdict per claim (up to 20 claims, one row per claim, in the
 order sent), and you escalate only the low-confidence rows to the full
-8-model pipeline (``verify``). Cheaper and faster than verifying every
+multi-model pipeline (``verify``). Cheaper and faster than verifying every
 claim outright.
 
 Run:

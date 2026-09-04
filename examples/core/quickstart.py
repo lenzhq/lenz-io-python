@@ -7,7 +7,7 @@ Run:
 The pattern: ``extract`` pulls claims out of any text, ONE ``assess`` call
 over those claims returns a fast 3-model verdict per claim (up to 20, one
 row per claim, same order), ``verify`` escalates the low-confidence rows
-to the full 8-model panel with citations, and ``ask`` lets you follow up
+to the full multi-model panel with citations, and ``ask`` lets you follow up
 on a verification.
 
 The demo claim is pre-cached, so the verify call returns in ~1.5s. Your
@@ -45,7 +45,7 @@ def main() -> None:
             print(f"    also found (not assessed): {c.identified_claims}")
     print()
 
-    # 3. verify — escalate the low-confidence rows to the full 8-model panel
+    # 3. verify — escalate the low-confidence rows to the full multi-model panel
     doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
     # The demo claim is pre-cached; verify it explicitly so the walkthrough
     # always reaches steps 3 and 4 even when every row came back confident.
