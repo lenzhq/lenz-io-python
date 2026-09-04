@@ -24,7 +24,7 @@ Shape (four-primitive ladder + the supporting reads):
     out = client.extract(text="...")                       # find claims in a document
     r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
     r = client.assess(claim="...")                         # ...or a single claim, ~10s
-    v = client.verify_and_wait(claim="...")                # full 8-model pipeline, ~90s
+    v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
 
     # Other verify-family verbs
@@ -556,7 +556,7 @@ class Lenz:
 
         Use ``confidence`` to decide when to escalate: ``"low"`` rows are
         worth re-running through ``verify_batch_and_wait`` for the deep
-        8-model pipeline with citations.
+        multi-model pipeline with citations.
 
         ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
         'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg'`` to receive
