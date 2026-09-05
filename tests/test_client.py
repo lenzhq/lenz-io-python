@@ -25,7 +25,7 @@ from lenz_io import (
     LenzValidationError,
     TaskAccepted,
 )
-from lenz_io.client import API_VERSION, ASSESS_LIST_TIMEOUT, DEFAULT_TIMEOUT, RETRY_BACKOFF
+from lenz_io.client import API_VERSION, ASSESS_TIMEOUT, RETRY_BACKOFF
 from lenz_io.errors import MAX_RETRY_AFTER_SLEEP
 
 DEFAULT_BASE = "https://lenz.io/api/v1"
@@ -471,7 +471,9 @@ class TestAssess:
             client.assess(claim="La tierra es plana.", language="es")
             assert json.loads(route.calls.last.request.content) == {"text": "La tierra es plana.", "language": "es"}
         timeout = route.calls.last.request.extensions["timeout"]
-        assert timeout["read"] == DEFAULT_TIMEOUT
+        # The BODY is what this test pins. The timeout moved to ASSESS_TIMEOUT
+        # in 2.12.0 (see test_both_forms_get_the_longer_default_timeout).
+        assert timeout["read"] == ASSESS_TIMEOUT
 
     def test_row_fields_default_when_an_older_server_omits_them(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -568,15 +570,69 @@ class TestAssess:
         assert len(ambiguous.candidate_claims) == 2
         assert ambiguous.hint.startswith("Ambiguous")
 
-    def test_claims_list_gets_the_longer_default_timeout(self, client):
-        """One parallel wave takes ~10-25s, so a list call rides
-        ``ASSESS_LIST_TIMEOUT`` rather than the 30s client default."""
+    @pytest.mark.parametrize("kwargs", [{"claims": ["A.", "B."]}, {"claim": "A."}])
+    def test_both_forms_get_the_longer_default_timeout(self, client, kwargs):
+        """BOTH forms ride ``ASSESS_TIMEOUT``, not just the list one.
+
+        The server runs framing and then a 3-model panel inside one request
+        and divides a single budget between them, so a single-claim call can
+        take as long as a list one. On the 30s client default a slow framing
+        call timed out AFTER the server had charged it, and the retry — which
+        sent no idempotency key — charged again.
+        """
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/assess").respond(200, json={"claims": [], "error": None})
-            client.assess(claims=["A.", "B."])
+            client.assess(**kwargs)
         timeout = route.calls.last.request.extensions["timeout"]
-        assert timeout["read"] == ASSESS_LIST_TIMEOUT == 45.0
-        assert timeout["connect"] == ASSESS_LIST_TIMEOUT
+        assert timeout["read"] == ASSESS_TIMEOUT == 45.0
+        assert timeout["connect"] == ASSESS_TIMEOUT
+
+    def test_a_longer_client_timeout_is_never_shortened(self):
+        """A caller who configured a longer timeout asked for it. This used to
+        be a flat assignment, which silently overruled them — and disagreed
+        with the Node SDK, which has always taken the max."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            Lenz(api_key="lenz_test_abc123", timeout=90.0).assess(claims=["A."])
+        assert route.calls.last.request.extensions["timeout"]["read"] == 90.0
+
+    def test_assess_sends_a_random_idempotency_key_by_default(self, client):
+        """A retry after a network drop must replay, not re-charge.
+
+        Random per invocation, NOT derived from the claim: a content-derived
+        key would replay a day-old verdict for an identical claim sent again,
+        including one the server would otherwise refresh.
+        """
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claim="A.")
+            first = route.calls.last.request.headers["Idempotency-Key"]
+            client.assess(claim="A.")
+            second = route.calls.last.request.headers["Idempotency-Key"]
+        assert first and second
+        assert first != second, "an identical claim later is a new question, not a replay"
+
+    def test_assess_idempotency_can_be_pinned_or_disabled(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claim="A.", idempotency_key="pinned-1")
+            assert route.calls.last.request.headers["Idempotency-Key"] == "pinned-1"
+            client.assess(claim="A.", idempotency=False)
+            assert "Idempotency-Key" not in route.calls.last.request.headers
+
+    def test_assess_reuses_one_key_across_the_retry_ladder(self, client):
+        """The key exists for exactly this: a 5xx retried by the SDK must be
+        deduped server-side, so every attempt of one invocation carries the
+        SAME key."""
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess")
+            route.side_effect = [
+                httpx.Response(500, json={"detail": "boom"}),
+                httpx.Response(200, json={"claims": [], "error": None}),
+            ]
+            client.assess(claim="A.")
+        keys = {c.request.headers["Idempotency-Key"] for c in route.calls}
+        assert len(keys) == 1, "a retry with a fresh key would charge twice"
 
     def test_explicit_timeout_overrides_the_default_for_that_call_only(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -587,7 +643,8 @@ class TestAssess:
             assert route.calls.last.request.extensions["timeout"]["read"] == 5.0
             # The next call is back on the client default — nothing leaked.
             client.assess(claim="A.")
-            assert route.calls.last.request.extensions["timeout"]["read"] == DEFAULT_TIMEOUT
+            # Back to the per-form default, which is ASSESS_TIMEOUT since 2.12.0.
+            assert route.calls.last.request.extensions["timeout"]["read"] == ASSESS_TIMEOUT
 
     def test_claims_with_claim_or_text_raises(self, client):
         with pytest.raises(ValueError, match="either one claim"):

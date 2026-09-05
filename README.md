@@ -116,7 +116,8 @@ print(reply.content)
 with exactly one row per claim, in the order sent. A row that could not be
 given a verdict comes back in position with `verdict == "Error"`, an
 `error_code` (`no_claim` / `ambiguous` / `framing_failed` /
-`upstream_unavailable` — the retryable one), `candidate_claims` when it was
+`upstream_unavailable` / `timeout` — an open set; the last two are the ones
+worth resending as-is), `candidate_claims` when it was
 ambiguous, and a one-sentence `hint` on what to send next; it is not
 charged. A compound item is assessed on its main claim and lists the other
 claims it found in `identified_claims` (also with a `hint`) — send those as

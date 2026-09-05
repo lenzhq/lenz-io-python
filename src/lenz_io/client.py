@@ -111,10 +111,19 @@ API_VERSION = "2026-05-13"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
 DEFAULT_TIMEOUT = 30.0
-# ``assess(claims=[...])`` runs one parallel wave over the whole list
-# (~10-25s), so a list call gets more room than the client default unless
-# the caller passes an explicit ``timeout=``.
-ASSESS_LIST_TIMEOUT = 45.0
+# ``assess`` runs framing and then a 3-model panel inside one synchronous
+# request, and the server divides a single budget between them — so BOTH
+# forms get the same room, not just the list one. Typical calls answer in
+# 10-25s; this is the ceiling the server sizes its own budget against.
+#
+# Applies to ``assess(claim=...)`` as well as ``assess(claims=[...])`` since
+# 2.12.0. Before that the single form used the 30s client default, and a call
+# whose framing was slow could time out client-side AFTER the server had
+# charged it — and a retry with no idempotency key charged again.
+ASSESS_TIMEOUT = 45.0
+#: Deprecated alias for :data:`ASSESS_TIMEOUT`, kept for callers that imported
+#: it. Same value; removed no earlier than 3.0.
+ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
 DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
@@ -518,8 +527,10 @@ class Lenz:
         claims: list[str] | None = None,
         language: str = "",
         timeout: float | None = None,
+        idempotency: bool = True,
+        idempotency_key: str | None = None,
     ) -> AssessResponse:
-        """Fast verdict via a 3-model frontier panel. Sync, ~10s per call.
+        """Fast verdict via a 3-model frontier panel. Sync, typically 10-25s.
 
         Two input forms, one response shape:
 
@@ -565,19 +576,35 @@ class Lenz:
         byte-identical behavior for existing English callers.
 
         ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
-        the client default for this one request. A list call defaults to
-        ``ASSESS_LIST_TIMEOUT`` (45s) because one wave takes longer than the
-        30s client default leaves margin for.
+        the client default for this one request. Both forms otherwise use
+        ``ASSESS_TIMEOUT`` (45s), or your client timeout when you configured a
+        longer one — the server runs framing and a 3-model panel inside one
+        request and 30s does not leave margin for a slow framing call.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
+        retry after a network drop replays the first response instead of
+        running — and paying for — the call twice. The key is random per
+        invocation and reused across this SDK's own retries; pin your own with
+        ``idempotency_key=`` to make a retry from a different process replay
+        too, or pass ``idempotency=False`` to send none.
+
+        Deliberately NOT derived from the claim text: an identical claim sent
+        an hour later is a NEW question, and a content-derived key would
+        replay the first answer for 24h — including for a claim whose verdict
+        the server would otherwise refresh.
 
         Paid — see ``client.usage()``. 1 credit per claim assessed; a
         single-string input that framing splits into N atomic claims costs
         N; ``Error`` rows are free.
         """
+        key = idempotency_key
+        if key is None and idempotency:
+            key = uuid.uuid4().hex
         if claims is not None:
             if claim or text:
                 raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
-            return self._assess(claims=claims, language=language, timeout=timeout)
-        return self._assess(text=claim or text, language=language, timeout=timeout)
+            return self._assess(claims=claims, language=language, timeout=timeout, idempotency_key=key)
+        return self._assess(text=claim or text, language=language, timeout=timeout, idempotency_key=key)
 
     def select(self, task_id: str, *, claims: list[str] | None = None, texts: list[str] | None = None) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
@@ -976,6 +1003,7 @@ class Lenz:
         claims: list[str] | None = None,
         language: str = "",
         timeout: float | None = None,
+        idempotency_key: str | None = None,
     ) -> AssessResponse:
         # The single form keeps its historical wire body (`text`). The list
         # form sends `claims` and never `text` — the server rejects a body
@@ -985,13 +1013,19 @@ class Lenz:
         payload: dict[str, Any]
         if claims is not None:
             payload = {"claims": list(claims)}
-            if timeout is None:
-                timeout = ASSESS_LIST_TIMEOUT
         else:
             payload = {"text": text}
         if language:
             payload["language"] = language
-        body = self._request("POST", "/assess", json=payload, timeout=timeout)
+        # ``max``, never a flat assignment: a caller who configured a longer
+        # client timeout asked for it, and shortening it here would be this
+        # SDK quietly overruling them.
+        if timeout is None:
+            timeout = max(self._timeout, ASSESS_TIMEOUT)
+        headers = {}
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        body = self._request("POST", "/assess", json=payload, timeout=timeout, headers=headers)
         return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
