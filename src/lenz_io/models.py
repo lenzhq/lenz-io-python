@@ -387,7 +387,8 @@ class AssessClaim(_Lax):
     list call it stays in position (one row per item sent), is not charged,
     and says why: ``error_code`` names the cause, ``candidate_claims`` holds
     the readings when the cause is ``ambiguous``, and ``hint`` is one
-    sentence on what to send next. A compound input is assessed on its main
+    sentence on what to send next. ``hint`` is the field to surface to a
+    human — it is written per cause and stays correct as causes are added. A compound input is assessed on its main
     claim; the other claims found in it are listed in ``identified_claims``
     (also with a ``hint``). All four default empty so older servers that
     don't send them still parse.
@@ -401,7 +402,17 @@ class AssessClaim(_Lax):
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
     # Only on ``verdict == "Error"`` rows: 'no_claim' | 'ambiguous' |
-    # 'framing_failed' | 'upstream_unavailable' (the retryable one).
+    # 'framing_failed' | 'upstream_unavailable' | 'timeout'.
+    #
+    # An OPEN set, deliberately typed ``str`` rather than a Literal: the API
+    # may add a cause in a minor version, so branch on the ones you know and
+    # fall through on the rest.
+    #
+    # Which are worth resending as-is: 'upstream_unavailable' (a provider was
+    # down) and 'timeout' (the call ran out of its time budget before this
+    # item was done — send fewer items per call to make it less likely).
+    # 'framing_failed' is deterministic, so retrying the same text will not
+    # help. 'no_claim' and 'ambiguous' want a different input; read ``hint``.
     error_code: str | None = None
     # Readings to choose from when ``error_code == "ambiguous"``; else empty.
     candidate_claims: list[str] = Field(default_factory=list)
