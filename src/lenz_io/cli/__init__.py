@@ -74,21 +74,32 @@ def force_utf8_streams() -> None:
     input side: ``lenz extract - < file.txt`` cannot even decode the document
     it was handed.
 
-    ``errors="replace"`` is the deliberate second half: a byte sequence that
-    isn't valid UTF-8 (a latin-1 paste) becomes U+FFFD instead of an exception,
-    because a mangled character is a far better outcome than a dead command.
+    **Input decodes strictly; output encodes leniently.** On the way out,
+    ``errors="replace"`` means an unrepresentable character degrades to U+FFFD
+    instead of taking a finished command down at the last step. On the way in
+    it would do the opposite of a favour: a document that is genuinely not
+    UTF-8 (a latin-1 paste, a PDF piped by mistake) would decode to a claim
+    full of U+FFFD, get submitted, and be *charged* — where a strict decode
+    fails loudly, for free, before anything is spent. So stdin keeps the
+    default strict handler; ``reconfigure(encoding=...)`` alone resets it.
 
     Only the ``lenz`` console script calls this — importing ``lenz_io`` as a
     library must never reconfigure a host application's streams.
     """
-    for stream in (sys.stdin, sys.stdout, sys.stderr):
+    lenient = {"encoding": "utf-8", "errors": "replace"}
+    for stream, kwargs in ((sys.stdin, {"encoding": "utf-8"}), (sys.stdout, lenient), (sys.stderr, lenient)):
         reconfigure = getattr(stream, "reconfigure", None)
         if reconfigure is None:
             continue  # already replaced (pytest capture, a pipe wrapper, …)
         try:
-            reconfigure(encoding="utf-8", errors="replace")
-        except (ValueError, OSError, AttributeError):
-            pass  # detached or exotic stream — nothing to fix, nothing to break
+            reconfigure(**kwargs)
+        except Exception:  # deliberately broad — best-effort by contract:
+            # Detached, already-read-from, or a wrapper whose `reconfigure` has
+            # a narrower signature (a `TypeError` on `errors=`). This runs as
+            # the first statement of `main()`, so anything raised here would
+            # kill the CLI before it ran a single command — the exact outcome
+            # this function exists to prevent.
+            pass
 
 
 def main() -> None:

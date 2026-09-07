@@ -21,10 +21,13 @@ CLI only; the SDK is unchanged.
   for a character Lenz "doesn't like" in a document that was fine. The same
   locale broke the input side: `lenz extract - < file.txt` could not decode
   the document it was handed, and even `lenz --help` tracebacked on the em
-  dash in its own help text. The entry point now forces UTF-8 (with
-  `errors="replace"`, so an invalid byte becomes `\ufffd` rather than an
-  exception) on stdin, stdout and stderr. Importing `lenz_io` as a library
-  still touches nothing.
+  dash in its own help text. The entry point now forces UTF-8 on all three
+  streams. Output encodes leniently (`errors="replace"`), so an
+  unrepresentable character can't kill a command at its last step; **input
+  decodes strictly**, so a document that genuinely isn't UTF-8 still fails
+  loudly and for free rather than becoming a claim full of `\ufffd` that gets
+  submitted and charged. Importing `lenz_io` as a library still touches
+  nothing.
 
 ## [2.12.0] - 2026-09-06
 

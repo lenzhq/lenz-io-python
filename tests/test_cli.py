@@ -285,6 +285,9 @@ def test_main_normalizes_argv_and_sets_no_color(monkeypatch):
     )
     monkeypatch.setattr(sys, "argv", ["lenz", "extract", "x", "--no-color"])
     monkeypatch.delenv("NO_COLOR", raising=False)
+    # This test is about argv, not encoding — don't let it reconfigure the
+    # pytest process's real streams for the rest of the session.
+    monkeypatch.setattr(cli_pkg, "force_utf8_streams", lambda: None)
     cli_pkg.main()
     assert ran["ok"] is True
     assert sys.argv == ["lenz", "--no-color", "extract", "x"]  # hoisted
@@ -1751,39 +1754,76 @@ def test_lazy_import_guard(monkeypatch, capsys):
 # the entry point forcing UTF-8 the CLI dies on valid work — and `execute`'s
 # catch-all reports the encode failure as though the *input* were at fault.
 class _FakeStream:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(self, *, raises: type[Exception] | None = None) -> None:
         self.calls: list[dict] = []
-        self._fail = fail
+        self._raises = raises
 
     def reconfigure(self, **kwargs):
-        if self._fail:
-            raise ValueError("detached")
+        if self._raises is not None:
+            raise self._raises("nope")
         self.calls.append(kwargs)
 
 
-def test_force_utf8_streams_reconfigures_all_three(monkeypatch):
+def test_force_utf8_streams_encodes_leniently_but_decodes_strictly(monkeypatch):
+    # Output gets `errors="replace"` so an unrepresentable character can't kill
+    # a finished command. Input deliberately does NOT: a document that isn't
+    # UTF-8 must fail loudly and for free, rather than decode to U+FFFD and be
+    # submitted — and charged — as a claim the user never wrote.
     import sys
 
     streams = {name: _FakeStream() for name in ("stdin", "stdout", "stderr")}
     for name, stream in streams.items():
         monkeypatch.setattr(sys, name, stream)
     cli_pkg.force_utf8_streams()
-    for stream in streams.values():
-        assert stream.calls == [{"encoding": "utf-8", "errors": "replace"}]
+    assert streams["stdin"].calls == [{"encoding": "utf-8"}]  # → errors defaults to strict
+    for name in ("stdout", "stderr"):
+        assert streams[name].calls == [{"encoding": "utf-8", "errors": "replace"}]
 
 
-def test_force_utf8_streams_survives_odd_streams(monkeypatch):
+@pytest.mark.parametrize("boom", [ValueError, OSError, TypeError, RuntimeError])
+def test_force_utf8_streams_survives_odd_streams(monkeypatch, boom):
     # A stream already replaced (pytest capture, a wrapper) has no
-    # `reconfigure`; a detached one raises. Neither may take the CLI down
-    # before it has run a single command.
+    # `reconfigure`; a detached one raises ValueError/OSError; a wrapper with a
+    # narrower signature raises TypeError on `errors=`. This runs as the first
+    # statement of `main()`, so none of them may take the CLI down before it has
+    # run a single command.
     import io
     import sys
     import types
 
     monkeypatch.setattr(sys, "stdin", io.StringIO())
-    monkeypatch.setattr(sys, "stdout", _FakeStream(fail=True))
+    monkeypatch.setattr(sys, "stdout", _FakeStream(raises=boom))
     monkeypatch.setattr(sys, "stderr", types.SimpleNamespace())  # no reconfigure at all
     cli_pkg.force_utf8_streams()  # no raise
+
+
+def test_a_non_utf8_document_on_stdin_fails_before_anything_is_spent():
+    """The other half of the strict-stdin decision, end to end.
+
+    latin-1 bytes on stdin must not become a U+FFFD claim: the command exits
+    nonzero with a decode error, having made no API call. ``base_url`` points
+    at a dead port so a regression here fails offline (connection refused)
+    instead of shipping a corrupted claim to the real API.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = "import sys; sys.argv = ['lenz', 'extract', '-']; from lenz_io.cli import main; main()"
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        input=b"Caf\xe9 was founded in 1901",
+        capture_output=True,
+        env={
+            **os.environ,
+            "PYTHONIOENCODING": "ascii",
+            "LENZ_API_KEY": "k",
+            "LENZ_BASE_URL": "http://127.0.0.1:1",
+        },
+    )
+    assert proc.returncode != 0
+    assert b"can't decode" in proc.stdout + proc.stderr
+    assert "\ufffd".encode() not in proc.stdout
 
 
 def test_cli_renders_non_ascii_under_an_ascii_locale():
