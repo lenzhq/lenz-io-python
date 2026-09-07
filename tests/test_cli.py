@@ -1744,6 +1744,70 @@ def test_lazy_import_guard(monkeypatch, capsys):
     assert "lenz-io[cli]" in capsys.readouterr().err
 
 
+# ── non-UTF-8 locales ───────────────────────────────────────────────────────
+# Python takes the standard streams' encoding from the ambient locale, so a
+# C/POSIX environment hands the CLI ascii streams. Claim text is not ascii
+# (en dashes, arrows, Greek letters, every non-English language), so without
+# the entry point forcing UTF-8 the CLI dies on valid work — and `execute`'s
+# catch-all reports the encode failure as though the *input* were at fault.
+class _FakeStream:
+    def __init__(self, *, fail: bool = False) -> None:
+        self.calls: list[dict] = []
+        self._fail = fail
+
+    def reconfigure(self, **kwargs):
+        if self._fail:
+            raise ValueError("detached")
+        self.calls.append(kwargs)
+
+
+def test_force_utf8_streams_reconfigures_all_three(monkeypatch):
+    import sys
+
+    streams = {name: _FakeStream() for name in ("stdin", "stdout", "stderr")}
+    for name, stream in streams.items():
+        monkeypatch.setattr(sys, name, stream)
+    cli_pkg.force_utf8_streams()
+    for stream in streams.values():
+        assert stream.calls == [{"encoding": "utf-8", "errors": "replace"}]
+
+
+def test_force_utf8_streams_survives_odd_streams(monkeypatch):
+    # A stream already replaced (pytest capture, a wrapper) has no
+    # `reconfigure`; a detached one raises. Neither may take the CLI down
+    # before it has run a single command.
+    import io
+    import sys
+    import types
+
+    monkeypatch.setattr(sys, "stdin", io.StringIO())
+    monkeypatch.setattr(sys, "stdout", _FakeStream(fail=True))
+    monkeypatch.setattr(sys, "stderr", types.SimpleNamespace())  # no reconfigure at all
+    cli_pkg.force_utf8_streams()  # no raise
+
+
+def test_cli_renders_non_ascii_under_an_ascii_locale():
+    """End-to-end, in a child process — the only way to get real ascii streams.
+
+    `--help` is enough: the help text itself carries an em dash, so this fails
+    (a Rich traceback, exit 1) on the pre-fix entry point without any network,
+    key, or API call.
+    """
+    import os
+    import subprocess
+    import sys
+
+    code = "import sys; sys.argv = ['lenz', '--help']; from lenz_io.cli import main; main()"
+    proc = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "ascii"},
+    )
+    assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
+    assert "Lenz — fact-check" in proc.stdout.decode("utf-8")
+    assert b"Traceback" not in proc.stderr
+
+
 # ── batch verify: N claims, N independent pipelines ──────────────────────────
 # `lenz verify` fans out to a batch whenever a multi-claim input resolves to
 # more than one pick (or `--detach` is set). Each row polls, renders and fails
