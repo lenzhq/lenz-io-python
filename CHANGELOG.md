@@ -4,6 +4,31 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [2.12.1] - 2026-09-07
+
+CLI only; the SDK is unchanged.
+
+### Fixed
+
+- **The CLI no longer dies on a non-UTF-8 locale.** Python takes the standard
+  streams' encoding from the environment, so a `C`/`POSIX` locale (a bare
+  container, an editor terminal, a shell started without `LANG`) gave `lenz`
+  **ascii** streams. Every command that printed a claim then failed —
+  `'ascii' codec can't encode characters in position 44-45` — because claim
+  text carries en dashes, arrows, Greek letters and, for most of the world,
+  its whole alphabet. `execute`'s catch-all reported that as a plain
+  `Error:`, so it read as the *input* being rejected and sent people hunting
+  for a character Lenz "doesn't like" in a document that was fine. The same
+  locale broke the input side: `lenz extract - < file.txt` could not decode
+  the document it was handed, and even `lenz --help` tracebacked on the em
+  dash in its own help text. The entry point now forces UTF-8 on all three
+  streams. Output encodes leniently (`errors="replace"`), so an
+  unrepresentable character can't kill a command at its last step; **input
+  decodes strictly**, so a document that genuinely isn't UTF-8 still fails
+  loudly and for free rather than becoming a claim full of `\ufffd` that gets
+  submitted and charged. Importing `lenz_io` as a library still touches
+  nothing.
+
 ## [2.12.0] - 2026-09-06
 
 **`assess` now defends against being charged twice for a call you never

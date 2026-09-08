@@ -60,8 +60,51 @@ def normalize_argv(argv: list[str]) -> list[str]:
     return front + rest
 
 
+def force_utf8_streams() -> None:
+    """Make the CLI's own stdin/stdout/stderr UTF-8, whatever the locale says.
+
+    Python picks the standard streams' encoding from the ambient locale, so a
+    ``C``/``POSIX`` (or otherwise non-UTF-8) environment gives them an **ascii**
+    codec. Claim text is full of characters ascii cannot carry — en dashes,
+    arrows, Greek letters, any non-English language — so without this the CLI
+    dies on perfectly valid work with ``'ascii' codec can't encode characters
+    in position 44-45``, reported through the generic error handler as if the
+    *input* had been rejected — the user is left hunting for "the character
+    Lenz doesn't like" in a document that is fine. The same locale breaks the
+    input side: ``lenz extract - < file.txt`` cannot even decode the document
+    it was handed.
+
+    **Input decodes strictly; output encodes leniently.** On the way out,
+    ``errors="replace"`` means an unrepresentable character degrades to U+FFFD
+    instead of taking a finished command down at the last step. On the way in
+    it would do the opposite of a favour: a document that is genuinely not
+    UTF-8 (a latin-1 paste, a PDF piped by mistake) would decode to a claim
+    full of U+FFFD, get submitted, and be *charged* — where a strict decode
+    fails loudly, for free, before anything is spent. So stdin keeps the
+    default strict handler; ``reconfigure(encoding=...)`` alone resets it.
+
+    Only the ``lenz`` console script calls this — importing ``lenz_io`` as a
+    library must never reconfigure a host application's streams.
+    """
+    lenient = {"encoding": "utf-8", "errors": "replace"}
+    for stream, kwargs in ((sys.stdin, {"encoding": "utf-8"}), (sys.stdout, lenient), (sys.stderr, lenient)):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue  # already replaced (pytest capture, a pipe wrapper, …)
+        try:
+            reconfigure(**kwargs)
+        except Exception:  # deliberately broad — best-effort by contract:
+            # Detached, already-read-from, or a wrapper whose `reconfigure` has
+            # a narrower signature (a `TypeError` on `errors=`). This runs as
+            # the first statement of `main()`, so anything raised here would
+            # kill the CLI before it ran a single command — the exact outcome
+            # this function exists to prevent.
+            pass
+
+
 def main() -> None:
     """Entry point for the ``lenz`` console script."""
+    force_utf8_streams()
     try:
         cli_app = importlib.import_module("lenz_io.cli.app")
     except ModuleNotFoundError as exc:  # CLI extra not installed
@@ -77,4 +120,4 @@ def main() -> None:
     cli_app.app()
 
 
-__all__ = ["main", "normalize_argv"]
+__all__ = ["force_utf8_streams", "main", "normalize_argv"]
