@@ -36,6 +36,12 @@ jobs:
         # meaningfully by OS or interpreter version, so paying for it eight
         # times buys nothing; the dedicated `coverage` job below measures once.
         run: pytest -q --no-cov
+        # Set on purpose: it makes rich treat captured output as a terminal, so
+        # the run fails if a test ever inherits the shell's console env again
+        # (tests/test_console_env.py; the guard is the autouse fixture in
+        # tests/conftest.py).
+        env:
+          FORCE_COLOR: "1"
 
   cli-wheel-smoke:
     name: cli wheel smoke
@@ -90,6 +96,9 @@ jobs:
         # `term-missing` prints the uncovered lines into this log, so a reviewer
         # can see them without re-running anything locally.
         run: pytest -q
+        # See the matrix's Test step.
+        env:
+          FORCE_COLOR: "1"
 
   ci-ok:
     # Aggregate gate. Branch protection requires THIS check and nothing else, so
