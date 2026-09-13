@@ -115,14 +115,13 @@ print(reply.content)
 `assess(claims=[...])` takes up to 20 claims per call and always answers
 with exactly one row per claim, in the order sent. A row that could not be
 given a verdict comes back in position with `verdict == "Error"`, an
-`error_code` (`no_claim` / `ambiguous` / `framing_failed` /
-`upstream_unavailable` / `timeout` — an open set; the last two are the ones
-worth resending as-is), `candidate_claims` when it was
-ambiguous, and a one-sentence `hint` on what to send next; it is not
-charged. A compound item is assessed on its main claim and lists the other
-claims it found in `identified_claims` (also with a `hint`) — send those as
-their own items to check the rest. `assess(claim="...")` still takes a
-single statement and is unchanged.
+`error_code` (`no_claim` / `framing_failed` / `upstream_unavailable` /
+`timeout` — an open set; the last two are the ones worth resending as-is)
+and a one-sentence `hint` on what to send next; it is not charged. A
+compound item is assessed on its main claim and lists the other claims it
+found in `identified_claims` (also with a `hint`) — send those as their own
+items to check the rest. `assess(claim="...")` takes one text and answers
+with a row per claim found in it, up to 20, at 1 credit each.
 
 `assess` and `verify` share a result cache server-side: if a claim
 already has a deep verification, `assess` returns it via
@@ -131,7 +130,7 @@ already has a deep verification, `assess` returns it via
 ## How verification works
 
 Framing → Research → Debate (2 models, 2 rounds) → Panel Review
-(3 reviewers: source quality, logical structure, claim precision) → Conclusion. ~90 seconds wall-clock
+(3 reviewers running the same checks, 2 more when they disagree) → Conclusion. ~90 seconds wall-clock
 per claim. `assess` runs a leaner 3-model panel against the same
 framing for the ~10s pass.
 

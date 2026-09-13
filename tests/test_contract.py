@@ -26,12 +26,14 @@ from __future__ import annotations
 import json
 import types
 import typing
+import warnings
 from pathlib import Path
 
 import pytest
 from pydantic import BaseModel
 
 from lenz_io.models import (
+    AssessClaim,
     AssessResponse,
     Certificate,
     ExtractedClaims,
@@ -136,7 +138,7 @@ def _load(name: str) -> dict:
         ("assess_single_claim.json", AssessResponse),
         ("assess_multiclaim.json", AssessResponse),
         # The list form: one row per item, Error rows in position with their
-        # cause, readings and hint. Same fixture as the Node SDK.
+        # cause and hint. Same fixture as the Node SDK.
         ("assess_claims_list.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
@@ -247,17 +249,17 @@ def test_assess_multiclaim_round_trips():
     assert parsed.claims[0].verification_url is not None
 
 
-def test_assess_claims_list_rows_carry_cause_readings_and_hint():
+def test_assess_claims_list_rows_carry_cause_and_hint():
     """The list form's per-row fields: a plain verdict row has all four
     empty, a compound row lists the rest under ``identified_claims`` with a
-    hint, and an Error row names its cause (and its readings when
-    ambiguous) — every row in the position it was sent."""
+    hint, and an Error row names its cause and what to send next — every row
+    in the position it was sent."""
     payload = _load("assess_claims_list.json")
     parsed = AssessResponse.model_validate(payload)
     assert parsed.error is None
     assert [c.verdict for c in parsed.claims] == ["True", "Mixed", "Error", "Error"]
 
-    plain, compound, no_claim, ambiguous = parsed.claims
+    plain, compound, no_claim, timed_out = parsed.claims
     assert plain.error_code is None
     assert plain.candidate_claims == []
     assert plain.identified_claims == []
@@ -270,9 +272,29 @@ def test_assess_claims_list_rows_carry_cause_readings_and_hint():
     assert no_claim.candidate_claims == []
     assert no_claim.hint
 
-    assert ambiguous.error_code == "ambiguous"
-    assert len(ambiguous.candidate_claims) == 2
-    assert ambiguous.hint.startswith("Ambiguous")
+    assert timed_out.error_code == "timeout"
+    assert timed_out.candidate_claims == []
+    assert timed_out.hint
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "field"),
+    [
+        (ExtractedClaims, "candidate_claims"),
+        (AssessClaim, "candidate_claims"),
+        (AssessResponse, "candidate_claims"),
+        (TaskStatus, "candidates"),
+    ],
+)
+def test_retired_reading_lists_are_deprecated_in_the_schema_only(model_cls, field):
+    """The server still sends these keys, always ``[]`` since 2026-09-12, so
+    the models keep them. They are marked deprecated in the JSON schema only:
+    ``Field(deprecated=True)`` would make pydantic warn on every attribute
+    read, and the contract walker above reads every one."""
+    assert model_cls.model_json_schema()["properties"][field].get("deprecated") is True
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert getattr(model_cls(), field) == []
 
 
 # ── Error envelopes ─────────────────────────────────────────────────────────
