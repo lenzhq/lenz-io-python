@@ -149,8 +149,9 @@ for source in v.sources[:3]:
     print(" -", source.title, source.url)
 ```
 
-The demo claim is pre-cached so this returns in ~1.5s. Your own claims
-hit the full pipeline (~60-90s) — use webhooks for production async flows.
+The demo claim is cached for an hour after anyone verifies it, so it can
+come back in seconds; otherwise it runs the full pipeline (~60-90s) like
+your own claims. Use webhooks for production async flows.
 
 > **Get your webhook secret here →** [lenz.io/api-credentials](https://lenz.io/api-credentials)
 

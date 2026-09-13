@@ -30,6 +30,12 @@ Docs and dead CLI code only; nothing the SDK sends or parses changes, and
   older specialist panelists; `Source.snippet` is the passage around the
   quote, in the page's language; a single `assess` text answers with up to
   20 rows.
+- The demo claim is no longer described as pre-cached: the API's verdict
+  cache now lasts an hour, so it answers in seconds only when someone
+  verified it within the hour.
+- Release smoke: the `/verify` checks (SDK and CLI) run the quickstart
+  claim at `depth="low"` with a 150s budget instead of expecting a cache
+  hit inside 30s, which a 1-hour cache no longer guarantees.
 
 ### Removed
 
