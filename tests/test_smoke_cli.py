@@ -11,8 +11,9 @@ suite; run on demand / in the release workflow:
     LENZ_E2E_KEY=lenz_... pytest -m smoke
 
 Skipped if no key is set. Token-minimizing, mirroring the SDK smoke:
-  - ``verify`` uses the pre-cached quickstart claim -> cache hit, < 30s, no
-    fresh multi-model pipeline burned.
+  - ``verify`` runs the quickstart claim at ``--depth low``, the cheap run
+    (~15s). The API's verdict cache lasts an hour, so a hit (for example
+    from the SDK smoke just before) is a bonus, never assumed.
   - ``assess`` reuses the same claim (sync, ~10s).
   - ``extract`` is free (no credit charge).
   - ``--version`` needs no API call at all.
@@ -34,8 +35,8 @@ pytestmark = pytest.mark.smoke
 
 # The console script installed next to this venv's python (pip install -e .[cli]).
 _LENZ = Path(sys.executable).parent / "lenz"
-# Same pre-cached claim the SDK smoke uses, so `verify` stays a cheap cache hit.
-CACHED_CLAIM = "Sharks don't get cancer"
+# The same quickstart claim the SDK smoke uses.
+SMOKE_CLAIM = "Sharks don't get cancer"
 
 
 def _key() -> str:
@@ -79,7 +80,7 @@ def test_cli_extract_real_contract():
 
 
 def test_cli_assess_real_contract():
-    proc = _run("assess", CACHED_CLAIM, "--json", timeout=60)
+    proc = _run("assess", SMOKE_CLAIM, "--json", timeout=60)
     assert proc.returncode == 0, proc.stderr
     data = json.loads(proc.stdout)
     assert data["claims"], "assess returned zero claims"
@@ -88,10 +89,12 @@ def test_cli_assess_real_contract():
     assert first["confidence"] in ("high", "medium", "low")
 
 
-def test_cli_verify_cached_real_contract():
-    """The pre-cached claim returns a verdict via cache hit (cheap, < 30s) —
-    exercises submit -> poll -> completed -> render against the real server."""
-    proc = _run("verify", CACHED_CLAIM, "--json", "--timeout", "60", timeout=90)
+def test_cli_verify_low_depth_real_contract():
+    """The quickstart claim at ``--depth low`` returns a verdict — exercises
+    submit -> poll -> completed -> render against the real server. The 150s
+    budget covers a fresh run; the subprocess limit sits above it so the CLI's
+    own timeout fires first."""
+    proc = _run("verify", SMOKE_CLAIM, "--json", "--depth", "low", "--timeout", "150", timeout=180)
     assert proc.returncode == 0, proc.stderr
     data = json.loads(proc.stdout)
     assert data["verdict"], "verify returned no verdict"

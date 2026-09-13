@@ -10,9 +10,9 @@ row per claim, same order), ``verify`` escalates the low-confidence rows
 to the full multi-model panel with citations, and ``ask`` lets you follow up
 on a verification.
 
-The demo claim is pre-cached, so the verify call returns in ~1.5s. Your
-own claims hit the full pipeline (~60-90s) — use webhooks for production
-async flows.
+The demo claim is cached for an hour after anyone verifies it, so the
+verify call can come back in seconds; otherwise it runs the full pipeline
+(~60-90s) like your own claims. Use webhooks for production async flows.
 """
 
 from __future__ import annotations
@@ -47,8 +47,8 @@ def main() -> None:
 
     # 3. verify — escalate the low-confidence rows to the full multi-model panel
     doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
-    # The demo claim is pre-cached; verify it explicitly so the walkthrough
-    # always reaches steps 3 and 4 even when every row came back confident.
+    # Fall back to the demo claim so the walkthrough always reaches steps 3
+    # and 4 even when every row came back confident.
     doubtful = doubtful or [{"claim": "Sharks don't get cancer"}]
     results = client.verify_batch_and_wait(claims=doubtful)
     v = next(r.verification for r in results if r.verification is not None)

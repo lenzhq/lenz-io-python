@@ -135,10 +135,6 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.console.print("[dim]No verifiable claim found in that text.[/dim]")
         return
 
-    if result.candidate_claims:
-        out.console.print("\n[dim]Ambiguous — candidate readings:[/dim]")
-        for c in result.candidate_claims:
-            out.console.print(f"  • {c}")
     # Only nudge to verify when there's a single, unambiguous claim — a lone
     # hint next to a multi-claim list reads as if it belongs to one of them.
     if len(claims) == 1:
@@ -151,17 +147,7 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         return
     claims = result.claims or []
     if not claims:
-        # Ambiguous input → the server returns specific readings to pick from
-        # (error_code='ambiguous'); show them so the user can assess one. A
-        # genuine non-claim has no readings → a clean "No claim found."
-        candidates = result.candidate_claims or []
-        if candidates:
-            out.console.print("[dim]Ambiguous — pick a specific reading:[/dim]")
-            for reading in candidates:
-                out.console.print(f"  • {reading}")
-            out.console.print('[dim]Then assess one, e.g.:[/dim] lenz assess "<reading>"')
-        else:
-            out.console.print("[dim]No claim found.[/dim]")
+        out.console.print("[dim]No claim found.[/dim]")
         return
     for c in claims:
         color = _VERDICT_COLOR.get(c.verdict, "white")
@@ -169,10 +155,6 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         # which is meaningless there.
         detail = c.error_code if c.verdict == "Error" and c.error_code else c.confidence
         out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({detail}) — {c.claim}")
-        if c.candidate_claims:
-            out.console.print("    [dim]readings:[/dim]")
-            for reading in c.candidate_claims:
-                out.console.print(f"      • {reading}")
         if c.identified_claims:
             out.console.print("    [dim]also found:[/dim]")
             for other in c.identified_claims:
@@ -367,10 +349,6 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
             out.console.print("[dim]claims found:[/dim]")
             for i, claim in enumerate(st.claims, 1):
                 out.console.print(f"  {i}. {claim.text}")
-        if st.candidates:
-            out.console.print("[dim]did you mean:[/dim]")
-            for i, candidate in enumerate(st.candidates, 1):
-                out.console.print(f"  {i}. {candidate}")
         for s in st.similar_claims[:5]:
             sc = "" if s.lenz_score is None else f" (score {s.lenz_score}/10)"
             out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{sc}  [dim]id: {s.verification_id}[/dim]")

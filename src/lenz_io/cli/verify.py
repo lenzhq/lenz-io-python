@@ -2,8 +2,8 @@
 interactive branches the status endpoint can return.
 
 The lifecycle is NOT just poll→verdict. ``GET /verify/status/{task_id}`` can
-return ``needs_input`` (``multi_claim`` / ``clarification_required`` /
-``duplicate_found``); ignoring those would hang or misrender. Ctrl-C prints a
+return ``needs_input`` (``multi_claim`` / ``duplicate_found``); ignoring
+those would hang or misrender. Ctrl-C prints a
 ``--resume <task_id>`` handle so an in-flight ~90s run isn't lost. The task
 handle is server-cached only ~10 min, so ``--resume`` also accepts a durable
 ``verification_id`` (falls back to ``verifications.get``).
@@ -22,7 +22,7 @@ import contextlib
 import sys
 import time
 import uuid
-from typing import Any
+from typing import Any, NoReturn
 
 import typer
 
@@ -194,13 +194,8 @@ def _poll(
                     _verify_batch(client, out, picks, timeout, detach=detach)
                     return
                 task_id = picks[0][0]
-            else:  # clarification_required / duplicate_found → single-pick / terminal
-                task_id = _needs_input_single(client, out, task_id, st, selection)
-                # Single-pick spawns a fresh task too; honor --detach here as well
-                # (the multi_claim branch already returns via _verify_batch above).
-                if detach:
-                    _emit_detached(out, task_id)
-                    return
+            else:  # duplicate_found → terminal
+                _needs_input_terminal(out, task_id, st)
             selection = None
             # A pick spawns a fresh ~90s pipeline. Reset the clock so the new
             # run gets the full --timeout budget, not what's left after the
@@ -279,24 +274,10 @@ def _checkbox_picker(message: str, options: list[str]) -> list[str]:
     return picks or []  # None on Ctrl-C, [] on empty submit → cancel
 
 
-def _needs_input_single(
-    client: Lenz, out: Output, task_id: str, st: TaskStatus, selection: list[int] | str | None
-) -> str:
-    """Resolve a single-pick pause (clarification) or terminal one (duplicate);
-    returns the new task_id to keep polling."""
+def _needs_input_terminal(out: Output, task_id: str, st: TaskStatus) -> NoReturn:
+    """Handle a pause that ``select`` cannot resolve (``duplicate_found``), or
+    one this release does not know. Always exits."""
     reason = st.reason
-
-    if reason == "clarification_required":
-        options = list(st.candidates)
-        if selection is not None:
-            idx = _selection_to_indices(selection, len(options))[0]  # one reading
-        elif out.json_mode:
-            _emit_needs_input(out, task_id, st)
-            raise SystemExit(3)
-        else:
-            idx = _choose(out, "Ambiguous — pick a reading:", options)
-        _validate_index(idx, options)
-        return client.select(task_id, claims=[options[idx]]).items[0].task_id
 
     if reason == "duplicate_found":
         if out.json_mode:
@@ -415,18 +396,6 @@ def _emit_needs_input(out: Output, task_id: str, st: TaskStatus) -> None:
             "similar": [s.model_dump(mode="json") for s in st.similar_claims],
         }
     )
-
-
-def _choose(out: Output, prompt: str, options: list[str]) -> int:
-    out.err.print(f"[bold]{prompt}[/bold]")
-    for i, option in enumerate(options, 1):
-        out.err.print(f"  {i}. {option}")
-    return int(typer.prompt("Number", type=int)) - 1
-
-
-def _validate_index(idx: int | None, options: list[str]) -> None:
-    if idx is None or idx < 0 or idx >= len(options):
-        raise CLIError(f"Selection out of range (1-{len(options)}).", code="invalid_selection", exit_code=2)
 
 
 def _render_similar(out: Output, similar: list[Any]) -> None:

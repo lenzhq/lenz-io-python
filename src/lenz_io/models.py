@@ -59,6 +59,9 @@ class Source(_Lax):
     source_name: str = ""
     title: str = ""
     url: str = ""
+    # The passage around the quoted sentence(s) on the source page, in the
+    # page's own language: up to ~2,000 characters, and it may contain line
+    # breaks. ``…`` marks a cut paragraph, `` … `` separates two passages.
     snippet: str = ""
     date: str = ""
 
@@ -72,16 +75,22 @@ class DebateSide(_Lax):
 
 
 class Assessment(_Lax):
-    """One panelist's structured assessment.
+    """One reviewer's structured assessment.
 
-    Each panelist emits exactly one category of warnings (logical fallacies
-    for the Logic Examiner, precision issues for the Precision Analyst,
-    weakest sources for the Source Auditor; verifications from before
-    2026-06 carry missing context for the retired Context Analyst). The
-    kind is implicit in ``focus_area``; all of them surface under a single
-    ``warnings`` list.
+    Current verifications carry three reviewers, ``Reviewer A`` to
+    ``Reviewer C``, all running the same checks over the evidence, plus
+    ``Reviewer D`` and ``Reviewer E`` when those three disagree. Their
+    ``focus_area`` reads ``"Sources, evidence fit and wording"``, and
+    ``warnings`` holds the source issues, evidence gaps and precision issues
+    that reviewer found, in one list.
 
-    ``score`` is a panelist-level 1-10 sub-score, distinct from the
+    Older verifications carry specialist panelists instead, one warning
+    category each: logical fallacies (Logic Examiner), precision issues
+    (Precision Analyst), weakest sources (Source Auditor) and, before
+    2026-06, missing context (Context Analyst).
+
+    ``panelist_name`` is a display value, not a stable key — don't branch
+    on it. ``score`` is a reviewer-level 1-10 sub-score, distinct from the
     top-level ``lenz_score`` on a ``Verification``.
     """
 
@@ -368,7 +377,9 @@ class ExtractedClaims(_Lax):
     status: str = ""
     claim: str = ""
     identified_claims: list[str] = Field(default_factory=list)
-    candidate_claims: list[str] = Field(default_factory=list)
+    # Deprecated: always empty since 2026-09-12. Kept because the server
+    # still sends the key.
+    candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     domain: str = ""
     key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
@@ -385,13 +396,14 @@ class AssessClaim(_Lax):
 
     A row with ``verdict == "Error"`` could not be given a verdict. On a
     list call it stays in position (one row per item sent), is not charged,
-    and says why: ``error_code`` names the cause, ``candidate_claims`` holds
-    the readings when the cause is ``ambiguous``, and ``hint`` is one
+    and says why: ``error_code`` names the cause and ``hint`` is one
     sentence on what to send next. ``hint`` is the field to surface to a
-    human — it is written per cause and stays correct as causes are added. A compound input is assessed on its main
-    claim; the other claims found in it are listed in ``identified_claims``
-    (also with a ``hint``). All four default empty so older servers that
-    don't send them still parse.
+    human — it is written per cause and stays correct as causes are added.
+    A vague input is assessed on its most likely reading, which ``claim``
+    carries. A compound input is assessed on its main claim; the other
+    claims found in it are listed in ``identified_claims`` (also with a
+    ``hint``). These fields default empty so older servers that don't send
+    them still parse.
     """
 
     claim: str = ""
@@ -401,8 +413,8 @@ class AssessClaim(_Lax):
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
-    # Only on ``verdict == "Error"`` rows: 'no_claim' | 'ambiguous' |
-    # 'framing_failed' | 'upstream_unavailable' | 'timeout'.
+    # Only on ``verdict == "Error"`` rows: 'no_claim' | 'framing_failed' |
+    # 'upstream_unavailable' | 'timeout'.
     #
     # An OPEN set, deliberately typed ``str`` rather than a Literal: the API
     # may add a cause in a minor version, so branch on the ones you know and
@@ -412,10 +424,12 @@ class AssessClaim(_Lax):
     # down) and 'timeout' (the call ran out of its time budget before this
     # item was done — send fewer items per call to make it less likely).
     # 'framing_failed' is deterministic, so retrying the same text will not
-    # help. 'no_claim' and 'ambiguous' want a different input; read ``hint``.
+    # help (a provider outage comes back as 'upstream_unavailable' instead).
+    # 'no_claim' wants a different input; read ``hint``.
     error_code: str | None = None
-    # Readings to choose from when ``error_code == "ambiguous"``; else empty.
-    candidate_claims: list[str] = Field(default_factory=list)
+    # Deprecated: always empty since 2026-09-12, when the ``ambiguous`` cause
+    # that filled it was retired. Kept because the server still sends the key.
+    candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # Other claims found in the input that were NOT assessed; else empty.
     identified_claims: list[str] = Field(default_factory=list)
     # One sentence on what to send next. Set on every Error row and on a row
@@ -426,26 +440,27 @@ class AssessClaim(_Lax):
 class AssessResponse(_Lax):
     """Output of ``POST /assess``.
 
-    Single form (``assess(claim=...)``): ``claims`` is one entry per
-    atomic_claim that framing identified in the input. Multiclaim inputs
-    return N entries. ``error`` is set when framing returns zero claims.
+    Single form (``assess(claim=...)``): ``claims`` is one entry per claim
+    found in the input — up to 20, at 1 credit each. ``error`` is set when
+    the input holds no checkable claim.
 
     List form (``assess(claims=[...])``): exactly one entry per item sent,
     in the order sent. An item that could not be given a verdict is an
     ``"Error"`` row in position (see ``AssessClaim``), never a missing one;
     the top-level ``error`` stays ``None``.
 
-    When ``claims`` is empty (single form), ``error_code`` disambiguates
-    why: ``'ambiguous'`` → the input was vague but framing produced specific
-    readings in ``candidate_claims`` (assess one of them); ``'no_claim'``
-    → genuinely not a checkable claim. Both fields default empty, so older
-    servers that don't send them degrade to the plain ``error`` message.
+    When ``claims`` is empty (single form), ``error_code`` is ``'no_claim'``:
+    the input holds no checkable claim (a vague input is assessed on its
+    most likely reading instead). It defaults empty, so older servers that
+    don't send it degrade to the plain ``error`` message.
     """
 
     claims: list[AssessClaim] = Field(default_factory=list)
     error: str | None = None
-    error_code: str = ""  # '' | 'ambiguous' | 'no_claim'
-    candidate_claims: list[str] = Field(default_factory=list)
+    error_code: str = ""  # '' | 'no_claim'
+    # Deprecated: always empty since 2026-09-12. Kept because the server
+    # still sends the key.
+    candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
 
 
 class TaskAccepted(_Lax):
@@ -527,11 +542,12 @@ class TaskStatus(_Lax):
     # verifications in one loop can tell the replies apart. ``""`` from
     # older servers.
     task_id: str = ""
-    reason: str = ""  # populated when status == 'needs_input'
+    # Populated when status == 'needs_input': 'multi_claim' | 'duplicate_found'.
+    reason: str = ""
     # One sentence on what was unclear and how to resolve it. Set on a
-    # ``needs_input`` (``multi_claim`` / ``clarification_required``) and on a
-    # ``failed`` with ``failure_reason == "not_a_claim"``; ``""`` otherwise
-    # and from older servers.
+    # ``multi_claim`` ``needs_input`` and on a ``failed`` with
+    # ``failure_reason == "not_a_claim"``; ``""`` otherwise and from older
+    # servers.
     hint: str = ""
     # Present on ``processing``; an empty ``Progress`` on every other status
     # (the server omits the key entirely there since 2026-09).
@@ -539,7 +555,10 @@ class TaskStatus(_Lax):
     result: Verification | None = None
     # needs_input branches
     claims: list[CandidateClaim] = Field(default_factory=list)
-    candidates: list[str] = Field(default_factory=list)
+    # Deprecated: always empty since 2026-09-12, when the
+    # ``clarification_required`` pause that filled it was retired. Kept
+    # because the server still sends the key.
+    candidates: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     similar_claims: list[SimilarVerification] = Field(default_factory=list)
     # failure branches. The server's failed response is
     # ``{"status": "failed", "error": "..."}`` — ``error`` is the live wire
@@ -571,7 +590,7 @@ class BatchItemResult(_Lax):
     ``status`` is a client-side rollup:
 
     - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
-    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / candidates).
+    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / similar_claims).
     - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
     """

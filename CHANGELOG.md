@@ -4,6 +4,47 @@ All notable changes to this SDK are documented here. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+Docs and dead CLI code only; nothing the SDK sends or parses changes, and
+2.12.x keeps working against the current API.
+
+### Deprecated
+
+- **`candidate_claims`** on `ExtractedClaims`, `AssessClaim` and
+  `AssessResponse`, and **`candidates`** on `TaskStatus`. The API has sent
+  them empty since 2026-09-12, when `/assess` stopped returning
+  `error_code: "ambiguous"` and `/verify` stopped pausing with
+  `reason: "clarification_required"` (a vague input is now checked on its
+  most likely reading). The fields stay because the keys still arrive. They
+  are marked deprecated in the JSON schema only, so reading them does not
+  warn.
+
+### Changed
+
+- Docs: `ambiguous` and `clarification_required` are gone from the
+  documented values. The `/assess` row causes are `no_claim` /
+  `framing_failed` / `upstream_unavailable` / `timeout`, and the `needs_input`
+  reasons are `multi_claim` / `duplicate_found`. `Assessment` describes the
+  current panel (Reviewers A–C, plus D and E when they disagree) and the
+  older specialist panelists; `Source.snippet` is the passage around the
+  quote, in the page's language; a single `assess` text answers with up to
+  20 rows.
+- The demo claim is no longer described as pre-cached: the API's verdict
+  cache now lasts an hour, so it answers in seconds only when someone
+  verified it within the hour.
+- Release smoke: the `/verify` checks (SDK and CLI) run the quickstart
+  claim at `depth="low"` with a 150s budget instead of expecting a cache
+  hit inside 30s, which a 1-hour cache no longer guarantees.
+
+### Removed
+
+- CLI: the `clarification_required` picker in `lenz verify` and the
+  "readings" / "did you mean" lines in the `assess`, `extract` and status
+  output, which the API no longer sends anything to fill. A
+  `clarification_required` pause from an older server now ends with a
+  `needs_input` error that names it.
+
 ## [2.12.1] - 2026-09-07
 
 CLI only; the SDK is unchanged.

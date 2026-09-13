@@ -607,7 +607,7 @@ def test_render_assess_shows_verdict_and_ask_hint():
 
 
 def test_render_assess_no_claims():
-    """Genuine non-claim (no candidate readings) → a clean 'No claim found.'.
+    """Genuine non-claim → a clean 'No claim found.'.
     The raw server `error` is NOT leaked into pretty output (it stays in --json)."""
     from lenz_io.cli.render import render_assess
 
@@ -619,31 +619,10 @@ def test_render_assess_no_claims():
     assert "No verifiable claim detected" not in out  # raw server wording suppressed in pretty mode
 
 
-def test_render_assess_ambiguous_shows_readings():
-    """Ambiguous input → the server returns candidate readings; the CLI lists
-    them and points at re-assessing one, instead of a flat 'no claim'."""
-    from lenz_io.cli.render import render_assess
-
-    out = _render(
-        render_assess,
-        AssessResponse(
-            claims=[],
-            error="Claim is ambiguous — pick a specific reading",
-            error_code="ambiguous",
-            candidate_claims=["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled 2021-2026."],
-        ),
-    )
-    assert "Ambiguous" in out
-    assert "DDR4 desktop RAM prices doubled 2021-2026." in out  # readings surfaced
-    assert "DRAM contract prices doubled 2021-2026." in out
-    assert "lenz assess" in out  # next step
-
-
-def test_render_assess_list_rows_show_hint_readings_and_also_found():
+def test_render_assess_list_rows_show_hint_and_also_found():
     """List-form rows: an Error row names its cause instead of a confidence
-    and prints its hint (plus its readings when ambiguous); a compound row
-    lists the claims it did not assess under 'also found:'; a plain row
-    prints neither."""
+    and prints its hint; a compound row lists the claims it did not assess
+    under 'also found:'; a plain row prints neither."""
     from lenz_io.cli.render import render_assess
 
     out = _render(
@@ -666,12 +645,11 @@ def test_render_assess_list_rows_show_hint_readings_and_also_found():
                     hint="No factual statement that can be checked against evidence was found in the input.",
                 ),
                 AssessClaim(
-                    claim="RAM prices have more than doubled",
+                    claim="The Eiffel Tower is 330 metres tall.",
                     verdict="Error",
                     confidence="low",
-                    error_code="ambiguous",
-                    candidate_claims=["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled."],
-                    hint="Ambiguous: Which memory market / form factor? Send one of candidate_claims as its own item.",
+                    error_code="timeout",
+                    hint="This item was not processed inside the call's time budget; nothing was charged.",
                 ),
             ]
         ),
@@ -683,10 +661,8 @@ def test_render_assess_list_rows_show_hint_readings_and_also_found():
     assert "Assessed the main claim only." in out
     assert "Error (no_claim) — this is fine" in out
     assert "No factual statement that can be checked" in out
-    assert "Error (ambiguous) — RAM prices" in out
-    assert "readings:" in out
-    assert "DDR4 desktop RAM prices doubled 2021-2026." in out
-    assert "Ambiguous: Which memory market" in out
+    assert "Error (timeout) — The Eiffel Tower" in out
+    assert "not processed inside the call's time budget" in out
     # The plain row gets no hint / no 'also found:' line under it.
     assert "also found:" not in lines[0] and "also found:" not in lines[1]
     assert lines[1].startswith("Mixed (medium)")
@@ -748,15 +724,6 @@ def test_render_extract_no_claim_found():
 
     text = _render(render_extract, ExtractedClaims.model_validate({"identified_claims": [], "claim": ""}))
     assert "No verifiable claim found" in text
-
-
-def test_render_extract_ambiguous_candidates():
-    from lenz_io.cli.render import render_extract
-
-    extracted = ExtractedClaims.model_validate({"claim": "X is Y", "candidate_claims": ["did you mean A?", "or B?"]})
-    text = _render(render_extract, extracted)
-    assert "candidate readings" in text
-    assert "did you mean A?" in text
 
 
 def test_assess_json_success(monkeypatch):
@@ -1199,20 +1166,6 @@ def test_resume_multi_claim_detach_emits_task_ids(monkeypatch):
     assert fake.select_calls == [("t-parent", ["A is true.", "B is false."])]
 
 
-def test_resume_clarification_detach_emits_task_id(monkeypatch):
-    """`--detach` must also be honored on the single-pick clarification branch,
-    not just multi_claim. Regression: it block-polled the spawned task instead."""
-    monkeypatch.setenv("LENZ_API_KEY", "k")
-    st = TaskStatus(status="needs_input", reason="clarification_required", candidates=["reading A", "reading B"])
-    fake = _patch_client(monkeypatch, FakeClient(statuses=[st, st]))
-    result = runner.invoke(app, ["--json", "verify", "--resume", "t-amb", "--claim", "1", "--detach"])
-    assert result.exit_code == 0
-    payload = json.loads(result.stdout)
-    assert payload["status"] == "submitted"  # detached, not block-polled
-    assert payload["task_id"] == "sel-1"
-    assert fake.select_calls == [("t-amb", ["reading A"])]
-
-
 def test_resume_falls_back_to_verification_id(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = FakeClient(
@@ -1349,7 +1302,14 @@ def _full_verification():
         audit=Audit(
             adjudication_summary="Consensus: false.",
             panel_agreement="unanimous",
-            assessments=[Assessment(panelist_name="Logic Examiner", focus_area="logic", score=2, reasoning="bad")],
+            assessments=[
+                Assessment(
+                    panelist_name="Reviewer A",
+                    focus_area="Sources, evidence fit and wording",
+                    score=2,
+                    reasoning="bad",
+                )
+            ],
             debate_pro=DebateSide(role="pro", argument="pro arg", rebuttal="pro reb"),
             debate_con=DebateSide(role="con", argument="con arg", rebuttal="con reb"),
         ),
@@ -1366,7 +1326,7 @@ def test_render_show_full_dossier():
     assert "Sources (12):" in out  # ALL sources, not capped at 8
     assert "S11" in out  # the 12th source rendered (concise view caps at 8)
     # audit block: panel + debate
-    assert "Panel" in out and "Logic Examiner" in out
+    assert "Panel" in out and "Reviewer A" in out
     assert "Panel Review" in out and "Consensus: false." in out
     assert "PRO" in out and "pro arg" in out
     assert "CON" in out and "con arg" in out
@@ -1477,21 +1437,20 @@ def test_verify_claim_index_out_of_range(monkeypatch):
     assert json.loads(result.stdout)["error"]["code"] == "invalid_selection"
 
 
-def test_verify_clarification_json_emits_and_exits(monkeypatch):
+def test_verify_unknown_needs_input_reason_fails_loudly(monkeypatch):
+    """A pause this release cannot resolve — ``clarification_required`` from a
+    server predating 2026-09-12, or a reason added later — ends in an error
+    that names it, never a picker or a hang."""
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
         monkeypatch,
-        FakeClient(
-            statuses=[
-                TaskStatus(status="needs_input", reason="clarification_required", candidates=["mean A?", "or B?"])
-            ]
-        ),
+        FakeClient(statuses=[TaskStatus(status="needs_input", reason="clarification_required")]),
     )
     result = runner.invoke(app, ["--json", "verify", "blob"])
-    assert result.exit_code == 3
-    payload = json.loads(result.stdout)
-    assert payload["reason"] == "clarification_required"
-    assert payload["candidates"] == ["mean A?", "or B?"]
+    assert result.exit_code != 0
+    error = json.loads(result.stdout)["error"]
+    assert error["code"] == "needs_input"
+    assert "clarification_required" in error["message"]
 
 
 def test_verify_duplicate_found_json_emits_and_exits(monkeypatch):

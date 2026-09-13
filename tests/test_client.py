@@ -314,22 +314,6 @@ class TestVerify:
             s = client.get_status("tsk_001")
         assert s.status == "processing"
 
-    def test_get_status_clarification_uses_candidates_not_candidate_claims(self, client):
-        # Server-side renamed candidate_claims -> candidates on the
-        # clarification_required needs_input branch. SDK model tracks.
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/verify/status/tsk_x").respond(
-                200,
-                json={
-                    "status": "needs_input",
-                    "reason": "clarification_required",
-                    "candidates": ["Did you mean A?", "Or B?"],
-                },
-            )
-            s = client.get_status("tsk_x")
-        assert s.reason == "clarification_required"
-        assert s.candidates == ["Did you mean A?", "Or B?"]
-
     def test_select_requires_texts(self, client):
         with pytest.raises(ValueError):
             client.select("tsk_001", texts=[])  # empty selection
@@ -539,15 +523,15 @@ class TestAssess:
                 "hint": "No factual statement that can be checked against evidence was found in the input.",
             },
             {
-                "claim": "RAM prices have more than doubled",
+                "claim": "The Eiffel Tower is 330 metres tall.",
                 "language": "en",
                 "verdict": "Error",
                 "confidence": "low",
                 "verification_url": None,
-                "error_code": "ambiguous",
-                "candidate_claims": ["DDR4 desktop RAM prices doubled 2021-2026.", "DRAM contract prices doubled."],
+                "error_code": "timeout",
+                "candidate_claims": [],
                 "identified_claims": [],
-                "hint": "Ambiguous: Which memory market / form factor? Send one of candidate_claims as its own item.",
+                "hint": "This item was not processed inside the call's time budget; nothing was charged.",
             },
         ]
         sent = [row["claim"] for row in rows]
@@ -557,7 +541,7 @@ class TestAssess:
         # One row per item, in the order sent — Error rows hold their position.
         assert [c.claim for c in out.claims] == sent
         assert out.error is None
-        plain, compound, no_claim, ambiguous = out.claims
+        plain, compound, no_claim, timed_out = out.claims
         assert (plain.verdict, plain.confidence) == ("True", "high")
         assert plain.error_code is None and plain.hint is None
         assert plain.candidate_claims == [] and plain.identified_claims == []
@@ -566,9 +550,8 @@ class TestAssess:
         assert compound.verification_url == "https://lenz.io/api/v1/verifications/3f9a1c2e"
         assert (no_claim.verdict, no_claim.error_code) == ("Error", "no_claim")
         assert no_claim.hint
-        assert (ambiguous.verdict, ambiguous.error_code) == ("Error", "ambiguous")
-        assert len(ambiguous.candidate_claims) == 2
-        assert ambiguous.hint.startswith("Ambiguous")
+        assert (timed_out.verdict, timed_out.error_code) == ("Error", "timeout")
+        assert timed_out.hint.startswith("This item was not processed")
 
     @pytest.mark.parametrize("kwargs", [{"claims": ["A.", "B."]}, {"claim": "A."}])
     def test_both_forms_get_the_longer_default_timeout(self, client, kwargs):
@@ -759,7 +742,7 @@ class TestVerifyAndWait:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
             r.get("/verify/status/t").respond(
-                200, json={"status": "needs_input", "reason": "clarification_required", "candidates": ["A", "B"]}
+                200, json={"status": "needs_input", "reason": "multi_claim", "claims": [{"text": "A"}, {"text": "B"}]}
             )
             with pytest.raises(LenzNeedsInputError) as ei:
                 client.verify_and_wait(claim="x", timeout=5)

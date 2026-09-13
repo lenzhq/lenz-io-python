@@ -534,8 +534,8 @@ class Lenz:
 
         Two input forms, one response shape:
 
-        * ``claim``: one statement to check. If it contains several atomic
-          claims, each is verdicted separately. ``text=`` is accepted as an
+        * ``claim``: one statement to check. If it contains several claims,
+          each is verdicted separately (up to 20). ``text=`` is accepted as an
           alias (``claim`` wins if both are given).
         * ``claims``: a list of up to 20 statements, assessed in one call
           (one parallel wave, ~10-25s). Exactly one ``AssessClaim`` comes
@@ -557,10 +557,9 @@ class Lenz:
 
         A row with ``verdict == "Error"`` could not be given a verdict. It
         stays in position, is not charged, and says why: ``error_code`` is
-        ``no_claim`` / ``ambiguous`` / ``framing_failed`` /
-        ``upstream_unavailable`` (the retryable one), ``candidate_claims``
-        lists the readings when ``ambiguous``, and ``hint`` is one sentence on
-        what to send next. A compound list item is assessed on its main
+        ``no_claim`` / ``framing_failed`` / ``upstream_unavailable`` /
+        ``timeout`` (an open set; the last two are worth resending as-is), and
+        ``hint`` is one sentence on what to send next. A compound list item is assessed on its main
         claim; the other claims found in it are listed on that row in
         ``identified_claims`` (with a ``hint``) — send them as their own
         items to check the rest. ``hint`` is ``None`` on a plain verdict row.
@@ -594,8 +593,8 @@ class Lenz:
         the server would otherwise refresh.
 
         Paid — see ``client.usage()``. 1 credit per claim assessed; a
-        single-string input that framing splits into N atomic claims costs
-        N; ``Error`` rows are free.
+        single-string input read as N claims (up to 20) costs N; ``Error``
+        rows are free.
         """
         key = idempotency_key
         if key is None and idempotency:
@@ -610,7 +609,7 @@ class Lenz:
         """Resolve a needs-input interrupt by selecting one or more claims.
 
         Pass ``claims=`` — the exact wording of the claim(s) you're choosing
-        (entries from the prior status's ``claims`` / ``candidates``). Each
+        (entries from the prior status's ``claims``). Each
         selected claim fans out into its own pipeline; the returned
         ``BatchAccepted`` carries one ``items`` entry (each with its own
         ``task_id``) per claim. Poll each via ``get_status`` / ``wait``.
@@ -650,7 +649,7 @@ class Lenz:
 
         Returns the completed ``Verification`` on success. Raises:
           * ``LenzNeedsInputError`` if the pipeline pauses (multi_claim /
-            clarification_required / duplicate_found). Resolve via
+            duplicate_found). Resolve via
             ``client.select(task_id, ...)`` then re-call this helper on
             the new task.
           * ``LenzPipelineError`` on terminal failure.
