@@ -6,8 +6,14 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-Docs and dead CLI code only; nothing the SDK sends or parses changes, and
-2.12.x keeps working against the current API.
+One behaviour change, `extract`'s default timeout (below); the rest is docs
+and dead CLI code. Nothing the SDK sends or parses changes, and 2.12.x keeps
+working against the current API.
+
+### Added
+
+- **`timeout=`** on `extract`: a per-call HTTP timeout in seconds, like the
+  one `assess` takes.
 
 ### Deprecated
 
@@ -22,6 +28,13 @@ Docs and dead CLI code only; nothing the SDK sends or parses changes, and
 
 ### Changed
 
+- **`extract` waits up to 90s per attempt by default** (`EXTRACT_TIMEOUT`) instead of
+  the 30s client timeout. The slowest extractions take 30-60s, and on a
+  client timeout the SDK re-sent the call, which ran the same extraction
+  again. A longer client timeout is never shortened, and `lenz extract` in
+  the CLI gets the same default.
+- Docs: `assess`'s 45s default is described as covering both forms, as it
+  has since 2.12.0.
 - Docs: `ambiguous` and `clarification_required` are gone from the
   documented values. The `/assess` row causes are `no_claim` /
   `framing_failed` / `upstream_unavailable` / `timeout`, and the `needs_input`
@@ -44,6 +57,13 @@ Docs and dead CLI code only; nothing the SDK sends or parses changes, and
   output, which the API no longer sends anything to fill. A
   `clarification_required` pause from an older server now ends with a
   `needs_input` error that names it.
+
+### Fixed
+
+- `assess` no longer shortens the timeout of an `httpx.Client` passed as
+  `http_client=`: its 45s floor was compared with `Lenz(timeout=...)`, which
+  such a client does not use. `extract`'s 90s floor reads the client in use
+  the same way, and an unbounded client stays unbounded.
 
 ## [2.12.1] - 2026-09-07
 

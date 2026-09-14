@@ -124,6 +124,11 @@ ASSESS_TIMEOUT = 45.0
 #: Deprecated alias for :data:`ASSESS_TIMEOUT`, kept for callers that imported
 #: it. Same value; removed no earlier than 3.0.
 ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
+# ``extract`` reads the whole input and enumerates its claims inside one
+# synchronous request. Most calls answer in 3-17s, but the slowest take 30-60s,
+# past the 30s client default, and a client timeout makes the SDK re-send the
+# call, which runs the same extraction again. 90s leaves room above them.
+EXTRACT_TIMEOUT = 90.0
 DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
@@ -496,7 +501,14 @@ class Lenz:
             idempotency_key=idempotency_key,
         )
 
-    def extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
+    def extract(
+        self,
+        *,
+        text: str,
+        language: str = "",
+        focus: str = "",
+        timeout: float | None = None,
+    ) -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/account/day (shared across your API keys).
 
@@ -516,8 +528,13 @@ class Lenz:
         is ``"no_match"`` and ``identified_claims`` is empty — the unfocused
         list is never substituted. Widen the focus and call again. A focused
         call costs the same single unit of the daily cap.
+
+        ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
+        the client default for this one request. Otherwise ``extract`` uses
+        ``EXTRACT_TIMEOUT`` (90s), or your client timeout when you configured
+        a longer one: a long input can take more than 30s to extract.
         """
-        return self._extract(text=text, language=language, focus=focus)
+        return self._extract(text=text, language=language, focus=focus, timeout=timeout)
 
     def assess(
         self,
@@ -984,7 +1001,28 @@ class Lenz:
         body = self._request("POST", "/verify/batch", json=payload, headers=headers)
         return BatchAccepted.model_validate(body)
 
-    def _extract(self, *, text: str, language: str = "", focus: str = "") -> ExtractedClaims:
+    def _timeout_at_least(self, floor: float) -> float | None:
+        """``floor`` seconds, or ``None`` (the client's own timeout) when that
+        is already at least as long, or unbounded.
+
+        Never a flat assignment: a caller who configured a longer timeout asked
+        for it, and shortening it would be this SDK quietly overruling them. It
+        reads the client actually in use, so an ``httpx.Client`` passed as
+        ``http_client=`` keeps its own setting too.
+        """
+        current = self._client.timeout.read
+        if current is None or current >= floor:
+            return None
+        return floor
+
+    def _extract(
+        self,
+        *,
+        text: str,
+        language: str = "",
+        focus: str = "",
+        timeout: float | None = None,
+    ) -> ExtractedClaims:
         payload: dict[str, Any] = {"text": text}
         if language:
             payload["language"] = language
@@ -992,7 +1030,9 @@ class Lenz:
         # contract, and a cap duplicated here would drift from it.
         if focus:
             payload["focus"] = focus
-        body = self._request("POST", "/extract", json=payload)
+        if timeout is None:
+            timeout = self._timeout_at_least(EXTRACT_TIMEOUT)
+        body = self._request("POST", "/extract", json=payload, timeout=timeout)
         return ExtractedClaims.model_validate(body)
 
     def _assess(
@@ -1016,11 +1056,8 @@ class Lenz:
             payload = {"text": text}
         if language:
             payload["language"] = language
-        # ``max``, never a flat assignment: a caller who configured a longer
-        # client timeout asked for it, and shortening it here would be this
-        # SDK quietly overruling them.
         if timeout is None:
-            timeout = max(self._timeout, ASSESS_TIMEOUT)
+            timeout = self._timeout_at_least(ASSESS_TIMEOUT)
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key

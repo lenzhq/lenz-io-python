@@ -25,7 +25,7 @@ from lenz_io import (
     LenzValidationError,
     TaskAccepted,
 )
-from lenz_io.client import API_VERSION, ASSESS_TIMEOUT, RETRY_BACKOFF
+from lenz_io.client import API_VERSION, ASSESS_TIMEOUT, EXTRACT_TIMEOUT, RETRY_BACKOFF
 from lenz_io.errors import MAX_RETRY_AFTER_SLEEP
 
 DEFAULT_BASE = "https://lenz.io/api/v1"
@@ -646,6 +646,67 @@ class TestAssess:
                 client.assess(claims=["x"] * 21)
         assert len(json.loads(route.calls.last.request.content)["claims"]) == 21
         assert ei.value.status_code == 422
+
+
+_EXTRACT_BODY = {"status": "ready", "claim": "A.", "identified_claims": []}
+
+
+class TestExtractTimeout:
+    """``extract`` waits ``EXTRACT_TIMEOUT`` (90s), not the 30s client default.
+
+    Extraction runs in one synchronous request, and a long input can take
+    longer than 30s. On a client timeout the SDK re-sends the call, which
+    starts the same extraction over on the server.
+    """
+
+    def test_extract_gets_the_longer_default_timeout(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
+            client.extract(text="A document.")
+        timeout = route.calls.last.request.extensions["timeout"]
+        assert timeout["read"] == EXTRACT_TIMEOUT == 90.0
+        assert timeout["connect"] == EXTRACT_TIMEOUT
+
+    def test_a_longer_client_timeout_is_never_shortened(self):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
+            Lenz(api_key="lenz_test_abc123", timeout=120.0).extract(text="A document.")
+        assert route.calls.last.request.extensions["timeout"]["read"] == 120.0
+
+    def test_explicit_timeout_overrides_the_default_for_that_call_only(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
+            client.extract(text="A document.", timeout=10)
+            assert route.calls.last.request.extensions["timeout"]["read"] == 10.0
+            # The next call is back on the extract default — nothing leaked.
+            client.extract(text="A document.")
+            assert route.calls.last.request.extensions["timeout"]["read"] == EXTRACT_TIMEOUT
+
+
+_FLOORED_CALLS = [
+    ("/extract", lambda c: c.extract(text="A document."), _EXTRACT_BODY),
+    ("/assess", lambda c: c.assess(claim="A."), {"claims": [], "error": None}),
+]
+
+
+class TestInjectedClientTimeout:
+    """A caller who passes their own ``httpx.Client`` set its timeout there,
+    not on ``Lenz(timeout=...)``, so the per-call floors of ``extract`` and
+    ``assess`` must not shorten it."""
+
+    @pytest.mark.parametrize("client_timeout", [300.0, None])
+    @pytest.mark.parametrize(("path", "call", "body"), _FLOORED_CALLS)
+    def test_a_longer_injected_client_timeout_is_kept(self, client_timeout, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path).respond(200, json=body)
+            call(Lenz(api_key="lenz_test_abc123", http_client=httpx.Client(timeout=client_timeout)))
+        assert route.calls.last.request.extensions["timeout"]["read"] == client_timeout
+
+    def test_a_shorter_injected_client_timeout_still_gets_the_floor(self):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
+            Lenz(api_key="lenz_test_abc123", http_client=httpx.Client(timeout=10.0)).extract(text="A document.")
+        assert route.calls.last.request.extensions["timeout"]["read"] == EXTRACT_TIMEOUT
 
 
 # ─────────────────────────────────────────────────── verify_and_wait ──
