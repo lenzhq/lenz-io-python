@@ -1,9 +1,10 @@
 """Usage model semantics — the credit pool, its projections, and the alias.
 
 Shape drift is covered by ``test_contract.py`` against the frozen server
-fixture. This file covers behaviour the fixture can't state: that ``bonus``
-and its deprecated ``credits`` alias track each other whichever side of the
-API deploy we're talking to, and that reading the alias warns.
+fixture. This file covers behaviour the fixture can't state: that each field and its
+deprecated alias (``credits.extra`` / ``credits.bonus``, and a block's
+``bonus`` / ``credits``) track each other whichever server version we're
+talking to, and that reading an alias warns.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ POOL_PAYLOAD = {
         "total": 5200,
         "used": 130,
         "remaining": 5070,
+        "extra": 200,
         "bonus": 200,
         "resets_at": "2026-09-01T00:00:00+00:00",
     },
@@ -52,7 +54,7 @@ def test_credit_pool_and_price_list_parse():
     u = Usage.model_validate(POOL_PAYLOAD)
     assert isinstance(u.credits, UsageCredits)
     assert (u.credits.total, u.credits.used, u.credits.remaining) == (5200, 130, 5070)
-    assert u.credits.bonus == 200
+    assert u.credits.extra == 200
     assert u.credits.resets_at == "2026-09-01T00:00:00+00:00"
     assert u.costs == {"verify": 10, "assess": 1, "ask": 1, "extract": 0}
 
@@ -166,3 +168,33 @@ def test_pre_pool_server_leaves_the_balance_empty_not_wrong():
     assert u.credits.remaining == 0
     assert u.costs == {}
     assert u.verify.remaining == 95
+
+
+def test_reading_the_bonus_alias_warns_and_returns_extra():
+    c = UsageCredits.model_validate(POOL_PAYLOAD["credits"])
+    assert c.extra == 200
+    with pytest.deprecated_call(match="2026-11-29"):
+        assert c.bonus == 200
+
+
+def test_dumping_the_pool_keeps_bonus_and_does_not_warn():
+    """A `--json` dump is not a deprecated read, and the key stays on the wire
+    until 2026-11-29."""
+    c = UsageCredits.model_validate(POOL_PAYLOAD["credits"])
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        dumped = c.model_dump()
+    assert dumped["extra"] == dumped["bonus"] == 200
+
+
+def test_a_server_sending_only_bonus_still_fills_extra():
+    c = UsageCredits.model_validate({"total": 300, "used": 0, "remaining": 300, "bonus": 200})
+    assert c.extra == 200
+
+
+def test_a_server_sending_only_extra_still_fills_bonus():
+    """After 2026-11-29 the server sends only `extra`; `bonus` keeps reading."""
+    c = UsageCredits.model_validate({"total": 300, "used": 0, "remaining": 300, "extra": 200})
+    assert c.extra == 200
+    with pytest.deprecated_call():
+        assert c.bonus == 200

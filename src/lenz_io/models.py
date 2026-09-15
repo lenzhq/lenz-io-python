@@ -609,9 +609,10 @@ class UsageCredits(_Lax):
     (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
     ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
-    resets at ``resets_at``, and non-expiring ``bonus`` credits from grants and
+    resets at ``resets_at``, and non-expiring ``extra`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
-    and is what a call is checked against.
+    and is what a call is checked against. ``bonus`` is the deprecated old
+    name of ``extra``, the same number, removed on 2026-11-29.
 
     Servers predating the credit pool (before 2026-08-29) don't send this block
     at all, and it then reads as all-zero — check ``usage.credits.total``
@@ -621,8 +622,38 @@ class UsageCredits(_Lax):
     total: int = 0
     used: int = 0
     remaining: int = 0
-    bonus: int = 0
+    #: The non-expiring part of ``remaining``: credits from grants and top-ups,
+    #: spent only once the monthly allowance is gone.
+    extra: int = 0
+    #: **Deprecated** old name of :attr:`extra`, the same number, removed on
+    #: 2026-11-29. Reading it emits a ``DeprecationWarning``; it stays in
+    #: ``model_dump()`` output (unwarned) for as long as the server sends it.
+    bonus: int = Field(
+        default=0,
+        deprecated=(
+            "UsageCredits.bonus is deprecated and will be removed on 2026-11-29; "
+            "use `extra` — the same number, the non-expiring part of the balance."
+        ),
+    )
     resets_at: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _mirror_extra_and_bonus(cls, data: Any) -> Any:
+        """Keep ``extra`` and its deprecated old name in step, in both directions.
+
+        A server that has not started sending ``extra`` sends only ``bonus``;
+        a server after the 2026-11-29 removal sends only ``extra``. Mirroring
+        here means both attributes read correctly either way.
+        """
+        if not isinstance(data, dict):
+            return data
+        has_extra, has_bonus = data.get("extra") is not None, data.get("bonus") is not None
+        if has_bonus and not has_extra:
+            return {**data, "extra": data["bonus"]}
+        if has_extra and not has_bonus:
+            return {**data, "bonus": data["extra"]}
+        return data
 
 
 class UsageCapacity(_Lax):
@@ -651,9 +682,10 @@ class UsageCapacity(_Lax):
       every period (see :attr:`Usage.quota_resets_at`). ``quota_used`` is
       derived as ``quota_total - quota_remaining``, so ``quota_used +
       quota_remaining == quota_total`` always holds.
-    - ``bonus``    — the non-expiring top-up bucket, in this unit. A user
-      holding 5 bonus credits sees ``assess.bonus == 5`` and
-      ``verify.bonus == 0``: 5 credits does not buy a verification.
+    - ``bonus``    — :attr:`UsageCredits.extra`, the non-expiring part of the
+      balance, in this unit. A user holding 5 extra credits sees
+      ``assess.bonus == 5`` and ``verify.bonus == 0``: 5 credits does not
+      buy a verification.
 
     ``remaining`` is the usable capacity across both buckets.
     """

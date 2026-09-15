@@ -473,9 +473,9 @@ def _capacity_row(
     """One capability's slice of the credit pool: usable total + breakdown.
 
     ``remaining`` is how many of THESE calls the balance still buys (monthly
-    allowance + bonus, in this capability's unit); the dim tail shows the split
-    — ``used / total quota``, ``+N bonus`` when the account holds non-expiring
-    top-up credits, and the per-call price when the server states one.
+    allowance + extra credits, in this capability's unit); the dim tail shows
+    the split — ``used / total quota``, ``+N extra`` when the account holds
+    non-expiring extra credits, and the per-call price when the server states one.
 
     ``price_note`` appends a second price to that tail (today: the ``verify``
     row's ``depth="low"`` half price). It rides on the existing row instead of
@@ -484,7 +484,7 @@ def _capacity_row(
     balance."""
     detail = f"{cap.quota_used} / {cap.quota_total} quota"
     if cap.bonus:
-        detail += f" + {cap.bonus} bonus"
+        detail += f" + {cap.bonus} extra"
     if cost:
         detail += f" · {_count(cost, 'credit')} each"
         if price_note:
@@ -583,7 +583,7 @@ def _low_depth_note(u: Usage) -> str:
 def _has_credit_pool(u: Usage) -> bool:
     """Did this server report a credit pool at all? (False pre-2026-08-29.)"""
     c = u.credits
-    return bool(c.total or c.remaining or c.used or c.bonus or u.costs)
+    return bool(c.total or c.remaining or c.used or c.extra or u.costs)
 
 
 def _equivalent(u: Usage, capability: str) -> int:
