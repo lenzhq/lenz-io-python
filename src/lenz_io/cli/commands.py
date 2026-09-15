@@ -11,7 +11,7 @@ from urllib.parse import urlsplit, urlunsplit
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzError
+from lenz_io.errors import LenzError, LenzVerificationNotReadyError
 
 from ._run import execute, read_text_arg
 from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
@@ -146,6 +146,16 @@ def show(
         try:
             with out.working("Fetching report…"):
                 v = client.verifications.get(verification_id)
+        except LenzVerificationNotReadyError as exc:
+            # A task_id whose run has no result yet. The server's hint names a
+            # raw endpoint; on the command line the next step is `lenz status`.
+            state_text = "waiting for input" if exc.status == "needs_input" else "still running"
+            raise CLIError(
+                f"Check {verification_id!r} has no report yet: it is {state_text}.",
+                code="not_ready",
+                status=409,
+                fix=f"Run: lenz status {verification_id}",
+            ) from None
         except LenzError as exc:
             if exc.status_code == 404:
                 raise CLIError(

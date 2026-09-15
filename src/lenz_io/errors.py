@@ -264,19 +264,45 @@ class LenzNeedsInputError(LenzError):
 
 
 class LenzPipelineError(LenzError):
-    """``verify_and_wait`` saw a terminal ``failed`` state from the pipeline.
+    """A verification run ended in a terminal ``failed`` state.
+
+    Raised by ``verify_and_wait`` / ``wait``, and by ``verifications.get``
+    when it is handed the ``task_id`` of a run that failed (a 409 with
+    ``code`` ``verification_failed``).
 
     ``failure_class`` says WHY (closed set: ``upstream_unavailable`` |
     ``insufficient_evidence`` | ``invalid_input`` | ``cancelled`` |
     ``internal``); ``retryable`` is the derived signal — ``True`` means a
     transient provider-side exhaustion where resubmitting the same claim is
-    the right move. ``None`` when an older server didn't say.
+    the right move. ``None`` when an older server didn't say. ``hint`` is the
+    server's one sentence on what to send instead (e.g. for ``not_a_claim``);
+    ``""`` when it sent none.
     """
 
     task_id: str = ""
     failure_reason: str = ""
     failure_class: str = ""
     retryable: bool | None = None
+    hint: str = ""
+
+
+class LenzVerificationNotReadyError(LenzError):
+    """409 — ``verifications.get`` was handed the ``task_id`` of a run that is
+    still going, so there is no verification to return yet.
+
+    ``status`` is ``"processing"`` or ``"needs_input"``, ``task_id`` echoes the
+    id and ``hint`` is the server's one sentence on what to do next (also on
+    ``fix``). Wait for the run with ``client.wait(task_id)``, or poll
+    ``client.get_status(task_id)``, which also carries the options a
+    ``needs_input`` run offers.
+
+    A run that FAILED raises :class:`LenzPipelineError` instead: it will never
+    be ready.
+    """
+
+    task_id: str = ""
+    status: str = ""
+    hint: str = ""
 
 
 class LenzWebhookSignatureError(LenzError):
@@ -346,6 +372,29 @@ _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
 }
 
 
+# The two 409s ``GET /verifications/{id}`` answers when handed the task_id of a
+# run with no result yet. Keyed on ``code``, not the status: every other 409
+# (an Idempotency-Key still in flight, a select with nothing pending) stays a
+# plain LenzError, exactly as before.
+_VERIFICATION_409_CODES: dict[str, tuple[type[LenzError], str, str]] = {
+    "verification_not_ready": (
+        LenzVerificationNotReadyError,
+        "Verification not ready",
+        f"{_DOCS_BASE}/verify",
+    ),
+    "verification_failed": (
+        LenzPipelineError,
+        "Verification failed",
+        f"{_DOCS_BASE}/errors",
+    ),
+}
+
+
+def _opt_str(value: Any) -> str:
+    """String-typed only: anything else reads as absent, never as its repr."""
+    return value if isinstance(value, str) else ""
+
+
 def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
     if not raw:
         return {}
@@ -380,6 +429,8 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
+    elif status_code == 409 and code in _VERIFICATION_409_CODES:
+        cls, default_msg, doc_url = _VERIFICATION_409_CODES[code]
     elif status_code == 503 and code in UPSTREAM_503_CODES:
         cls, default_msg, doc_url = (
             LenzUpstreamUnavailableError,
@@ -405,6 +456,29 @@ def map_response_to_error(
 
     # Class-specific enrichment from the response body. Each is set on the
     # instance so callers can access via the documented attribute name.
+    if status_code == 409 and isinstance(err, (LenzVerificationNotReadyError, LenzPipelineError)):
+        # The generic 4xx advice ("retry; file an issue") is wrong for both:
+        # the server's own hint says what to do, with a class default behind it.
+        err.task_id = _opt_str(parsed.get("task_id"))
+        err.hint = _opt_str(parsed.get("hint"))
+        if isinstance(err, LenzVerificationNotReadyError):
+            err.status = _opt_str(parsed.get("status"))
+            err.fix = err.hint or "Wait for the run with client.wait(task_id), then read its result."
+        else:
+            err.failure_reason = _opt_str(parsed.get("failure_reason"))
+            err.failure_class = _opt_str(parsed.get("failure_class"))
+            # Only a real boolean is a retry signal, as in the wait path.
+            retryable = parsed.get("retryable")
+            err.retryable = retryable if isinstance(retryable, bool) else None
+            err.doc_url = _opt_str(parsed.get("docs_url")) or err.doc_url
+            if err.hint:
+                err.fix = err.hint
+            elif err.retryable:
+                # Same words as the wait path's LenzPipelineError (client.py).
+                err.fix = "Transient provider outage — retry the same request after a short wait."
+            else:
+                err.fix = "This run will not produce a result. Resubmit with a different claim."
+
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
         # the fallback for any proxy that strips the body.
@@ -517,6 +591,7 @@ __all__ = [
     "LenzRateLimitError",
     "LenzTimeoutError",
     "LenzValidationError",
+    "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
     "map_response_to_error",
 ]

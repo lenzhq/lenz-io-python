@@ -1379,6 +1379,40 @@ def test_show_404_is_friendly(monkeypatch):
     assert "lenz status <task_id>" in err["message"]
 
 
+@pytest.mark.parametrize(
+    ("status", "state_text"),
+    [("processing", "still running"), ("needs_input", "waiting for input")],
+)
+def test_show_on_a_task_id_with_no_result_points_at_lenz_status(monkeypatch, status, state_text):
+    from lenz_io.errors import LenzVerificationNotReadyError
+
+    task_id = "a" * 32
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            verifications=_FakeVerifications(
+                error=LenzVerificationNotReadyError(
+                    message="This check is still running.",
+                    status_code=409,
+                    code="verification_not_ready",
+                    status=status,
+                    task_id=task_id,
+                    hint=f"Poll GET /verify/status/{task_id} until it completes, then read its result.",
+                )
+            )
+        ),
+    )
+    result = runner.invoke(app, ["--json", "show", task_id])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "not_ready"
+    assert err["status"] == 409
+    assert state_text in err["message"]
+    # The command-line next step, not the raw HTTP endpoint the server names.
+    assert err["fix"] == f"Run: lenz status {task_id}"
+
+
 # ── login (was zero coverage) ────────────────────────────────────────────────
 def test_login_saves_flag_key(monkeypatch):
     result = runner.invoke(app, ["--api-key", "lenz_flagkey", "login"])

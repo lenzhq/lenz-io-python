@@ -14,11 +14,15 @@ from lenz_io.errors import (
     LenzAPIError,
     LenzAuthError,
     LenzError,
+    LenzPipelineError,
     LenzQuotaExceededError,
     LenzRateLimitError,
     LenzValidationError,
+    LenzVerificationNotReadyError,
     map_response_to_error,
 )
+
+_TASK_ID = "a" * 32
 
 
 def _body(payload: dict) -> bytes:
@@ -291,6 +295,83 @@ class TestMapResponseToError:
             {},
         )
         assert e.upgrade_url == "https://lenz.io/plans"
+
+    def test_409_verification_not_ready_is_its_own_error(self):
+        hint = f"Poll GET /verify/status/{_TASK_ID} until it completes, then read its result."
+        e = map_response_to_error(
+            409,
+            _body(
+                {
+                    "detail": "This check is still running.",
+                    "code": "verification_not_ready",
+                    "status": "processing",
+                    "task_id": _TASK_ID,
+                    "hint": hint,
+                }
+            ),
+            {"X-Request-ID": "rq9"},
+        )
+        assert isinstance(e, LenzVerificationNotReadyError)
+        assert e.status == "processing"
+        assert e.task_id == _TASK_ID
+        assert e.hint == hint
+        # The server's advice, not the generic "retry; file an issue".
+        assert e.fix == hint
+        assert e.code == "verification_not_ready"
+        assert e.message == "This check is still running."
+        assert e.request_id == "rq9"
+
+    def test_409_verification_not_ready_without_a_hint_still_says_what_to_do(self):
+        e = map_response_to_error(409, _body({"code": "verification_not_ready", "status": "needs_input"}), {})
+        assert isinstance(e, LenzVerificationNotReadyError)
+        assert e.status == "needs_input"
+        assert "client.wait" in e.fix
+
+    def test_409_verification_failed_is_a_pipeline_error_with_the_failure(self):
+        e = map_response_to_error(
+            409,
+            _body(
+                {
+                    "detail": "This check failed and has no result.",
+                    "code": "verification_failed",
+                    "status": "failed",
+                    "task_id": _TASK_ID,
+                    "hint": "Send one checkable statement.",
+                    "failure_reason": "not_a_claim",
+                    "failure_class": "invalid_input",
+                    "retryable": False,
+                    "docs_url": "https://lenz.io/docs/errors#invalid_input",
+                }
+            ),
+            {},
+        )
+        assert isinstance(e, LenzPipelineError)
+        assert e.task_id == _TASK_ID
+        assert e.failure_reason == "not_a_claim"
+        assert e.failure_class == "invalid_input"
+        assert e.retryable is False
+        assert e.hint == "Send one checkable statement."
+        assert e.fix == "Send one checkable statement."
+        assert e.doc_url == "https://lenz.io/docs/errors#invalid_input"
+
+    def test_409_verification_failed_without_a_hint_follows_retryable(self):
+        retryable = map_response_to_error(409, _body({"code": "verification_failed", "retryable": True}), {})
+        final = map_response_to_error(409, _body({"code": "verification_failed", "retryable": False}), {})
+        assert "retry the same request" in retryable.fix
+        assert "different claim" in final.fix
+
+    def test_409_verification_failed_reads_only_a_boolean_retryable(self):
+        e = map_response_to_error(409, _body({"code": "verification_failed", "retryable": "true"}), {})
+        assert isinstance(e, LenzPipelineError)
+        assert e.retryable is None
+
+    def test_other_409s_stay_a_plain_error(self):
+        for payload in (
+            {"detail": "A request with this Idempotency-Key is already in progress.", "task_id": _TASK_ID},
+            {"detail": "This task has no pending claim selection.", "code": "no_selection_pending"},
+        ):
+            e = map_response_to_error(409, _body(payload), {})
+            assert type(e) is LenzError, payload
 
     def test_5xx_maps_to_api_error(self):
         e = map_response_to_error(503, _body({"detail": "unavailable"}), {"x-request-id": "rq2"})

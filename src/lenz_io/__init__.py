@@ -50,6 +50,7 @@ from .errors import (
     LenzTimeoutError,
     LenzUpstreamUnavailableError,
     LenzValidationError,
+    LenzVerificationNotReadyError,
     LenzWebhookSignatureError,
 )
 from .models import (
@@ -135,6 +136,7 @@ __all__ = [
     "LenzTimeoutError",
     "LenzUpstreamUnavailableError",
     "LenzValidationError",
+    "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
     "LenzWebhooks",
     "LibraryItem",

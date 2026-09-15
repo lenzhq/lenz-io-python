@@ -23,6 +23,7 @@ from lenz_io.errors import (
     LenzRateLimitError,
     LenzTimeoutError,
     LenzValidationError,
+    LenzVerificationNotReadyError,
 )
 
 from .config import ConfigError
@@ -56,6 +57,7 @@ _CODE_BY_TYPE: dict[type, str] = {
     LenzTimeoutError: "timeout",
     LenzPipelineError: "pipeline_failed",
     LenzNeedsInputError: "needs_input",
+    LenzVerificationNotReadyError: "not_ready",
 }
 
 
