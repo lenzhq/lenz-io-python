@@ -224,6 +224,12 @@ class _VerificationsNamespace:
         Works without an API key — the server accepts optional Bearer:
         anon callers see any public + non-hidden claim, authed callers
         additionally see their own at any visibility / status.
+
+        With a key, also accepts the ``task_id`` that ``verify`` returned: a
+        completed run returns its verification. A run with no result yet
+        raises :class:`LenzVerificationNotReadyError` while it is running or
+        waiting for input, and :class:`LenzPipelineError` when it failed. To
+        wait for a run, use ``client.wait(task_id)``.
         """
         body = self._p._request(
             "GET",
@@ -956,6 +962,8 @@ class Lenz:
             # Coerce like the Node SDK: only a real boolean is a retry signal;
             # anything else (a stringy "true", a future enum) reads as unknown.
             retryable=status.retryable if isinstance(status.retryable, bool) else None,
+            # Parity with the Node SDK, which has always carried it.
+            hint=status.hint or "",
         )
 
     # ── account ──
