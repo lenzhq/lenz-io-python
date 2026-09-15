@@ -54,9 +54,9 @@ exit (an out-of-credits run reports `"code": "no_credits"` and adds
 ```text
 Lenz usage  (developer plan)
   5070 credits left  (≈ 507 verifications · 5070 assessments)
-  Verify:   507 left  (13 / 520 quota + 20 bonus · 10 credits each · 5 at depth "low")
-  Ask:      5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
-  Assess:   5070 left  (130 / 5200 quota + 200 bonus · 1 credit each)
+  Verify:   507 left  (13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low")
+  Ask:      5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
+  Assess:   5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
   Extract:  4 / 1000 today  (free — no credit charge)
   Credits reset in 3 days (Sep 1, 2026)
 ```
@@ -335,7 +335,7 @@ print(u.credits.remaining, "credits")  # the balance — the authoritative numbe
 print(u.costs["verify"], "credits per verification")  # the price list
 print(u.cost_options["verify"]["depth"]["low"], "at depth low")  # 5 — half price
 print(u.verify.remaining, "verifications left")  # a projection of that balance
-print(u.credits.bonus, "of them non-expiring")  # grants + top-ups
+print(u.credits.extra, "of them non-expiring")  # grants + top-ups
 ```
 
 The `verify` / `ask` / `assess` blocks are **projections** of the one balance
@@ -343,10 +343,14 @@ into each capability's unit — how many of those calls the remaining credits
 would buy — not separate allowances. Spending on any one of them moves all of
 them.
 
-Per-capability `bonus` is that capability's share of the non-expiring bucket,
-so 200 bonus credits read as `assess.bonus == 200` and `verify.bonus == 20`.
-The old `capability.credits` field is a deprecated alias of `bonus` (it never
-meant the pool); reading it emits a `DeprecationWarning` and it goes away on
+`credits.extra` is the non-expiring part of the balance. Its old name,
+`credits.bonus`, is deprecated: the same number, it emits a
+`DeprecationWarning` when read and goes away on 2026-11-29.
+
+Per-capability `bonus` is that capability's share of `credits.extra`, so 200
+extra credits read as `assess.bonus == 200` and `verify.bonus == 20`. The old
+`capability.credits` field is a deprecated alias of `bonus` (it never meant
+the pool); reading it emits a `DeprecationWarning` and it goes away on
 2026-11-29.
 
 ### Depth pricing

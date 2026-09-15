@@ -834,15 +834,15 @@ def test_usage_pretty_leads_with_the_credit_balance():
     assert "developer plan" in text
     assert "5070 credits left" in text
     assert "≈ 507 verifications · 5070 assessments" in text
-    # Per-capability rows beneath, in order, with the bonus + price tails.
+    # Per-capability rows beneath, in order, with the extra-credit + price tails.
     assert "507 left" in text
-    assert '13 / 520 quota + 20 bonus · 10 credits each · 5 at depth "low"' in text
+    assert '13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low"' in text
     assert "5070 left" in text
     assert "1 credit each" in text  # assess/ask are the unit — singular
     assert text.index("credits left") < text.index("Verify:")
     assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
-    # No bonus tail on Ask (bonus == 0 there)
-    assert "bonus" not in text.split("Ask:")[1].split("Assess:")[0]
+    # No extra-credit tail on Ask (its bonus == 0 there)
+    assert "extra" not in text.split("Ask:")[1].split("Assess:")[0]
     assert "4 / 1000 today" in text
     # Humanized: absolute date always present; the relative prefix ("in N days")
     # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
@@ -899,14 +899,15 @@ def test_usage_pretty_omits_a_low_depth_note_that_equals_the_standard_price():
 
 
 def test_usage_pretty_never_reads_the_deprecated_alias():
-    """The renderer must read `bonus`, not the deprecated `credits` alias —
-    otherwise every `lenz usage` run prints a DeprecationWarning."""
+    """The renderer must read `credits.extra` and each block's `bonus`, never the
+    deprecated `credits.bonus` or a block's `credits` alias — otherwise every
+    `lenz usage` run prints a DeprecationWarning."""
     import warnings
 
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
         text = _render_usage_text(_pool_usage())
-    assert "20 bonus" in text
+    assert "20 extra" in text
 
 
 def test_usage_pretty_pre_pool_server_has_no_balance_headline():
