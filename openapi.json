@@ -3,7 +3,7 @@
   "info": {
     "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 25, most check-worthy first, inputs to 50k chars); an optional `focus` narrows the list to the claims you care about. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict in ~5-10s. Sync, 1 credit.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on all of them via /assess (~5-10s, 3-model panel)\nquick = client.assess(text=llm_output)\n\n# 3. Escalate low-confidence claims to /verify (~90s, multi-model pipeline)\nfor c in quick.claims:\n    if c.confidence == \"low\":\n        deep = client.verify_and_wait(claim=c.claim)\n        print(deep.verdict, deep.lenz_score, deep.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (3 models: sources, logic, precision) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026). `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unresolvable ambiguity, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). New keys may be added to status and webhook bodies without notice \u2014 ignore keys you do not recognise. A failed `/verify` is not charged.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`sources`** \u2014 evidence with title, URL, snippet (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, and `POST /verify/batch` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key per call by default.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 20, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or up to a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on every claim in ONE call (typically 10-25s, 3-model panel):\n# a list of up to 20, one row per claim, in the order you sent them.\nquick = client.assess(claims=claims).claims\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Rows we ran out of time on are free and worth resending; the rest of the\n# Error rows (no_claim, framing_failed) want a different input.\nretry = [c.claim for c in quick if c.error_code == \"timeout\"]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.verdict != \"Error\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of four shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nThere is nothing to enable and no request field to set.\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed six-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026); on the webhook the same value rides in `error`. `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nOne of those reasons comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `not_a_claim` (the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`sources`** \u2014 evidence with title, URL and snippet: the passage around the quoted sentence(s), in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key for `verify_and_wait`; on other calls pass `idempotency_key` yourself.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. `/ask` keys are HTTP-only today: neither SDK, the n8n node nor the Zapier app sends the header on ask yet.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/api-terms"
   },
   "paths": {
@@ -137,7 +137,7 @@
             "description": "OK"
           }
         },
-        "description": "Submit a claim for verification.\n\nReturns a ``task_id`` immediately. Poll ``GET /verify/status/{task_id}``\nor supply ``webhook_url`` in the body for an asynchronous callback when\nthe pipeline terminates.\n\n**Duplicate submissions are collapsed.** With no ``Idempotency-Key``\nheader, the request body itself is the key: resubmitting an identical\nbody within 10 minutes returns the original ``task_id`` instead of\nstarting a second run. To run the same text twice on purpose, send your\nown ``Idempotency-Key`` \u2014 a supplied key always wins.\n\n**``depth``** selects how much research the check does. ``standard``\n(default) is the full pipeline. ``low`` searches fewer sources and skips\nthe recovery fetch tiers, so it comes back sooner \u2014 with less evidence\nbehind the verdict. Every step runs the same models either way; ``low`` is\na research-breadth lever, not a model downgrade.\n\n``low`` costs **half the credits**. You are charged for the depth you\nREQUESTED, so a ``low`` request answered from an existing ``standard``\ncheck still costs the low price. The completed result echoes the depth the\nverdict was actually produced with, which is why that field can read\n``standard`` on a ``low`` request \u2014 the echo describes the evidence, the\ncharge follows the request.",
+        "description": "Submit a claim for verification.\n\nThe claim goes in ``claim``. (``text`` is accepted as an alias \u2014 a\ndocument is ``text``, a claim is ``claim``; ``POST /extract`` is the\nendpoint that takes a document.)\n\nReturns a ``task_id`` immediately. Poll ``GET /verify/status/{task_id}``\nor supply ``webhook_url`` in the body for an asynchronous callback when\nthe pipeline terminates.\n\n**Duplicate submissions are collapsed.** With no ``Idempotency-Key``\nheader, the request body itself is the key: resubmitting an identical\nbody within 10 minutes returns the original ``task_id`` instead of\nstarting a second run. To run the same text twice on purpose, send your\nown ``Idempotency-Key`` \u2014 a supplied key always wins.\n\n**``depth``** selects how much work the check does. ``standard``\n(default) is the full pipeline. ``low`` searches fewer sources, skips\nthe recovery fetch tiers and stops the debate after the opening\narguments (no rebuttal round), so it comes back sooner \u2014 with less\nevidence behind the verdict. Framing, the adjudication panel and the\nconclusion run unchanged, and every step runs the same models either\nway; ``low`` is a volume lever, not a model downgrade.\n\n``low`` costs **half the credits**. You are charged for the depth you\nREQUESTED, so a ``low`` request answered from an existing ``standard``\ncheck still costs the low price. The completed result echoes the depth the\nverdict was actually produced with, which is why that field can read\n``standard`` on a ``low`` request \u2014 the echo describes the evidence, the\ncharge follows the request.",
         "tags": [
           "Verify"
         ],
@@ -178,7 +178,7 @@
             "description": "OK"
           }
         },
-        "description": "Fan-out wrapper around /verify for multi-claim LLM responses.\n\nBody: ``{claims: [{text, source_url?, webhook_url?, visibility?, depth?},\n...]}`` capped at 20 items. Server pre-checks total credits, then fans out N\nindependent pipelines \u2014 each with its own ``task_id`` and lifecycle.\nEach claim's webhook (per-item override, or batch ``webhook_url``, or\nper-key default) fires when its pipeline terminates. ``batch_id`` is\npurely for client-side correlation; the server doesn't gate anything\non it.\n\nOn a mid-fan-out enqueue error, the response includes the partial\n``items`` list and a ``partial: true`` flag. Per-claim credit spend\nhappens at each claim's normal persist time \u2014 claims that never\nenqueue are never charged.\n\n``depth`` works like ``visibility``: a batch-wide default that any item\ncan override. See ``POST /verify`` for what the values mean.",
+        "description": "Fan-out wrapper around /verify for multi-claim LLM responses.\n\nBody: ``{claims: [{text, source_url?, webhook_url?, visibility?, depth?},\n...]}`` capped at 20 items. Server pre-checks total credits, then fans out N\nindependent pipelines \u2014 each with its own ``task_id`` and lifecycle.\nEach claim's webhook (per-item override, or batch ``webhook_url``, or\nper-key default) fires when its pipeline terminates. ``batch_id`` is\npurely for client-side correlation; the server doesn't gate anything\non it.\n\nOn a mid-fan-out enqueue error, the response includes the partial\n``items`` list and a ``partial: true`` flag. Per-claim credit spend\nhappens at each claim's normal persist time \u2014 claims that never\nenqueue are never charged.\n\n``depth`` works like ``visibility``: a batch-wide default that any item\ncan override. See ``POST /verify`` for what the values mean.\n\nEach item carries its claim in ``claim`` (``text`` is accepted as an\nalias), plus the same optional fields as ``POST /verify``.",
         "tags": [
           "Verify"
         ],
@@ -226,7 +226,7 @@
             }
           }
         },
-        "description": "Submit text for fast verdict via 3-model panel (sync).\n\nReturns a per-atomic-claim verdict array in ~5-10 seconds. Cheaper\nand faster than ``POST /verify``; uses 3 frontier models in\nparallel and skips the research/debate/adjudication pipeline.\n\nSmart-routed: time-sensitive claims (events from the past ~6\nmonths) get a retrieval-grounded panel; evergreen claims get a\nparametric panel.\n\nCache lookup chain: existing Claim row first (deep /verify\nresult), then Assessment row (prior /assess verdict). Both honor a\n6h staleness rule for time-sensitive claims.",
+        "description": "Fast verdict via a 3-model panel (sync, ~10-25s).\n\nEscalation contract: a ``claims[].claim`` text POSTed back verbatim to\n``/verify`` within 24 hours is verified as-is \u2014 in normal operation it\ndoes not return ``needs_input`` and its wording is not rewritten.\n\nTwo input forms, one response shape::\n\n    claim / text  \u2500\u25ba ONE text. Intake reads it once and it is EXPANDED: every\n                     claim intake finds becomes a row (up to 20).\n    claims[]      \u2500\u25ba a LIST of up to 20 items, each one claim. One row per item, same order.\n                     A compound item is assessed on its primary reading and\n                     the rest is listed in that row's ``identified_claims``.\n\nThe list form is the batch rung of the extract \u2192 assess \u2192 verify ladder:\n``/extract`` emits up to 20 claims, and one ``/assess`` call answers all\nof them in about the time a single call takes, because every item is\nassessed in parallel.\n\nA verdict can be served from memory: a completed ``/verify`` of the exact\nsame claim text, or a prior ``/assess`` of it, within the last hour,\nwhichever account ran it \u2014 the verdict is a function of the input.\n``verification_url`` is set only when the caller could read that\nverification by id.\n\nBilling: 1 credit per row that carries a verdict; error rows are free; a\nduplicate item is a second row and a second credit (the panel runs once).",
         "tags": [
           "Assess"
         ],
@@ -248,11 +248,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nout = client.assess(text=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" for Spanish verdict text; verdict labels stay English.\nfor c in out.claims:\n    print(c.claim, \"\u2192\", c.verdict, c.confidence)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nout = client.assess(text=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" for Spanish verdict text; verdict labels stay English.\nfor c in out.claims:\n    print(c.claim, \"\u2192\", c.verdict, c.confidence)\n\n# Several claims at once: one row per item, same order (up to 20).\nrows = client.assess(claims=[\"Coffee causes cancer.\", \"The earth is flat.\"]).claims\nfor c in rows:\n    print(c.verdict if c.error_code is None else c.hint)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.assess({\n  text: \"Coffee causes cancer and the earth is flat.\",\n});\nout.claims.forEach(c => console.log(c.claim, \"\u2192\", c.verdict, c.confidence));\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.assess({\n  text: \"Coffee causes cancer and the earth is flat.\",\n});\nout.claims.forEach(c => console.log(c.claim, \"\u2192\", c.verdict, c.confidence));\n\n// Several claims at once: one row per item, same order (up to 20).\nconst rows = (await client.assess({\n  claims: [\"Coffee causes cancer.\", \"The earth is flat.\"],\n})).claims;\nrows.forEach(c => console.log(c.error_code ? c.hint : c.verdict));\n"
           }
         ]
       }
@@ -274,7 +274,7 @@
             }
           }
         },
-        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the standalone extraction step (`lenz.extraction`) \u2014 no research,\nno debate, no credit charge. Enumerates every distinct major factual\nclaim in the input (up to 25), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `not_a_claim` \u2014 the input contains no verifiable factual claim at all.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys. Keys with admin-set ``unlimited_extract=True`` bypass the cap.",
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the extraction step on its own \u2014 no research, no debate, no credit\ncharge. Enumerates every distinct major factual\nclaim in the input (up to 20), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `not_a_claim` \u2014 the input contains no verifiable factual claim at all.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\n`text` can also be a single public web page URL (http or https, nothing\nelse in the field). Lenz reads the page, or a YouTube video's transcript,\nand extracts the claims from its first 50,000 characters. Pages behind a\nlogin (Facebook, Instagram, Threads, LinkedIn) can't be read. A URL call\ntypically takes 5-40 seconds, so give it a 90-second client timeout (SDK\n2.13 and later do). A page that cannot be read answers 502\n`extraction_failed`; when the services that read pages are down, 503\n`upstream_unavailable` with `Retry-After`. Neither uses a unit of the\ndaily cap.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys.",
         "tags": [
           "Extract"
         ],
@@ -325,7 +325,7 @@
             "description": "OK"
           }
         },
-        "description": "Resolve a multi-claim / clarification interrupt by selecting one or more\nof the offered claims.\n\nEach selected claim fans out into its own independent pipeline (like\n``/verify/batch``), so the response is batch-shaped:\n``{batch_id, items: [{task_id, claim_text}], partial?}``. Poll each\n``task_id`` via ``GET /verify/status/{task_id}``.\n\nEvery selected text must match a claim that was offered in the prior\n``needs_input`` response (server-validated against the recorded offer set);\narbitrary client-asserted text is rejected.",
+        "description": "Resolve a multi-claim interrupt by selecting one or more of the offered\nclaims.\n\nEach selected claim fans out into its own independent pipeline (like\n``/verify/batch``), so the response is batch-shaped:\n``{batch_id, items: [{task_id, claim_text}], partial?}``. Poll each\n``task_id`` via ``GET /verify/status/{task_id}``.\n\nSend the chosen claims in ``claims`` (``texts`` is accepted as an alias).\nEvery selected claim must match one that was offered in the prior\n``needs_input`` response (server-validated against the recorded offer set);\narbitrary client-asserted text is rejected.",
         "tags": [
           "Verify"
         ],
@@ -363,10 +363,17 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusOut"
+                }
+              }
+            }
           }
         },
-        "description": "Poll processing status for a submitted verification.",
+        "description": "Poll processing status for a submitted verification.\n\nFour shapes keyed on ``status`` \u2014 ``processing``, ``needs_input``,\n``completed``, ``failed`` \u2014 and only the fields belonging to the current\none are present (see the response schema). A field that does not belong\nto the current shape is omitted rather than sent as null, so a client may\ntest for presence.",
         "tags": [
           "Verify"
         ],
@@ -378,11 +385,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nstatus = client.get_status(\"tsk_abc123\")\nprint(status.status)  # \"processing\" | \"needs_input\" | \"completed\" | \"failed\"\n"
+            "source": "from lenz_io import Lenz\n\n# typed progress needs lenz-io >= 2.11.0\nclient = Lenz(api_key=\"lenz_...\")\nstatus = client.get_status(\"tsk_abc123\")\n\n# \"processing\" | \"needs_input\" | \"completed\" | \"failed\"\nif status.status == \"processing\":\n    p = status.progress\n    print(f\"{p.step} \u2014 step {p.index} of {p.total}\")\nelif status.status == \"completed\":\n    print(status.result.verdict, status.result.key_finding)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst s = await client.getStatus(\"tsk_abc123\");\nconsole.log(s.status);\n"
+            "source": "// typed progress needs lenz-io >= 2.11.0\nimport { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst s = await client.getStatus(\"tsk_abc123\");\n\nif (s.status === \"processing\" && s.progress) {\n  const { step, index, total } = s.progress;\n  console.log(`${step} \u2014 step ${index} of ${total}`);\n} else if (s.status === \"completed\") {\n  console.log(s.result!.verdict, s.result!.key_finding);\n}\n"
           }
         ]
       }
@@ -404,7 +411,7 @@
             }
           }
         },
-        "description": "Return the calling account's credit balance and what it can still buy.\n\n**``credits`` is the balance.** One pool funds every billable capability,\nat the weights in ``costs`` \u2014 today ``verify`` 10, ``assess`` 1, ``ask`` 1.\nIt has two buckets: the monthly allowance for the current ``plan``, which\nresets at ``resets_at``, and non-expiring ``bonus`` credits from grants and\ntop-ups, spent only once the allowance is gone. ``remaining`` is the sum,\nand is what a call is actually checked against.\n\n``plan`` is the stable slug to branch on; ``plan_label`` is the same tier\nas display copy (\"Developer\"). Two fields rather than one humanised\nstring, so a reworded label cannot break a client comparing tiers.\n\n**The per-capability blocks are deprecated.** ``verify`` / ``ask`` /\n``assess`` are **projections** of that one pool into each capability's own\nunit \u2014 \"how many of these could I still make\" \u2014 not separate allowances.\nSpending on one moves all of them, and they are floor divisions, so a\nverify block ticks once per 10 credits spent anywhere.\n\nThey go on **2026-11-29**, together with the per-block ``credits`` alias.\nDerive them instead::\n\n    remaining = credits.remaining // costs[capability]\n    total     = credits.total     // costs[capability]\n    used      = total - remaining\n\nTwo capabilities at the same price emit identical blocks \u2014 ``ask`` and\n``assess`` are both 1 credit \u2014 which is the clearest sign the shape\ndescribes an allowance that no longer exists.\n\n``bonus`` in each block is the bonus bucket in that capability's unit. The\nolder key ``credits`` is its deprecated alias, on the same date.\n\n``costs`` is one entry per capability at its DEFAULT price. Prices that\ndepend on a request parameter live in ``cost_options``, nested capability\n\u2192 parameter \u2192 value \u2014 ``{\"verify\": {\"depth\": {\"standard\": 10, \"low\": 5}}}``.\nTwo maps rather than a flat one with a ``verify_low`` key, so a future\ntuning parameter nests instead of adding an entry that reads like a fifth\ncapability. Every capability in ``cost_options`` also appears in ``costs``\nat its default, so reading only ``costs`` is always correct.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and is bounded by\na per-account daily fair-use cap instead, reported separately here and\nrejected with 429 rather than 402.",
+        "description": "Return the calling account's credit balance and what it can still buy.\n\n**``credits`` is the balance.** One pool funds every billable capability,\nat the weights in ``costs`` \u2014 today ``verify`` 10, ``assess`` 1, ``ask`` 1.\nIt has two buckets: the monthly allowance for the current ``plan``, which\nresets at ``resets_at``, and non-expiring ``bonus`` credits from grants and\ntop-ups, spent only once the allowance is gone. ``remaining`` is the sum,\nand is what a call is actually checked against.\n\n``plan`` is the stable slug to branch on; ``plan_label`` is the same tier\nas display copy (\"Pro\"). Two fields rather than one humanised\nstring, so a reworded label cannot break a client comparing tiers.\n\n**The per-capability blocks are deprecated.** ``verify`` / ``ask`` /\n``assess`` are **projections** of that one pool into each capability's own\nunit \u2014 \"how many of these could I still make\" \u2014 not separate allowances.\nSpending on one moves all of them, and they are floor divisions, so a\nverify block ticks once per 10 credits spent anywhere.\n\nThey go on **2026-11-29**, together with the per-block ``credits`` alias.\nDerive them instead::\n\n    remaining = credits.remaining // costs[capability]\n    total     = credits.total     // costs[capability]\n    used      = total - remaining\n\nTwo capabilities at the same price emit identical blocks \u2014 ``ask`` and\n``assess`` are both 1 credit \u2014 which is the clearest sign the shape\ndescribes an allowance that no longer exists.\n\n``bonus`` in each block is the bonus bucket in that capability's unit. The\nolder key ``credits`` is its deprecated alias, on the same date.\n\n``costs`` is one entry per capability at its DEFAULT price. Prices that\ndepend on a request parameter live in ``cost_options``, nested capability\n\u2192 parameter \u2192 value \u2014 ``{\"verify\": {\"depth\": {\"standard\": 10, \"low\": 5}}}``.\nTwo maps rather than a flat one with a ``verify_low`` key, so a future\ntuning parameter nests instead of adding an entry that reads like a fifth\ncapability. Every capability in ``cost_options`` also appears in ``costs``\nat its default, so reading only ``costs`` is always correct.\n\n``extract`` is free at the pool (``costs.extract`` is 0) and is bounded by\na per-account daily fair-use cap instead, reported separately here and\nrejected with 429 rather than 402.",
         "tags": [
           "Account"
         ],
@@ -501,10 +508,17 @@
         ],
         "responses": {
           "200": {
-            "description": "OK"
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimDetailOut"
+                }
+              }
+            }
           }
         },
-        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any listed public claim (``visibility='public'`` AND\n  ``status`` in {pending, published}) PLUS any API ``unlisted`` claim\n  (``visibility='public'``, ``status='hidden'``, ``source_channel='api'``):\n  unlisted is readable by verification_id, just never surfaced in listings.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private claims, and non-API hidden public claims (retracted / pre-screen),\n  owned by someone else return 404.",
+        "description": "Retrieve the full verification report for a single claim.\n\nReturns the verdict, citations, and (under ``audit``) the panel\nreasoning, debate transcript, and assessments. Same shape as the\n/verify webhook payload and the deprecated /library/{id} endpoint\nthis merger replaces.\n\nAuthorization model (optional Bearer):\n- Anon callers see any listed public claim (``visibility='public'`` AND\n  ``status`` in {pending, published}) PLUS any API ``unlisted`` claim\n  (``visibility='public'``, ``status='hidden'``, ``source_channel='api'``):\n  unlisted is readable by verification_id, just never surfaced in listings.\n- Authed callers additionally see their own claims regardless of\n  visibility or status.\n- Private claims, and non-API hidden public claims (retracted / pre-screen),\n  owned by someone else return 404.\n\nAlso accepts a **task_id** in place of a verification_id: a\ncompleted run reads exactly as its verification_id would, a running one\ngets the ``/verify/status`` body, and an unrecognised task-shaped id gets\na 404 with a ``hint`` at ``GET /verify/status/{task_id}`` instead of a\nbare one.",
         "tags": [
           "Verifications"
         ]
@@ -528,7 +542,38 @@
             "description": "OK"
           }
         },
-        "description": "Delete an owned verification.",
+        "description": "Delete an owned verification.\n\nDeleting a warranted verification keeps its certificate and warranty; the\ncertificate stays at its `certificate_url`.",
+        "tags": [
+          "Verifications"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/verifications/{verification_id}/certificate": {
+      "get": {
+        "operationId": "getCertificate",
+        "summary": "Get Certificate",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "verification_id",
+            "schema": {
+              "title": "Verification Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "description": "Download the warranty certificate for a covered verification.\n\nResolved by (verification, ACCOUNT), not by verification alone: one cached\nanalysis can have several holders, each with their own certificate, their\nown cap and their own link. Returning \"the certificate for this\nverification\" would hand one customer another customer's document.\n\nByte-identical to ``/certificate/<certificate_id>.json``. A withdrawn\ncertificate is still served \u2014 it is the record of what was warranted, and\nthe withdrawal date is on it.\n\nServed whether or not new certificates are currently being issued: an\nissued certificate stands.",
         "tags": [
           "Verifications"
         ],
@@ -576,7 +621,7 @@
             }
           }
         },
-        "description": "List public verifications semantically related to this one.\n\nReturns the closest public-library claims by pgvector ANN distance\n(cosine, 0 = identical). Excludes the verification itself, near-\nduplicates (distance < 0.2), and editorially-hidden claims. Empty\nlist when the verification has no embedding yet (early pipeline) or\nwhen no claim is close enough.\n\nAuthorization model (optional Bearer) \u2014 identical to\n``get_verification``: anon callers reach listed public claims plus\nAPI-origin unlisted ones; a valid key additionally unlocks the\ncaller's own claims. Results are always drawn from the public\nlibrary only, so keyless access exposes nothing new.\n``limit`` is clamped to [1, 10].",
+        "description": "List public verifications semantically related to this one.\n\nReturns the closest public-library claims by semantic similarity\n(cosine distance, 0 = identical). Excludes the verification itself,\nnear-duplicates (distance < 0.2), and editorially-hidden claims. Empty\nlist when the verification has not been indexed yet (that happens\nshortly after it completes) or when no claim is close enough.\n\nAuthorization model (optional Bearer) \u2014 identical to\n``GET /verifications/{verification_id}``: anon callers reach listed public claims plus\nAPI-origin unlisted ones; a valid key additionally unlocks the\ncaller's own claims. Results are always drawn from the public\nlibrary only, so keyless access exposes nothing new.\n``limit`` is clamped to [1, 10].",
         "tags": [
           "Verifications"
         ],
@@ -837,7 +882,21 @@
       },
       "VerifyIn": {
         "properties": {
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The claim to check. A statement in natural language; several claims in one string are split and handled separately.",
+            "title": "Claim"
+          },
           "text": {
+            "default": "",
+            "description": "Accepted alias for `claim`. Send one or the other; `text` is used when it has content.",
             "title": "Text",
             "type": "string"
           },
@@ -875,9 +934,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "text"
-        ],
         "title": "VerifyIn",
         "type": "object"
       },
@@ -927,7 +983,21 @@
       },
       "VerifyBatchItemIn": {
         "properties": {
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The claim to check. A statement in natural language; several claims in one string are split and handled separately.",
+            "title": "Claim"
+          },
           "text": {
+            "default": "",
+            "description": "Accepted alias for `claim`. Send one or the other; `text` is used when it has content.",
             "title": "Text",
             "type": "string"
           },
@@ -977,14 +1047,11 @@
             "title": "Depth"
           }
         },
-        "required": [
-          "text"
-        ],
         "title": "VerifyBatchItemIn",
         "type": "object"
       },
       "AssessClaimOut": {
-        "description": "Per-claim entry inside an ``AssessOut.claims`` list.\n\nDeliberately minimal \u2014 no model_votes, no panel identity, no\nsource/cache-provenance, no internal confidence label. The\n``verification_url`` is the SDK's signal that a deep payload exists\nfor this claim; otherwise this row is the entire answer.\n\nSame field vocabulary as ``ClaimDetailOut`` (``claim``, ``verdict``,\n``confidence``); /assess just omits ``lenz_score`` (no deep score\nis computed at this tier). ``language`` echoes the requested\noutput language so SDK consumers can route per-claim text in\nbatch responses where items may have different languages.",
+        "description": "Per-claim entry inside an ``AssessOut.claims`` list.\n\nA verdict row is the entire answer for that claim. ``verification_url``\nis set when a full verification of the same claim exists and the caller\ncan read it; follow it for sources, reasoning and the deep score.\n\nSame field vocabulary as ``ClaimDetailOut`` (``claim``, ``verdict``,\n``confidence``); /assess omits ``lenz_score``, which only a full\nverification computes. ``language`` echoes the output language so a\nbatch caller can route per-claim text when items differ in language.\n\nThe three trailing keys are emitted on EVERY row (empty on a plain\nverdict row) so the shape is one shape: ``error_code`` says why a\n``verdict: Error`` row has no verdict (``no_claim`` | ``framing_failed`` |\n``upstream_unavailable`` | ``timeout`` \u2014 an OPEN set: branch on the values\nyou know and fall through on the rest, because a new one can be added\nwithout a major version. ``timeout`` means the call ran out of its time\nbudget on that item; it is free and worth resending, unlike\n``framing_failed``, which is deterministic). A vague item is assessed on\nits most likely reading, which ``claim`` carries; ``candidate_claims`` is\nalways ``[]`` and is kept only so released SDK models keep parsing.\n``identified_claims`` lists the OTHER claims found in a list item that\nwere NOT assessed (the list form assesses one claim per item, the\nprimary). ``hint`` is one sentence on what to send next \u2014 set on every\nError row and on a verdict row whose item held more claims than the one\nassessed; ``None`` on a plain verdict row. On an Error row ``claim``\nechoes the item as submitted.",
         "properties": {
           "claim": {
             "title": "Claim",
@@ -1012,6 +1079,44 @@
               }
             ],
             "title": "Verification Url"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "candidate_claims": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Candidate Claims",
+            "type": "array"
+          },
+          "identified_claims": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Identified Claims",
+            "type": "array"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
           }
         },
         "required": [
@@ -1024,7 +1129,7 @@
         "type": "object"
       },
       "AssessOut": {
-        "description": "Response body for ``POST /assess``.\n\n``error_code`` is the machine-readable companion to ``error`` so callers\ncan distinguish a genuine non-claim (``'no_claim'``) from an ambiguous\nclaim that framing could disambiguate (``'ambiguous'``). For the ambiguous\ncase ``candidate_claims`` carries framing's specific readings so a caller\ncan pick one and re-assess \u2014 mirroring how ``/verify`` surfaces a\n``clarification_required`` interrupt. Both fields are absent/empty on the\nhappy path; existing callers that only read ``claims``/``error`` are\nunaffected.",
+        "description": "Response body for ``POST /assess``.\n\n``error_code`` is the machine-readable companion to ``error``: ``'no_claim'``\nwhen the text holds no checkable claim (a vague input is assessed on its\nmost likely reading instead). ``candidate_claims`` is always ``[]`` and\nis kept only so released SDK models keep parsing. Both are absent/empty\non the happy path.",
         "properties": {
           "claims": {
             "default": [],
@@ -1069,11 +1174,40 @@
         "type": "object"
       },
       "AssessIn": {
-        "description": "Request body for ``POST /assess``.",
+        "description": "Request body for ``POST /assess``.\n\nTwo forms. ``claim`` (or its alias ``text``) is ONE text: read once and\nexpanded, so every claim found in it becomes a row (up to 20, one credit\neach). ``claims`` is a list\nof up to 20 items: exactly one row per item, in order \u2014 the batch rung of\nthe extract \u2192 assess \u2192 verify ladder. Sending both is a 422.",
         "properties": {
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The claim to check. A statement in natural language; several claims in one string are split and handled separately.",
+            "title": "Claim"
+          },
           "text": {
+            "default": "",
+            "description": "Accepted alias for `claim`. Send one or the other; `text` is used when it has content.",
             "title": "Text",
             "type": "string"
+          },
+          "claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A list of up to 20 \u2014 one verdict row each, in order. Use this for the claims `/extract` returned; each item is one claim (\u22642000 chars), not a document. Mutually exclusive with `claim`.",
+            "title": "Claims"
           },
           "language": {
             "default": "",
@@ -1081,9 +1215,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "text"
-        ],
         "title": "AssessIn",
         "type": "object"
       },
@@ -1167,7 +1298,7 @@
       "ExtractIn": {
         "properties": {
           "text": {
-            "description": "The document to extract claims from. Up to 50,000 characters; longer input is truncated.",
+            "description": "The document to extract claims from. Up to 50,000 characters; longer input is truncated. Or a single public web page URL (http or https, nothing else in the field): Lenz reads the page, or a YouTube video's transcript, and extracts the claims from its first 50,000 characters.",
             "title": "Text",
             "type": "string"
           },
@@ -1193,7 +1324,23 @@
       },
       "SelectIn": {
         "properties": {
+          "claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The claims to verify, as strings: the `text` of each entry in the status response's `claims`, copied verbatim.",
+            "title": "Claims"
+          },
           "texts": {
+            "description": "Accepted alias for `claims`. Send one or the other; `texts` is used when it has content.",
             "items": {
               "type": "string"
             },
@@ -1201,10 +1348,671 @@
             "type": "array"
           }
         },
-        "required": [
-          "texts"
-        ],
         "title": "SelectIn",
+        "type": "object"
+      },
+      "AssessmentOut": {
+        "description": "An adjudicator's individual assessment. Nested under ``audit``.\n\nCurrent verifications carry three independent reviewers (``Reviewer A``\nto ``Reviewer C``), each assigned a model from a different vendor (after a\nprovider failure a reviewer can run on another vendor's model), and two\nmore (``Reviewer D``, ``Reviewer E``) when those three disagree, all\nrunning the same checks over the evidence; ``warnings`` carries the source\nissues, evidence gaps and precision issues that reviewer found, in one\nlist. ``panelist_name`` is a display value, not a stable key.\nVerifications from before the change carry the specialist panelists\ninstead, one flag category each: logical fallacies (Logic Examiner),\nprecision issues (Precision Analyst), weakest sources (Source Auditor)\nand, before 2026-06, missing context (Context Analyst).",
+        "properties": {
+          "panelist_name": {
+            "default": "",
+            "title": "Panelist Name",
+            "type": "string"
+          },
+          "focus_area": {
+            "default": "",
+            "title": "Focus Area",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "reasoning": {
+            "default": "",
+            "title": "Reasoning",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "title": "AssessmentOut",
+        "type": "object"
+      },
+      "AuditOut": {
+        "description": "Audit / explainability block \u2014 for callers that need to show their work.\n\n``panel_agreement`` is derived from the panel: ``unanimous`` (all agree),\n``majority`` (score spread <= 2), or ``split`` \u2014 over every reviewer that\nvoted, so a panel that called in Reviewers D and E is counted whole.",
+        "properties": {
+          "adjudication_summary": {
+            "default": "",
+            "title": "Adjudication Summary",
+            "type": "string"
+          },
+          "assessments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AssessmentOut"
+            },
+            "title": "Assessments",
+            "type": "array"
+          },
+          "debate_pro": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DebateSideOut"
+              }
+            ],
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "debate_con": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DebateSideOut"
+              }
+            ],
+            "default": {
+              "role": "",
+              "argument": "",
+              "rebuttal": ""
+            }
+          },
+          "panel_agreement": {
+            "default": "",
+            "title": "Panel Agreement",
+            "type": "string"
+          }
+        },
+        "title": "AuditOut",
+        "type": "object"
+      },
+      "CandidateClaimOut": {
+        "description": "A single candidate claim surfaced when the framing detects multiple\ndistinct claims in the submitted text. The caller picks one via\n``POST /verify/{task_id}/select``.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "CandidateClaimOut",
+        "type": "object"
+      },
+      "ClaimDetailOut": {
+        "description": "Full verification report.\n\nSlim top-level (verdict + confidence + lenz_score + sources). Audit\ndetail (panel reasoning, debate, individual panelist assessments)\nlives under ``audit``.\n\nSame field vocabulary as ``VerificationListItemOut`` (list view) and\n``AssessClaimOut`` (fast verdict). A consumer that branches on\n``verdict`` or ``confidence`` reads the same field name regardless\nof which endpoint produced the payload.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "visibility": {
+            "default": "private",
+            "title": "Visibility",
+            "type": "string"
+          },
+          "depth": {
+            "default": "standard",
+            "title": "Depth",
+            "type": "string"
+          },
+          "domain": {
+            "default": "",
+            "title": "Domain",
+            "type": "string"
+          },
+          "entities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/EntityRef"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "presumed_intent": {
+            "default": "",
+            "title": "Presumed Intent",
+            "type": "string"
+          },
+          "verdict": {
+            "default": "",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lenz_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lenz Score"
+          },
+          "key_finding": {
+            "default": "",
+            "title": "Key Finding",
+            "type": "string"
+          },
+          "executive_summary": {
+            "default": "",
+            "title": "Executive Summary",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "audit": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AuditOut"
+              }
+            ],
+            "default": {
+              "adjudication_summary": "",
+              "assessments": [],
+              "debate_pro": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "debate_con": {
+                "argument": "",
+                "rebuttal": "",
+                "role": ""
+              },
+              "panel_agreement": ""
+            }
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "language"
+        ],
+        "title": "ClaimDetailOut",
+        "type": "object"
+      },
+      "CoverageOut": {
+        "description": "Whether this verdict carries a warranty, and if not, why not.\n\nPresent only when covered verification is enabled. It describes the pair\n(this account, this analysis), not the analysis alone: two accounts can\nhold two certificates over one cached verdict, so the block one customer\nsees is never the block another sees.\n\n``reasons`` is empty exactly when ``status`` is not ``uncovered``. The\nvocabulary is closed and deliberately smaller than the internal gate's:\n``plan`` and ``depth`` are actionable, ``verdict`` is a product rule\ncallers design around, ``quality`` covers everything a caller can neither\nact on nor define, and ``withdrawn`` / ``issue_failed`` are statements\nabout Lenz rather than about the caller's claim.",
+        "properties": {
+          "status": {
+            "default": "uncovered",
+            "enum": [
+              "covered",
+              "uncovered",
+              "pending_timestamp"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "enum": [
+                "plan",
+                "depth",
+                "verdict",
+                "quality",
+                "withdrawn",
+                "issue_failed"
+              ],
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "certificate_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Id"
+          },
+          "certificate_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Url"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "currency": {
+            "default": "",
+            "title": "Currency",
+            "type": "string"
+          },
+          "cap": {
+            "default": 0,
+            "title": "Cap",
+            "type": "integer"
+          },
+          "aggregate": {
+            "default": 0,
+            "title": "Aggregate",
+            "type": "integer"
+          },
+          "terms_version": {
+            "default": "",
+            "title": "Terms Version",
+            "type": "string"
+          }
+        },
+        "title": "CoverageOut",
+        "type": "object"
+      },
+      "DebateSideOut": {
+        "description": "One side of the debate (pro or con). Nested under ``audit``.",
+        "properties": {
+          "role": {
+            "default": "",
+            "title": "Role",
+            "type": "string"
+          },
+          "argument": {
+            "default": "",
+            "title": "Argument",
+            "type": "string"
+          },
+          "rebuttal": {
+            "default": "",
+            "title": "Rebuttal",
+            "type": "string"
+          }
+        },
+        "title": "DebateSideOut",
+        "type": "object"
+      },
+      "ProgressOut": {
+        "description": "Where a running verification has got to. Advisory \u2014 never results.\n\n``step`` is a closed set, so it is safe to switch on. ``index`` is the\n1-based stage position (0 while ``starting``) out of ``total``; read\n``total`` off the response rather than hard-coding it, since stages may\nbe added.\n\n``index`` is stage POSITION, not elapsed work: the stages are uneven, so\na client rendering it as a bar will see it sit on ``research`` for roughly\nhalf the run. ``elapsed_seconds`` is a measurement of how long the run has\nbeen going, never an estimate of what is left.",
+        "properties": {
+          "step": {
+            "enum": [
+              "starting",
+              "framing",
+              "research",
+              "debate",
+              "adjudication",
+              "conclusion"
+            ],
+            "title": "Step",
+            "type": "string"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "elapsed_seconds": {
+            "title": "Elapsed Seconds",
+            "type": "integer"
+          },
+          "poll_after_seconds": {
+            "title": "Poll After Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "step",
+          "index",
+          "total",
+          "elapsed_seconds",
+          "poll_after_seconds"
+        ],
+        "title": "ProgressOut",
+        "type": "object"
+      },
+      "SimilarVerificationOut": {
+        "description": "An existing public verification that semantically resembles a\ngiven claim text.\n\nSurfaced in two places:\n\n* When duplicate detection finds a close-enough match on a fresh\n  `/verify` (the ``duplicate_found`` needs-input branch).\n* As an item in ``GET /verifications/{id}/related`` for callers\n  surfacing \"see also\" references next to a verdict.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "verdict": {
+            "default": "",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lenz_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lenz Score"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "distance"
+        ],
+        "title": "SimilarVerificationOut",
+        "type": "object"
+      },
+      "SourceOut": {
+        "description": "A research source used to evaluate a claim.\n\n``date`` is the source article's publication date (a source-level\nattribute, not a Lenz API event time \u2014 so it's not renamed to\n``published_at``).",
+        "properties": {
+          "source_name": {
+            "default": "",
+            "title": "Source Name",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "description": "The passage around the quoted sentence(s) on the source page, in the page's own language: its paragraph plus the paragraph before and after, with `\u2026` where a paragraph was cut and ` \u2026 ` between separate passages; may contain line breaks.",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "date": {
+            "default": "",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "title": "SourceOut",
+        "type": "object"
+      },
+      "StatusOut": {
+        "description": "Body of ``GET /verify/status/{task_id}``.\n\nFour shapes keyed on ``status``, and only the fields belonging to the\ncurrent one are present \u2014 ``processing`` carries ``progress``,\n``needs_input`` carries ``reason`` plus one of ``claims`` /\n``similar_claims``, ``completed`` carries ``result``,\nand ``failed`` carries the error block. Branch on ``status`` and read\nthe fields for that branch; absent is meaningful, so do not treat a\nmissing key as an empty one.\n\n``task_id`` is echoed on every shape, so a caller polling several\nverifications in one loop can tell the replies apart without threading\nthe id through their own call site.",
+        "properties": {
+          "status": {
+            "enum": [
+              "processing",
+              "needs_input",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProgressOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "multi_claim",
+                  "duplicate_found"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CandidateClaimOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claims"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
+          "similar_claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SimilarVerificationOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Similar Claims"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClaimDetailOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "failure_class": {
+            "anyOf": [
+              {
+                "enum": [
+                  "upstream_unavailable",
+                  "insufficient_evidence",
+                  "invalid_input",
+                  "cancelled",
+                  "internal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Class"
+          },
+          "retryable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retryable"
+          },
+          "docs_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Docs Url"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          }
+        },
+        "required": [
+          "status",
+          "task_id"
+        ],
+        "title": "StatusOut",
         "type": "object"
       },
       "MeUsageCreditsOut": {
@@ -1396,59 +2204,10 @@
         "title": "RelatedVerificationsOut",
         "type": "object"
       },
-      "SimilarVerificationOut": {
-        "description": "An existing public verification that semantically resembles a\ngiven claim text.\n\nSurfaced in two places:\n\n* When duplicate detection finds a close-enough match on a fresh\n  `/verify` (the ``duplicate_found`` needs-input branch).\n* As an item in ``GET /verifications/{id}/related`` for callers\n  surfacing \"see also\" references next to a verdict.",
-        "properties": {
-          "verification_id": {
-            "title": "Verification Id",
-            "type": "string"
-          },
-          "claim": {
-            "title": "Claim",
-            "type": "string"
-          },
-          "verdict": {
-            "default": "",
-            "title": "Verdict",
-            "type": "string"
-          },
-          "confidence": {
-            "default": "low",
-            "title": "Confidence",
-            "type": "string"
-          },
-          "lenz_score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lenz Score"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "distance": {
-            "title": "Distance",
-            "type": "number"
-          }
-        },
-        "required": [
-          "verification_id",
-          "claim",
-          "distance"
-        ],
-        "title": "SimilarVerificationOut",
-        "type": "object"
-      },
       "AskIn": {
         "properties": {
           "message": {
+            "description": "The follow-up question. Maximum 500 characters.",
             "title": "Message",
             "type": "string"
           },
@@ -1464,267 +2223,8 @@
         "title": "AskIn",
         "type": "object"
       },
-      "AssessmentOut": {
-        "description": "An adjudicator's individual assessment. Nested under ``audit``.\n\n``warnings`` carries the panelist-specific flags (logical fallacies for\nthe Logic Examiner, precision issues for the Precision Analyst, weakest\nsources for the Source Auditor; verifications from before 2026-06 carry\nmissing context for the retired Context Analyst). The kind is implicit\nin ``focus_area``; every panelist emits exactly one category.",
-        "properties": {
-          "panelist_name": {
-            "default": "",
-            "title": "Panelist Name",
-            "type": "string"
-          },
-          "focus_area": {
-            "default": "",
-            "title": "Focus Area",
-            "type": "string"
-          },
-          "score": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Score"
-          },
-          "reasoning": {
-            "default": "",
-            "title": "Reasoning",
-            "type": "string"
-          },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          }
-        },
-        "title": "AssessmentOut",
-        "type": "object"
-      },
-      "AuditOut": {
-        "description": "Audit / explainability block \u2014 for callers that need to show their work.\n\n``panel_agreement`` is derived from the panel: ``unanimous`` (all agree),\n``majority`` (score spread <= 2), or ``split``.",
-        "properties": {
-          "adjudication_summary": {
-            "default": "",
-            "title": "Adjudication Summary",
-            "type": "string"
-          },
-          "assessments": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/AssessmentOut"
-            },
-            "title": "Assessments",
-            "type": "array"
-          },
-          "debate_pro": {
-            "$ref": "#/components/schemas/DebateSideOut",
-            "default": {
-              "role": "",
-              "argument": "",
-              "rebuttal": ""
-            }
-          },
-          "debate_con": {
-            "$ref": "#/components/schemas/DebateSideOut",
-            "default": {
-              "role": "",
-              "argument": "",
-              "rebuttal": ""
-            }
-          },
-          "panel_agreement": {
-            "default": "",
-            "title": "Panel Agreement",
-            "type": "string"
-          }
-        },
-        "title": "AuditOut",
-        "type": "object"
-      },
-      "CandidateClaimOut": {
-        "description": "A single candidate claim surfaced when the framing detects multiple\ndistinct claims in the submitted text. The caller picks one via\n``POST /verify/{task_id}/select``.",
-        "properties": {
-          "text": {
-            "title": "Text",
-            "type": "string"
-          },
-          "domain": {
-            "default": "",
-            "title": "Domain",
-            "type": "string"
-          }
-        },
-        "required": [
-          "text"
-        ],
-        "title": "CandidateClaimOut",
-        "type": "object"
-      },
-      "ClaimDetailOut": {
-        "description": "Full verification report.\n\nSlim top-level (verdict + confidence + lenz_score + sources). Audit\ndetail (panel reasoning, debate, individual panelist assessments)\nlives under ``audit``.\n\nSame field vocabulary as ``VerificationListItemOut`` (list view) and\n``AssessClaimOut`` (fast verdict). A consumer that branches on\n``verdict`` or ``confidence`` reads the same field name regardless\nof which endpoint produced the payload.",
-        "properties": {
-          "verification_id": {
-            "title": "Verification Id",
-            "type": "string"
-          },
-          "claim": {
-            "title": "Claim",
-            "type": "string"
-          },
-          "visibility": {
-            "default": "private",
-            "title": "Visibility",
-            "type": "string"
-          },
-          "depth": {
-            "default": "standard",
-            "title": "Depth",
-            "type": "string"
-          },
-          "domain": {
-            "default": "",
-            "title": "Domain",
-            "type": "string"
-          },
-          "entities": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/EntityRef"
-            },
-            "title": "Entities",
-            "type": "array"
-          },
-          "presumed_intent": {
-            "default": "",
-            "title": "Presumed Intent",
-            "type": "string"
-          },
-          "verdict": {
-            "default": "",
-            "title": "Verdict",
-            "type": "string"
-          },
-          "confidence": {
-            "default": "low",
-            "title": "Confidence",
-            "type": "string"
-          },
-          "lenz_score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Lenz Score"
-          },
-          "key_finding": {
-            "default": "",
-            "title": "Key Finding",
-            "type": "string"
-          },
-          "executive_summary": {
-            "default": "",
-            "title": "Executive Summary",
-            "type": "string"
-          },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          },
-          "created_at": {
-            "default": "",
-            "title": "Created At",
-            "type": "string"
-          },
-          "modified_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Modified At"
-          },
-          "sources": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SourceOut"
-            },
-            "title": "Sources",
-            "type": "array"
-          },
-          "audit": {
-            "$ref": "#/components/schemas/AuditOut",
-            "default": {
-              "adjudication_summary": "",
-              "assessments": [],
-              "debate_pro": {
-                "argument": "",
-                "rebuttal": "",
-                "role": ""
-              },
-              "debate_con": {
-                "argument": "",
-                "rebuttal": "",
-                "role": ""
-              },
-              "panel_agreement": ""
-            }
-          },
-          "language": {
-            "title": "Language",
-            "type": "string"
-          }
-        },
-        "required": [
-          "verification_id",
-          "claim",
-          "language"
-        ],
-        "title": "ClaimDetailOut",
-        "type": "object"
-      },
-      "DebateSideOut": {
-        "description": "One side of the debate (pro or con). Nested under ``audit``.",
-        "properties": {
-          "role": {
-            "default": "",
-            "title": "Role",
-            "type": "string"
-          },
-          "argument": {
-            "default": "",
-            "title": "Argument",
-            "type": "string"
-          },
-          "rebuttal": {
-            "default": "",
-            "title": "Rebuttal",
-            "type": "string"
-          }
-        },
-        "title": "DebateSideOut",
-        "type": "object"
-      },
       "NeedsInputOut": {
-        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``), needs disambiguation\n(``clarification_required``), or finds a near-duplicate of an existing\nverification (``duplicate_found``). Only one of ``claims``,\n``candidates``, or ``similar_claims`` is populated per event, keyed\non ``reason``. Resolve by calling ``POST /verify/{task_id}/select``.",
+        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``) or finds a near-duplicate of an\nexisting verification (``duplicate_found``). Only one of ``claims`` or\n``similar_claims`` is populated per event, keyed on ``reason``. A vague\ninput does not pause: it is checked on its most likely reading, or fails\nas ``not_a_claim`` when there is none.\n\n``multi_claim`` is resolved by calling ``POST /verify/{task_id}/select``\nwith one of the offered claim texts. ``duplicate_found`` is NOT:\n``/select`` validates picks as claim texts, and that reason offers\nexisting verifications instead. It is informational \u2014 read\n``similar_claims`` and decide whether to resubmit.",
         "properties": {
           "reason": {
             "title": "Reason",
@@ -1753,44 +2253,17 @@
             },
             "title": "Similar Claims",
             "type": "array"
+          },
+          "hint": {
+            "default": "",
+            "title": "Hint",
+            "type": "string"
           }
         },
         "required": [
           "reason"
         ],
         "title": "NeedsInputOut",
-        "type": "object"
-      },
-      "SourceOut": {
-        "description": "A research source used to evaluate a claim.\n\n``date`` is the source article's publication date (a source-level\nattribute, not a Lenz API event time \u2014 so it's not renamed to\n``published_at``).",
-        "properties": {
-          "source_name": {
-            "default": "",
-            "title": "Source Name",
-            "type": "string"
-          },
-          "title": {
-            "default": "",
-            "title": "Title",
-            "type": "string"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "snippet": {
-            "default": "",
-            "title": "Snippet",
-            "type": "string"
-          },
-          "date": {
-            "default": "",
-            "title": "Date",
-            "type": "string"
-          }
-        },
-        "title": "SourceOut",
         "type": "object"
       },
       "WebhookPayload": {
@@ -1847,6 +2320,17 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/NeedsInputOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CoverageOut"
               },
               {
                 "type": "null"
@@ -1937,7 +2421,7 @@
     },
     {
       "name": "Assess",
-      "description": "Fast 3-model panel verdict on a claim. Sync, ~5-10s."
+      "description": "Fast 3-model panel verdict on a claim. Sync, typically 10-25s; allow 45s for the response."
     },
     {
       "name": "Verify",
@@ -2011,6 +2495,48 @@
       "post": {
         "summary": "verification.needs_input",
         "description": "Fires when framing detects multiple claims, ambiguity, or a duplicate.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "webhook.test": {
+      "post": {
+        "summary": "webhook.test",
+        "description": "Fires only when you click Send test on the API credentials page (or POST /api-keys/{id}/webhook-test). It carries no result and no real task_id \u2014 its job is to prove a signed POST from us reaches your endpoint before you spend a verification finding out. Switch on `event` and ignore it.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "certificate.timestamped": {
+      "post": {
+        "summary": "certificate.timestamped",
+        "description": "Fires when a covered verification's qualified timestamp lands, minutes after verification.completed. If you publish automatically, publish on this event: the warranty covers a publication that FOLLOWS the timestamp, and verification.completed fires while the qualified timestamp is still pending.",
         "requestBody": {
           "required": true,
           "content": {
