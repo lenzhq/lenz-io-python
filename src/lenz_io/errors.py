@@ -474,7 +474,8 @@ def map_response_to_error(
             if err.hint:
                 err.fix = err.hint
             elif err.retryable:
-                err.fix = "Transient provider outage — resubmit the same claim after a short wait."
+                # Same words as the wait path's LenzPipelineError (client.py).
+                err.fix = "Transient provider outage — retry the same request after a short wait."
             else:
                 err.fix = "This run will not produce a result. Resubmit with a different claim."
 

@@ -9,8 +9,8 @@ All notable changes to this SDK are documented here. Format follows
 Three behaviour changes — `extract`'s default timeout, an opt-in
 `Idempotency-Key` on `ask.send`, and typed errors for the 409s
 `verifications.get` answers on a task_id (all below); the rest is docs and
-dead CLI code. Nothing the SDK parses changes, and 2.12.x keeps working
-against the current API.
+dead CLI code. The only new parsing is that 409 error body, and 2.12.x keeps
+working against the current API.
 
 ### Added
 
@@ -26,8 +26,9 @@ against the current API.
   than lenzhq/Lenz#680 the call behaves as before.
 - **`hint`** on `LenzPipelineError`, the server's one sentence on what to
   send instead (e.g. for `not_a_claim`). `wait` and `verify_and_wait` now set
-  it too, as the Node SDK always has.
-
+  it too, as the Node SDK always has. `lenz show <task_id>` on a run with no
+  result yet now says so, with `code` `not_ready`, and points at
+  `lenz status <task_id>`.
 - **`timeout=`** on `extract`: a per-call HTTP timeout in seconds, like the
   one `assess` takes.
 - **`idempotency_key=`** on `ask.send`: sent as the `Idempotency-Key` header,

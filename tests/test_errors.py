@@ -357,7 +357,7 @@ class TestMapResponseToError:
     def test_409_verification_failed_without_a_hint_follows_retryable(self):
         retryable = map_response_to_error(409, _body({"code": "verification_failed", "retryable": True}), {})
         final = map_response_to_error(409, _body({"code": "verification_failed", "retryable": False}), {})
-        assert "resubmit the same claim" in retryable.fix
+        assert "retry the same request" in retryable.fix
         assert "different claim" in final.fix
 
     def test_409_verification_failed_reads_only_a_boolean_retryable(self):
