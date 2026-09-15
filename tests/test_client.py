@@ -7,6 +7,7 @@ behavior; together they form the cross-language test parity baseline.
 
 from __future__ import annotations
 
+import inspect
 import json
 import re
 
@@ -1317,6 +1318,31 @@ class TestAsk:
         assert f.role == "expert"
         assert f.content == "because the photoelectric effect…"
         assert f.created_at == "2026-05-22T12:00:05Z"
+
+    def test_send_with_idempotency_key_sets_header(self, client):
+        assert "idempotency_key" in inspect.signature(client.ask.send).parameters, (
+            "ask.send must take an idempotency_key so a client retry replays the first reply"
+        )
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/ask/vid_1").respond(
+                200,
+                json={"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
+            )
+            client.ask.send("vid_1", message="why?", idempotency_key="ask-key-1")
+        assert route.calls.last.request.headers["Idempotency-Key"] == "ask-key-1"
+
+    def test_send_sends_no_idempotency_key_by_default(self, client):
+        # Never auto-generated and never derived from the message: re-asking
+        # the same question is normal here, so a key the caller did not
+        # choose would replay an old answer instead of asking again.
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/ask/vid_1").respond(
+                200,
+                json={"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
+            )
+            client.ask.send("vid_1", message="why?")
+            client.ask.send("vid_1", message="why?")
+        assert all("Idempotency-Key" not in c.request.headers for c in route.calls)
 
     def test_send_legacy_reply_attr_gone(self):
         # REGRESSION: pre-1.0.2 `AskReply.reply` always returned `""`
