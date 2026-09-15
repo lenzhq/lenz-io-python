@@ -6,12 +6,13 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-Three behaviour changes — `extract`'s default timeout, an opt-in
-`Idempotency-Key` on `ask.send`, and typed errors for the 409s
-`verifications.get` answers on a task_id — and a new name for the
-non-expiring balance, `credits.extra` (all below); the rest is docs and dead
-CLI code. The only new parsing is that 409 error body and `credits.extra`,
-and 2.12.x keeps working against the current API.
+## [2.14.0] - 2026-09-15
+
+Two behaviour changes — an opt-in `Idempotency-Key` on `ask.send`, and typed
+errors for the 409s `verifications.get` answers on a task_id — and a new name
+for the non-expiring balance, `credits.extra` (all below); the rest is docs.
+The only new parsing is that 409 error body and `credits.extra`, and 2.13.0
+keeps working against the current API.
 
 ### Added
 
@@ -23,15 +24,13 @@ and 2.12.x keeps working against the current API.
   `verification_failed`), carrying `task_id`, `failure_reason`,
   `failure_class`, `retryable` and `hint`. Both used to surface as a generic
   `LenzError` whose advice was to retry and file an issue, which is wrong for
-  both. Every other 409 is still a plain `LenzError`. Against an API older
-  than lenzhq/Lenz#680 the call behaves as before.
+  both. Every other 409 is still a plain `LenzError`. Against an older API
+  the call behaves as before.
 - **`hint`** on `LenzPipelineError`, the server's one sentence on what to
   send instead (e.g. for `not_a_claim`). `wait` and `verify_and_wait` now set
   it too, as the Node SDK always has. `lenz show <task_id>` on a run with no
   result yet now says so, with `code` `not_ready`, and points at
   `lenz status <task_id>`.
-- **`timeout=`** on `extract`: a per-call HTTP timeout in seconds, like the
-  one `assess` takes.
 - **`UsageCredits.extra`**: the non-expiring part of the balance, credits
   from grants and top-ups that are spent only once the monthly allowance is
   gone. It is the new name of `UsageCredits.bonus` and carries the same
@@ -52,6 +51,30 @@ and 2.12.x keeps working against the current API.
   removes it on 2026-11-29, along with the per-capability `credits` alias.
   Reading it emits a `DeprecationWarning`; it stays in `model_dump()` output
   while the server sends it.
+
+### Changed
+
+- **`Usage.plan` is `"pro"` for the Pro plan.** The API renamed the slug on
+  2026-09-15; it was `"developer"`. Nothing in the SDK branches on it, so the
+  change is the docstring, the README and the test fixtures. If your code
+  compares `plan` to `"developer"`, compare it to `"pro"` (or read
+  `plan_label`, which has read `"Pro"` throughout).
+- `lenz usage` labels the non-expiring part of each row "extra"
+  (`+ 20 extra`) instead of "bonus".
+
+## [2.13.0] - 2026-09-15
+
+One behaviour change, `extract`'s default timeout (below); the rest is docs
+and dead CLI code. Nothing the SDK sends or parses changes, and 2.12.x keeps
+working against the current API.
+
+### Added
+
+- **`timeout=`** on `extract`: a per-call HTTP timeout in seconds, like the
+  one `assess` takes.
+
+### Deprecated
+
 - **`candidate_claims`** on `ExtractedClaims`, `AssessClaim` and
   `AssessResponse`, and **`candidates`** on `TaskStatus`. The API has sent
   them empty since 2026-09-12, when `/assess` stopped returning
@@ -63,13 +86,6 @@ and 2.12.x keeps working against the current API.
 
 ### Changed
 
-- **`Usage.plan` is `"pro"` for the Pro plan.** The API renamed the slug on
-  2026-09-15; it was `"developer"`. Nothing in the SDK branches on it, so the
-  change is the docstring, the README and the test fixtures. If your code
-  compares `plan` to `"developer"`, compare it to `"pro"` (or read
-  `plan_label`, which has read `"Pro"` throughout).
-- `lenz usage` labels the non-expiring part of each row "extra"
-  (`+ 20 extra`) instead of "bonus".
 - **`extract` waits up to 90s per attempt by default** (`EXTRACT_TIMEOUT`) instead of
   the 30s client timeout. The slowest extractions take 30-60s, and on a
   client timeout the SDK re-sent the call, which ran the same extraction
