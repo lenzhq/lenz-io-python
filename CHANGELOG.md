@@ -63,6 +63,11 @@ and 2.12.x keeps working against the current API.
 
 ### Changed
 
+- **`Usage.plan` is `"pro"` for the Pro plan.** The API renamed the slug on
+  2026-09-15; it was `"developer"`. Nothing in the SDK branches on it, so the
+  change is the docstring, the README and the test fixtures. If your code
+  compares `plan` to `"developer"`, compare it to `"pro"` (or read
+  `plan_label`, which has read `"Pro"` throughout).
 - `lenz usage` labels the non-expiring part of each row "extra"
   (`+ 20 extra`) instead of "bonus".
 - **`extract` waits up to 90s per attempt by default** (`EXTRACT_TIMEOUT`) instead of

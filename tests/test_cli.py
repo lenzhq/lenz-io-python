@@ -772,9 +772,9 @@ def _usage(**kw):
 
 
 def _pool_usage(**overrides):
-    """The live developer-plan shape: 5,070 credits = 507 verifies or 5,070 assesses."""
+    """The live Pro-plan shape: 5,070 credits = 507 verifies or 5,070 assesses."""
     payload = {
-        "plan": "developer",
+        "plan": "pro",
         "quota_resets_at": "2026-09-01",
         "credits": {"total": 5200, "used": 130, "remaining": 5070, "bonus": 200, "resets_at": "2026-09-01"},
         "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
@@ -811,7 +811,7 @@ def test_usage_json_success(monkeypatch):
     result = runner.invoke(app, ["--json", "usage"])
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["plan"] == "developer"
+    assert payload["plan"] == "pro"
     # The balance and the price list — the authoritative pair.
     assert payload["credits"]["remaining"] == 5070
     assert payload["credits"]["bonus"] == 200
@@ -831,7 +831,7 @@ def test_usage_pretty_leads_with_the_credit_balance():
     """One pool funds everything, so the balance is the headline; the
     per-capability rows below it are projections, each with its price."""
     text = _render_usage_text(_pool_usage())
-    assert "developer plan" in text
+    assert "pro plan" in text
     assert "5070 credits left" in text
     assert "≈ 507 verifications · 5070 assessments" in text
     # Per-capability rows beneath, in order, with the extra-credit + price tails.

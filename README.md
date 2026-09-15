@@ -52,7 +52,7 @@ exit (an out-of-credits run reports `"code": "no_credits"` and adds
 `upgrade_url`). `lenz usage` leads with the balance:
 
 ```text
-Lenz usage  (developer plan)
+Lenz usage  (Pro plan)
   5070 credits left  (≈ 507 verifications · 5070 assessments)
   Verify:   507 left  (13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low")
   Ask:      5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
@@ -239,7 +239,7 @@ Every claim-shaped response shares these fields at top level:
 
 ### The warranty (`coverage`)
 
-Qualifying verdicts on paid Developer and Scale plans carry a contractual
+Qualifying verdicts on paid Pro and Scale plans carry a contractual
 warranty from Lenz. Every verification tells you where it stands:
 
 ```python

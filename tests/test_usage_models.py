@@ -17,7 +17,7 @@ from lenz_io.models import Usage, UsageCapacity, UsageCredits
 
 # The live shape (2026-08-29 onward), trimmed to the fields under test.
 POOL_PAYLOAD = {
-    "plan": "developer",
+    "plan": "pro",
     "quota_resets_at": "2026-09-01T00:00:00+00:00",
     "credits": {
         "total": 5200,
