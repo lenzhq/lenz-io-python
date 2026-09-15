@@ -468,6 +468,24 @@ default, so a network drop after submit doesn't spawn a duplicate verification
 or charge a second credit. Override with `idempotency_key="..."` to pin a
 specific key, or `idempotency=False` to opt out.
 
+`assess` does the same. `ask.send` takes an `idempotency_key="..."` too, but
+never generates one: re-asking the same question is a normal thing to do, and
+a key you did not choose would replay the earlier answer. Pass one when your
+retry means "the same question, once" — the reply, the credit and the
+conversation history are then all the first call's:
+
+```python
+reply = client.ask.send(
+    v.verification_id,
+    message="Which source is strongest?",
+    idempotency_key="deal-42-followup-1",
+)
+```
+
+A retry that arrives while the first call is still running gets a 409
+(`LenzError`) rather than the reply — there is nothing finished to replay
+yet.
+
 ## Steering extract
 
 `extract` returns every major factual claim it finds, ranked most-check-worthy

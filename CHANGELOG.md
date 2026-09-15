@@ -6,14 +6,23 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-One behaviour change, `extract`'s default timeout (below); the rest is docs
-and dead CLI code. Nothing the SDK sends or parses changes, and 2.12.x keeps
-working against the current API.
+Two behaviour changes — `extract`'s default timeout and an opt-in
+`Idempotency-Key` on `ask.send` (both below); the rest is docs and dead CLI
+code. Nothing the SDK parses changes, and 2.12.x keeps working against the
+current API.
 
 ### Added
 
 - **`timeout=`** on `extract`: a per-call HTTP timeout in seconds, like the
   one `assess` takes.
+- **`idempotency_key=`** on `ask.send`: sent as the `Idempotency-Key` header,
+  so a retry of the same question replays the first reply instead of spending
+  a second credit and appending a second question-and-answer pair to the
+  conversation. Nothing is sent unless you pass a key: no key is generated
+  for you and none is derived from the message, because asking the same
+  question again is a normal thing to do on this endpoint. A retry that
+  arrives while the first call is still running raises on a 409 — there is no
+  finished reply to replay yet.
 
 ### Deprecated
 

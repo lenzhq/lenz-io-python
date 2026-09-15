@@ -56,7 +56,8 @@ Design decisions:
   by default. ``Retry-After`` honored on 429s.
 * ``Idempotency-Key`` auto-generated for ``verify_and_wait`` so a network
   drop during submit doesn't spawn duplicate tasks. Customer can override
-  with explicit ``idempotency_key=...``.
+  with explicit ``idempotency_key=...``. ``ask.send`` takes the same
+  argument but never generates one — see its docstring.
 * ``X-Lenz-API-Version`` header pinned at SDK release date so the server
   can route old clients to v1 handlers when v2 ships.
 * ``X-Request-ID`` is captured from every response onto the typed error
@@ -301,20 +302,46 @@ class _AskNamespace:
         body = self._p._request("GET", f"/ask/{verification_id}")
         return AskHistory.model_validate(body)
 
-    def send(self, verification_id: str, *, message: str, language: str = "") -> AskReply:
+    def send(
+        self,
+        verification_id: str,
+        *,
+        message: str,
+        language: str = "",
+        idempotency_key: str | None = None,
+    ) -> AskReply:
         """Send a follow-up question on an existing verification.
 
         ``language`` (optional) overrides the claim's stored language for
         this single reply. Omit to let the server use the claim's
         ``language`` as default — that's the typical case.
+
+        ``idempotency_key`` (optional): send an ``Idempotency-Key`` so a
+        retry of *this* question replays the first reply instead of asking —
+        and paying for — it twice, and without appending the question and a
+        second answer to the conversation. A retry that arrives while the
+        first call is still running gets a 409 instead: there is no reply to
+        replay yet.
+
+        Unlike ``assess``, no key is generated for you, and none is derived
+        from the message: asking the same thing again is a normal thing to do
+        here, and each turn also reads the history the previous one wrote, so
+        an implied key would replay a stale answer. Pass your own key when
+        your retry means "the same question, once".
+
+        Paid — see ``client.usage()``.
         """
         payload: dict[str, Any] = {"message": message}
         if language:
             payload["language"] = language
+        headers = {}
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
         body = self._p._request(
             "POST",
             f"/ask/{verification_id}",
             json=payload,
+            headers=headers,
         )
         return AskReply.model_validate(body)
 
