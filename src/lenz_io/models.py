@@ -757,10 +757,11 @@ class Usage(_Lax):
     ``verify_low`` block beside ``verify``.
     """
 
-    #: The tier slug — ``"free"`` | ``"plus"`` | ``"developer"`` | ``"scale"``.
-    #: This is the field to branch on; it is stable.
+    #: The tier slug — ``"free"`` | ``"plus"`` | ``"pro"`` | ``"scale"``.
+    #: This is the field to branch on; it is stable. The Pro plan's slug was
+    #: ``"developer"`` until 2026-09-15.
     plan: str = ""
-    #: The same tier as display copy (``"Developer"``). Separate from
+    #: The same tier as display copy (``"Pro"``). Separate from
     #: :attr:`plan` on purpose: this one is copy and may be reworded, so
     #: comparing against it will break on a rename that ought to be free.
     #: Empty on servers predating this field — fall back to :attr:`plan`.
