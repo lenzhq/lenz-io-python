@@ -6,6 +6,17 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`rationale` and `dissent` on `AssessClaim`**, the two optional notes the
+  API now returns on every `assess` row. `rationale` is the reasoning of a
+  reviewer who agrees with the panel's verdict; `dissent`, when set, is the
+  reasoning of the reviewer farthest from it. Both are reviewers' notes, not
+  checked sources; for sourced evidence, call `verify`. Both default to
+  `None`: an `"Error"` row has neither, and neither does a response the API
+  replays from before it added them. `lenz assess` prints them under the
+  verdict. Earlier SDK versions ignore the two keys and keep working.
+
 ## [2.14.0] - 2026-09-15
 
 Two behaviour changes — an opt-in `Idempotency-Key` on `ask.send`, and typed

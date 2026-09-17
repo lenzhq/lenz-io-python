@@ -606,6 +606,32 @@ def test_render_assess_shows_verdict_and_ask_hint():
     assert "lenz ask abcd1234" in text  # follow-up hint with the parsed id
 
 
+def test_render_assess_prints_the_reviewers_notes():
+    """A row's rationale prints under its verdict and a dissent under that,
+    led by who it belongs to; a row with neither prints no extra line."""
+    from lenz_io.cli.render import render_assess
+
+    out = _render(
+        render_assess,
+        AssessResponse(
+            claims=[
+                AssessClaim(
+                    claim="Bilingual children develop stronger executive function.",
+                    verdict="Mixed",
+                    confidence="low",
+                    rationale="Some studies find an advantage; large replications find little.",
+                    dissent="Recent large-sample studies find no reliable advantage.",
+                ),
+                AssessClaim(claim="Water boils at 100 °C at sea level.", verdict="True", confidence="high"),
+            ]
+        ),
+    )
+    assert "Some studies find an advantage" in out
+    assert "One reviewer disagreed:" in out
+    assert "no reliable advantage" in out
+    assert out.count("One reviewer disagreed:") == 1
+
+
 def test_render_assess_no_claims():
     """Genuine non-claim → a clean 'No claim found.'.
     The raw server `error` is NOT leaked into pretty output (it stays in --json)."""

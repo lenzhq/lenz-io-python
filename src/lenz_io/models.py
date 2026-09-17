@@ -413,6 +413,14 @@ class AssessClaim(_Lax):
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
+    # ``rationale`` is the reasoning of a reviewer who agrees with the panel's
+    # verdict; ``dissent``, when set, is the reasoning of the reviewer farthest
+    # from it. Both are reviewers' notes, not checked sources; for sourced
+    # evidence, call ``verify``. Read both as optional: an ``"Error"`` row has
+    # neither, and a response replayed from before the API added them carries
+    # neither key.
+    rationale: str | None = None
+    dissent: str | None = None
     # Only on ``verdict == "Error"`` rows: 'no_claim' | 'framing_failed' |
     # 'upstream_unavailable' | 'timeout'.
     #
