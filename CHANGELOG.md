@@ -6,6 +6,12 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-09-17
+
+Two new optional fields on every `assess` row, `rationale` and `dissent`
+(below). Nothing the SDK sends changes, and 2.14.0 keeps working against the
+current API.
+
 ### Added
 
 - **`rationale` and `dissent` on `AssessClaim`**, the two optional notes the
