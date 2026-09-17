@@ -98,6 +98,8 @@ claims = out.identified_claims or [out.claim]
 quick = client.assess(claims=claims).claims
 for c in quick:
     print(c.verdict, c.confidence, c.claim)
+    if c.rationale:
+        print("  ", c.rationale)
 
 # 3. verify — escalate the low-confidence rows to the full panel + citations
 doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
@@ -122,6 +124,12 @@ compound item is assessed on its main claim and lists the other claims it
 found in `identified_claims` (also with a `hint`) — send those as their own
 items to check the rest. `assess(claim="...")` takes one text and answers
 with a row per claim found in it, up to 20, at 1 credit each.
+
+Each verdict row also carries two optional notes. `rationale` is the
+reasoning of a reviewer who agrees with the panel's verdict; `dissent`, when
+set, is the reasoning of the reviewer farthest from it. Both are reviewers'
+notes, not checked sources; for sourced evidence, call `verify`. Read them as
+optional: either can be `None`.
 
 `assess` and `verify` share a result cache server-side: if a claim
 already has a deep verification, `assess` returns it via

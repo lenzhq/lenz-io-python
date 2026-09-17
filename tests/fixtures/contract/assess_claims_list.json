@@ -1,9 +1,59 @@
 {
   "claims": [
-    {"claim": "Water boils at 100 °C at sea level.", "language": "en", "verdict": "True", "confidence": "high", "verification_url": null, "error_code": null, "candidate_claims": [], "identified_claims": [], "hint": null},
-    {"claim": "Bilingual children develop stronger executive function.", "language": "en", "verdict": "Mixed", "confidence": "medium", "verification_url": "https://lenz.io/api/v1/verifications/3f9a1c2e", "error_code": null, "candidate_claims": [], "identified_claims": ["Bilingual children learn to read later than monolingual peers."], "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest."},
-    {"claim": "this is fine", "language": "en", "verdict": "Error", "confidence": "low", "verification_url": null, "error_code": "no_claim", "candidate_claims": [], "identified_claims": [], "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims."},
-    {"claim": "The Eiffel Tower is 330 metres tall.", "language": "en", "verdict": "Error", "confidence": "low", "verification_url": null, "error_code": "timeout", "candidate_claims": [], "identified_claims": [], "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call."}
+    {
+      "claim": "Water boils at 100 °C at sea level.",
+      "language": "en",
+      "verdict": "True",
+      "confidence": "high",
+      "verification_url": null,
+      "rationale": "Water boils at 100 °C at sea level at standard atmospheric pressure, which is the definition the claim uses.",
+      "dissent": null,
+      "error_code": null,
+      "candidate_claims": [],
+      "identified_claims": [],
+      "hint": null
+    },
+    {
+      "claim": "Bilingual children develop stronger executive function.",
+      "language": "en",
+      "verdict": "Mixed",
+      "confidence": "medium",
+      "verification_url": "https://lenz.io/api/v1/verifications/3f9a1c2e",
+      "rationale": "Studies find an executive-function advantage in some bilingual children, but large replications report small or no effect.",
+      "dissent": "Recent large-sample studies find no reliable bilingual advantage in executive function.",
+      "error_code": null,
+      "candidate_claims": [],
+      "identified_claims": [
+        "Bilingual children learn to read later than monolingual peers."
+      ],
+      "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest."
+    },
+    {
+      "claim": "this is fine",
+      "language": "en",
+      "verdict": "Error",
+      "confidence": "low",
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "error_code": "no_claim",
+      "candidate_claims": [],
+      "identified_claims": [],
+      "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims."
+    },
+    {
+      "claim": "The Eiffel Tower is 330 metres tall.",
+      "language": "en",
+      "verdict": "Error",
+      "confidence": "low",
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "error_code": "timeout",
+      "candidate_claims": [],
+      "identified_claims": [],
+      "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call."
+    }
   ],
   "error": null
 }

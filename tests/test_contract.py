@@ -407,3 +407,26 @@ def test_webhook_payload_failed_maps_every_field():
     # payload has one field set per event kind.
     handled = typed | {"result", "needs_input"}
     assert not set(payload) - handled
+
+
+def test_assess_rows_carry_the_reviewers_notes():
+    """``rationale`` and ``dissent`` are optional strings on every row: a
+    verdict row carries a rationale, a dissent only sometimes, and an Error
+    row carries neither."""
+    parsed = AssessResponse.model_validate(_load("assess_claims_list.json"))
+    plain, compound, no_claim, timed_out = parsed.claims
+
+    assert plain.rationale and plain.dissent is None
+    assert compound.rationale and compound.dissent
+    for row in (no_claim, timed_out):
+        assert row.rationale is None and row.dissent is None
+
+
+def test_assess_rows_without_the_notes_still_parse():
+    """A response stored before the API gained the two fields is replayed
+    as it was stored, so a row can carry neither key: both read ``None``."""
+    parsed = AssessResponse.model_validate(_load("assess_single_claim.json"))
+    assert parsed.claims
+    for row in parsed.claims:
+        assert "rationale" not in row.model_fields_set
+        assert row.rationale is None and row.dissent is None
