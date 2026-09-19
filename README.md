@@ -418,7 +418,7 @@ except LenzAuthError as exc:
     print(exc)
     # Unauthorized
     #   Cause:  Invalid api key
-    #   Fix:    Generate a new key at https://lenz.io/api-credentials.
+    #   Fix:    Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.
     #   Docs:   https://lenz.io/docs/auth
     #   Request ID: req_abc123
 except LenzRateLimitError as exc:
@@ -582,6 +582,8 @@ Environment variables:
 
 - `LENZ_API_KEY` — read if `api_key=` is not passed
 - `LENZ_BASE_URL` — read if `base_url=` is not passed
+
+An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
 
 ## Compatibility
 
