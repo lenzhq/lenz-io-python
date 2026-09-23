@@ -6,6 +6,14 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The 401 fix hint is neutral about the credential.** It used to say only
+  "Generate a new key", which is the wrong advice for a key that was mistyped
+  or left out. It now reads: "Your credential is missing, invalid or expired.
+  Check the key you passed, or get a new one at https://lenz.io/api-credentials."
+  The error class and its fields are unchanged.
+
 ## [2.15.0] - 2026-09-17
 
 Two new optional fields on every `assess` row, `rationale` and `dissent`
