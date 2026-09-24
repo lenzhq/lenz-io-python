@@ -13,7 +13,8 @@ All notable changes to this SDK are documented here. Format follows
   `coverage.reasons == ["account"]` (or `["plan", "account"]` after a
   downgrade). A verification that already carries a certificate keeps it.
   `reasons` was already typed as strings on the wire, so earlier SDK versions
-  read the new value without error.
+  read the new value without error. The `CoverageReason` Literal gained a
+  member: a type-checked exhaustive `match` over it needs an `"account"` case.
 - **`LenzGoneError` for HTTP 410.** An account on Pro or Scale can set a
   retention period; a verification older than it answers 410 with
   `code: "purged"` and `purged_at`. The SDK now raises `LenzGoneError`
@@ -23,6 +24,9 @@ All notable changes to this SDK are documented here. Format follows
   `status_detail`. Only a 410 whose body carries `code: "purged"` is this
   error; any other 410 stays a plain `LenzError`. The CLI reports it as
   `gone`, and a batch it is polling marks that row failed and keeps going.
+- **The `openapi.json` snapshot is refreshed.** Additive only: the 410
+  `VerificationPurgedOut` schema, `account` in the coverage reasons, and the
+  404, 409 and 410 responses of `GET /verifications/{id}`.
 - **`lenz_io.errors.__all__` lists every public error.** `LenzGoneError`,
   and the previously omitted `LenzUpstreamUnavailableError` and
   `UPSTREAM_503_CODES`.
