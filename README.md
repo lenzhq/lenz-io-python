@@ -209,6 +209,10 @@ for r in results:
         print(r.claim_text, "→", r.status)  # needs_input | failed | timeout
 ```
 
+A `failed` item with `status_detail is None` is a verification its account's
+retention period has removed (HTTP 410, see [Retention](#retention)); every
+other failure carries a `status_detail`.
+
 A verify takes ~90 seconds, so show your users where it is. `on_progress` fires
 once per poll while the run is going — it takes the `task_id` as well, because
 the batch helper round-robins several ids in one loop:
@@ -286,7 +290,8 @@ An account on Pro or Scale can set a retention period on the
 [API credentials page](https://lenz.io/api-credentials). Once a verification
 is older than that period, reading it raises `LenzGoneError` (HTTP 410,
 `code == "purged"`, with `purged_at`), and `wait()` raises it at once instead
-of polling to its deadline. A certificate issued for it stays available from
+of polling to its deadline. It also disappears from `verifications.list()`.
+A certificate issued for it stays available from
 `verifications.get_certificate()`.
 
 ```python

@@ -231,6 +231,8 @@ class _VerificationsNamespace:
         raises :class:`LenzVerificationNotReadyError` while it is running or
         waiting for input, and :class:`LenzPipelineError` when it failed. To
         wait for a run, use ``client.wait(task_id)``.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         body = self._p._request(
             "GET",
@@ -284,6 +286,8 @@ class _VerificationsNamespace:
         verifications. Accessible for
         any verification the caller owns (any visibility) or any public
         library item.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         body = self._p._request(
             "GET",
@@ -306,6 +310,10 @@ class _AskNamespace:
         self._p = parent
 
     def history(self, verification_id: str) -> AskHistory:
+        """The follow-up conversation on a verification.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+        """
         body = self._p._request("GET", f"/ask/{verification_id}")
         return AskHistory.model_validate(body)
 
@@ -337,6 +345,8 @@ class _AskNamespace:
         your retry means "the same question, once".
 
         Paid — see ``client.usage()``.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         payload: dict[str, Any] = {"message": message}
         if language:
@@ -676,7 +686,12 @@ class Lenz:
         return self._select(task_id, texts=chosen)
 
     def get_status(self, task_id: str) -> TaskStatus:
-        """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
+        """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the task completed and the
+        account's retention period has since removed its verification; a task
+        that is still running never answers 410.
+        """
         return self._get_status(task_id)
 
     # ── headline ergonomic ──

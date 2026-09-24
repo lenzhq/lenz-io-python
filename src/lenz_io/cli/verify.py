@@ -27,7 +27,7 @@ from typing import Any, NoReturn
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzError
+from lenz_io.errors import LenzError, LenzGoneError
 from lenz_io.models import TaskStatus
 
 from ._run import execute, read_text_arg
@@ -345,7 +345,12 @@ def _poll_all(
     try:
         while pending and time.monotonic() <= deadline:
             for tid in list(pending):
-                st = client.get_status(tid)
+                try:
+                    st = client.get_status(tid)
+                except LenzGoneError as exc:
+                    # Removed by its account's retention period: that row is
+                    # done, the rest keep polling.
+                    st = TaskStatus(task_id=tid, status="failed", error=exc.message or str(exc))
                 statuses[tid] = st
                 if st.status != "processing":
                     pending.discard(tid)

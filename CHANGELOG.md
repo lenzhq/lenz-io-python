@@ -20,7 +20,12 @@ All notable changes to this SDK are documented here. Format follows
   (a `LenzError`, carrying `purged_at`) instead of a plain `LenzError`, and
   `wait()` raises it at once instead of polling until its timeout.
   `verify_batch_and_wait` reports such an item as `failed` with no
-  `status_detail`.
+  `status_detail`. Only a 410 whose body carries `code: "purged"` is this
+  error; any other 410 stays a plain `LenzError`. The CLI reports it as
+  `gone`, and a batch it is polling marks that row failed and keeps going.
+- **`lenz_io.errors.__all__` lists every public error.** `LenzGoneError`,
+  and the previously omitted `LenzUpstreamUnavailableError` and
+  `UPSTREAM_503_CODES`.
 
 ### Changed
 
