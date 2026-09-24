@@ -273,6 +273,30 @@ Three things worth getting right:
   thousand, not a hundred. Read `currency`; do not assume EUR.
 - **A 404 from `get_certificate()` does not mean "not covered"** — check
   `coverage.status` for that.
+- **`reasons == ["account"]` means the account turned certificates off.** An
+  account on Pro or Scale can switch them off on the
+  [API credentials page](https://lenz.io/api-credentials); checks submitted
+  from then on carry no certificate. A verification that already carries a
+  certificate keeps it.
+
+### Retention
+
+By default a verification stays available for as long as the account exists.
+An account on Pro or Scale can set a retention period on the
+[API credentials page](https://lenz.io/api-credentials). Once a verification
+is older than that period, reading it raises `LenzGoneError` (HTTP 410,
+`code == "purged"`, with `purged_at`), and `wait()` raises it at once instead
+of polling to its deadline. A certificate issued for it stays available from
+`verifications.get_certificate()`.
+
+```python
+from lenz_io import LenzGoneError
+
+try:
+    v = client.verifications.get("a1b2c3d4")
+except LenzGoneError as exc:
+    print(exc.purged_at)  # "2026-10-25T10:00:00+00:00"
+```
 
 ### Webhooks
 

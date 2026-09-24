@@ -305,6 +305,24 @@ class LenzVerificationNotReadyError(LenzError):
     hint: str = ""
 
 
+class LenzGoneError(LenzError):
+    """410 — the verification existed, and its account's retention period has
+    since removed it.
+
+    ``code`` is ``"purged"`` and ``purged_at`` is the ISO-8601 time it was
+    removed, or ``None`` when the server didn't say. Retrying cannot bring it
+    back. A certificate issued for it stays available from
+    ``verifications.get_certificate``.
+
+    Raised by ``verifications.get``, ``get_status`` on a completed task,
+    ``verifications.related`` and ``ask``. ``wait`` raises it at once instead
+    of polling to the deadline. A 404 stays a plain :class:`LenzError`: only
+    an id you could read before answers 410.
+    """
+
+    purged_at: str | None = None
+
+
 class LenzWebhookSignatureError(LenzError):
     """``LenzWebhooks.parse`` rejected a payload.
 
@@ -368,6 +386,11 @@ _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
         LenzRateLimitError,
         "Rate limit exceeded",
         f"{_DOCS_BASE}/rate-limits",
+    ),
+    410: (
+        LenzGoneError,
+        "Verification removed",
+        f"{_DOCS_BASE}/errors",
     ),
 }
 
@@ -479,6 +502,9 @@ def map_response_to_error(
             else:
                 err.fix = "This run will not produce a result. Resubmit with a different claim."
 
+    if isinstance(err, LenzGoneError):
+        err.purged_at = _opt_str(parsed.get("purged_at")) or None
+
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
         # the fallback for any proxy that strips the body.
@@ -577,6 +603,7 @@ def _fix_hint_for(status_code: int) -> str:
         402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
         422: "Check the request body against the OpenAPI spec.",
         429: "Wait Retry-After seconds and retry.",
+        410: "Its account's retention period removed it. A certificate issued for it is still available.",
     }.get(status_code, "Retry; if the error persists, file an issue with the Request ID.")
 
 

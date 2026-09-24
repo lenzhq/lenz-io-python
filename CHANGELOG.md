@@ -6,6 +6,22 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`"account"` in `CoverageReason`.** An account on Pro or Scale can now turn
+  warranty certificates off; its verifications then read
+  `coverage.reasons == ["account"]` (or `["plan", "account"]` after a
+  downgrade). A verification that already carries a certificate keeps it.
+  `reasons` was already typed as strings on the wire, so earlier SDK versions
+  read the new value without error.
+- **`LenzGoneError` for HTTP 410.** An account on Pro or Scale can set a
+  retention period; a verification older than it answers 410 with
+  `code: "purged"` and `purged_at`. The SDK now raises `LenzGoneError`
+  (a `LenzError`, carrying `purged_at`) instead of a plain `LenzError`, and
+  `wait()` raises it at once instead of polling until its timeout.
+  `verify_batch_and_wait` reports such an item as `failed` with no
+  `status_detail`.
+
 ### Changed
 
 - **The 401 fix hint is neutral about the credential.** It used to say only
