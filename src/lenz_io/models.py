@@ -152,12 +152,14 @@ CoverageStatus = Literal["covered", "uncovered", "pending_timestamp"]
 
 #: Closed set of ``coverage.reasons`` values — why a verdict is NOT covered.
 #: Deliberately smaller than the internal gate's vocabulary: ``plan`` and
-#: ``depth`` are actionable, ``verdict`` is a product rule you design around,
-#: ``quality`` covers everything you can neither act on nor define, and
-#: ``withdrawn`` / ``issue_failed`` are statements about Lenz rather than about
-#: your claim.
+#: ``depth`` are actionable, ``account`` means the account turned warranty
+#: certificates off (a verification that already carries a certificate keeps
+#: it), ``verdict`` is a product rule you design around, ``quality`` covers
+#: everything you can neither act on nor define, and ``withdrawn`` /
+#: ``issue_failed`` are statements about Lenz rather than about your claim.
 CoverageReason = Literal[
     "plan",
+    "account",
     "depth",
     "verdict",
     "quality",
@@ -600,6 +602,7 @@ class BatchItemResult(_Lax):
     - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
     - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / similar_claims).
     - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
+      A verification removed by its account's retention period (HTTP 410) is ``failed``, ``status_detail`` ``None``.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
     """
 

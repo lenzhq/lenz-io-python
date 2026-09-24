@@ -81,6 +81,7 @@ from .errors import (
     UPSTREAM_503_CODES,
     LenzAPIError,
     LenzError,
+    LenzGoneError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzTimeoutError,
@@ -230,6 +231,8 @@ class _VerificationsNamespace:
         raises :class:`LenzVerificationNotReadyError` while it is running or
         waiting for input, and :class:`LenzPipelineError` when it failed. To
         wait for a run, use ``client.wait(task_id)``.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         body = self._p._request(
             "GET",
@@ -283,6 +286,8 @@ class _VerificationsNamespace:
         verifications. Accessible for
         any verification the caller owns (any visibility) or any public
         library item.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         body = self._p._request(
             "GET",
@@ -305,6 +310,10 @@ class _AskNamespace:
         self._p = parent
 
     def history(self, verification_id: str) -> AskHistory:
+        """The follow-up conversation on a verification.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+        """
         body = self._p._request("GET", f"/ask/{verification_id}")
         return AskHistory.model_validate(body)
 
@@ -336,6 +345,8 @@ class _AskNamespace:
         your retry means "the same question, once".
 
         Paid — see ``client.usage()``.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
         payload: dict[str, Any] = {"message": message}
         if language:
@@ -675,7 +686,12 @@ class Lenz:
         return self._select(task_id, texts=chosen)
 
     def get_status(self, task_id: str) -> TaskStatus:
-        """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics."""
+        """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics.
+
+        Raises :class:`LenzGoneError` (HTTP 410) when the task completed and the
+        account's retention period has since removed its verification; a task
+        that is still running never answers 410.
+        """
         return self._get_status(task_id)
 
     # ── headline ergonomic ──
@@ -754,13 +770,16 @@ class Lenz:
         ``verify`` / ``select`` — so ``client.wait(client.verify(claim=...))``
         reads naturally. Raises ``ValueError`` for an empty id,
         ``LenzNeedsInputError`` / ``LenzPipelineError`` on terminal
-        non-success, and ``LenzTimeoutError`` if ``timeout`` elapses (the task
+        non-success, ``LenzGoneError`` if its account's retention period has
+        removed the verification, and ``LenzTimeoutError`` if ``timeout`` elapses (the task
         may still finish server-side — resume via ``get_status``).
         """
         task_id = task if isinstance(task, str) else task.task_id
         if not task_id:
             raise ValueError("wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
-        terminal, timed_out = self._poll_to_terminal([task_id], timeout, on_progress)
+        terminal, timed_out, gone = self._poll_to_terminal([task_id], timeout, on_progress)
+        if task_id in gone:
+            raise gone[task_id]
         if task_id in timed_out:
             raise LenzTimeoutError(
                 message=f"wait timed out after {timeout}s",
@@ -803,12 +822,16 @@ class Lenz:
             idempotency_key=idempotency_key,
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
-        terminal, timed_out = self._poll_to_terminal(ids, timeout, on_progress)
+        terminal, timed_out, gone = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
         for it in accepted.items:  # preserve input order
             status = terminal.get(it.task_id)
-            if not it.task_id or it.task_id in timed_out or status is None:
+            if it.task_id in gone:
+                # Removed by the account's retention period (410): terminal,
+                # with no status to carry.
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
+            elif not it.task_id or it.task_id in timed_out or status is None:
                 results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
             elif status.status == "completed" and status.result is not None:
                 results.append(
@@ -840,11 +863,11 @@ class Lenz:
         task_ids: list[str],
         timeout: float,
         on_progress: Callable[[str, Progress], None] | None = None,
-    ) -> tuple[dict[str, TaskStatus], set[str]]:
+    ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzGoneError]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
         (completed / needs_input / failed) or the deadline elapses.
 
-        Returns ``(terminal_by_id, timed_out_ids)``. A timed-out task has no
+        Returns ``(terminal_by_id, timed_out_ids, gone_by_id)``. A timed-out task has no
         ``TaskStatus`` — ``"timeout"`` is a client-side concept, never a wire
         status — so it lands in the second set, not the dict.
 
@@ -860,7 +883,9 @@ class Lenz:
         A per-id poll that raises ``LenzError`` (e.g. a transport blip that
         outlived ``_request``'s own retries) does not abort the other ids: that
         id stays pending and is retried next round. A persistent error
-        therefore surfaces as a timeout once the deadline passes.
+        therefore surfaces as a timeout once the deadline passes. The one
+        exception is ``LenzGoneError`` (410): it is terminal, so that id stops
+        being polled and its error lands in ``gone_by_id``.
 
         ``on_progress(task_id, progress)`` fires once per still-running poll.
         It takes the id as well as the object because this loop round-robins a
@@ -874,6 +899,7 @@ class Lenz:
         ladder when it is present and sane; garbage falls back to the ladder.
         """
         pending = list(task_ids)
+        gone: dict[str, LenzGoneError] = {}
         terminal: dict[str, TaskStatus] = {}
         timed_out: set[str] = set()
         deadline = time.monotonic() + timeout
@@ -884,6 +910,12 @@ class Lenz:
             for task_id in pending:
                 try:
                     status = self._get_status(task_id)
+                except LenzGoneError as exc:
+                    # Terminal: retention removed it, and no later poll will
+                    # say otherwise. The API never answers 410 for a task
+                    # that is still running.
+                    gone[task_id] = exc
+                    continue
                 except LenzError:
                     # Don't let one id's poll failure abort the rest — retry it
                     # next round (bounded by the deadline below).
@@ -918,7 +950,7 @@ class Lenz:
             sleep_for = min(sleep_for, remaining)
             time.sleep(sleep_for)
             backoff_idx += 1
-        return terminal, timed_out
+        return terminal, timed_out, gone
 
     def _verification_from_terminal(self, status: TaskStatus, task_id: str) -> Verification:
         """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the

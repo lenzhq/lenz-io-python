@@ -14,6 +14,7 @@ from lenz_io.errors import (
     LenzAPIError,
     LenzAuthError,
     LenzError,
+    LenzGoneError,
     LenzPipelineError,
     LenzQuotaExceededError,
     LenzRateLimitError,
@@ -296,6 +297,49 @@ class TestMapResponseToError:
         )
         assert e.upgrade_url == "https://lenz.io/plans"
 
+    def test_410_purged_is_its_own_error(self):
+        e = map_response_to_error(
+            410,
+            _body(
+                {
+                    "detail": "This verification is no longer available.",
+                    "code": "purged",
+                    "purged_at": "2026-09-25T10:00:00+00:00",
+                }
+            ),
+            {"X-Request-ID": "rq410"},
+        )
+        assert isinstance(e, LenzGoneError)
+        assert e.code == "purged"
+        assert e.purged_at == "2026-09-25T10:00:00+00:00"
+        assert e.status_code == 410
+        assert e.message == "This verification is no longer available."
+        assert e.request_id == "rq410"
+        # Not the generic "retry; file an issue": retrying cannot bring it back.
+        assert "retry" not in e.fix.lower()
+
+    def test_410_without_purged_at_reads_none(self):
+        e = map_response_to_error(410, _body({"code": "purged"}), {})
+        assert isinstance(e, LenzGoneError)
+        assert e.purged_at is None
+
+    def test_410_malformed_purged_at_reads_none(self):
+        e = map_response_to_error(410, _body({"code": "purged", "purged_at": 42}), {})
+        assert e.purged_at is None
+
+    def test_410_without_purged_code_stays_plain(self):
+        # Keyed on the body code, like the 409 and 503 tables: a 410 from
+        # anything other than a retention removal stays a plain LenzError.
+        for body in ({}, {"code": "something_else"}, {"detail": "Gone."}):
+            e = map_response_to_error(410, _body(body), {})
+            assert type(e) is LenzError
+            assert e.status_code == 410
+
+    def test_gone_is_not_a_not_found(self):
+        # A 404 stays a plain LenzError: only 410 is gone.
+        e = map_response_to_error(404, _body({"detail": "Not found."}), {})
+        assert not isinstance(e, LenzGoneError)
+
     def test_409_verification_not_ready_is_its_own_error(self):
         hint = f"Poll GET /verify/status/{_TASK_ID} until it completes, then read its result."
         e = map_response_to_error(
@@ -415,3 +459,19 @@ class TestMapResponseToError:
 def test_status_to_class_table(status, expected_cls):
     e = map_response_to_error(status, b"{}", {})
     assert isinstance(e, expected_cls)
+
+
+def test_errors_all_lists_every_public_error_class_and_constant():
+    import inspect
+
+    from lenz_io import errors
+
+    public_classes = {
+        name
+        for name, obj in vars(errors).items()
+        if inspect.isclass(obj) and issubclass(obj, Exception) and obj.__module__ == errors.__name__
+    }
+    assert public_classes <= set(errors.__all__)
+    assert {"LenzGoneError", "LenzUpstreamUnavailableError", "UPSTREAM_503_CODES"} <= set(errors.__all__)
+    for name in errors.__all__:
+        assert hasattr(errors, name), name

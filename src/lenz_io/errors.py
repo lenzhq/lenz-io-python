@@ -305,6 +305,24 @@ class LenzVerificationNotReadyError(LenzError):
     hint: str = ""
 
 
+class LenzGoneError(LenzError):
+    """410 — the verification existed, and its account's retention period has
+    since removed it.
+
+    ``code`` is ``"purged"`` and ``purged_at`` is the ISO-8601 time it was
+    removed, or ``None`` when the server didn't say. Retrying cannot bring it
+    back. A certificate issued for it stays available from
+    ``verifications.get_certificate``.
+
+    Raised by ``verifications.get``, ``get_status`` on a completed task,
+    ``verifications.related``, ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
+    of polling to the deadline. A 404 stays a plain :class:`LenzError`: only
+    an id you could read before answers 410.
+    """
+
+    purged_at: str | None = None
+
+
 class LenzWebhookSignatureError(LenzError):
     """``LenzWebhooks.parse`` rejected a payload.
 
@@ -372,6 +390,18 @@ _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
 }
 
 
+# The one 410 the API answers: a verification its account's retention period
+# has removed. Keyed on ``code``, like the 409 and 503 tables: any other 410
+# (a proxy, a future contract) stays a plain LenzError.
+_GONE_410_CODES: dict[str, tuple[type[LenzError], str, str]] = {
+    "purged": (
+        LenzGoneError,
+        "Verification removed",
+        f"{_DOCS_BASE}/errors",
+    ),
+}
+
+
 # The two 409s ``GET /verifications/{id}`` answers when handed the task_id of a
 # run with no result yet. Keyed on ``code``, not the status: every other 409
 # (an Idempotency-Key still in flight, a select with nothing pending) stays a
@@ -429,6 +459,8 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
+    elif status_code == 410 and code in _GONE_410_CODES:
+        cls, default_msg, doc_url = _GONE_410_CODES[code]
     elif status_code == 409 and code in _VERIFICATION_409_CODES:
         cls, default_msg, doc_url = _VERIFICATION_409_CODES[code]
     elif status_code == 503 and code in UPSTREAM_503_CODES:
@@ -478,6 +510,11 @@ def map_response_to_error(
                 err.fix = "Transient provider outage — retry the same request after a short wait."
             else:
                 err.fix = "This run will not produce a result. Resubmit with a different claim."
+
+    if isinstance(err, LenzGoneError):
+        err.purged_at = _opt_str(parsed.get("purged_at")) or None
+        # Retrying cannot bring it back, so not the generic 4xx advice.
+        err.fix = "Its account's retention period removed it. A certificate issued for it is still available."
 
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
@@ -582,14 +619,17 @@ def _fix_hint_for(status_code: int) -> str:
 
 __all__ = [
     "MAX_RETRY_AFTER_SLEEP",
+    "UPSTREAM_503_CODES",
     "LenzAPIError",
     "LenzAuthError",
     "LenzError",
+    "LenzGoneError",
     "LenzNeedsInputError",
     "LenzPipelineError",
     "LenzQuotaExceededError",
     "LenzRateLimitError",
     "LenzTimeoutError",
+    "LenzUpstreamUnavailableError",
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",

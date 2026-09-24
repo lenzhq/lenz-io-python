@@ -17,6 +17,7 @@ from typing import Any
 from lenz_io.errors import (
     LenzAuthError,
     LenzError,
+    LenzGoneError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzQuotaExceededError,
@@ -58,6 +59,7 @@ _CODE_BY_TYPE: dict[type, str] = {
     LenzPipelineError: "pipeline_failed",
     LenzNeedsInputError: "needs_input",
     LenzVerificationNotReadyError: "not_ready",
+    LenzGoneError: "gone",
 }
 
 

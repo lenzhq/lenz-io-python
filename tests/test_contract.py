@@ -386,6 +386,25 @@ def test_unavailable_503_envelope_maps_every_field(fixture_name, expected_code, 
     assert not set(fixture) - handled
 
 
+def test_purged_410_envelope_maps_every_field():
+    """A verification its account's retention period removed. Only the
+    ``purged`` code makes a 410 a LenzGoneError."""
+    from lenz_io.errors import LenzGoneError, map_response_to_error
+
+    fixture = _load("error_purged_410.json")
+    err = map_response_to_error(410, json.dumps(fixture), {})
+
+    assert isinstance(err, LenzGoneError)
+    assert err.status_code == 410
+    assert err.message == fixture["detail"]
+    assert err.code == fixture["code"] == "purged"
+    assert err.purged_at == fixture["purged_at"]
+    assert err.body == fixture
+
+    handled = {"detail", "code", "purged_at"}
+    assert not set(fixture) - handled
+
+
 def test_webhook_payload_failed_maps_every_field():
     """Every key of the failed-event payload is consumed by a typed
     VerificationFailed attribute (or is one of the always-present-but-null

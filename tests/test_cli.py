@@ -2266,3 +2266,58 @@ def test_verify_batch_ctrl_c_exits_130(monkeypatch):
 
     result = runner.invoke(app, ["--json", "verify", "blob", "--claim", "all"])
     assert result.exit_code == 130
+
+
+def test_a_removed_verification_reports_code_gone(monkeypatch):
+    from lenz_io.errors import LenzGoneError
+
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(
+            verifications=_FakeVerifications(
+                error=LenzGoneError(
+                    message="This verification is no longer available.",
+                    status_code=410,
+                    code="purged",
+                    purged_at="2026-09-25T10:00:00+00:00",
+                )
+            )
+        ),
+    )
+    result = runner.invoke(app, ["--json", "show", "a1b2c3d4"])
+    assert result.exit_code == 1
+    err = json.loads(result.stdout)["error"]
+    assert err["code"] == "gone"
+    assert err["status"] == 410
+
+
+def test_poll_all_marks_a_removed_task_failed_and_keeps_polling_the_rest():
+    from lenz_io.cli.verify import _poll_all
+    from lenz_io.errors import LenzGoneError
+
+    out, _ = _pretty_output()
+    picks = [("t-1", "A"), ("t-2", "B")]
+    fake = FakeClient()
+    calls = {"t-2": 0}
+
+    def get_status(tid):
+        fake.status_calls.append(tid)
+        if tid == "t-1":
+            raise LenzGoneError(message="This verification is no longer available.", status_code=410, code="purged")
+        calls["t-2"] += 1
+        return (
+            TaskStatus(status="processing")
+            if calls["t-2"] == 1
+            else TaskStatus(status="completed", result=_verification())
+        )
+
+    fake.get_status = get_status
+    statuses = {"t-1": None, "t-2": None}
+
+    _poll_all(fake, out, picks, 30.0, statuses, on_update=None)
+
+    assert fake.status_calls.count("t-1") == 1
+    assert statuses["t-1"].status == "failed"
+    assert "no longer available" in statuses["t-1"].error
+    assert statuses["t-2"].status == "completed"
