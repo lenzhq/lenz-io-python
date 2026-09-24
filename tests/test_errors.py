@@ -327,6 +327,14 @@ class TestMapResponseToError:
         e = map_response_to_error(410, _body({"code": "purged", "purged_at": 42}), {})
         assert e.purged_at is None
 
+    def test_410_without_purged_code_stays_plain(self):
+        # Keyed on the body code, like the 409 and 503 tables: a 410 from
+        # anything other than a retention removal stays a plain LenzError.
+        for body in ({}, {"code": "something_else"}, {"detail": "Gone."}):
+            e = map_response_to_error(410, _body(body), {})
+            assert type(e) is LenzError
+            assert e.status_code == 410
+
     def test_gone_is_not_a_not_found(self):
         # A 404 stays a plain LenzError: only 410 is gone.
         e = map_response_to_error(404, _body({"detail": "Not found."}), {})
@@ -442,7 +450,6 @@ class TestMapResponseToError:
         (402, LenzQuotaExceededError),
         (422, LenzValidationError),
         (429, LenzRateLimitError),
-        (410, LenzGoneError),
         (500, LenzAPIError),
         (502, LenzAPIError),
         (503, LenzAPIError),
@@ -452,3 +459,19 @@ class TestMapResponseToError:
 def test_status_to_class_table(status, expected_cls):
     e = map_response_to_error(status, b"{}", {})
     assert isinstance(e, expected_cls)
+
+
+def test_errors_all_lists_every_public_error_class_and_constant():
+    import inspect
+
+    from lenz_io import errors
+
+    public_classes = {
+        name
+        for name, obj in vars(errors).items()
+        if inspect.isclass(obj) and issubclass(obj, Exception) and obj.__module__ == errors.__name__
+    }
+    assert public_classes <= set(errors.__all__)
+    assert {"LenzGoneError", "LenzUpstreamUnavailableError", "UPSTREAM_503_CODES"} <= set(errors.__all__)
+    for name in errors.__all__:
+        assert hasattr(errors, name), name
