@@ -19,6 +19,7 @@ from lenz_io import (
     Lenz,
     LenzAuthError,
     LenzError,
+    LenzGoneError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRateLimitError,
@@ -780,6 +781,36 @@ class TestVerifyAndWait:
             r.get("/verify/status/t").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
             client.verify_and_wait(claim="x", timeout=5, idempotency=False)
         assert "Idempotency-Key" not in submit.calls.last.request.headers
+
+    def test_wait_stops_on_a_purged_verification(self, client, monkeypatch):
+        # A 410 is terminal: the loop raises it at once instead of swallowing
+        # it and polling until the deadline.
+        slept = []
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            poll = r.get("/verify/status/t").respond(
+                410,
+                json={"detail": "Gone.", "code": "purged", "purged_at": "2026-09-25T10:00:00+00:00"},
+            )
+            with pytest.raises(LenzGoneError) as ei:
+                client.wait("t", timeout=60)
+        assert poll.call_count == 1
+        assert slept == []
+        assert ei.value.purged_at == "2026-09-25T10:00:00+00:00"
+
+    def test_batch_wait_reports_a_purged_item_as_failed_and_keeps_the_rest(self, client, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={"items": [{"task_id": "a", "claim_text": "A"}, {"task_id": "b", "claim_text": "B"}]},
+            )
+            gone = r.get("/verify/status/a").respond(410, json={"code": "purged"})
+            r.get("/verify/status/b").respond(200, json={"status": "completed", "result": _COMPLETED_RESULT})
+            results = client.verify_batch_and_wait(claims=[{"claim": "A"}, {"claim": "B"}], timeout=60)
+        assert gone.call_count == 1
+        assert [x.status for x in results] == ["failed", "completed"]
+        assert results[0].status_detail is None
 
     def test_needs_input_raises_with_payload(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

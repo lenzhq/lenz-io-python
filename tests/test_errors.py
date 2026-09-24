@@ -14,6 +14,7 @@ from lenz_io.errors import (
     LenzAPIError,
     LenzAuthError,
     LenzError,
+    LenzGoneError,
     LenzPipelineError,
     LenzQuotaExceededError,
     LenzRateLimitError,
@@ -296,6 +297,41 @@ class TestMapResponseToError:
         )
         assert e.upgrade_url == "https://lenz.io/plans"
 
+    def test_410_purged_is_its_own_error(self):
+        e = map_response_to_error(
+            410,
+            _body(
+                {
+                    "detail": "This verification is no longer available.",
+                    "code": "purged",
+                    "purged_at": "2026-09-25T10:00:00+00:00",
+                }
+            ),
+            {"X-Request-ID": "rq410"},
+        )
+        assert isinstance(e, LenzGoneError)
+        assert e.code == "purged"
+        assert e.purged_at == "2026-09-25T10:00:00+00:00"
+        assert e.status_code == 410
+        assert e.message == "This verification is no longer available."
+        assert e.request_id == "rq410"
+        # Not the generic "retry; file an issue": retrying cannot bring it back.
+        assert "retry" not in e.fix.lower()
+
+    def test_410_without_purged_at_reads_none(self):
+        e = map_response_to_error(410, _body({"code": "purged"}), {})
+        assert isinstance(e, LenzGoneError)
+        assert e.purged_at is None
+
+    def test_410_malformed_purged_at_reads_none(self):
+        e = map_response_to_error(410, _body({"code": "purged", "purged_at": 42}), {})
+        assert e.purged_at is None
+
+    def test_gone_is_not_a_not_found(self):
+        # A 404 stays a plain LenzError: only 410 is gone.
+        e = map_response_to_error(404, _body({"detail": "Not found."}), {})
+        assert not isinstance(e, LenzGoneError)
+
     def test_409_verification_not_ready_is_its_own_error(self):
         hint = f"Poll GET /verify/status/{_TASK_ID} until it completes, then read its result."
         e = map_response_to_error(
@@ -406,6 +442,7 @@ class TestMapResponseToError:
         (402, LenzQuotaExceededError),
         (422, LenzValidationError),
         (429, LenzRateLimitError),
+        (410, LenzGoneError),
         (500, LenzAPIError),
         (502, LenzAPIError),
         (503, LenzAPIError),

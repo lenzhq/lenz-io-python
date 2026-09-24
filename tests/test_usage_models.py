@@ -198,3 +198,14 @@ def test_a_server_sending_only_extra_still_fills_bonus():
     assert c.extra == 200
     with pytest.deprecated_call():
         assert c.bonus == 200
+
+
+def test_coverage_reason_names_the_account_switch():
+    # "account": the account turned warranty certificates off.
+    from typing import get_args
+
+    from lenz_io import CoverageReason
+
+    assert "account" in get_args(CoverageReason)
+    # Wire order: "account" sits right after "plan".
+    assert get_args(CoverageReason)[:2] == ("plan", "account")
