@@ -12,7 +12,7 @@
   "key_finding": "The Eiffel Tower stands on the Champ de Mars in Paris.",
   "executive_summary": "Every source places it in the 7th arrondissement.",
   "warnings": ["Measured at the base."],
-  "suggested_revision": null,
+  "suggested_rewrite": null,
   "sources": [
     {
       "source_name": "Ville de Paris",

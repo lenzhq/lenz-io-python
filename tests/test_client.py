@@ -1700,10 +1700,10 @@ class TestConnectionReuse:
         assert any("tsk_log_test" in r.message for r in caplog.records)
 
 
-_REVISION = "The Amazon produces roughly 6-9% of the world's oxygen."
+_REWRITE = "The Amazon produces roughly 6-9% of the world's oxygen."
 
 
-class TestSuggestedRevision:
+class TestSuggestedRewrite:
     """The suggested rewrite on a verification detail: a string, or `None`.
 
     `None` covers three cases the SDK does not tell apart: the server sent
@@ -1720,30 +1720,30 @@ class TestSuggestedRevision:
             return client.verifications.get("vid_r")
 
     def test_a_present_value_is_the_rewrite(self, client):
-        assert self._get(client, self._detail(suggested_revision=_REVISION)).suggested_revision == _REVISION
+        assert self._get(client, self._detail(suggested_rewrite=_REWRITE)).suggested_rewrite == _REWRITE
 
     def test_null_is_none(self, client):
-        assert self._get(client, self._detail(suggested_revision=None)).suggested_revision is None
+        assert self._get(client, self._detail(suggested_rewrite=None)).suggested_rewrite is None
 
     def test_an_absent_key_is_none(self, client):
         """An older server, or a verification predating the field."""
-        assert self._get(client, self._detail()).suggested_revision is None
+        assert self._get(client, self._detail()).suggested_rewrite is None
 
     def test_unknown_sibling_keys_do_not_break_the_client(self, client):
-        v = self._get(client, self._detail(suggested_revision=_REVISION, something_new={"a": 1}))
-        assert v.suggested_revision == _REVISION
+        v = self._get(client, self._detail(suggested_rewrite=_REWRITE, something_new={"a": 1}))
+        assert v.suggested_rewrite == _REWRITE
 
     def test_the_completed_status_body_carries_it(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.get("/verify/status/t").respond(
                 200,
-                json={"status": "completed", "result": self._detail(suggested_revision=_REVISION)},
+                json={"status": "completed", "result": self._detail(suggested_rewrite=_REWRITE)},
             )
             st = client.get_status("t")
-        assert st.result.suggested_revision == _REVISION
+        assert st.result.suggested_rewrite == _REWRITE
 
 
-class TestSuggestedRevisionOnListItems:
+class TestSuggestedRewriteOnListItems:
     """`GET /verifications` and `GET /library` rows carry the same field."""
 
     def _page(self, *items):
@@ -1757,26 +1757,26 @@ class TestSuggestedRevisionOnListItems:
             r.get("/verifications").respond(
                 200,
                 json=self._page(
-                    self._row("a", verdict="False", suggested_revision=_REVISION),
-                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("a", verdict="False", suggested_rewrite=_REWRITE),
+                    self._row("b", verdict="True", suggested_rewrite=None),
                     self._row("c", verdict="Mixed"),
                 ),
             )
             page = client.verifications.list()
-        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+        assert [i.suggested_rewrite for i in page.items] == [_REWRITE, None, None]
 
     def test_library_list_rows_parse_present_null_and_absent(self, unauth_client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.get("/library").respond(
                 200,
                 json=self._page(
-                    self._row("a", verdict="False", suggested_revision=_REVISION),
-                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("a", verdict="False", suggested_rewrite=_REWRITE),
+                    self._row("b", verdict="True", suggested_rewrite=None),
                     self._row("c", verdict="Mixed"),
                 ),
             )
             page = unauth_client.library.list()
-        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+        assert [i.suggested_rewrite for i in page.items] == [_REWRITE, None, None]
 
 
 class TestCoverage:

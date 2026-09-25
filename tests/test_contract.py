@@ -183,30 +183,30 @@ def test_contract_no_unknown_fields(fixture_name, model_cls):
     model_cls.model_validate(payload)
 
 
-def test_suggested_revision_is_on_every_verification_fixture():
-    """The server sends `suggested_revision` on every verification detail: a
+def test_suggested_rewrite_is_on_every_verification_fixture():
+    """The server sends `suggested_rewrite` on every verification detail: a
     string on a corrected claim, `null` otherwise. Both parse into the typed
     field, not into the extras."""
     completed = TaskStatus.model_validate(_load("verify_status_completed.json"))
-    rev = completed.result.suggested_revision
-    assert isinstance(rev, str)
-    assert rev.startswith("Einstein's 1921 Nobel Prize in Physics was awarded")
+    rewrite = completed.result.suggested_rewrite
+    assert isinstance(rewrite, str)
+    assert rewrite.startswith("Einstein's 1921 Nobel Prize in Physics was awarded")
     for name in (
         "verifications_detail.json",
         "verifications_detail_covered.json",
         "verifications_detail_uncovered.json",
     ):
         payload = _load(name)
-        assert payload["suggested_revision"] is None
-        assert Verification.model_validate(payload).suggested_revision is None
+        assert payload["suggested_rewrite"] is None
+        assert Verification.model_validate(payload).suggested_rewrite is None
     webhook = _load("webhook_payload_completed.json")
-    assert webhook["result"]["suggested_revision"] is None
+    assert webhook["result"]["suggested_rewrite"] is None
     listed = VerificationList.model_validate(_load("verifications_list.json"))
-    assert [(i.verdict, i.suggested_revision is None) for i in listed.items] == [
+    assert [(i.verdict, i.suggested_rewrite is None) for i in listed.items] == [
         ("False", False),
         ("True", True),
     ]
-    assert listed.items[0].suggested_revision == rev
+    assert listed.items[0].suggested_rewrite == rewrite
 
 
 def test_completed_body_keeps_modified_at_null():

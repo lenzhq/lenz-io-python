@@ -249,17 +249,17 @@ Every claim-shaped response shares these fields at top level:
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
-### A suggested rewrite (`suggested_revision`)
+### A suggested rewrite (`suggested_rewrite`)
 
-A verification can carry `suggested_revision`: a suggested rewrite of its
+A verification can carry `suggested_rewrite`: a suggested rewrite of its
 `claim` that the verification's findings support, to use in place of the
 original sentence.
 
 ```python
 v = client.verifications.get("a1b2c3d4")
 
-if v.suggested_revision is not None:
-    print(v.suggested_revision)  # the rewritten sentence
+if v.suggested_rewrite is not None:
+    print(v.suggested_rewrite)  # the rewritten sentence
 ```
 
 - **It has not been verified itself.** Before using it, review it or run it
