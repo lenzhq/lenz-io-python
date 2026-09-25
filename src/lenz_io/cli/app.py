@@ -15,6 +15,7 @@ from lenz_io import __version__
 from lenz_io.client import DEFAULT_BASE_URL
 
 from . import commands
+from . import review as review_mod
 from . import verify as verify_mod
 from .config import ENV_BASE_URL, ConfigError, resolve_all
 from .context import CLIState
@@ -69,6 +70,7 @@ def _main(
 app.command("extract")(commands.extract)
 app.command("assess")(commands.assess)
 app.command("verify")(verify_mod.verify)
+app.command("review")(review_mod.review)
 app.command("status")(commands.status)
 app.command("show")(commands.show)
 app.command("ask")(commands.ask)

@@ -1,0 +1,39 @@
+{
+  "review_id": "442b6aa9",
+  "view": "full",
+  "status": "queued",
+  "outcome": null,
+  "created_at": "2026-09-25T19:00:39.962779Z",
+  "completed_at": null,
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 2,
+    "depth": "low"
+  },
+  "summary": {
+    "claims_selected": null,
+    "claim_limit": 20,
+    "claim_limit_reached": null,
+    "input_truncated": false,
+    "assessments": null,
+    "verifications": null,
+    "issues": 0
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": 10,
+  "issues": [],
+  "failures": [],
+  "claims": [],
+  "failure": null
+}

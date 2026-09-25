@@ -1,0 +1,315 @@
+{
+  "review_id": "442b6aa9",
+  "view": "full",
+  "status": "completed",
+  "outcome": "incomplete",
+  "created_at": "2026-09-25T19:00:39.962779Z",
+  "completed_at": "2026-09-25T19:01:57.678147Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 2,
+    "depth": "low"
+  },
+  "summary": {
+    "claims_selected": 4,
+    "claim_limit": 20,
+    "claim_limit_reached": false,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 3,
+      "failed": 1
+    },
+    "verifications": {
+      "planned": 2,
+      "completed": 2,
+      "failed": 0
+    },
+    "issues": 3
+  },
+  "credits": {
+    "charged": 13
+  },
+  "poll_after_seconds": null,
+  "issues": [
+    {
+      "claim_index": 0,
+      "claim": "The EU AI Act entered into force in March 2024.",
+      "verified_claim": null,
+      "verdict": "False",
+      "confidence": "high",
+      "source": "verification",
+      "verification_id": "c9b769e1",
+      "verification_status": "completed",
+      "verification_url": "https://lenz.io/api/v1/verifications/c9b769e1",
+      "url": "https://lenz.io/c/eu-ai-act-entry-into-force-march-2024-c9b769e1",
+      "escalation": {
+        "matched_rules": [
+          "verdict",
+          "confidence"
+        ],
+        "disposition": "planned"
+      },
+      "key_finding": "The EU AI Act entered into force on 1 August 2024.",
+      "rationale": "The claim is false: in March 2024, the European Parliament adopted its position on the proposed legislation, but the EU AI Act had not yet entered into force. Regulation (EU) 2024/1689 was signed on June 13, 2024, published on July 12, 2024, and entered into force on August 1, 2024, twenty days after publication.",
+      "suggested_rewrite": "The EU AI Act entered into force on 1 August 2024.",
+      "failure": null
+    },
+    {
+      "claim_index": 3,
+      "claim": "About 40% of European companies had started AI Act compliance work by the end of 2024.",
+      "verified_claim": null,
+      "verdict": "False",
+      "confidence": "medium",
+      "source": "verification",
+      "verification_id": "86ea9355",
+      "verification_status": "completed",
+      "verification_url": "https://lenz.io/api/v1/verifications/86ea9355",
+      "url": "https://lenz.io/c/european-companies-ai-act-compliance-2024-86ea9355",
+      "escalation": {
+        "matched_rules": [
+          "verdict",
+          "confidence"
+        ],
+        "disposition": "planned"
+      },
+      "key_finding": "EY reported 28% full compliance among surveyed organizations.",
+      "rationale": "The closest contemporaneous evidence does not support the stated figure: Deloitte Legal Germany’s 2024 survey of 500 company managers found that only 26.2% had begun seriously addressing AI Act implementation, while 48.6% had not seriously prepared. That is materially below “about 40%,” and the evidence concerns German companies rather than all European companies, making the claim’s broader geographic wording unsupported. Some surveys use different populations and looser measures of readiness, but they do not establish the claim as phrased by year-end 2024.",
+      "suggested_rewrite": null,
+      "failure": null
+    },
+    {
+      "claim_index": 2,
+      "claim": "Fines for prohibited practices under the EU AI Act can reach 7% of global annual turnover.",
+      "verified_claim": null,
+      "verdict": "Mostly False",
+      "confidence": "medium",
+      "source": "assessment",
+      "verification_id": null,
+      "verification_status": null,
+      "verification_url": null,
+      "url": null,
+      "escalation": {
+        "matched_rules": [
+          "verdict"
+        ],
+        "disposition": "cap"
+      },
+      "key_finding": null,
+      "rationale": "The claim accurately states the maximum percentage-based penalty for non-compliance with the EU AI Act’s prohibited-practices rules. Article 99 permits fines of up to €35 million or, for an undertaking, 7% of its total worldwide annual turnover for the preceding financial year, whichever is higher; the exact caveat is that the percentage applies to undertakings and the amount imposed depends on the circumstances.",
+      "suggested_rewrite": null,
+      "failure": null
+    }
+  ],
+  "failures": [
+    {
+      "claim_index": 1,
+      "claim": "Obligations under the EU AI Act for general-purpose models applied from 2 August 2025.",
+      "stage": "assessment",
+      "failure": {
+        "failure_reason": "timeout",
+        "failure_class": "upstream_unavailable",
+        "retryable": true,
+        "hint": "The quick check ran out of time on this claim. Retry it; nothing was charged.",
+        "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    }
+  ],
+  "claims": [
+    {
+      "index": 0,
+      "claim": "The EU AI Act entered into force in March 2024.",
+      "result": {
+        "verdict": "False",
+        "confidence": "high",
+        "source": "verification",
+        "is_issue": true
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "False",
+        "confidence": "high",
+        "rationale": "The claim is false: in March 2024, the European Parliament adopted its position on the proposed legislation, but the EU AI Act had not yet entered into force. Regulation (EU) 2024/1689 was signed on June 13, 2024, published on July 12, 2024, and entered into force on August 1, 2024, twenty days after publication.",
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [
+          "verdict",
+          "confidence"
+        ],
+        "disposition": "planned"
+      },
+      "verification": {
+        "status": "completed",
+        "content_status": "available",
+        "task_id": "d31e51f182a94751a6666ff393f2ab81",
+        "verification_id": "c9b769e1",
+        "claim": "The EU AI Act entered into force in March 2024.",
+        "language": "en",
+        "visibility": "private",
+        "depth": "low",
+        "domain": "Legal",
+        "entities": [
+          {
+            "name": "EU AI Act",
+            "qid": "Q108456694"
+          },
+          {
+            "name": "European Union",
+            "qid": "Q458"
+          }
+        ],
+        "verdict": "False",
+        "confidence": "high",
+        "lenz_score": 1,
+        "key_finding": "The EU AI Act entered into force on 1 August 2024.",
+        "executive_summary": "The EU AI Act entered into force on 1 August 2024, so the March date is incorrect. Official EUR-Lex records and European Commission material directly establish the legal date. March 2024 refers to the European Parliament’s position vote, a legislative step rather than entry into force.",
+        "suggested_rewrite": "The EU AI Act entered into force on 1 August 2024.",
+        "warnings": [
+          "“Entry into force” is a precise legal milestone and should not be equated with a parliamentary vote.",
+          "Several EUR-Lex links are duplicate presentations of the same regulation, not independent sources.",
+          "The March 2024 date identifies a legislative step, not when the Act took legal effect."
+        ],
+        "created_at": "2026-09-25T19:36:07.087602+00:00",
+        "modified_at": null,
+        "verification_url": "https://lenz.io/api/v1/verifications/c9b769e1",
+        "url": "https://lenz.io/c/eu-ai-act-entry-into-force-march-2024-c9b769e1",
+        "failure": null
+      }
+    },
+    {
+      "index": 1,
+      "claim": "Obligations under the EU AI Act for general-purpose models applied from 2 August 2025.",
+      "result": null,
+      "assessment": {
+        "status": "failed",
+        "verdict": "Error",
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": "timeout",
+        "identified_claims": [],
+        "hint": "The quick check ran out of time on this claim. Retry it; nothing was charged.",
+        "failure": {
+          "failure_reason": "timeout",
+          "failure_class": "upstream_unavailable",
+          "retryable": true,
+          "hint": "The quick check ran out of time on this claim. Retry it; nothing was charged.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+        }
+      },
+      "escalation": null,
+      "verification": null
+    },
+    {
+      "index": 2,
+      "claim": "Fines for prohibited practices under the EU AI Act can reach 7% of global annual turnover.",
+      "result": {
+        "verdict": "Mostly False",
+        "confidence": "medium",
+        "source": "assessment",
+        "is_issue": true
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "Mostly False",
+        "confidence": "medium",
+        "rationale": "The claim accurately states the maximum percentage-based penalty for non-compliance with the EU AI Act’s prohibited-practices rules. Article 99 permits fines of up to €35 million or, for an undertaking, 7% of its total worldwide annual turnover for the preceding financial year, whichever is higher; the exact caveat is that the percentage applies to undertakings and the amount imposed depends on the circumstances.",
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [
+          "verdict"
+        ],
+        "disposition": "cap"
+      },
+      "verification": null
+    },
+    {
+      "index": 3,
+      "claim": "About 40% of European companies had started AI Act compliance work by the end of 2024.",
+      "result": {
+        "verdict": "False",
+        "confidence": "medium",
+        "source": "verification",
+        "is_issue": true
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "Mostly False",
+        "confidence": "low",
+        "rationale": "The closest contemporaneous evidence does not support the stated figure: Deloitte Legal Germany’s 2024 survey of 500 company managers found that only 26.2% had begun seriously addressing AI Act implementation, while 48.6% had not seriously prepared. That is materially below “about 40%,” and the evidence concerns German companies rather than all European companies, making the claim’s broader geographic wording unsupported. Some surveys use different populations and looser measures of readiness, but they do not establish the claim as phrased by year-end 2024.",
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [
+          "verdict",
+          "confidence"
+        ],
+        "disposition": "planned"
+      },
+      "verification": {
+        "status": "completed",
+        "content_status": "available",
+        "task_id": "52ddf94e8100440ab0c77fcc44d6b3d7",
+        "verification_id": "86ea9355",
+        "claim": "About 40% of European companies had started AI Act compliance work by the end of 2024.",
+        "language": "en",
+        "visibility": "private",
+        "depth": "low",
+        "domain": "Legal",
+        "entities": [
+          {
+            "name": "EU AI Act",
+            "qid": "Q108456694"
+          },
+          {
+            "name": "European Companies",
+            "qid": null
+          }
+        ],
+        "verdict": "False",
+        "confidence": "medium",
+        "lenz_score": 2,
+        "key_finding": "EY reported 28% full compliance among surveyed organizations.",
+        "executive_summary": "The cited evidence does not establish that about 40% of European companies had begun AI Act compliance work by the end of 2024. EY reported 80% awareness and 28% full compliance among surveyed organizations, neither of which measures whether work had started. European Commission materials cover roughly 100 voluntary AI Pact signatories, not a representative Europe-wide population, and a later update concerns 2026.",
+        "suggested_rewrite": null,
+        "warnings": [
+          "Awareness, full compliance and having started compliance work are distinct measures and cannot be treated as interchangeable.",
+          "Voluntary AI Pact signatories are a self-selected group, not a representative sample of European companies.",
+          "The evidence provides no survey result, denominator or valid calculation supporting the 40% figure for the end of 2024."
+        ],
+        "created_at": "2026-09-25T19:01:57.598097+00:00",
+        "modified_at": null,
+        "verification_url": "https://lenz.io/api/v1/verifications/86ea9355",
+        "url": "https://lenz.io/c/european-companies-ai-act-compliance-2024-86ea9355",
+        "failure": null
+      }
+    }
+  ],
+  "failure": null
+}

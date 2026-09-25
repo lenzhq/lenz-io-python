@@ -3,7 +3,15 @@
     pip install lenz-io
 
 The fact-check API for AI products. Four primitives form a research-depth
-ladder — find claims, judge them fast, prove them deep, follow up:
+ladder — find claims, judge them fast, prove them deep, follow up — and a
+fifth call runs the ladder on a whole draft:
+
+    # /review — every claim quick-checked, the doubtful ones deep-checked (2-4 min)
+    review = client.review_and_wait(text=draft)
+    for issue in review.issues:
+        print(issue.verdict, issue.claim, issue.suggested_rewrite)
+
+The primitives, call by call:
 
     from lenz_io import Lenz
     client = Lenz(api_key="lenz_...")
@@ -53,6 +61,8 @@ from .errors import (
     LenzValidationError,
     LenzVerificationNotReadyError,
     LenzWebhookSignatureError,
+    ReviewFailed,
+    ReviewTimeout,
 )
 from .models import (
     AskHistory,
@@ -71,14 +81,23 @@ from .models import (
     CoverageStatus,
     DebateSide,
     EntityRef,
+    Escalation,
+    EscalationPolicy,
     ExtractedClaims,
     ExtractedEntity,
     ExtractStatus,
+    FailureBlock,
     FailureClass,
     LibraryItem,
     LibraryList,
     Progress,
     RelatedVerifications,
+    ReviewClaim,
+    ReviewFailure,
+    ReviewFull,
+    ReviewIssue,
+    ReviewIssues,
+    ReviewStarted,
     SimilarVerification,
     Source,
     TaskAccepted,
@@ -94,10 +113,12 @@ from .models import (
 from .webhooks import (
     CertificateTimestamped,
     LenzWebhooks,
+    ReviewEvent,
     VerificationCompleted,
     VerificationFailed,
     VerificationNeedsInput,
     WebhookEvent,
+    parse_webhook,
     verify_signature,
 )
 
@@ -122,9 +143,12 @@ __all__ = [
     "CoverageStatus",
     "DebateSide",
     "EntityRef",
+    "Escalation",
+    "EscalationPolicy",
     "ExtractStatus",
     "ExtractedClaims",
     "ExtractedEntity",
+    "FailureBlock",
     "FailureClass",
     "Lenz",
     "LenzAPIError",
@@ -145,6 +169,15 @@ __all__ = [
     "LibraryList",
     "Progress",
     "RelatedVerifications",
+    "ReviewClaim",
+    "ReviewEvent",
+    "ReviewFailed",
+    "ReviewFailure",
+    "ReviewFull",
+    "ReviewIssue",
+    "ReviewIssues",
+    "ReviewStarted",
+    "ReviewTimeout",
     "SimilarVerification",
     "Source",
     "TaskAccepted",
@@ -162,5 +195,6 @@ __all__ = [
     "VerifyBatchItem",
     "WebhookEvent",
     "__version__",
+    "parse_webhook",
     "verify_signature",
 ]

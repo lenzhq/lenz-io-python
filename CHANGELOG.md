@@ -6,12 +6,71 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-A new optional field on every verification, single or listed,
-`suggested_rewrite` (below). Nothing the SDK sends changes, and 2.16.0 keeps
-working against the current API.
+`review`: the whole extract → assess → verify ladder on a draft in one call,
+from the SDK and from the CLI (below). And a new optional field on every
+verification, single or listed, `suggested_rewrite`. Nothing the SDK already
+sends changes, and 2.16.0 keeps working against the current API; `review`
+needs an API that serves `POST /review`.
 
 ### Added
 
+- **`client.review(text, ...)`**, which starts a review of a draft and returns
+  a `ReviewStarted` with its `review_id`. Every claim gets a quick verdict;
+  the ones whose verdict is `False`, `Mostly False` or `Mixed`, or whose
+  confidence is `low`, get a deep check, up to five. The rule is set with flat
+  keyword arguments (`verdicts`, `confidence`, `max_assessments`,
+  `max_verifications`, `depth`), which the SDK sends as the API's `escalate`
+  object; `None` keeps the server default and `[]` switches a rule off.
+  `webhook_url` has three states: `None` (the credential's default URL), `""`
+  (no webhook) or a URL. An `Idempotency-Key` is generated when you pass none:
+  a resend with the same key within 24 hours returns the same review, and a
+  new key is a new review.
+- **`client.get_review(review_id)`** returns a `ReviewFull` (every claim, in
+  `claims`), and **`get_review(review_id, view="issues")`** a `ReviewIssues`
+  (the issues and the failures only). Both carry `status`, `outcome` (`clean`,
+  `issues_found`, `incomplete` or `unchecked` once the review ends), `issues`,
+  `failures`, `summary`, `policy`, `credits.charged` and, on a failed review,
+  `failure`.
+- **`client.review_and_wait(text, *, timeout=600, on_update=None, **kw)`**
+  submits and polls on the review's `poll_after_seconds` (never faster than
+  every 5 s), one request per poll bounded by the time left, so the wait
+  keeps to its `timeout`; a failed read (5xx, network, 429) is retried on the
+  next poll. `on_update(review)` fires on every poll whose body changed; the
+  helper is silent without it. It raises `ReviewFailed` (a
+  `LenzPipelineError`, with `review_id`, `error_code`, `hint` and the final
+  `review`) on a failed review, and `ReviewTimeout` (a `LenzTimeoutError`,
+  with `review_id` and the last body read as `partial`) when the timeout
+  passes first.
+- **The review models.** Exported from `lenz_io`: `ReviewStarted`,
+  `ReviewFull`, `ReviewIssues`, `ReviewIssue`, `ReviewClaim`,
+  `ReviewFailure`, `EscalationPolicy`, `Escalation` (`matched_rules`,
+  `disposition`) and `FailureBlock`. The nested shapes you read but never
+  build (`ReviewEnvelope`, `ReviewResult`, `ReviewAssessment`,
+  `ReviewVerification`, `ReviewEntity`, `ReviewSummary`, `ReviewCredits`,
+  `ReviewAssessmentCounts`, `ReviewVerificationCounts`) live in
+  `lenz_io.models`. Every status, disposition and error code is a plain
+  string, so a value the API adds later passes through.
+- **`ReviewEvent`** for the `review.completed` and `review.failed` webhooks,
+  from `LenzWebhooks.parse`, with `event_id` (the same on every retry of one
+  delivery: deduplicate on it), `review_id` and the final `review`.
+  **`parse_webhook(body)`** parses a body whose signature was already checked
+  into the same typed events. Verification events are unchanged, and an event
+  type this version does not know still parses as a plain `WebhookEvent`.
+- **`lenz review draft.md`** in the CLI. It prints the quick verdicts as they
+  arrive and rewrites each row as its deep check lands, then the result: the
+  claim, the verdict, the key finding (deep check) or the reviewers' note
+  (quick check), and `Suggested rewrite: …`. The exit code is the outcome:
+  `0` clean, `1` issues found, `2` anything else, errors included, so a CI step
+  never reads an outage as a clean draft. `--issues`, `--json`,
+  `--max-verifications N`, `--depth low`, `--detach` and
+  `--resume <review_id>`. The draft is a file, `-` for stdin, or one URL.
+- **Error codes from `/review`** reach you on the existing errors, with
+  `code` set: `review_in_flight` (a `LenzRateLimitError` carrying
+  `retry_after`; the account already has its maximum of reviews running),
+  `capacity` and `upstream_unavailable` (`LenzUpstreamUnavailableError`),
+  `invalid_verdict_label`, `invalid_confidence_band` and
+  `webhook_secret_missing` (`LenzValidationError`), and, for a URL review,
+  `extract_daily_limit` (`LenzRateLimitError`).
 - **`suggested_rewrite` on `Verification`, `VerificationListItem` and
   `LibraryItem`**, a string or `None`: a suggested rewrite of the
   verification's `claim` that its findings support, to use in place of the
@@ -25,9 +84,16 @@ working against the current API.
 - **The CLI prints it.** `lenz verify`, `lenz show` and the batch view print
   one line under the key finding, `Suggested rewrite: …`, when a verification
   carries one; `--json` output includes the field.
-- **The `openapi.json` snapshot is refreshed.** Additive only:
-  `suggested_rewrite` on the verification detail and on list items, and its
-  line in the API description.
+- **The `openapi.json` snapshot is refreshed.** Additive only: the two
+  review paths and their schemas, `suggested_rewrite` on the verification
+  detail and on list items, and their lines in the API description.
+
+### Changed
+
+- **A 429 with `code: review_in_flight` is raised at once** instead of being
+  slept through by the retry ladder: a review runs for minutes, so waiting the
+  stated minute inside the call would most likely end in the same answer.
+  Every other 429 is retried as before.
 
 ## [2.16.0] - 2026-09-24
 

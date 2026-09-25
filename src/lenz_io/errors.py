@@ -21,7 +21,10 @@ from __future__ import annotations
 
 import json
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .models import ReviewFull
 
 
 class LenzError(Exception):
@@ -218,7 +221,13 @@ class LenzRateLimitError(LenzError):
 
 
 class LenzAPIError(LenzError):
-    """500 / 502 / 503 / 504 / catch-all for unexpected server errors."""
+    """500 / 502 / 503 / 504 / catch-all for unexpected server errors.
+
+    ``retry_after`` is the wait the response stated (``Retry-After``), or
+    ``None`` when it stated none.
+    """
+
+    retry_after: int | None = None
 
 
 class LenzUpstreamUnavailableError(LenzAPIError):
@@ -323,6 +332,35 @@ class LenzGoneError(LenzError):
     purged_at: str | None = None
 
 
+class ReviewTimeout(LenzTimeoutError):
+    """``review_and_wait`` reached its ``timeout`` before the review ended.
+
+    The review keeps running server-side. ``review_id`` resumes it
+    (``client.get_review(review_id)``), and ``partial`` is the last body read,
+    or ``None`` when no read succeeded: its ``claims`` already carry the quick
+    verdicts that are in.
+    """
+
+    review_id: str = ""
+    partial: ReviewFull | None = None
+
+
+class ReviewFailed(LenzPipelineError):
+    """A review ended ``failed``.
+
+    ``error_code`` is ``review.failure.failure_reason`` (an open set:
+    ``no_claim``, ``insufficient_credits``, ``upstream_unavailable``, …),
+    ``hint`` the server's one sentence on what to do next, ``retryable``
+    whether resending the same draft can help, and ``review`` the final body.
+    A subclass of :class:`LenzPipelineError`, so an existing handler for
+    failed verifications catches it too.
+    """
+
+    review_id: str = ""
+    error_code: str = ""
+    review: ReviewFull | None = None
+
+
 class LenzWebhookSignatureError(LenzError):
     """``LenzWebhooks.parse`` rejected a payload.
 
@@ -360,6 +398,12 @@ MAX_RETRY_AFTER_SLEEP = 60
 # carries no Lenz code, states a maintenance-window wait, and must keep being
 # retried exactly as it was before 2.8.0.
 UPSTREAM_503_CODES = ("upstream_unavailable", "capacity")
+
+# 429 ``code`` values the retry ladder never sleeps through, whatever wait they
+# state. ``review_in_flight`` means the account already has its maximum of
+# reviews running, and a review runs for minutes: sleeping the stated wait
+# inside a submit would block the caller, most likely into the same answer.
+NO_RETRY_429_CODES = ("review_in_flight",)
 
 _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
     401: (
@@ -516,10 +560,16 @@ def map_response_to_error(
         # Retrying cannot bring it back, so not the generic 4xx advice.
         err.fix = "Its account's retention period removed it. A certificate issued for it is still available."
 
+    if isinstance(err, LenzAPIError) and not isinstance(err, LenzUpstreamUnavailableError):
+        err.retry_after = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
         # the fallback for any proxy that strips the body.
         stated = _opt_int(parsed.get("retry_after"))
+        if stated is None:
+            # The /review error body states its wait under this name.
+            stated = _opt_int(parsed.get("retry_after_seconds"))
         if stated is None:
             stated = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
         err.retry_after = stated
@@ -570,6 +620,8 @@ def map_response_to_error(
             headers.get("Retry-After"),
             headers.get("retry-after"),
             parsed.get("reset_in_seconds"),
+            # ``review_in_flight`` states its wait here.
+            parsed.get("retry_after_seconds"),
             parsed.get("retry_after"),
         ):
             resolved = _opt_int(candidate)
@@ -619,6 +671,7 @@ def _fix_hint_for(status_code: int) -> str:
 
 __all__ = [
     "MAX_RETRY_AFTER_SLEEP",
+    "NO_RETRY_429_CODES",
     "UPSTREAM_503_CODES",
     "LenzAPIError",
     "LenzAuthError",
@@ -633,5 +686,7 @@ __all__ = [
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
+    "ReviewFailed",
+    "ReviewTimeout",
     "map_response_to_error",
 ]

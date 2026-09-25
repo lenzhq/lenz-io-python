@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .errors import LenzWebhookSignatureError
+from .models import ReviewFull
 
 SIGNATURE_HEADER = "X-Lenz-Signature"
 SIGNATURE_PREFIX = "sha256="
@@ -160,11 +161,34 @@ class CertificateTimestamped(WebhookEvent):
     coverage: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass
+class ReviewEvent(WebhookEvent):
+    """``event=review.completed`` or ``review.failed`` — a review ended.
+
+    ``review`` is the final review (the same body ``get_review`` returns),
+    or ``None`` if it could not be parsed (``raw["review"]`` still has it).
+    ``status`` is ``completed`` or ``failed``; read ``review.outcome`` and
+    ``review.issues``.
+
+    Deduplicate on ``event_id``: it is the same on every delivery attempt of
+    one event, while ``attempt`` counts up. ``task_id`` identifies the
+    delivery and cannot be polled on ``/verify/status``. The deep checks a
+    review runs send no ``verification.*`` events of their own.
+    """
+
+    event_id: str = ""
+    review_id: str = ""
+    review: ReviewFull | None = None
+
+
 def _build_event(payload: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
     event = str(payload.get("event") or "")
     task_id = str(payload.get("task_id") or "")
-    attempt = int(payload.get("attempt") or 1)
+    try:
+        attempt = int(payload.get("attempt") or 1)
+    except (TypeError, ValueError):
+        attempt = 1
     delivered_at = str(payload.get("delivered_at") or "")
     verification_id = str(payload["verification_id"]) if payload.get("verification_id") else None
     batch_id = str(payload["batch_id"]) if payload.get("batch_id") else None
@@ -221,7 +245,27 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             raw=payload,
             coverage=payload.get("coverage") or {},
         )
-    # Unknown event type — return generic. Future-compatible.
+    if event in ("review.completed", "review.failed"):
+        body = payload.get("review")
+        try:
+            review = ReviewFull.model_validate(body) if isinstance(body, dict) else None
+        except ValueError:
+            review = None
+        return ReviewEvent(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            event_id=str(payload.get("event_id") or ""),
+            review_id=str(payload.get("review_id") or ""),
+            review=review,
+        )
+    # Unknown event type — return generic. Future-compatible: ignore events
+    # you do not handle rather than failing the delivery.
     return WebhookEvent(
         event=event,
         task_id=task_id,
@@ -232,6 +276,28 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
         status=status,
         raw=payload,
     )
+
+
+def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:
+    """Parse a webhook body into its typed event, WITHOUT checking the signature.
+
+    For a body whose signature you have already checked (with
+    :func:`verify_signature`), or one you stored. For a request as it arrives,
+    use :meth:`LenzWebhooks.parse`, which checks the signature and the replay
+    window first.
+
+    Returns a :class:`ReviewEvent` for ``review.*``, the matching verification
+    or certificate event otherwise, and a plain :class:`WebhookEvent` for an
+    event type this release does not know. Branch with ``isinstance`` and
+    ignore events you do not handle.
+    """
+    if isinstance(body, dict):
+        payload: Any = body
+    else:
+        payload = json.loads(body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body)
+    if not isinstance(payload, dict):
+        raise ValueError(f"A webhook body is a JSON object, got {type(payload).__name__}.")
+    return _build_event(payload)
 
 
 class LenzWebhooks:
@@ -344,9 +410,11 @@ class LenzWebhooks:
 __all__ = [
     "SIGNATURE_HEADER",
     "LenzWebhooks",
+    "ReviewEvent",
     "VerificationCompleted",
     "VerificationFailed",
     "VerificationNeedsInput",
     "WebhookEvent",
+    "parse_webhook",
     "verify_signature",
 ]

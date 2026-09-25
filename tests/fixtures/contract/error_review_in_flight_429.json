@@ -1,0 +1,5 @@
+{
+  "detail": "This account already has 3 reviews running. Retry when one completes.",
+  "code": "review_in_flight",
+  "retry_after_seconds": 60
+}

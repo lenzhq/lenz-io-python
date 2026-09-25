@@ -1,0 +1,15 @@
+{
+  "detail": "payload.escalate.verdicts: Unknown verdict label 'Wrong'; use one of: False, Mostly False, Mixed, Mostly True, True.",
+  "code": "invalid_verdict_label",
+  "errors": [
+    {
+      "loc": [
+        "body",
+        "payload",
+        "escalate",
+        "verdicts"
+      ],
+      "msg": "Unknown verdict label 'Wrong'; use one of: False, Mostly False, Mixed, Mostly True, True."
+    }
+  ]
+}
