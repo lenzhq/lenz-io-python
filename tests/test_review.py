@@ -477,12 +477,14 @@ class TestReviewAndWait:
     def test_failed_terminal_raises_review_failed(self, client, no_sleep, fixture, code, retryable):
         with respx.mock(base_url=BASE) as r:
             r.post("/review").respond(202, json=_load("review_accepted.json"))
-            r.get("/reviews/442b6aa9").mock(side_effect=_sequence("review_queued.json", fixture))
+            # the recorded failure, served as this review
+            failed = dict(_load(fixture), review_id="442b6aa9")
+            r.get("/reviews/442b6aa9").mock(side_effect=_sequence_raw(_load("review_queued.json"), failed))
             with pytest.raises(ReviewFailed) as exc:
                 client.review_and_wait("draft")
         err = exc.value
         assert isinstance(err, LenzPipelineError)
-        assert err.review_id == _load(fixture)["review_id"]
+        assert err.review_id == "442b6aa9"
         assert err.error_code == code
         assert err.failure_reason == code
         assert err.retryable is retryable
@@ -573,8 +575,25 @@ class TestReviewAndWait:
             r.get("/reviews/442b6aa9").mock(side_effect=_sequence_raw(bad, _load("review_completed.json")))
             assert client.review_and_wait("draft").status == "completed"
 
+    @pytest.mark.parametrize(
+        "stray",
+        [
+            {"status": "completed"},
+            dict(_load("review_completed.json"), review_id="deadbeef"),
+            {k: v for k, v in _load("review_completed.json").items() if k != "issues"},
+            dict(_load("review_completed.json"), claims=None),
+        ],
+    )
+    def test_only_this_reviews_full_body_is_accepted(self, client, no_sleep, stray):
+        # A proxy's or another review's 200 must not end the wait.
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(side_effect=_sequence_raw(stray, _load("review_completed.json")))
+            review = client.review_and_wait("draft")
+        assert review.review_id == "442b6aa9" and len(review.issues) == 2
+
     def test_failed_review_without_a_failure_block(self, client, no_sleep):
-        body = _load("review_failed_no_claim.json")
+        body = dict(_load("review_failed_no_claim.json"), review_id="442b6aa9")
         body["failure"] = None
         with respx.mock(base_url=BASE) as r:
             r.post("/review").respond(202, json=_load("review_accepted.json"))

@@ -65,7 +65,9 @@ def draft(tmp_path):
 
 
 def _serve(r, *states: str, post: str = "review_accepted.json"):
-    route_post = r.post("/review").respond(202, json=_load(post))
+    # The receipt names the review the last state belongs to, as the API would.
+    receipt = dict(_load(post), review_id=_load(states[-1])["review_id"]) if states else _load(post)
+    route_post = r.post("/review").respond(202, json=receipt)
     route_get = r.get(url__regex=r"/reviews/[0-9a-f]+$").mock(
         side_effect=[httpx.Response(200, json=_load(s)) for s in states]
     )
@@ -90,7 +92,7 @@ def _invoke(*args: str):
 )
 def test_exit_code_follows_the_outcome(draft, fixture, code):
     with respx.mock(base_url=BASE) as r:
-        _serve(r, "review_queued.json", fixture)
+        _serve(r, fixture)
         result = _invoke("review", draft, "--json")
     assert result.exit_code == code, result.output
     assert json.loads(result.stdout)["review_id"] == _load(fixture)["review_id"]

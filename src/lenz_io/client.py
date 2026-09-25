@@ -1041,6 +1041,8 @@ class Lenz:
                 body = self._request(
                     "GET", f"/reviews/{review_id}", max_retries=0, timeout=max(1.0, min(remaining, self._timeout))
                 )
+                if not _is_full_review_body(body, review_id):
+                    raise ValueError("not this review's full body")
                 review = ReviewFull.model_validate(body)
             except ValueError:
                 # A body this release cannot read (pydantic's ValidationError
@@ -1480,6 +1482,19 @@ class Lenz:
         if last_exc:
             raise LenzAPIError(message=str(last_exc), cause=str(last_exc)) from last_exc
         raise LenzAPIError(message=f"{method} {path} failed without diagnostic")
+
+
+def _is_full_review_body(body: Any, review_id: str) -> bool:
+    """Whether a 200 is this review's full view: its id, a status, and the
+    three lists. A proxy page or another review's body is a failed poll, never
+    a result (an empty ``{"status": "completed"}`` would otherwise end the
+    wait with no issues)."""
+    return (
+        isinstance(body, dict)
+        and body.get("review_id") == review_id
+        and isinstance(body.get("status"), str)
+        and all(isinstance(body.get(k), list) for k in ("issues", "failures", "claims"))
+    )
 
 
 def _review_failed(review: ReviewFull) -> ReviewFailed:
