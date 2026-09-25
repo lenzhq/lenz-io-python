@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-09-26
+
 `review`: the whole extract → assess → verify ladder on a draft in one call,
 from the SDK and from the CLI (below). And a new optional field on every
 verification, single or listed, `suggested_rewrite`. Nothing the SDK already
