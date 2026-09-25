@@ -559,6 +559,9 @@ def map_response_to_error(
         # the fallback for any proxy that strips the body.
         stated = _opt_int(parsed.get("retry_after"))
         if stated is None:
+            # The /review error body states its wait under this name.
+            stated = _opt_int(parsed.get("retry_after_seconds"))
+        if stated is None:
             stated = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
         err.retry_after = stated
 

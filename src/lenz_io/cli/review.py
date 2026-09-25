@@ -30,7 +30,7 @@ import typer
 from rich.markup import escape
 
 from lenz_io import Lenz
-from lenz_io.errors import ReviewFailed, ReviewTimeout
+from lenz_io.errors import LenzError, ReviewFailed, ReviewTimeout
 from lenz_io.models import ReviewClaim, ReviewFull
 
 from ._run import execute, read_text_arg
@@ -77,6 +77,14 @@ def review(
     out = state.output
 
     def work(client: Lenz) -> None:
+        try:
+            _work(client)
+        except KeyboardInterrupt:
+            # Never left to the CLI framework: an older typer turns it into
+            # exit 1, which here means "issues found".
+            raise SystemExit(130) from None
+
+    def _work(client: Lenz) -> None:
         if resume:
             if draft:
                 raise CLIError("Pass either a draft or --resume, not both.", code="invalid_usage", exit_code=2)
@@ -89,7 +97,12 @@ def review(
             if detach:
                 _emit_detached(out, review_id)
                 return
-        final = _wait(client, out, review_id, timeout)
+        try:
+            final = _wait(client, out, review_id, timeout)
+        except LenzError as exc:
+            # The review was accepted and may still finish: say how to get it.
+            exc.fix = f"{exc.fix} Resume with: lenz review --resume {review_id}".strip()
+            raise
         if out.json_mode:
             if issues:
                 out.emit_json(client.get_review(review_id, view="issues").model_dump(mode="json"))
@@ -194,7 +207,7 @@ def _wait_quiet(client: Lenz, review_id: str, timeout: float, *, on_update: Any)
 
 def _verdict_text(verdict: str | None, confidence: str | None) -> str:
     color = _VERDICT_COLOR.get(verdict or "", "white")
-    conf = f" ({confidence})" if confidence else ""
+    conf = f" ({escape(confidence)})" if confidence else ""
     return f"[bold {color}]{escape(verdict or '?')}[/bold {color}]{conf}"
 
 
@@ -292,7 +305,9 @@ def _render_issue(out: Output, i: Any, n: int) -> None:
     if i.suggested_rewrite:
         out.console.print(f"  [dim]Suggested rewrite:[/dim] {escape(i.suggested_rewrite)}")
     if i.failure is not None:
-        out.console.print(f"  [red]Deep check failed:[/red] {escape(i.failure.hint or i.failure.failure_reason)}")
+        out.console.print(
+            f"  [red]Deep check failed:[/red] {escape(i.failure.hint or i.failure.failure_reason or 'failed')}"
+        )
     elif i.source != "verification" and i.escalation is not None and i.escalation.disposition != "planned":
         out.console.print(f"  [dim]Not deep-checked ({escape(i.escalation.disposition)}).[/dim]")
     if i.url:
@@ -305,7 +320,7 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
     or the reviewers' note (quick), and the suggested rewrite."""
     out.console.print(_summary_line(review))
     if review.failure is not None:
-        hint = review.failure.hint or review.failure.failure_reason
+        hint = review.failure.hint or review.failure.failure_reason or "no reason given"
         out.console.print(f"[red]Failed:[/red] {escape(hint)}")
     n = review.summary.claims_selected or len(review.claims)
     if issues_only:

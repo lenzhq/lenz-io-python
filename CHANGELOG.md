@@ -33,7 +33,9 @@ needs an API that serves `POST /review`.
   `failure`.
 - **`client.review_and_wait(text, *, timeout=600, on_update=None, **kw)`**
   submits and polls on the review's `poll_after_seconds` (never faster than
-  every 5 s). `on_update(review)` fires on every poll whose body changed; the
+  every 5 s), one request per poll bounded by the time left, so the wait
+  keeps to its `timeout`; a failed read (5xx, network, 429) is retried on the
+  next poll. `on_update(review)` fires on every poll whose body changed; the
   helper is silent without it. It raises `ReviewFailed` (a
   `LenzPipelineError`, with `review_id`, `error_code`, `hint` and the final
   `review`) on a failed review, and `ReviewTimeout` (a `LenzTimeoutError`,
@@ -41,8 +43,9 @@ needs an API that serves `POST /review`.
   passes first.
 - **The review models**: `ReviewStarted`, `ReviewEnvelope`, `ReviewFull`,
   `ReviewIssues`, `ReviewIssue`, `ReviewClaim`, `ReviewResult`,
-  `ReviewAssessment`, `ReviewVerification`, `ReviewFailure`, `ReviewSummary`,
-  `ReviewCredits`, `EscalationPolicy`, `Escalation` (`matched_rules`,
+  `ReviewAssessment`, `ReviewVerification`, `ReviewEntity`, `ReviewFailure`, `ReviewSummary`,
+  `ReviewAssessmentCounts`, `ReviewVerificationCounts`, `ReviewCredits`,
+  `EscalationPolicy`, `Escalation` (`matched_rules`,
   `disposition`) and `FailureBlock`. Every status, disposition and error code
   is a plain string, so a value the API adds later passes through.
 - **`ReviewEvent`** for the `review.completed` and `review.failed` webhooks,

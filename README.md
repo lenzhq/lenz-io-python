@@ -162,7 +162,8 @@ they arrive and rewrites each row as its deep check lands. The exit code is the
 outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
 unchecked, failed, timed out, or an error). `--issues` prints only the issues,
 `--json` the review body, `--max-verifications N` and `--depth low` set the
-policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`.
+policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
+(and exits `0`: it submitted, it did not review).
 
 ## Quickstart — the canonical integration
 
@@ -455,12 +456,13 @@ A review sends `review.completed` or `review.failed`, parsed as `ReviewEvent`
 with the final review on `event.review`. Deduplicate on `event.event_id`: it is
 the same on every retry of one delivery. The deep checks a review runs send no
 `verification.*` events of their own, and events this SDK version does not know
-parse as a plain `WebhookEvent`: ignore them.
+parse as a plain `WebhookEvent`: ignore them. `event.review` is `None` if the
+body could not be read (`event.raw` keeps it).
 
 ```python
 from lenz_io import ReviewEvent
 
-if isinstance(event, ReviewEvent) and not already_seen(event.event_id):
+if isinstance(event, ReviewEvent) and event.review and not already_seen(event.event_id):
     for issue in event.review.issues:
         flag(issue.claim, issue.verdict, issue.suggested_rewrite)
 ```

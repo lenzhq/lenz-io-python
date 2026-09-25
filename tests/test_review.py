@@ -138,6 +138,23 @@ class TestSubmit:
         keys = {c.request.headers["Idempotency-Key"] for c in route.calls}
         assert len(route.calls) == 2 and len(keys) == 1
 
+    def test_selectors_accept_any_iterable_but_not_a_bare_string(self, client):
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
+            client.review("draft", verdicts=("False",), confidence={"low"})
+        assert json.loads(route.calls.last.request.content)["escalate"] == {
+            "verdicts": ["False"],
+            "confidence": ["low"],
+        }
+        with pytest.raises(ValueError):
+            client.review("draft", verdicts="False")  # type: ignore[arg-type]
+
+    def test_empty_visibility_is_omitted(self, client):
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
+            client.review("draft", visibility="")
+        assert "visibility" not in json.loads(route.calls.last.request.content)
+
     def test_empty_text_is_refused_before_the_network(self, client):
         with pytest.raises(ValueError):
             client.review("   ")
@@ -187,6 +204,17 @@ class TestErrors:
             with pytest.raises(LenzUpstreamUnavailableError) as exc:
                 client.review("draft")
         assert exc.value.retry_after == 90
+
+    def test_a_body_only_503_wait_in_retry_after_seconds_is_honoured(self, client, no_sleep):
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(
+                503, json={"detail": "busy", "code": "capacity", "retry_after_seconds": 120}
+            )
+            with pytest.raises(LenzUpstreamUnavailableError) as exc:
+                client.review("draft")
+        # 120 s is past the ladder's sleep cap: raised at once, carrying the wait
+        assert route.call_count == 1
+        assert exc.value.retry_after == 120
 
     def test_extract_daily_limit_on_a_url_review(self, client, no_sleep):
         with respx.mock(base_url=BASE) as r:
@@ -326,6 +354,12 @@ class TestModels:
         assert capped == [{"claim": review.claims[2].claim}]
         assert deep is not None and deep.verification_id == "86ea9355"
 
+    def test_an_entity_with_no_name_parses(self):
+        body = _load("review_completed.json")
+        body["claims"][3]["verification"]["entities"].append({"name": None, "qid": None})
+        review = ReviewFull.model_validate(body)
+        assert review.claims[3].verification.entities[-1].name is None
+
     def test_unknown_values_pass_through(self):
         # Every enum-shaped field is a plain string: a disposition, status or
         # error code the API adds later must not break a released SDK.
@@ -340,6 +374,10 @@ class TestModels:
 
 
 # ── wait ────────────────────────────────────────────────────────────────────
+
+
+def _sequence_raw(*bodies: dict) -> list[httpx.Response]:
+    return [httpx.Response(200, json=b) for b in bodies]
 
 
 def _sequence(*names: str) -> list[httpx.Response]:
@@ -457,6 +495,55 @@ class TestReviewAndWait:
             review = client.review_and_wait("draft")
         assert review.status == "completed"
 
+    def test_one_request_per_poll_bounded_by_the_deadline(self, client, no_sleep):
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            get = r.get("/reviews/442b6aa9").mock(
+                side_effect=[httpx.Response(502), httpx.Response(200, json=_load("review_completed.json"))]
+            )
+            client.review_and_wait("draft", timeout=20)
+        # the 502 was not retried inside the poll: the next poll read it
+        assert get.call_count == 2
+        assert no_sleep == [10]
+        read_timeout = get.calls[0].request.extensions["timeout"]["read"]
+        assert read_timeout <= 20
+
+    def test_a_429_while_polling_waits_what_it_states(self, client, no_sleep):
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(
+                side_effect=[
+                    httpx.Response(429, json={"detail": "slow down"}, headers={"Retry-After": "40"}),
+                    httpx.Response(200, json=_load("review_completed.json")),
+                ]
+            )
+            assert client.review_and_wait("draft").status == "completed"
+        assert no_sleep == [40]
+
+    def test_an_unreadable_body_is_read_again(self, client, no_sleep):
+        bad = _load("review_verifying.json")
+        bad["credits"] = None
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(side_effect=_sequence_raw(bad, _load("review_completed.json")))
+            assert client.review_and_wait("draft").status == "completed"
+
+    def test_failed_review_without_a_failure_block(self, client, no_sleep):
+        body = _load("review_failed_no_claim.json")
+        body["failure"] = None
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").respond(200, json=body)
+            with pytest.raises(ReviewFailed) as exc:
+                client.review_and_wait("draft")
+        assert exc.value.error_code == ""
+        assert exc.value.retryable is None
+
+    def test_a_partial_failure_block_parses(self):
+        body = _load("review_failed_no_claim.json")
+        body["failure"] = {"failure_reason": None, "failure_class": None, "retryable": None, "docs_url": None}
+        assert ReviewFull.model_validate(body).failure.failure_reason is None
+
     def test_non_transient_poll_errors_raise(self, client, no_sleep):
         with respx.mock(base_url=BASE) as r:
             r.post("/review").respond(202, json=_load("review_accepted.json"))
@@ -556,6 +643,10 @@ class TestWebhooks:
         assert isinstance(event, ReviewEvent)
         assert event.review is None
         assert event.event_id == "evt_a43e6ae7646f275d92f15223"
+
+    def test_a_malformed_attempt_does_not_break_parsing(self):
+        event = parse_webhook(dict(_load("review_webhook_completed.json"), attempt="x"))
+        assert event.attempt == 1
 
     def test_parse_webhook_rejects_non_objects(self):
         with pytest.raises(ValueError):

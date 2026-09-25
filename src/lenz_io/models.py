@@ -918,11 +918,11 @@ class FailureBlock(_Lax):
     class is explained.
     """
 
-    failure_reason: str = ""
-    failure_class: str = ""
+    failure_reason: str | None = ""
+    failure_class: str | None = ""
     retryable: bool | None = None
     hint: str | None = None
-    docs_url: str = ""
+    docs_url: str | None = ""
 
 
 class EscalationPolicy(_Lax):
@@ -1020,6 +1020,14 @@ class ReviewAssessment(_Lax):
     failure: FailureBlock | None = None
 
 
+class ReviewEntity(_Lax):
+    """An entity the deep check found in the claim. ``qid`` is its Wikidata
+    id when resolved. Either may be ``None``."""
+
+    name: str | None = None
+    qid: str | None = None
+
+
 class ReviewVerification(_Lax):
     """A claim's deep check. ``status``: ``processing`` | ``completed`` |
     ``failed``; while ``processing`` only ``status``, ``content_status`` and
@@ -1042,7 +1050,7 @@ class ReviewVerification(_Lax):
     visibility: str | None = None
     depth: str | None = None
     domain: str | None = None
-    entities: list[EntityRef] = Field(default_factory=list)
+    entities: list[ReviewEntity] = Field(default_factory=list)
     verdict: str | None = None
     confidence: str | None = None
     lenz_score: int | float | None = None
@@ -1186,6 +1194,7 @@ __all__ = [
     "ReviewAssessmentCounts",
     "ReviewClaim",
     "ReviewCredits",
+    "ReviewEntity",
     "ReviewEnvelope",
     "ReviewFailure",
     "ReviewFull",

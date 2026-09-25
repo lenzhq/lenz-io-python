@@ -90,6 +90,7 @@ from .errors import (
     LenzGoneError,
     LenzNeedsInputError,
     LenzPipelineError,
+    LenzRateLimitError,
     LenzTimeoutError,
     ReviewFailed,
     ReviewTimeout,
@@ -923,17 +924,22 @@ class Lenz:
             payload["language"] = language
         if webhook_url is not None:
             payload["webhook_url"] = webhook_url
-        payload["visibility"] = visibility
+        if visibility:
+            payload["visibility"] = visibility
         escalate: dict[str, Any] = {}
+        for name, selector in (("verdicts", verdicts), ("confidence", confidence)):
+            if selector is None:
+                continue
+            if isinstance(selector, str):
+                raise ValueError(f"{name} is a list of strings, e.g. {name}=[{selector!r}].")
+            escalate[name] = list(selector)
         for name, value in (
-            ("verdicts", verdicts),
-            ("confidence", confidence),
             ("max_assessments", max_assessments),
             ("max_verifications", max_verifications),
             ("depth", depth),
         ):
             if value is not None:
-                escalate[name] = list(value) if isinstance(value, (list, tuple)) else value
+                escalate[name] = value
         if escalate:
             payload["escalate"] = escalate
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
@@ -1002,18 +1008,32 @@ class Lenz:
         """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``).
 
         Like the verification poll, it always reads once more at the deadline
-        before giving up, and a transient read failure (a 5xx or a network
-        error that outlived the request's own retries) is retried on the next
-        round rather than raised. Anything else (404, 403, 410) raises.
+        before giving up. A failed read (a 5xx, a network error, a 429) is
+        retried on the next round, after the wait the server stated if it
+        stated one, rather than raised; anything else (404, 403, 410) raises.
         """
         deadline = time.monotonic() + timeout
         last: ReviewFull | None = None
         last_dump: dict[str, Any] | None = None
         while True:
+            # One request per poll, bounded by what is left of the deadline:
+            # the client's own retry ladder inside a poll could run minutes
+            # past it. A failed poll is retried on the next round instead.
+            stated_wait: float | None = None
+            review: ReviewFull | None = None
+            remaining = deadline - time.monotonic()
             try:
-                review = self.get_review(review_id)
-            except LenzAPIError:
-                review = None
+                body = self._request(
+                    "GET", f"/reviews/{review_id}", max_retries=0, timeout=max(1.0, min(remaining, self._timeout))
+                )
+                review = ReviewFull.model_validate(body)
+            except ValueError:
+                # A body this release cannot read (pydantic's ValidationError
+                # is a ValueError): read again next round, as for a 5xx.
+                logger.debug("unreadable review body for %s", review_id, exc_info=True)
+            except (LenzAPIError, LenzRateLimitError) as exc:
+                wait = getattr(exc, "retry_after", None)
+                stated_wait = float(wait) if isinstance(wait, int) and wait > 0 else None
             if review is not None:
                 dump = review.model_dump()
                 if dump != last_dump:
@@ -1038,8 +1058,11 @@ class Lenz:
                     review_id=review_id,
                     partial=last,
                 )
-            hint = last.poll_after_seconds if last is not None else None
-            sleep_for = REVIEW_POLL_DEFAULT if hint is None else max(REVIEW_POLL_FLOOR, float(hint))
+            if stated_wait is not None:
+                sleep_for = max(REVIEW_POLL_FLOOR, stated_wait)
+            else:
+                hint = last.poll_after_seconds if last is not None else None
+                sleep_for = REVIEW_POLL_DEFAULT if hint is None else max(REVIEW_POLL_FLOOR, float(hint))
             time.sleep(min(sleep_for, remaining))
 
     # ── poll engine (shared by wait + verify_batch_and_wait) ──
@@ -1338,7 +1361,11 @@ class Lenz:
         auth_required: bool = True,
         auth_optional: bool = False,
         timeout: float | None = None,
+        max_retries: int | None = None,
     ) -> dict[str, Any]:
+        # ``max_retries`` overrides the client's retry count for this request
+        # only (the review wait polls with 0 and does its own pacing).
+        retries = self._max_retries if max_retries is None else max_retries
         if auth_required and not self._api_key:
             from .errors import LenzAuthError
 
@@ -1368,14 +1395,14 @@ class Lenz:
         req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else httpx.Timeout(timeout)
 
         last_exc: Exception | None = None
-        for attempt in range(self._max_retries + 1):
+        for attempt in range(retries + 1):
             try:
                 response = self._client.request(
                     method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
                 )
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
-                if attempt >= self._max_retries:
+                if attempt >= retries:
                     raise LenzAPIError(
                         message=f"{method} {path} failed after {attempt + 1} attempts: {exc}",
                         cause=str(exc),
@@ -1414,7 +1441,7 @@ class Lenz:
             #  * a 429 whose code is in NO_RETRY_429_CODES — raise at once,
             #    whatever the wait (see its definition).
             if (
-                attempt < self._max_retries
+                attempt < retries
                 and (response.status_code >= 500 or response.status_code == 429)
                 and not (response.status_code == 429 and _body_error_code(response) in NO_RETRY_429_CODES)
             ):
@@ -1440,12 +1467,12 @@ class Lenz:
 
 def _review_failed(review: ReviewFull) -> ReviewFailed:
     failure = review.failure
-    reason = (failure.failure_reason if failure else "") or "unknown"
+    reason = (failure.failure_reason if failure else None) or ""
     hint = (failure.hint if failure else None) or ""
     retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
     return ReviewFailed(
-        message=f"Review failed: {reason}",
-        cause=hint or reason,
+        message=f"Review failed: {reason or 'the server sent no failure block'}",
+        cause=hint or reason or "No failure block on the failed review.",
         fix=hint or ("Retry the same draft after a short wait." if retryable else "Check the draft and resubmit."),
         doc_url=(failure.docs_url if failure else "") or "https://lenz.io/docs/errors",
         review_id=review.review_id,
@@ -1480,6 +1507,8 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         raw = body.get("reset_in_seconds")
         if raw is None or str(raw).strip() == "":
             raw = body.get("retry_after")
+        if raw is None or str(raw).strip() == "":
+            raw = body.get("retry_after_seconds")
     if raw is None or str(raw).strip() == "":
         return None
     try:

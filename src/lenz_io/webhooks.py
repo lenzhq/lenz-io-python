@@ -185,7 +185,10 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
     event = str(payload.get("event") or "")
     task_id = str(payload.get("task_id") or "")
-    attempt = int(payload.get("attempt") or 1)
+    try:
+        attempt = int(payload.get("attempt") or 1)
+    except (TypeError, ValueError):
+        attempt = 1
     delivered_at = str(payload.get("delivered_at") or "")
     verification_id = str(payload["verification_id"]) if payload.get("verification_id") else None
     batch_id = str(payload["batch_id"]) if payload.get("batch_id") else None

@@ -325,3 +325,32 @@ def test_progress_view_renders_every_state():
     console.print(render_progress(None))
     text = console.file.getvalue()
     assert "quick check…" in text and "deep check…" in text and "failed (timeout)" in text
+
+
+def test_a_poll_error_after_submit_names_the_resume_command(draft):
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review").respond(202, json=_load("review_accepted.json"))
+        r.get("/reviews/442b6aa9").respond(404, json={"detail": "Review not found.", "code": "not_found"})
+        result = _invoke("review", draft, "--json")
+    assert result.exit_code == 2
+    assert "lenz review --resume 442b6aa9" in json.loads(result.stdout)["error"]["fix"]
+
+
+def test_ctrl_c_during_submit_exits_130(draft, monkeypatch):
+    def interrupted(*a, **kw):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(Lenz, "review", interrupted)
+    result = _invoke("review", draft, "--json")
+    assert result.exit_code == 130
+
+
+def test_markup_in_a_confidence_value_is_printed_not_parsed():
+    body = _load("review_completed.json")
+    body["claims"][3]["verification"]["confidence"] = "[/bold]"
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body))
+    assert "False ([/bold]) · deep check" in buf.getvalue()
