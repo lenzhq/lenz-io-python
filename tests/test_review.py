@@ -508,6 +508,19 @@ class TestReviewAndWait:
         read_timeout = get.calls[0].request.extensions["timeout"]["read"]
         assert read_timeout <= 20
 
+    @pytest.mark.parametrize(("stated", "slept"), [("45", 45), ("3600", 60)])
+    def test_a_proxy_503_while_polling_waits_what_it_states_capped(self, client, no_sleep, stated, slept):
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(
+                side_effect=[
+                    httpx.Response(503, text="Service Unavailable", headers={"Retry-After": stated}),
+                    httpx.Response(200, json=_load("review_completed.json")),
+                ]
+            )
+            client.review_and_wait("draft")
+        assert no_sleep == [slept]
+
     def test_a_429_while_polling_waits_what_it_states(self, client, no_sleep):
         with respx.mock(base_url=BASE) as r:
             r.post("/review").respond(202, json=_load("review_accepted.json"))

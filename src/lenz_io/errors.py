@@ -221,7 +221,13 @@ class LenzRateLimitError(LenzError):
 
 
 class LenzAPIError(LenzError):
-    """500 / 502 / 503 / 504 / catch-all for unexpected server errors."""
+    """500 / 502 / 503 / 504 / catch-all for unexpected server errors.
+
+    ``retry_after`` is the wait the response stated (``Retry-After``), or
+    ``None`` when it stated none.
+    """
+
+    retry_after: int | None = None
 
 
 class LenzUpstreamUnavailableError(LenzAPIError):
@@ -553,6 +559,9 @@ def map_response_to_error(
         err.purged_at = _opt_str(parsed.get("purged_at")) or None
         # Retrying cannot bring it back, so not the generic 4xx advice.
         err.fix = "Its account's retention period removed it. A certificate issued for it is still available."
+
+    if isinstance(err, LenzAPIError) and not isinstance(err, LenzUpstreamUnavailableError):
+        err.retry_after = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
 
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as

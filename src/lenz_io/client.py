@@ -1032,8 +1032,10 @@ class Lenz:
                 # is a ValueError): read again next round, as for a 5xx.
                 logger.debug("unreadable review body for %s", review_id, exc_info=True)
             except (LenzAPIError, LenzRateLimitError) as exc:
+                # A stated wait paces the next poll, capped like the retry
+                # ladder caps it: an untyped proxy 503 can state an hour.
                 wait = getattr(exc, "retry_after", None)
-                stated_wait = float(wait) if isinstance(wait, int) and wait > 0 else None
+                stated_wait = float(min(wait, MAX_RETRY_AFTER_SLEEP)) if isinstance(wait, int) and wait > 0 else None
             if review is not None:
                 dump = review.model_dump()
                 if dump != last_dump:
