@@ -140,7 +140,9 @@ with `key_finding`, `url` and `verification_id`) or from the quick check alone
 why it was not deep-checked). `suggested_rewrite` comes from a deep check, so
 an issue that stayed on the quick verdict has none. It is not verified itself:
 review it, or run it through `verify`, before you use it. `claims` lists every
-claim with both checks; `failures` lists the ones whose work failed.
+claim with both checks; `failures` lists the ones whose work failed. The
+top-level types are importable from `lenz_io`; the nested ones (`ReviewAssessment`,
+`ReviewVerification`, `ReviewSummary`, …) from `lenz_io.models`.
 
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as

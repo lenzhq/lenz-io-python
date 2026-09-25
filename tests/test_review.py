@@ -700,26 +700,39 @@ class TestWebhooks:
 
 def test_review_names_are_public():
     import lenz_io
+    import lenz_io.models
 
-    for name in (
+    exported = (
         "ReviewStarted",
         "ReviewFull",
         "ReviewIssues",
-        "ReviewEnvelope",
         "ReviewIssue",
         "ReviewClaim",
         "ReviewFailure",
-        "ReviewAssessment",
-        "ReviewVerification",
-        "ReviewSummary",
-        "ReviewCredits",
-        "EscalationPolicy",
         "Escalation",
+        "EscalationPolicy",
         "FailureBlock",
         "ReviewEvent",
-        "ReviewTimeout",
         "ReviewFailed",
+        "ReviewTimeout",
         "parse_webhook",
-    ):
+    )
+    for name in exported:
         assert name in lenz_io.__all__, name
+    # Shapes a caller receives but never constructs or annotates: importable
+    # from lenz_io.models, and kept out of the top-level semver promise.
+    nested = (
+        "ReviewEnvelope",
+        "ReviewResult",
+        "ReviewAssessment",
+        "ReviewVerification",
+        "ReviewEntity",
+        "ReviewSummary",
+        "ReviewCredits",
+        "ReviewAssessmentCounts",
+        "ReviewVerificationCounts",
+    )
+    for name in nested:
+        assert name not in lenz_io.__all__, name
+        assert name in lenz_io.models.__all__, name
     assert Lenz.review.__doc__ and Lenz.get_review.__doc__ and Lenz.review_and_wait.__doc__

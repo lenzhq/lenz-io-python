@@ -41,13 +41,15 @@ needs an API that serves `POST /review`.
   `review`) on a failed review, and `ReviewTimeout` (a `LenzTimeoutError`,
   with `review_id` and the last body read as `partial`) when the timeout
   passes first.
-- **The review models**: `ReviewStarted`, `ReviewEnvelope`, `ReviewFull`,
-  `ReviewIssues`, `ReviewIssue`, `ReviewClaim`, `ReviewResult`,
-  `ReviewAssessment`, `ReviewVerification`, `ReviewEntity`, `ReviewFailure`, `ReviewSummary`,
-  `ReviewAssessmentCounts`, `ReviewVerificationCounts`, `ReviewCredits`,
-  `EscalationPolicy`, `Escalation` (`matched_rules`,
-  `disposition`) and `FailureBlock`. Every status, disposition and error code
-  is a plain string, so a value the API adds later passes through.
+- **The review models.** Exported from `lenz_io`: `ReviewStarted`,
+  `ReviewFull`, `ReviewIssues`, `ReviewIssue`, `ReviewClaim`,
+  `ReviewFailure`, `EscalationPolicy`, `Escalation` (`matched_rules`,
+  `disposition`) and `FailureBlock`. The nested shapes you read but never
+  build (`ReviewEnvelope`, `ReviewResult`, `ReviewAssessment`,
+  `ReviewVerification`, `ReviewEntity`, `ReviewSummary`, `ReviewCredits`,
+  `ReviewAssessmentCounts`, `ReviewVerificationCounts`) live in
+  `lenz_io.models`. Every status, disposition and error code is a plain
+  string, so a value the API adds later passes through.
 - **`ReviewEvent`** for the `review.completed` and `review.failed` webhooks,
   from `LenzWebhooks.parse`, with `event_id` (the same on every retry of one
   delivery: deduplicate on it), `review_id` and the final `review`.
