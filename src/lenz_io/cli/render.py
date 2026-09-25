@@ -195,13 +195,13 @@ def _verification_missing(out: Output) -> NoReturn:
     raise SystemExit(1)
 
 
-def _suggested_revision_line(out: Output, v: Verification, *, gap: bool = False) -> None:
+def _suggested_rewrite_line(out: Output, v: Verification, *, gap: bool = False) -> None:
     """One line under the key finding when the verification carries a
     suggested rewrite of its claim. ``gap`` adds the blank line the key
     finding would otherwise have opened."""
-    if v.suggested_revision:
+    if v.suggested_rewrite:
         lead = "\n" if gap else ""
-        out.console.print(f"{lead}[dim]Suggested rewrite:[/dim] {escape(v.suggested_revision)}")
+        out.console.print(f"{lead}[dim]Suggested rewrite:[/dim] {escape(v.suggested_rewrite)}")
 
 
 def render_verification(out: Output, v: Verification | None) -> None:
@@ -214,7 +214,7 @@ def render_verification(out: Output, v: Verification | None) -> None:
     _verdict_header(out, v)
     if v.key_finding:
         out.console.print(f"\n[bold]{v.key_finding}[/bold]")
-    _suggested_revision_line(out, v, gap=not v.key_finding)
+    _suggested_rewrite_line(out, v, gap=not v.key_finding)
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
     if v.sources:
@@ -320,7 +320,7 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
         out.console.print(f"[dim]{'  •  '.join(meta)}[/dim]")
     if v.key_finding:
         out.console.print(f"\n[bold]{v.key_finding}[/bold]")
-    _suggested_revision_line(out, v, gap=not v.key_finding)
+    _suggested_rewrite_line(out, v, gap=not v.key_finding)
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
     if v.warnings:
@@ -438,7 +438,7 @@ def _batch_verdict_block(out: Output, v: Verification) -> None:
         out.console.print(v.key_finding)
     elif v.executive_summary:
         out.console.print(v.executive_summary)
-    _suggested_revision_line(out, v)
+    _suggested_rewrite_line(out, v)
     footer = []
     if v.sources:
         footer.append(f"{len(v.sources)} source{'s' if len(v.sources) != 1 else ''}")

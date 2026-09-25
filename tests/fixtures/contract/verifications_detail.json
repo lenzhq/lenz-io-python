@@ -15,7 +15,7 @@
   "key_finding": "Water boils at 100\u00b0C at standard atmospheric pressure.",
   "executive_summary": "At standard atmospheric pressure, water boils at exactly 100\u00b0C.",
   "warnings": [],
-  "suggested_revision": null,
+  "suggested_rewrite": null,
   "sources": [
     {
       "source_name": "NIST",

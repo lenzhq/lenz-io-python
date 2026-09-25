@@ -7,12 +7,12 @@ All notable changes to this SDK are documented here. Format follows
 ## [Unreleased]
 
 A new optional field on every verification, single or listed,
-`suggested_revision` (below). Nothing the SDK sends changes, and 2.16.0 keeps
+`suggested_rewrite` (below). Nothing the SDK sends changes, and 2.16.0 keeps
 working against the current API.
 
 ### Added
 
-- **`suggested_revision` on `Verification`, `VerificationListItem` and
+- **`suggested_rewrite` on `Verification`, `VerificationListItem` and
   `LibraryItem`**, a string or `None`: a suggested rewrite of the
   verification's `claim` that its findings support, to use in place of the
   original sentence. It has not been verified itself: before using it, review
@@ -26,7 +26,7 @@ working against the current API.
   one line under the key finding, `Suggested rewrite: …`, when a verification
   carries one; `--json` output includes the field.
 - **The `openapi.json` snapshot is refreshed.** Additive only:
-  `suggested_revision` on the verification detail and on list items, and its
+  `suggested_rewrite` on the verification detail and on list items, and its
   line in the API description.
 
 ## [2.16.0] - 2026-09-24

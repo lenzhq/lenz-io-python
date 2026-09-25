@@ -1379,7 +1379,7 @@ def test_render_show_concise_omits_panel():
     assert "S11" not in text  # concise caps sources at 8
 
 
-# ── suggested_revision: one line under the key finding ──────────────────────
+# ── suggested_rewrite: one line under the key finding ──────────────────────
 _REWRITE = "The Earth is an oblate spheroid."
 
 
@@ -1387,7 +1387,7 @@ def _with_rewrite(v, *, key_finding="The Earth is round."):
     return v.model_copy(
         update={
             "key_finding": key_finding,
-            "suggested_revision": _REWRITE,
+            "suggested_rewrite": _REWRITE,
         }
     )
 
@@ -1422,7 +1422,7 @@ def test_a_suggested_rewrite_is_printed_as_text_not_markup():
     """The rewrite is claim text; a bracket in it must not be read as Rich markup."""
     from lenz_io.cli.render import render_verification
 
-    v = _full_verification().model_copy(update={"suggested_revision": "Rates rose [bold]2%[/bold] in 2024."})
+    v = _full_verification().model_copy(update={"suggested_rewrite": "Rates rose [bold]2%[/bold] in 2024."})
     text = _render(render_verification, v)
     assert "Rates rose [bold]2%[/bold] in 2024." in text
 
@@ -1439,7 +1439,7 @@ def test_the_batch_block_without_a_rewrite_prints_no_line():
     assert "Suggested rewrite" not in text
 
 
-def test_show_json_carries_the_suggested_revision(monkeypatch):
+def test_show_json_carries_the_suggested_rewrite(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
         monkeypatch,
@@ -1447,7 +1447,7 @@ def test_show_json_carries_the_suggested_revision(monkeypatch):
     )
     result = runner.invoke(app, ["--json", "show", "ab12cd34"])
     assert result.exit_code == 0
-    assert json.loads(result.stdout)["suggested_revision"] == _REWRITE
+    assert json.loads(result.stdout)["suggested_rewrite"] == _REWRITE
 
 
 def test_show_json_emits_full_object(monkeypatch):
