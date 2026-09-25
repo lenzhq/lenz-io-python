@@ -270,6 +270,12 @@ class Verification(_Lax):
     key_finding: str = ""
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
+    #: A suggested rewrite of ``claim`` that this verification's findings
+    #: support, for a person to review before using it. It has not been
+    #: verified itself. ``None`` for a True verdict, when the findings
+    #: establish no correction, and on verifications that predate the field
+    #: (or a server that does not send it).
+    suggested_revision: str | None = None
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None

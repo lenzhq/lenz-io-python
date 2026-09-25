@@ -6,6 +6,28 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+A new optional field on every full verification, `suggested_revision`
+(below). Nothing the SDK sends changes, and 2.16.0 keeps working against the
+current API.
+
+### Added
+
+- **`suggested_revision` on `Verification`**, a string or `None`: a suggested
+  rewrite of the verification's `claim` that its findings support, for a
+  person to review before using it. It has not been verified itself. It is
+  `None` for a true claim, when no correction is established, and on
+  verifications that predate the field; an older server that does not send
+  the key also reads `None`. It is on `verifications.get`, `verify_and_wait`,
+  `wait` and a completed `get_status`, and the same key arrives in the
+  `result` dict of a `verification.completed` webhook. List items, `assess`
+  rows and the library do not carry it.
+- **The CLI prints it.** `lenz verify`, `lenz show` and the batch view print
+  one line under the key finding, `Suggested rewrite: …`, when a verification
+  carries one; `--json` output includes the field.
+- **The `openapi.json` snapshot is refreshed.** Additive only:
+  `suggested_revision` on the verification detail, and its line in the API
+  description.
+
 ## [2.16.0] - 2026-09-24
 
 A new error, `LenzGoneError`, for a verification removed by its account's

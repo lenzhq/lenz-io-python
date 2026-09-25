@@ -177,6 +177,26 @@ def test_contract_no_unknown_fields(fixture_name, model_cls):
     model_cls.model_validate(payload)
 
 
+def test_suggested_revision_is_on_every_verification_fixture():
+    """The server sends `suggested_revision` on every verification detail: a
+    string on a corrected claim, `null` otherwise. Both parse into the typed
+    field, not into the extras."""
+    completed = TaskStatus.model_validate(_load("verify_status_completed.json"))
+    rev = completed.result.suggested_revision
+    assert isinstance(rev, str)
+    assert rev.startswith("Einstein's 1921 Nobel Prize in Physics was awarded")
+    for name in (
+        "verifications_detail.json",
+        "verifications_detail_covered.json",
+        "verifications_detail_uncovered.json",
+    ):
+        payload = _load(name)
+        assert payload["suggested_revision"] is None
+        assert Verification.model_validate(payload).suggested_revision is None
+    webhook = _load("webhook_payload_completed.json")
+    assert webhook["result"]["suggested_revision"] is None
+
+
 def test_completed_body_keeps_modified_at_null():
     """The server serialises with ``exclude_unset``, not ``exclude_none``.
 

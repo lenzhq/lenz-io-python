@@ -16,6 +16,7 @@
     "key_finding": "A sample one-sentence finding.",
     "executive_summary": "Sample summary.",
     "warnings": [],
+    "suggested_revision": null,
     "sources": [],
     "audit": {
       "adjudication_summary": "Sample adjudication.",
