@@ -248,24 +248,51 @@ def render_progress(review: ReviewFull | None) -> Any:
     return table
 
 
+def _count(n: int, one: str, many: str | None = None) -> str:
+    return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
 def _summary_line(review: ReviewFull) -> str:
+    """One line: the outcome, then where every claim landed. The issue set is
+    fixed (False, Mostly False, Mixed), so a claim is an issue, true or mostly
+    true, failed, or not checked: four buckets say it all."""
     s = review.summary
     selected = s.claims_selected or 0
-    parts = [f"{s.issues} issue{'s' if s.issues != 1 else ''} in {selected} claim{'s' if selected != 1 else ''}"]
+    if not selected:
+        parts = ["no claims checked"]
+    else:
+        issues = len(review.issues)
+        fine = sum(1 for c in review.claims if c.result is not None and not c.result.is_issue)
+        failed = len(review.failures)
+        unchecked = max(0, selected - issues - fine - failed)
+        buckets = [
+            _count(issues, "issue") if issues else "",
+            f"{fine} true or mostly true" if fine else "",
+            f"{failed} failed" if failed else "",
+            f"{unchecked} not checked" if unchecked else "",
+        ]
+        parts = [f"{_count(selected, 'claim')}: " + ", ".join(b for b in buckets if b)]
     if s.verifications and s.verifications.planned:
         parts.append(f"{s.verifications.completed} of {s.verifications.planned} deep-checked")
-    parts.append(f"{review.credits.charged} credit{'s' if review.credits.charged != 1 else ''} charged")
+    parts.append(f"{_count(review.credits.charged, 'credit')} charged")
     outcome = _OUTCOME_LABEL.get(review.outcome or "", escape(review.outcome or review.status or "?"))
     return f"Review {escape(review.review_id)}: {outcome} — " + " · ".join(parts)
 
 
 def _print_text(out: Output, text: str | None, *, style: str = "") -> None:
-    """Model-written text, printed as plain text (never as markup)."""
-    if text:
-        from rich.padding import Padding
-        from rich.text import Text
+    """Model-written text as plain text (never markup), wrapped by hand so
+    continuation lines keep the indent and no line carries trailing spaces
+    into a copy or a pipe."""
+    if not text:
+        return
+    import textwrap
 
-        out.console.print(Padding(Text(text, style=style), (0, 0, 0, 2)))
+    from rich.text import Text
+
+    width = max(20, out.console.width - 2)
+    for paragraph in text.splitlines() or [""]:
+        for line in textwrap.wrap(paragraph, width) or [""]:
+            out.console.print(Text("  " + line, style=style), soft_wrap=True)
 
 
 def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:

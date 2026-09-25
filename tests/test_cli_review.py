@@ -267,7 +267,10 @@ def _render(fixture: str, *, issues_only: bool = False) -> str:
 
 def test_full_render_lists_every_claim_with_its_final_verdict():
     text = _render("review_completed.json")
-    assert text.startswith("Review 442b6aa9: issues found — 2 issues in 4 claims · 2 of 2 deep-checked · 14 credits")
+    assert text.startswith(
+        "Review 442b6aa9: issues found — 4 claims: 2 issues, 2 true or mostly true"
+        " · 2 of 2 deep-checked · 14 credits charged\n"
+    )
     assert "[1/4] The EU AI Act entered into force in March 2024." in text
     assert "False (high) · deep check" in text
     assert "True (high) · quick check" in text
@@ -357,3 +360,21 @@ def test_markup_in_a_confidence_value_is_printed_not_parsed():
     out.console = Console(file=buf, no_color=True, width=200, highlight=False)
     render_review(out, ReviewFull.model_validate(body))
     assert "False ([/bold]) · deep check" in buf.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("fixture", "summary"),
+    [
+        ("review_incomplete.json", "4 claims: 3 issues, 1 failed"),
+        ("review_failed_insufficient_credits.json", "4 claims: 4 not checked"),
+        ("review_failed_no_claim.json", "no claims checked"),
+    ],
+)
+def test_summary_counts_every_claim(fixture, summary):
+    assert summary in _render(fixture).splitlines()[0]
+
+
+def test_no_line_carries_trailing_spaces():
+    for fixture in ("review_completed.json", "review_incomplete.json"):
+        for line in _render(fixture).splitlines():
+            assert line == line.rstrip(), repr(line)
