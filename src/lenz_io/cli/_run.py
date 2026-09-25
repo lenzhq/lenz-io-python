@@ -49,8 +49,13 @@ def read_text_arg(text: str | None) -> str:
     return data
 
 
-def execute(state: CLIState, *, needs_key: bool, work: Callable[[Lenz], None]) -> None:
-    """Build the client, run ``work``, translate any failure into the contract."""
+def execute(state: CLIState, *, needs_key: bool, work: Callable[[Lenz], None], error_exit: int | None = None) -> None:
+    """Build the client, run ``work``, translate any failure into the contract.
+
+    ``error_exit`` replaces the exit code of every failure, for a command whose
+    exit codes carry a result (``lenz review``: 1 means "issues found", so an
+    error must not exit 1 as well).
+    """
     out = state.output
     try:
         if needs_key and state.key_source == "none":
@@ -68,4 +73,4 @@ def execute(state: CLIState, *, needs_key: bool, work: Callable[[Lenz], None]) -
         if os.environ.get("LENZ_CLI_TRACEBACK"):
             raise
         out.error(to_payload(exc), friendly_text(exc))
-        raise SystemExit(exit_code_for(exc)) from None
+        raise SystemExit(exit_code_for(exc) if error_exit is None else error_exit) from None

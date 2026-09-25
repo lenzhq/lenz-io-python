@@ -883,6 +883,282 @@ class AskReply(_Lax):
     created_at: str = ""
 
 
+# ── /review ──────────────────────────────────────────────────────────────
+#
+# ``POST /review`` reads a draft, gives every claim a quick verdict, sends the
+# ones that look wrong or uncertain through the deep check, and hands back the
+# issues. ``GET /reviews/{review_id}`` answers one of two views over one
+# envelope: ``ReviewFull`` (every claim, ``claims``) and ``ReviewIssues``
+# (``?view=issues``, without ``claims``).
+#
+# Every enum-shaped field below is a plain ``str``, never a ``Literal``: the API
+# may add a status, a disposition or an error code in a minor version, and a
+# released SDK must pass it through rather than reject the whole review.
+
+
+class ReviewStarted(_Lax):
+    """Returned by ``POST /review`` (HTTP 202).
+
+    ``status`` is always ``"queued"``: the acceptance receipt, not the current
+    state. Read the review with ``client.get_review(review_id)``.
+    """
+
+    review_id: str = ""
+    status: str = "queued"
+
+
+class FailureBlock(_Lax):
+    """Why a review, or one claim's work inside it, failed.
+
+    The same fields a failed ``GET /verify/status`` carries: ``failure_reason``
+    is the specific cause (an open set, e.g. ``no_claim``,
+    ``insufficient_credits``, ``timeout``), ``failure_class`` the closed
+    :data:`FailureClass`, ``retryable`` whether resending the same request can
+    help, ``hint`` one sentence on what to do next and ``docs_url`` where the
+    class is explained.
+    """
+
+    failure_reason: str = ""
+    failure_class: str = ""
+    retryable: bool | None = None
+    hint: str | None = None
+    docs_url: str = ""
+
+
+class EscalationPolicy(_Lax):
+    """Which quick-checked claims get a deep check, as the review RESOLVED it.
+
+    A claim is deep-checked when its quick verdict is in ``verdicts`` OR its
+    confidence band is in ``confidence``, up to ``max_verifications`` of them,
+    at ``depth``. ``max_assessments`` is how many of the draft's claims, most
+    check-worthy first, got a quick verdict.
+    """
+
+    verdicts: list[str] = Field(default_factory=list)
+    confidence: list[str] = Field(default_factory=list)
+    max_assessments: int = 20
+    max_verifications: int = 5
+    depth: str = "standard"
+
+
+class Escalation(_Lax):
+    """Why a claim was, or was not, deep-checked.
+
+    ``matched_rules`` lists the rules the quick check matched (``verdict``,
+    ``confidence``, both, or neither). ``disposition`` says what happened:
+    ``planned`` (deep-checked), ``not_selected`` (no rule matched), ``cap``
+    (matched, but ``max_verifications`` was reached), ``credits`` (matched,
+    but the balance ran out) or ``account_cap`` (matched, but the account's
+    allowance of concurrent deep checks was reached). To deep-check the
+    ``cap`` rows yourself, send their claims to ``verify_batch_and_wait``.
+    """
+
+    matched_rules: list[str] = Field(default_factory=list)
+    disposition: str = ""
+
+
+class ReviewAssessmentCounts(_Lax):
+    completed: int = 0
+    failed: int = 0
+
+
+class ReviewVerificationCounts(_Lax):
+    planned: int = 0
+    completed: int = 0
+    failed: int = 0
+
+
+class ReviewSummary(_Lax):
+    """Counts over the review. A count is ``None`` until what it counts is
+    known (``claims_selected`` before the draft has been read)."""
+
+    claims_selected: int | None = None
+    #: The resolved ``max_assessments``.
+    claim_limit: int = 20
+    #: The draft held at least ``claim_limit`` claims: more MAY exist.
+    claim_limit_reached: bool | None = None
+    #: The text was cut at 50,000 characters.
+    input_truncated: bool = False
+    assessments: ReviewAssessmentCounts | None = None
+    verifications: ReviewVerificationCounts | None = None
+    issues: int = 0
+
+
+class ReviewCredits(_Lax):
+    """``charged`` is the net credits the review cost the account. It is
+    final once no deep check is running: read it at ``completed``."""
+
+    charged: int = 0
+
+
+class ReviewResult(_Lax):
+    """The one answer to read for a claim: the deep check's verdict when it
+    completed, else the quick check's. ``source`` says which
+    (``assessment`` or ``verification``)."""
+
+    verdict: str = ""
+    confidence: str | None = None
+    source: str = ""
+    is_issue: bool = False
+
+
+class ReviewAssessment(_Lax):
+    """A claim's quick check. ``status``: ``pending`` | ``running`` |
+    ``completed`` | ``failed``. On ``completed`` the fields mean what they
+    mean on an ``/assess`` row; on ``failed`` see ``error_code`` (an open
+    set, as on ``/assess``), ``hint`` and ``failure``."""
+
+    status: str = ""
+    verdict: str | None = None
+    confidence: str | None = None
+    rationale: str | None = None
+    dissent: str | None = None
+    verification_url: str | None = None
+    error_code: str | None = None
+    identified_claims: list[str] = Field(default_factory=list)
+    hint: str | None = None
+    failure: FailureBlock | None = None
+
+
+class ReviewVerification(_Lax):
+    """A claim's deep check. ``status``: ``processing`` | ``completed`` |
+    ``failed``; while ``processing`` only ``status``, ``content_status`` and
+    the ids are set. ``content_status`` is ``purged`` once the verification
+    was deleted or removed by its account's retention period: the verdict and
+    ids stay, the text fields and links are ``None``.
+
+    ``visibility`` and ``depth`` are what the verification actually has: a
+    verdict served from an earlier check keeps its own visibility and may be
+    ``standard`` for a ``low`` request. Sources are on the verification
+    itself: ``client.verifications.get(verification_id)``, or ``url``.
+    """
+
+    status: str = ""
+    content_status: str = "available"
+    verification_id: str | None = None
+    task_id: str | None = None
+    claim: str | None = None
+    language: str | None = None
+    visibility: str | None = None
+    depth: str | None = None
+    domain: str | None = None
+    entities: list[EntityRef] = Field(default_factory=list)
+    verdict: str | None = None
+    confidence: str | None = None
+    lenz_score: int | float | None = None
+    key_finding: str | None = None
+    executive_summary: str | None = None
+    suggested_rewrite: str | None = None
+    warnings: list[str] = Field(default_factory=list)
+    created_at: str | None = None
+    modified_at: str | None = None
+    verification_url: str | None = None
+    url: str | None = None
+    failure: FailureBlock | None = None
+
+
+class ReviewClaim(_Lax):
+    """One claim of the draft, in the order the draft's claims were read.
+
+    ``result`` is ``None`` until the quick check completes, and on a failed
+    one. ``escalation`` is ``None`` until then too. ``verification`` is set
+    once a deep check was planned for the claim.
+    """
+
+    index: int = 0
+    claim: str | None = None
+    result: ReviewResult | None = None
+    assessment: ReviewAssessment = Field(default_factory=ReviewAssessment)
+    escalation: Escalation | None = None
+    verification: ReviewVerification | None = None
+
+
+class ReviewIssue(_Lax):
+    """A claim whose final verdict is ``False``, ``Mostly False`` or ``Mixed``.
+
+    ``source`` says which check the verdict comes from: ``verification`` (a
+    deep check, with ``verification_id``, ``url`` and ``key_finding``) or
+    ``assessment`` (the quick check only; ``escalation`` says why it was not
+    deep-checked, and ``rationale`` is the reviewers' note).
+    ``verified_claim`` is the deep check's wording of the claim when it
+    differs from ``claim``. ``failure`` is set when the claim's deep check
+    failed.
+    """
+
+    claim_index: int = 0
+    claim: str | None = None
+    verified_claim: str | None = None
+    verdict: str = ""
+    confidence: str | None = None
+    source: str = ""
+    verification_id: str | None = None
+    verification_status: str | None = None
+    verification_url: str | None = None
+    url: str | None = None
+    escalation: Escalation | None = None
+    key_finding: str | None = None
+    rationale: str | None = None
+    #: The claim rewritten so the deep check's findings support it; ``None``
+    #: on a quick-only issue and when the deep check suggested none. It is a
+    #: suggestion and has not been verified itself: review it, or run it
+    #: through ``verify``, before you use it.
+    suggested_rewrite: str | None = None
+    failure: FailureBlock | None = None
+
+
+class ReviewFailure(_Lax):
+    """A claim outside the issues whose work failed. ``stage`` is
+    ``assessment`` or ``verification``."""
+
+    claim_index: int = 0
+    claim: str | None = None
+    stage: str = ""
+    failure: FailureBlock | None = None
+
+
+class ReviewEnvelope(_Lax):
+    """What both views of ``GET /reviews/{review_id}`` carry.
+
+    ``status`` is the lifecycle: ``queued`` → ``assessing`` → ``verifying``
+    → ``completed``, or ``failed``. ``outcome`` is ``None`` until the review
+    ends, then one of ``clean`` (every selected claim checked, no issue),
+    ``issues_found``, ``incomplete`` (some work failed) or ``unchecked`` (it
+    failed before any claim was checked; ``failure`` says why).
+
+    ``issues`` and ``failures`` can change until ``completed``.
+    ``poll_after_seconds`` is how long to wait before reading again; ``None``
+    once the review has ended.
+    """
+
+    review_id: str = ""
+    view: str = ""
+    status: str = ""
+    outcome: str | None = None
+    created_at: str = ""
+    completed_at: str | None = None
+    language: str = "en"
+    policy: EscalationPolicy = Field(default_factory=EscalationPolicy)
+    summary: ReviewSummary = Field(default_factory=ReviewSummary)
+    credits: ReviewCredits = Field(default_factory=ReviewCredits)
+    poll_after_seconds: int | None = None
+    issues: list[ReviewIssue] = Field(default_factory=list)
+    failures: list[ReviewFailure] = Field(default_factory=list)
+    failure: FailureBlock | None = None
+
+
+class ReviewFull(ReviewEnvelope):
+    """``GET /reviews/{review_id}``: the envelope plus every claim."""
+
+    view: str = "full"
+    claims: list[ReviewClaim] = Field(default_factory=list)
+
+
+class ReviewIssues(ReviewEnvelope):
+    """``GET /reviews/{review_id}?view=issues``: the envelope, no ``claims``."""
+
+    view: str = "issues"
+
+
 __all__ = [
     "AskHistory",
     "AskMessage",
@@ -896,13 +1172,30 @@ __all__ = [
     "CandidateClaim",
     "DebateSide",
     "EntityRef",
+    "Escalation",
+    "EscalationPolicy",
     "ExtractStatus",
     "ExtractedClaims",
     "ExtractedEntity",
+    "FailureBlock",
     "FailureClass",
     "LibraryItem",
     "LibraryList",
     "RelatedVerifications",
+    "ReviewAssessment",
+    "ReviewAssessmentCounts",
+    "ReviewClaim",
+    "ReviewCredits",
+    "ReviewEnvelope",
+    "ReviewFailure",
+    "ReviewFull",
+    "ReviewIssue",
+    "ReviewIssues",
+    "ReviewResult",
+    "ReviewStarted",
+    "ReviewSummary",
+    "ReviewVerification",
+    "ReviewVerificationCounts",
     "SimilarVerification",
     "Source",
     "TaskAccepted",

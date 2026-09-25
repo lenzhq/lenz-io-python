@@ -3,7 +3,7 @@
   "info": {
     "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Four API primitives for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 20, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or up to a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on every claim in ONE call (typically 10-25s, 3-model panel):\n# a list of up to 20, one row per claim, in the order you sent them.\nquick = client.assess(claims=claims).claims\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Rows we ran out of time on are free and worth resending; the rest of the\n# Error rows (no_claim, framing_failed) want a different input.\nretry = [c.claim for c in quick if c.error_code == \"timeout\"]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.verdict != \"Error\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of four shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026); on the webhook the same value rides in `error`. `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nOne of those reasons comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `not_a_claim` (the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`); not on `/assess` rows.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key for `verify_and_wait`; on other calls pass `idempotency_key` yourself.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. The SDKs send the header when you pass a key yourself: `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node; neither generates one for ask, because a repeated question is usually deliberate. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Five API calls for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up, review a whole draft.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 20, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or up to a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n- `POST /review` \u2014 the extract \u2192 assess \u2192 verify ladder on a whole draft, returning the issues with suggested rewrites in 2-4 min. Async, 1 credit per claim assessed + 10 (5 at `depth: \"low\"`) per claim verified.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: one /review call\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# Extract, assess, and verify the doubtful claims in one call (async, 2-4 min)\ndraft = \"The EU AI Act took effect in March 2024. It sorts AI systems into four risk tiers.\"\nreview = client.review_and_wait(text=draft)\nfor i in review.issues:\n    print(i.verdict, i.claim, i.suggested_rewrite)\n```\n\nThe default policy: a quick verdict on every claim (up to 20), and the deep check on the rows whose quick verdict is `False`, `Mostly False` or `Mixed`, or whose confidence is `low`, up to five. Change it in `escalate`. To deep-check the rows the cap left out (`escalation.disposition == \"cap\"`), send them to `/verify/batch`. A resend with the same `Idempotency-Key` within 24 hours returns the same review; a new key is a new review.\n\n## The primitives, call by call: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on every claim in ONE call (typically 10-25s, 3-model panel):\n# a list of up to 20, one row per claim, in the order you sent them.\nquick = client.assess(claims=claims).claims\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Rows we ran out of time on are free and worth resending; the rest of the\n# Error rows (no_claim, framing_failed) want a different input.\nretry = [c.claim for c in quick if c.error_code == \"timeout\"]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.verdict != \"Error\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of four shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026); on the webhook the same value rides in `error`. `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nOne of those reasons comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `not_a_claim` (the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **Whole drafts**: `POST /review` with `webhook_url`; handle `review.completed` (a `ReviewWebhookPayload`, deduped on `event_id`) and read `review.issues[]`.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`); not on `/assess` rows.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key for `verify_and_wait`; on other calls pass `idempotency_key` yourself.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. The SDKs send the header when you pass a key yourself: `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node; neither generates one for ask, because a repeated question is usually deliberate. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` and `POST /review` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events. Events: `verification.completed`, `verification.failed`, `certificate.timestamped`, and for a review `review.completed` / `review.failed` (switch on `event`; a review's own deep checks fire no `verification.*` events).\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/terms"
   },
   "paths": {
@@ -762,6 +762,204 @@
         "security": [
           {
             "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/review": {
+      "post": {
+        "operationId": "review",
+        "summary": "Review a draft",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewAcceptedOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
+        "tags": [
+          "Review"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "cURL",
+            "source": "curl -X POST https://lenz.io/api/v1/review \\\n  -H \"Authorization: Bearer lenz_...\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"Idempotency-Key: draft-42\" \\\n  -d '{\"text\": \"The EU AI Act took effect in March 2024. ...\",\n       \"escalate\": {\"max_verifications\": 5}}'\n# 202 {\"review_id\": \"a1b2c3d4\", \"status\": \"queued\"}\n# Location: /api/v1/reviews/a1b2c3d4\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/reviews/{review_id}": {
+      "get": {
+        "operationId": "getReview",
+        "summary": "Get a review",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "schema": {
+              "title": "Review Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "view",
+            "schema": {
+              "default": "full",
+              "title": "View",
+              "type": "string"
+            },
+            "required": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ReviewFullOut"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ReviewIssuesOut"
+                    }
+                  ],
+                  "title": "Response"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The review as it stands: quick verdicts at ~25-40 s, deep checks as each\nlands. `?view=issues` returns the same object without `claims[]`. Poll no\nfaster than `poll_after_seconds`; read `issues[]` at `completed`.",
+        "tags": [
+          "Review"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Shell",
+            "label": "cURL",
+            "source": "curl \"https://lenz.io/api/v1/reviews/a1b2c3d4?view=issues\" \\\n  -H \"Authorization: Bearer lenz_...\"\n# Poll every poll_after_seconds until status is completed or failed,\n# then read outcome and issues[] (verdict, key_finding, suggested_rewrite).\n"
           }
         ]
       }
@@ -2455,6 +2653,1539 @@
         "title": "AskIn",
         "type": "object"
       },
+      "ReviewAcceptedOut": {
+        "properties": {
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "description": "The acceptance receipt, not the current state.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "status"
+        ],
+        "title": "ReviewAcceptedOut",
+        "type": "object"
+      },
+      "ReviewErrorOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Review Id"
+          },
+          "purged_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged At"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          }
+        },
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "ReviewErrorOut",
+        "type": "object"
+      },
+      "ReviewErrorItemOut": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Loc",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Msg",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg"
+        ],
+        "title": "ReviewErrorItemOut",
+        "type": "object"
+      },
+      "ReviewValidationErrorOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "errors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewErrorItemOut"
+            },
+            "title": "Errors",
+            "type": "array"
+          }
+        },
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "ReviewValidationErrorOut",
+        "type": "object"
+      },
+      "EscalationPolicyIn": {
+        "additionalProperties": false,
+        "description": "Which quick-checked claims get a deep check. A claim escalates when its\nquick label is in ``verdicts`` OR its confidence band is in ``confidence``.\nBoth may be empty; ``max_verifications: 0`` makes an assess-only review.",
+        "properties": {
+          "verdicts": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quick-check labels that get a deep check. Default [\"False\", \"Mostly False\", \"Mixed\"].",
+            "title": "Verdicts"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Quick-check confidence bands that get a deep check (low, medium, high). Default [\"low\"].",
+            "title": "Confidence"
+          },
+          "max_verifications": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The deep-check cap. Default 5.",
+            "title": "Max Verifications"
+          },
+          "max_assessments": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many of the draft's claims, most check-worthy first, get a quick verdict. Default 20.",
+            "title": "Max Assessments"
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "enum": [
+                  "standard",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Depth of every deep check. Default standard.",
+            "title": "Depth"
+          }
+        },
+        "title": "EscalationPolicyIn",
+        "type": "object"
+      },
+      "ReviewIn": {
+        "additionalProperties": false,
+        "description": "A draft to review: up to 50,000 characters, or one public http(s) URL.",
+        "properties": {
+          "text": {
+            "description": "The draft, up to 50,000 characters (longer text is cut and reported as input_truncated), or one public http(s) URL, read like /extract reads one.",
+            "title": "Text",
+            "type": "string"
+          },
+          "language": {
+            "default": "",
+            "description": "The output language of every claim and rewrite. Default English.",
+            "title": "Language",
+            "type": "string"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted or null: the credential's default webhook URL. \"\": no webhook for this review. A URL: review.completed / review.failed go there.",
+            "title": "Webhook Url"
+          },
+          "visibility": {
+            "default": "private",
+            "description": "Applied to every deep check.",
+            "enum": [
+              "private",
+              "unlisted"
+            ],
+            "title": "Visibility",
+            "type": "string"
+          },
+          "escalate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EscalationPolicyIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ReviewIn",
+        "type": "object"
+      },
+      "ReviewAssessmentCountsOut": {
+        "properties": {
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "completed",
+          "failed"
+        ],
+        "title": "ReviewAssessmentCountsOut",
+        "type": "object"
+      },
+      "ReviewAssessmentOut": {
+        "properties": {
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "True",
+                  "Mostly True",
+                  "Mixed",
+                  "Mostly False",
+                  "False",
+                  "Error"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "dissent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dissent"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An extensible string, as on /assess.",
+            "title": "Error Code"
+          },
+          "identified_claims": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Identified Claims",
+            "type": "array"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReviewAssessmentOut",
+        "type": "object"
+      },
+      "ReviewClaimOut": {
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewResultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assessment": {
+            "$ref": "#/components/schemas/ReviewAssessmentOut"
+          },
+          "escalation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewEscalationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewVerificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "claim",
+          "result",
+          "assessment",
+          "escalation",
+          "verification"
+        ],
+        "title": "ReviewClaimOut",
+        "type": "object"
+      },
+      "ReviewCreditsOut": {
+        "properties": {
+          "charged": {
+            "description": "Net credits this review cost the account, read from the ledger. Authoritative once no deep check is running.",
+            "title": "Charged",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "charged"
+        ],
+        "title": "ReviewCreditsOut",
+        "type": "object"
+      },
+      "ReviewEntityOut": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "qid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qid"
+          }
+        },
+        "title": "ReviewEntityOut",
+        "type": "object"
+      },
+      "ReviewEscalationOut": {
+        "properties": {
+          "matched_rules": {
+            "items": {
+              "enum": [
+                "verdict",
+                "confidence"
+              ],
+              "type": "string"
+            },
+            "title": "Matched Rules",
+            "type": "array"
+          },
+          "disposition": {
+            "enum": [
+              "not_selected",
+              "planned",
+              "cap",
+              "credits",
+              "account_cap"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          }
+        },
+        "required": [
+          "matched_rules",
+          "disposition"
+        ],
+        "title": "ReviewEscalationOut",
+        "type": "object"
+      },
+      "ReviewFailedRowOut": {
+        "properties": {
+          "claim_index": {
+            "title": "Claim Index",
+            "type": "integer"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "stage": {
+            "enum": [
+              "assessment",
+              "verification"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "claim_index",
+          "claim",
+          "stage",
+          "failure"
+        ],
+        "title": "ReviewFailedRowOut",
+        "type": "object"
+      },
+      "ReviewFailureOut": {
+        "description": "The failure block ``GET /verify/status`` answers a failed task with.",
+        "properties": {
+          "failure_reason": {
+            "title": "Failure Reason",
+            "type": "string"
+          },
+          "failure_class": {
+            "enum": [
+              "upstream_unavailable",
+              "insufficient_evidence",
+              "invalid_input",
+              "cancelled",
+              "internal"
+            ],
+            "title": "Failure Class",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "docs_url": {
+            "title": "Docs Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "failure_reason",
+          "failure_class",
+          "retryable",
+          "docs_url"
+        ],
+        "title": "ReviewFailureOut",
+        "type": "object"
+      },
+      "ReviewFullOut": {
+        "properties": {
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "assessing",
+              "verifying",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "clean",
+                  "issues_found",
+                  "incomplete",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth.",
+            "title": "Outcome"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ReviewPolicyOut"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReviewSummaryOut"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/ReviewCreditsOut"
+          },
+          "poll_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After Seconds"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewIssueOut"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFailedRowOut"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "const": "full",
+            "title": "View",
+            "type": "string"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewClaimOut"
+            },
+            "title": "Claims",
+            "type": "array"
+          }
+        },
+        "required": [
+          "review_id",
+          "status",
+          "outcome",
+          "created_at",
+          "completed_at",
+          "language",
+          "policy",
+          "summary",
+          "credits",
+          "poll_after_seconds",
+          "issues",
+          "failures",
+          "failure",
+          "view",
+          "claims"
+        ],
+        "title": "ReviewFullOut",
+        "type": "object"
+      },
+      "ReviewIssueOut": {
+        "properties": {
+          "claim_index": {
+            "title": "Claim Index",
+            "type": "integer"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "verified_claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Claim"
+          },
+          "verdict": {
+            "enum": [
+              "True",
+              "Mostly True",
+              "Mixed",
+              "Mostly False",
+              "False"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "source": {
+            "enum": [
+              "assessment",
+              "verification"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "verification_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Id"
+          },
+          "verification_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "processing",
+                  "completed",
+                  "failed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Status"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "escalation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewEscalationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key_finding": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Finding"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "suggested_rewrite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The deep check's rewrite; null on a quick-only row. A suggestion, not itself verified.",
+            "title": "Suggested Rewrite"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "claim_index",
+          "claim",
+          "verified_claim",
+          "verdict",
+          "confidence",
+          "source",
+          "verification_id",
+          "verification_status",
+          "verification_url",
+          "url",
+          "escalation",
+          "key_finding",
+          "rationale",
+          "suggested_rewrite",
+          "failure"
+        ],
+        "title": "ReviewIssueOut",
+        "type": "object"
+      },
+      "ReviewIssuesOut": {
+        "properties": {
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "assessing",
+              "verifying",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "clean",
+                  "issues_found",
+                  "incomplete",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth.",
+            "title": "Outcome"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/ReviewPolicyOut"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ReviewSummaryOut"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/ReviewCreditsOut"
+          },
+          "poll_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After Seconds"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewIssueOut"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "failures": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewFailedRowOut"
+            },
+            "title": "Failures",
+            "type": "array"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "const": "issues",
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "review_id",
+          "status",
+          "outcome",
+          "created_at",
+          "completed_at",
+          "language",
+          "policy",
+          "summary",
+          "credits",
+          "poll_after_seconds",
+          "issues",
+          "failures",
+          "failure",
+          "view"
+        ],
+        "title": "ReviewIssuesOut",
+        "type": "object"
+      },
+      "ReviewPolicyOut": {
+        "properties": {
+          "verdicts": {
+            "items": {
+              "enum": [
+                "True",
+                "Mostly True",
+                "Mixed",
+                "Mostly False",
+                "False"
+              ],
+              "type": "string"
+            },
+            "title": "Verdicts",
+            "type": "array"
+          },
+          "confidence": {
+            "items": {
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "type": "string"
+            },
+            "title": "Confidence",
+            "type": "array"
+          },
+          "max_verifications": {
+            "title": "Max Verifications",
+            "type": "integer"
+          },
+          "max_assessments": {
+            "title": "Max Assessments",
+            "type": "integer"
+          },
+          "depth": {
+            "enum": [
+              "standard",
+              "low"
+            ],
+            "title": "Depth",
+            "type": "string"
+          }
+        },
+        "required": [
+          "verdicts",
+          "confidence",
+          "max_verifications",
+          "max_assessments",
+          "depth"
+        ],
+        "title": "ReviewPolicyOut",
+        "type": "object"
+      },
+      "ReviewResultOut": {
+        "properties": {
+          "verdict": {
+            "enum": [
+              "True",
+              "Mostly True",
+              "Mixed",
+              "Mostly False",
+              "False",
+              "Error"
+            ],
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "source": {
+            "enum": [
+              "assessment",
+              "verification"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "is_issue": {
+            "title": "Is Issue",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "verdict",
+          "confidence",
+          "source",
+          "is_issue"
+        ],
+        "title": "ReviewResultOut",
+        "type": "object"
+      },
+      "ReviewSummaryOut": {
+        "properties": {
+          "claims_selected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Claims this review works on; null until the draft is read.",
+            "title": "Claims Selected"
+          },
+          "claim_limit": {
+            "description": "The resolved max_assessments.",
+            "title": "Claim Limit",
+            "type": "integer"
+          },
+          "claim_limit_reached": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The draft held at least claim_limit claims: more MAY exist.",
+            "title": "Claim Limit Reached"
+          },
+          "input_truncated": {
+            "title": "Input Truncated",
+            "type": "boolean"
+          },
+          "assessments": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewAssessmentCountsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verifications": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewVerificationCountsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issues": {
+            "title": "Issues",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "claims_selected",
+          "claim_limit",
+          "claim_limit_reached",
+          "input_truncated",
+          "assessments",
+          "verifications",
+          "issues"
+        ],
+        "title": "ReviewSummaryOut",
+        "type": "object"
+      },
+      "ReviewVerificationCountsOut": {
+        "properties": {
+          "planned": {
+            "title": "Planned",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "planned",
+          "completed",
+          "failed"
+        ],
+        "title": "ReviewVerificationCountsOut",
+        "type": "object"
+      },
+      "ReviewVerificationOut": {
+        "properties": {
+          "status": {
+            "enum": [
+              "processing",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "content_status": {
+            "enum": [
+              "available",
+              "purged"
+            ],
+            "title": "Content Status",
+            "type": "string"
+          },
+          "verification_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Id"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "claim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Claim"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "EFFECTIVE: a same-account cache hit keeps its own.",
+            "title": "Visibility"
+          },
+          "depth": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "EFFECTIVE: a cache hit may serve standard for a low request.",
+            "title": "Depth"
+          },
+          "domain": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Domain"
+          },
+          "entities": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewEntityOut"
+            },
+            "title": "Entities",
+            "type": "array"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "enum": [
+                  "True",
+                  "Mostly True",
+                  "Mixed",
+                  "Mostly False",
+                  "False"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "lenz_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lenz Score"
+          },
+          "key_finding": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key Finding"
+          },
+          "executive_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executive Summary"
+          },
+          "suggested_rewrite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Rewrite"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "modified_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modified At"
+          },
+          "verification_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verification Url"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "content_status"
+        ],
+        "title": "ReviewVerificationOut",
+        "type": "object"
+      },
       "NeedsInputOut": {
         "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``) or finds a near-duplicate of an\nexisting verification (``duplicate_found``). Only one of ``claims`` or\n``similar_claims`` is populated per event, keyed on ``reason``. A vague\ninput does not pause: it is checked on its most likely reading, or fails\nas ``not_a_claim`` when there is none.\n\n``multi_claim`` is resolved by calling ``POST /verify/{task_id}/select``\nwith one of the offered claim texts. ``duplicate_found`` is NOT:\n``/select`` validates picks as claim texts, and that reason offers\nexisting verifications instead. It is informational \u2014 read\n``similar_claims`` and decide whether to resubmit.",
         "properties": {
@@ -2613,6 +4344,18 @@
             "default": null,
             "title": "Retryable"
           },
+          "review_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Review Id"
+          },
           "attempt": {
             "title": "Attempt",
             "type": "integer"
@@ -2630,6 +4373,62 @@
           "delivered_at"
         ],
         "title": "WebhookPayload",
+        "type": "object"
+      },
+      "ReviewWebhookPayload": {
+        "description": "Body of ``review.completed`` / ``review.failed``.\n\n``event_id`` is stable per (review, event): dedupe on it (``attempt``\nchanges on retries). ``task_id`` is the delivery identity, not pollable on\n``/verify/status``. ``delivered_at`` is the attempt time.",
+        "properties": {
+          "event": {
+            "enum": [
+              "review.completed",
+              "review.failed"
+            ],
+            "title": "Event",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "review": {
+            "$ref": "#/components/schemas/ReviewFullOut"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "delivered_at": {
+            "title": "Delivered At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "event_id",
+          "review_id",
+          "task_id",
+          "status",
+          "review",
+          "attempt",
+          "delivered_at"
+        ],
+        "title": "ReviewWebhookPayload",
         "type": "object"
       }
     },
@@ -2658,6 +4457,10 @@
     {
       "name": "Verify",
       "description": "Deep multi-model pipeline with citations. Async, ~90s. Submit one claim or a batch, poll status, and resolve a needs_input interrupt with select."
+    },
+    {
+      "name": "Review",
+      "description": "The whole recipe in one call: find the claims in a draft, quick-check each, deep-check the ones that look wrong or uncertain, and get the issues back with suggested rewrites. Async, two to four minutes; poll the review or receive review.completed at a webhook."
     },
     {
       "name": "Ask",
@@ -2754,6 +4557,48 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/WebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "review.completed": {
+      "post": {
+        "summary": "review.completed",
+        "description": "Fires once when a review ends with every planned deep check done. The body is ReviewWebhookPayload, not WebhookPayload: switch on `event` and dedupe on `event_id`. A review's own deep checks fire no verification.* events.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "review.failed": {
+      "post": {
+        "summary": "review.failed",
+        "description": "Fires once when a review ends without a result (no claim, no credits, an outage).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewWebhookPayload"
               }
             }
           }

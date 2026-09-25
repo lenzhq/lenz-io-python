@@ -1,0 +1,135 @@
+{
+  "review_id": "442b6aa9",
+  "view": "full",
+  "status": "assessing",
+  "outcome": null,
+  "created_at": "2026-09-25T19:00:39.962779Z",
+  "completed_at": null,
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 2,
+    "depth": "low"
+  },
+  "summary": {
+    "claims_selected": 4,
+    "claim_limit": 20,
+    "claim_limit_reached": false,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 2,
+      "failed": 0
+    },
+    "verifications": null,
+    "issues": 0
+  },
+  "credits": {
+    "charged": 4
+  },
+  "poll_after_seconds": 10,
+  "issues": [],
+  "failures": [],
+  "claims": [
+    {
+      "index": 0,
+      "claim": "The EU AI Act entered into force on 1 August 2024.",
+      "result": {
+        "verdict": "True",
+        "confidence": "high",
+        "source": "assessment",
+        "is_issue": false
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "True",
+        "confidence": "high",
+        "rationale": "The claim is correct. Regulation (EU) 2024/1689 was published in the EU Official Journal on 12 July 2024, and Article 113 provided that it would enter into force 20 days later—1 August 2024; this date is also confirmed by European Commission and European Parliament materials. Its entry into force should not be confused with its staggered dates of application, including the general application date of 2 August 2026.",
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [],
+        "disposition": "not_selected"
+      },
+      "verification": null
+    },
+    {
+      "index": 1,
+      "claim": "Obligations under the EU AI Act for general-purpose models applied from 2 August 2025.",
+      "result": {
+        "verdict": "True",
+        "confidence": "high",
+        "source": "assessment",
+        "is_issue": false
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "True",
+        "confidence": "high",
+        "rationale": "Article 113(b) of the EU AI Act made Chapter V, which contains the obligations for providers of general-purpose AI models, applicable from 2 August 2025. The claim is accurate as a general statement, although models placed on the market before that date benefit from a transition period until 2 August 2027, and the Commission’s fining powers for these obligations began on 2 August 2026.",
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [],
+        "disposition": "not_selected"
+      },
+      "verification": null
+    },
+    {
+      "index": 2,
+      "claim": "Fines for prohibited practices under the EU AI Act can reach 7% of global annual turnover.",
+      "result": null,
+      "assessment": {
+        "status": "running",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    },
+    {
+      "index": 3,
+      "claim": "About 40% of European companies had started AI Act compliance work by the end of 2024.",
+      "result": null,
+      "assessment": {
+        "status": "running",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    }
+  ],
+  "failure": null
+}

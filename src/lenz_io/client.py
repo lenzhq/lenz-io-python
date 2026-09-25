@@ -26,6 +26,11 @@ Shape (four-primitive ladder + the supporting reads):
     r = client.assess(claim="...")                         # ...or a single claim, ~10s
     v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
+    review = client.review_and_wait(text=draft)            # the whole ladder on a draft, 2-4 min
+
+    # Review without waiting
+    started = client.review(draft)                         # returns a review_id
+    review = client.get_review(started.review_id)          # ReviewFull; view="issues" → ReviewIssues
 
     # Other verify-family verbs
     v = client.verify(claim="...")          # async submit; returns task_id
@@ -71,13 +76,14 @@ import os
 import time
 import uuid
 from collections.abc import Callable
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict, overload
 
 import httpx
 
 from . import __version__
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
+    NO_RETRY_429_CODES,
     UPSTREAM_503_CODES,
     LenzAPIError,
     LenzError,
@@ -85,6 +91,8 @@ from .errors import (
     LenzNeedsInputError,
     LenzPipelineError,
     LenzTimeoutError,
+    ReviewFailed,
+    ReviewTimeout,
     map_response_to_error,
 )
 from .models import (
@@ -98,6 +106,9 @@ from .models import (
     LibraryList,
     Progress,
     RelatedVerifications,
+    ReviewFull,
+    ReviewIssues,
+    ReviewStarted,
     TaskAccepted,
     TaskStatus,
     Usage,
@@ -141,6 +152,11 @@ POLL_BACKOFF_CAP = 10.0
 # ceiling stops it stalling a wait well inside its own timeout.
 POLL_HINT_MIN = 1.0
 POLL_HINT_MAX = 30.0
+# ``review_and_wait`` reads the review's own ``poll_after_seconds`` (10 s while
+# assessing, 15 s while deep-checking). A review takes minutes, so nothing is
+# gained by polling faster than this floor, whatever the body says.
+REVIEW_POLL_FLOOR = 5.0
+REVIEW_POLL_DEFAULT = 10.0
 
 
 def _poll_hint(progress: Any) -> float | None:
@@ -856,6 +872,176 @@ class Lenz:
                 )
         return results
 
+    # ── /review: the whole recipe in one call ──
+
+    def review(
+        self,
+        text: str,
+        *,
+        verdicts: list[str] | None = None,
+        confidence: list[str] | None = None,
+        max_assessments: int | None = None,
+        max_verifications: int | None = None,
+        depth: str | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        visibility: str = "private",
+        idempotency_key: str | None = None,
+    ) -> ReviewStarted:
+        """Start a review of a draft. Returns at once with a ``review_id``;
+        the review takes two to four minutes. Use ``review_and_wait`` to
+        block until it ends, or ``get_review`` to read it.
+
+        ``text`` is the draft (up to 50,000 characters; longer text is cut and
+        reported as ``summary.input_truncated``), or one public http(s) URL.
+
+        Every claim in the draft gets a quick verdict (up to
+        ``max_assessments``, default 20, most check-worthy first). The ones
+        whose quick verdict is in ``verdicts`` (default ``["False",
+        "Mostly False", "Mixed"]``) OR whose confidence is in ``confidence``
+        (default ``["low"]``) get a deep check, up to ``max_verifications``
+        (default 5; ``0`` makes a quick-only review) at ``depth``
+        (``"standard"``, the default, or ``"low"``). ``None`` leaves a knob at
+        the server default; an empty list switches that rule off.
+
+        Credits: 1 per claim assessed, plus 10 (5 at ``depth="low"``) per
+        deep check. ``credits.charged`` on the review says what it cost.
+
+        ``webhook_url``: ``None`` (default) sends ``review.completed`` /
+        ``review.failed`` to your credential's default webhook URL, ``""``
+        sends none, a URL sends them there.
+
+        An ``Idempotency-Key`` is generated when you pass none, so a retried
+        submit cannot start a second review; a resend with the same key
+        within 24 hours returns the same review, and a new key is a new
+        review.
+        """
+        if not text or not text.strip():
+            raise ValueError("review() needs the draft text, or one public http(s) URL.")
+        payload: dict[str, Any] = {"text": text}
+        if language:
+            payload["language"] = language
+        if webhook_url is not None:
+            payload["webhook_url"] = webhook_url
+        payload["visibility"] = visibility
+        escalate: dict[str, Any] = {}
+        for name, value in (
+            ("verdicts", verdicts),
+            ("confidence", confidence),
+            ("max_assessments", max_assessments),
+            ("max_verifications", max_verifications),
+            ("depth", depth),
+        ):
+            if value is not None:
+                escalate[name] = list(value) if isinstance(value, (list, tuple)) else value
+        if escalate:
+            payload["escalate"] = escalate
+        headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
+        body = self._request("POST", "/review", json=payload, headers=headers)
+        return ReviewStarted.model_validate(body)
+
+    @overload
+    def get_review(self, review_id: str) -> ReviewFull: ...
+
+    @overload
+    def get_review(self, review_id: str, *, view: Literal["full"]) -> ReviewFull: ...
+
+    @overload
+    def get_review(self, review_id: str, *, view: Literal["issues"]) -> ReviewIssues: ...
+
+    def get_review(self, review_id: str, *, view: str = "full") -> ReviewFull | ReviewIssues:
+        """Read a review. ``view="issues"`` returns just the issues and the
+        failures (``ReviewIssues``, no ``claims``); the default returns every
+        claim (``ReviewFull``).
+
+        Raises :class:`LenzGoneError` (410) once the account's retention
+        period has removed the review.
+        """
+        if not review_id:
+            raise ValueError("get_review() needs a review_id.")
+        if view == "issues":
+            body = self._request("GET", f"/reviews/{review_id}", params={"view": "issues"})
+            return ReviewIssues.model_validate(body)
+        if view != "full":
+            raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
+        return ReviewFull.model_validate(self._request("GET", f"/reviews/{review_id}"))
+
+    def review_and_wait(
+        self,
+        text: str,
+        *,
+        timeout: float = 600.0,
+        on_update: Callable[[ReviewFull], None] | None = None,
+        **kw: Any,
+    ) -> ReviewFull:
+        """Start a review (``review(text, **kw)``) and poll it until it ends.
+
+        Returns the completed ``ReviewFull``: read ``outcome``, then
+        ``issues``. Polls on the review's own ``poll_after_seconds`` (never
+        faster than every 5 s). ``on_update(review)`` is called on every poll
+        whose body changed, so you can show the quick verdicts as soon as they
+        are in and each deep check as it lands; without it the helper is
+        silent.
+
+        Raises :class:`ReviewFailed` when the review ends ``failed`` (its
+        ``error_code`` and ``hint`` say why), and :class:`ReviewTimeout` when
+        ``timeout`` seconds pass first: the review keeps running, and the
+        error carries its ``review_id`` and the last body read.
+        """
+        started = self.review(text, **kw)
+        logger.info("Submitted review: %s", started.review_id)
+        return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
+
+    def _wait_review(
+        self,
+        review_id: str,
+        *,
+        timeout: float,
+        on_update: Callable[[ReviewFull], None] | None = None,
+    ) -> ReviewFull:
+        """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``).
+
+        Like the verification poll, it always reads once more at the deadline
+        before giving up, and a transient read failure (a 5xx or a network
+        error that outlived the request's own retries) is retried on the next
+        round rather than raised. Anything else (404, 403, 410) raises.
+        """
+        deadline = time.monotonic() + timeout
+        last: ReviewFull | None = None
+        last_dump: dict[str, Any] | None = None
+        while True:
+            try:
+                review = self.get_review(review_id)
+            except LenzAPIError:
+                review = None
+            if review is not None:
+                dump = review.model_dump()
+                if dump != last_dump:
+                    last_dump = dump
+                    if on_update is not None:
+                        try:
+                            on_update(review.model_copy(deep=True))
+                        except Exception:
+                            logger.debug("on_update callback raised for review %s", review_id, exc_info=True)
+                last = review
+                if review.status == "completed":
+                    return review
+                if review.status == "failed":
+                    raise _review_failed(review)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise ReviewTimeout(
+                    message=f"review_and_wait timed out after {timeout}s",
+                    cause="The review is still running server-side.",
+                    fix=f"Read it later with client.get_review('{review_id}').",
+                    doc_url="https://lenz.io/docs/quickstart",
+                    review_id=review_id,
+                    partial=last,
+                )
+            hint = last.poll_after_seconds if last is not None else None
+            sleep_for = REVIEW_POLL_DEFAULT if hint is None else max(REVIEW_POLL_FLOOR, float(hint))
+            time.sleep(min(sleep_for, remaining))
+
     # ── poll engine (shared by wait + verify_batch_and_wait) ──
 
     def _poll_to_terminal(
@@ -1225,7 +1411,13 @@ class Lenz:
             #    Lenz code; the server is down, not pacing us, so an hour-long
             #    Retry-After must become backoff — not an hour-long sleep, and
             #    not an abort of a request our ladder might still satisfy.
-            if attempt < self._max_retries and (response.status_code >= 500 or response.status_code == 429):
+            #  * a 429 whose code is in NO_RETRY_429_CODES — raise at once,
+            #    whatever the wait (see its definition).
+            if (
+                attempt < self._max_retries
+                and (response.status_code >= 500 or response.status_code == 429)
+                and not (response.status_code == 429 and _body_error_code(response) in NO_RETRY_429_CODES)
+            ):
                 stated = _stated_retry_after(response)
                 if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
                     time.sleep(stated)
@@ -1244,6 +1436,26 @@ class Lenz:
         if last_exc:
             raise LenzAPIError(message=str(last_exc), cause=str(last_exc)) from last_exc
         raise LenzAPIError(message=f"{method} {path} failed without diagnostic")
+
+
+def _review_failed(review: ReviewFull) -> ReviewFailed:
+    failure = review.failure
+    reason = (failure.failure_reason if failure else "") or "unknown"
+    hint = (failure.hint if failure else None) or ""
+    retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
+    return ReviewFailed(
+        message=f"Review failed: {reason}",
+        cause=hint or reason,
+        fix=hint or ("Retry the same draft after a short wait." if retryable else "Check the draft and resubmit."),
+        doc_url=(failure.docs_url if failure else "") or "https://lenz.io/docs/errors",
+        review_id=review.review_id,
+        error_code=reason,
+        failure_reason=reason,
+        failure_class=(failure.failure_class if failure else "") or "",
+        retryable=retryable,
+        hint=hint,
+        review=review,
+    )
 
 
 def _stated_retry_after(response: httpx.Response) -> int | None:

@@ -1,0 +1,129 @@
+{
+  "review_id": "fffb34c8",
+  "view": "full",
+  "status": "failed",
+  "outcome": "unchecked",
+  "created_at": "2026-09-25T19:02:38.500426Z",
+  "completed_at": "2026-09-25T19:02:38.524155Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 5,
+    "depth": "standard"
+  },
+  "summary": {
+    "claims_selected": 4,
+    "claim_limit": 20,
+    "claim_limit_reached": false,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 0,
+      "failed": 0
+    },
+    "verifications": {
+      "planned": 0,
+      "completed": 0,
+      "failed": 0
+    },
+    "issues": 0
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": null,
+  "issues": [],
+  "failures": [],
+  "claims": [
+    {
+      "index": 0,
+      "claim": "The EU AI Act entered into force on 1 August 2024.",
+      "result": null,
+      "assessment": {
+        "status": "pending",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    },
+    {
+      "index": 1,
+      "claim": "Obligations under the EU AI Act for general-purpose models applied from 2 August 2025.",
+      "result": null,
+      "assessment": {
+        "status": "pending",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    },
+    {
+      "index": 2,
+      "claim": "Fines for prohibited practices under the EU AI Act can reach 7% of global annual turnover.",
+      "result": null,
+      "assessment": {
+        "status": "pending",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    },
+    {
+      "index": 3,
+      "claim": "About 40% of European companies had started AI Act compliance work by the end of 2024.",
+      "result": null,
+      "assessment": {
+        "status": "pending",
+        "verdict": null,
+        "confidence": null,
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": null,
+      "verification": null
+    }
+  ],
+  "failure": {
+    "failure_reason": "insufficient_credits",
+    "failure_class": "invalid_input",
+    "retryable": false,
+    "hint": "This review needs 4 credits to assess its claims. Nothing was charged.",
+    "docs_url": "https://lenz.io/docs/errors#invalid-input"
+  }
+}

@@ -38,6 +38,9 @@ from lenz_io.models import (
     Certificate,
     ExtractedClaims,
     LibraryList,
+    ReviewFull,
+    ReviewIssues,
+    ReviewStarted,
     TaskStatus,
     Usage,
     Verification,
@@ -162,6 +165,19 @@ def _load(name: str) -> dict:
         ("verifications_list.json", LibraryList),
         ("certificate.json", Certificate),
         ("usage.json", Usage),
+        # /review: the 202 receipt, then every state of the review as the
+        # server sent it (queued, partly assessed, deep-checking, completed,
+        # incomplete, failed before and after reading the draft), and the
+        # issues-only view. Same fixtures as the Node SDK.
+        ("review_accepted.json", ReviewStarted),
+        ("review_queued.json", ReviewFull),
+        ("review_assessing.json", ReviewFull),
+        ("review_verifying.json", ReviewFull),
+        ("review_completed.json", ReviewFull),
+        ("review_incomplete.json", ReviewFull),
+        ("review_failed_no_claim.json", ReviewFull),
+        ("review_failed_insufficient_credits.json", ReviewFull),
+        ("review_completed_issues.json", ReviewIssues),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):
@@ -481,3 +497,20 @@ def test_assess_rows_without_the_notes_still_parse():
     for row in parsed.claims:
         assert "rationale" not in row.model_fields_set
         assert row.rationale is None and row.dissent is None
+
+
+@pytest.mark.parametrize("fixture_name", ["review_webhook_completed.json", "review_webhook_failed.json"])
+def test_review_webhook_payload_is_fully_typed(fixture_name):
+    """Every top-level key of a ``review.*`` delivery lands on a typed field
+    of ``ReviewEvent`` (or on the base event), and the embedded ``review`` is
+    the ``ReviewFull`` body, walked strictly."""
+    import dataclasses
+
+    from lenz_io.webhooks import ReviewEvent
+
+    payload = _load(fixture_name)
+    typed = {f.name for f in dataclasses.fields(ReviewEvent)} - {"raw"}
+    assert sorted(set(payload) - typed) == []
+    errors = _check(payload["review"], ReviewFull, "review")
+    if errors:
+        pytest.fail("\n".join(errors))

@@ -1,0 +1,45 @@
+{
+  "review_id": "b8a9a137",
+  "view": "full",
+  "status": "failed",
+  "outcome": "unchecked",
+  "created_at": "2026-09-25T19:00:48.279048Z",
+  "completed_at": "2026-09-25T19:00:54.661959Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 5,
+    "depth": "standard"
+  },
+  "summary": {
+    "claims_selected": null,
+    "claim_limit": 20,
+    "claim_limit_reached": null,
+    "input_truncated": false,
+    "assessments": null,
+    "verifications": null,
+    "issues": 0
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": null,
+  "issues": [],
+  "failures": [],
+  "claims": [],
+  "failure": {
+    "failure_reason": "no_claim",
+    "failure_class": "invalid_input",
+    "retryable": false,
+    "hint": "The input requests a short poem about autumn leaves and states no fact. Send one factual claim, or run the text through /extract to enumerate its claims.",
+    "docs_url": "https://lenz.io/docs/errors#invalid-input"
+  }
+}

@@ -2,12 +2,13 @@
 
 Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https://lenz.io/developers).
 
-**Four API primitives, one research-depth ladder.**
+**Five API calls, one research-depth ladder.**
 
 - `extract` — pull verifiable claims out of any text, optionally narrowed with a `focus`. Free, 1000 calls/account/day (shared across your API keys).
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification.
+- `review` — the ladder on a whole draft in one call: the issues back, with suggested rewrites, in 2-4 min. Async, paid.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
@@ -41,6 +42,8 @@ lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
+lenz review draft.md             # a whole draft: quick verdicts, deep checks on the doubtful ones (2-4 min)
+lenz review draft.md --issues    # only the issues
 lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
@@ -81,6 +84,85 @@ them; resolve it non-interactively by index (spawns one verification per pick):
 ```bash
 lenz verify --resume "$tid" --claim 1,3 --detach --json   # → spawned task_ids
 ```
+
+## Review a draft
+
+One call runs the whole ladder on a draft: it pulls out the claims, gives each
+a quick `assess` verdict, and sends the ones that look wrong or uncertain
+through the full `verify` pipeline, up to five by default. It takes two to four
+minutes and hands back the issues, with suggested rewrites.
+
+```python
+from lenz_io import Lenz
+
+client = Lenz(api_key="lenz_...")
+
+draft = """
+The EU AI Act entered into force on 1 August 2024, and its obligations for
+general-purpose models applied from 2 August 2025. Fines for prohibited
+practices reach 7% of global annual turnover. About 40% of European
+companies had started compliance work by the end of 2024.
+"""
+
+# One call: extract, assess, and verify the doubtful claims (async, 2-4 min)
+review = client.review_and_wait(text=draft)
+print(review.outcome)  # clean | issues_found | incomplete | unchecked
+for i in review.issues:
+    print(i.verdict, i.confidence, i.claim)
+    if i.suggested_rewrite:
+        print("  Suggested rewrite:", i.suggested_rewrite)
+
+# Past the cap: send the remaining claims to /verify in one batch
+capped = [{"claim": c.claim} for c in review.claims if c.escalation and c.escalation.disposition == "cap"]
+results = client.verify_batch_and_wait(claims=capped) if capped else []
+```
+
+**Which claims get the deep check.** A claim is deep-checked when its quick
+verdict is `False`, `Mostly False` or `Mixed`, or its confidence is `low`, up
+to five of them. Change the rule with flat keyword arguments:
+
+```python
+client.review_and_wait(
+    text=draft,
+    verdicts=["False", "Mostly False"],  # quick verdicts that get a deep check ([] = none)
+    confidence=["low", "medium"],  # confidence bands that get one ([] = none)
+    max_verifications=10,  # the deep-check cap (0 = quick checks only)
+    max_assessments=20,  # how many of the draft's claims get a quick verdict
+    depth="low",  # every deep check at half the credits
+)
+```
+
+**Reading the result.** `outcome` is the one field to branch on. Each entry in
+`issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`:
+`source` says whether that verdict comes from a deep check (`verification`,
+with `key_finding`, `url` and `verification_id`) or from the quick check alone
+(`assessment`, with the reviewers' `rationale`; `escalation.disposition` says
+why it was not deep-checked). `suggested_rewrite` comes from a deep check, so
+an issue that stayed on the quick verdict has none. It is not verified itself:
+review it, or run it through `verify`, before you use it. `claims` lists every
+claim with both checks; `failures` lists the ones whose work failed.
+
+**Waiting.** `review_and_wait` polls on the review's own
+`poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
+they are in and each deep check as it lands; without it the helper is silent.
+It raises `ReviewFailed` when the review fails (`error_code` and `hint` say
+why) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
+keeps running, and the error carries its `review_id` and the last body read.
+To submit without waiting, `client.review(draft)` returns a `review_id`;
+read it with `client.get_review(review_id)`, or only the issues with
+`client.get_review(review_id, view="issues")`.
+
+**Credits.** 1 per claim assessed, plus 10 (5 at `depth="low"`) per deep
+check; `review.credits.charged` says what the review cost. A resend with the
+same `Idempotency-Key` within 24 hours returns the same review; a new key is a
+new review.
+
+**From the terminal.** `lenz review draft.md` prints the quick verdicts as
+they arrive and rewrites each row as its deep check lands. The exit code is the
+outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
+unchecked, failed, timed out, or an error). `--issues` prints only the issues,
+`--json` the review body, `--max-verifications N` and `--depth low` set the
+policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`.
 
 ## Quickstart — the canonical integration
 
@@ -369,6 +451,23 @@ if isinstance(event, CertificateTimestamped):
 It carries `coverage` instead of `result` — it reports a timestamp landing,
 not a verdict being produced.
 
+A review sends `review.completed` or `review.failed`, parsed as `ReviewEvent`
+with the final review on `event.review`. Deduplicate on `event.event_id`: it is
+the same on every retry of one delivery. The deep checks a review runs send no
+`verification.*` events of their own, and events this SDK version does not know
+parse as a plain `WebhookEvent`: ignore them.
+
+```python
+from lenz_io import ReviewEvent
+
+if isinstance(event, ReviewEvent) and not already_seen(event.event_id):
+    for issue in event.review.issues:
+        flag(issue.claim, issue.verdict, issue.suggested_rewrite)
+```
+
+`parse_webhook(body)` parses a body whose signature you have already checked
+(or one you stored) into the same events.
+
 Signature verification is HMAC-SHA256 over the raw body; the SDK does it for
 you and rejects tampered or replayed payloads.
 
@@ -531,7 +630,7 @@ default, so a network drop after submit doesn't spawn a duplicate verification
 or charge a second credit. Override with `idempotency_key="..."` to pin a
 specific key, or `idempotency=False` to opt out.
 
-`assess` does the same. `ask.send` takes an `idempotency_key="..."` too, but
+`assess` does the same, and `review` always sends one (pin it with `idempotency_key=`). `ask.send` takes an `idempotency_key="..."` too, but
 never generates one: re-asking the same question is a normal thing to do, and
 a key you did not choose would replay the earlier answer. Pass one when your
 retry means "the same question, once" — the reply, the credit and the
