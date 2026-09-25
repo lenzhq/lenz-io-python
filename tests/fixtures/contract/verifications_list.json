@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "verification_id": "a1b2c3d4",
+      "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+      "domain": "Science",
+      "entities": [{ "name": "Albert Einstein", "qid": "Q937" }],
+      "verdict": "False",
+      "confidence": "high",
+      "lenz_score": 1,
+      "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
+      "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+      "suggested_revision": "Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.",
+      "created_at": "2026-05-22T12:00:00Z",
+      "modified_at": null,
+      "language": "en"
+    },
+    {
+      "verification_id": "e5f6a7b8",
+      "claim": "Water boils at 100°C at sea level.",
+      "domain": "Science",
+      "entities": [{ "name": "Water", "qid": "Q283" }],
+      "verdict": "True",
+      "confidence": "high",
+      "lenz_score": 10,
+      "key_finding": "Water boils at 100°C at standard atmospheric pressure.",
+      "executive_summary": "At standard atmospheric pressure, water boils at exactly 100°C.",
+      "suggested_revision": null,
+      "created_at": "2026-05-21T09:30:00Z",
+      "modified_at": null,
+      "language": "en"
+    }
+  ],
+  "total": 2,
+  "page": 1,
+  "page_size": 20
+}

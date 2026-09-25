@@ -1743,6 +1743,42 @@ class TestSuggestedRevision:
         assert st.result.suggested_revision == _REVISION
 
 
+class TestSuggestedRevisionOnListItems:
+    """`GET /verifications` and `GET /library` rows carry the same field."""
+
+    def _page(self, *items):
+        return {"items": list(items), "total": len(items), "page": 1, "page_size": 20}
+
+    def _row(self, vid, **extra):
+        return {"verification_id": vid, "claim": "x", "domain": "", "language": "en", **extra}
+
+    def test_verifications_list_rows_parse_present_null_and_absent(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications").respond(
+                200,
+                json=self._page(
+                    self._row("a", verdict="False", suggested_revision=_REVISION),
+                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("c", verdict="Mixed"),
+                ),
+            )
+            page = client.verifications.list()
+        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+
+    def test_library_list_rows_parse_present_null_and_absent(self, unauth_client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/library").respond(
+                200,
+                json=self._page(
+                    self._row("a", verdict="False", suggested_revision=_REVISION),
+                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("c", verdict="Mixed"),
+                ),
+            )
+            page = unauth_client.library.list()
+        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+
+
 class TestCoverage:
     """The warranty block and the certificate download.
 

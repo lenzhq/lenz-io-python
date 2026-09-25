@@ -251,8 +251,8 @@ Every claim-shaped response shares these fields at top level:
 
 ### A suggested rewrite (`suggested_revision`)
 
-A full `Verification` can carry `suggested_revision`: a suggested rewrite of
-its `claim` that the verification's findings support, to use in place of the
+A verification can carry `suggested_revision`: a suggested rewrite of its
+`claim` that the verification's findings support, to use in place of the
 original sentence.
 
 ```python
@@ -266,10 +266,10 @@ if v.suggested_revision is not None:
   through `client.verify(...)`.
 - **`None` for a true claim**, when no correction is established, and on
   verifications that predate the field.
-- Only on a full verification (`verify_and_wait`, `wait`,
-  `verifications.get`), and as the `suggested_revision` key of a
-  `verification.completed` webhook's `result` dict. List items, `assess` rows
-  and the library do not carry it.
+- On every verification, single or listed: `verifications.get`,
+  `verifications.list`, `library.list`, `verify_and_wait`, `wait`, a completed
+  `get_status`, and the `result` of a `verification.completed` webhook. Not on
+  `assess` rows.
 
 ### The warranty (`coverage`)
 

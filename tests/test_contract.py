@@ -37,9 +37,11 @@ from lenz_io.models import (
     AssessResponse,
     Certificate,
     ExtractedClaims,
+    LibraryList,
     TaskStatus,
     Usage,
     Verification,
+    VerificationList,
 )
 
 # PEP 604 unions (`int | None`) produce `types.UnionType` on 3.10+, while
@@ -154,6 +156,10 @@ def _load(name: str) -> dict:
         # not — three shapes one optional model has to absorb.
         ("verifications_detail_covered.json", Verification),
         ("verifications_detail_uncovered.json", Verification),
+        # `GET /verifications` and `GET /library` share one row shape, so one
+        # fixture checks both list models.
+        ("verifications_list.json", VerificationList),
+        ("verifications_list.json", LibraryList),
         ("certificate.json", Certificate),
         ("usage.json", Usage),
     ],
@@ -195,6 +201,12 @@ def test_suggested_revision_is_on_every_verification_fixture():
         assert Verification.model_validate(payload).suggested_revision is None
     webhook = _load("webhook_payload_completed.json")
     assert webhook["result"]["suggested_revision"] is None
+    listed = VerificationList.model_validate(_load("verifications_list.json"))
+    assert [(i.verdict, i.suggested_revision is None) for i in listed.items] == [
+        ("False", False),
+        ("True", True),
+    ]
+    assert listed.items[0].suggested_revision == rev
 
 
 def test_completed_body_keeps_modified_at_null():
