@@ -59,10 +59,7 @@
         "hint": null,
         "failure": null
       },
-      "escalation": {
-        "matched_rules": [],
-        "disposition": "not_selected"
-      },
+      "escalation": null,
       "verification": null
     },
     {
@@ -86,10 +83,7 @@
         "hint": null,
         "failure": null
       },
-      "escalation": {
-        "matched_rules": [],
-        "disposition": "not_selected"
-      },
+      "escalation": null,
       "verification": null
     },
     {

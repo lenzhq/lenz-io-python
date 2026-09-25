@@ -280,7 +280,7 @@ class TestGetReview:
         assert isinstance(review, ReviewFull)
         assert review.view == "full"
         assert review.outcome == "issues_found"
-        assert review.credits.charged == 9
+        assert review.credits.charged == 14
         assert [c.index for c in review.claims] == [0, 1, 2, 3]
 
     def test_issues_view(self, client):
@@ -300,23 +300,27 @@ class TestGetReview:
 class TestModels:
     def test_completed_issue_fields(self):
         review = ReviewFull.model_validate(_load("review_completed.json"))
-        (issue,) = review.issues
-        assert issue.claim_index == 3
-        assert issue.claim.startswith("About 40% of European companies")
+        # ordered by final verdict, then confidence band
+        issue, other = review.issues
+        assert issue.claim_index == 0
+        assert issue.claim == "The EU AI Act entered into force in March 2024."
         assert issue.verified_claim is None
-        assert (issue.verdict, issue.confidence, issue.source) == ("False", "medium", "verification")
-        assert issue.verification_id == "86ea9355"
+        assert (issue.verdict, issue.confidence, issue.source) == ("False", "high", "verification")
+        assert issue.verification_id == "c9b769e1"
         assert issue.verification_status == "completed"
         assert issue.url.startswith("https://lenz.io/c/")
         assert issue.escalation.matched_rules == ["verdict", "confidence"]
         assert issue.escalation.disposition == "planned"
         assert issue.key_finding and issue.rationale
-        assert issue.suggested_rewrite.startswith("About 26% of German companies")
+        assert issue.suggested_rewrite == "The EU AI Act entered into force on 1 August 2024."
         assert issue.failure is None
+        # a deep check that found the claim false but established no correction
+        assert (other.claim_index, other.confidence, other.suggested_rewrite) == (3, "medium", None)
+        assert other.claim.startswith("About 40% of European companies")
 
     def test_claim_rows_carry_result_assessment_and_deep_check(self):
         review = ReviewFull.model_validate(_load("review_completed.json"))
-        quick, deep = review.claims[0], review.claims[3]
+        quick, deep = review.claims[1], review.claims[3]
         assert quick.result.source == "assessment" and quick.result.is_issue is False
         assert quick.escalation.disposition == "not_selected"
         assert quick.verification is None
@@ -358,7 +362,8 @@ class TestModels:
     def test_incomplete_review_with_a_capped_quick_issue_and_a_failed_row(self):
         review = ReviewFull.model_validate(_load("review_incomplete.json"))
         assert review.outcome == "incomplete"
-        quick = review.issues[1]
+        assert [i.claim_index for i in review.issues] == [0, 3, 2]
+        quick = review.issues[2]
         assert quick.source == "assessment"
         assert quick.verification_id is None and quick.suggested_rewrite is None
         assert quick.escalation.disposition == "cap"
@@ -377,9 +382,9 @@ class TestModels:
                 lines.append(("  Suggested rewrite:", i.suggested_rewrite))
         capped = [{"claim": c.claim} for c in review.claims if c.escalation and c.escalation.disposition == "cap"]
         deep = next((i for i in review.issues if i.verification_id), None)
-        assert len(lines) == 3
+        assert len(lines) == 4
         assert capped == [{"claim": review.claims[2].claim}]
-        assert deep is not None and deep.verification_id == "86ea9355"
+        assert deep is not None and deep.verification_id == "c9b769e1"
 
     def test_an_entity_with_no_name_parses(self):
         body = _load("review_completed.json")
@@ -613,7 +618,7 @@ class TestReviewAndWait:
             r.post("/review").respond(202, json=_load("review_accepted.json"))
             r.get("/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
             review = client.review_and_wait("draft", on_update=mutate)
-        assert len(review.issues) == 1 and seen[0].issues == []
+        assert len(review.issues) == 2 and seen[0].issues == []
 
     def test_silent_without_on_update(self, client, no_sleep, capsys):
         with respx.mock(base_url=BASE) as r:

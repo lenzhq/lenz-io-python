@@ -265,12 +265,13 @@ def _render(fixture: str, *, issues_only: bool = False) -> str:
 
 def test_full_render_lists_every_claim_with_its_final_verdict():
     text = _render("review_completed.json")
-    assert text.startswith("Review 442b6aa9: issues found — 1 issue in 4 claims · 1 of 1 deep-checked · 9 credits")
-    assert "[1/4] The EU AI Act entered into force on 1 August 2024." in text
+    assert text.startswith("Review 442b6aa9: issues found — 2 issues in 4 claims · 2 of 2 deep-checked · 14 credits")
+    assert "[1/4] The EU AI Act entered into force in March 2024." in text
+    assert "False (high) · deep check" in text
     assert "True (high) · quick check" in text
     assert "False (medium) · deep check" in text
     assert "EY reported 28% full compliance among surveyed organizations." in text
-    assert "Suggested rewrite: About 26% of German companies" in text
+    assert "Suggested rewrite: The EU AI Act entered into force on 1 August 2024." in text
     assert "https://lenz.io/c/european-companies-ai-act-compliance-2024-86ea9355" in text
     assert "has not been verified itself" in text
 
@@ -281,7 +282,7 @@ def test_issues_render_shows_quick_issues_and_failures():
     assert "Mostly False (medium) · quick check" in text
     assert "Not deep-checked (cap)." in text
     assert "Assessment failed: The quick check ran out of time" in text
-    assert "The EU AI Act entered into force" not in text  # a clean row is not an issue
+    assert [text.count(f"[{n}/4]") for n in (1, 2, 3, 4)] == [1, 1, 1, 1]  # each row once
 
 
 def test_failed_review_render_says_why():
