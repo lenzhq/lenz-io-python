@@ -943,7 +943,22 @@ class Lenz:
         if escalate:
             payload["escalate"] = escalate
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
-        body = self._request("POST", "/review", json=payload, headers=headers)
+        try:
+            body = self._request("POST", "/review", json=payload, headers=headers)
+        except LenzError as exc:
+            # A retried submit (same key) that lands while the first attempt's
+            # review is still being created answers 409 with that review's id:
+            # it exists, so this call started it.
+            conflict = exc.body if isinstance(exc.body, dict) else {}
+            review_id = conflict.get("review_id")
+            if (
+                exc.status_code == 409
+                and exc.code == "idempotency_conflict"
+                and isinstance(review_id, str)
+                and review_id
+            ):
+                return ReviewStarted(review_id=review_id, status="queued")
+            raise
         return ReviewStarted.model_validate(body)
 
     @overload

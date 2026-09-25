@@ -21,6 +21,7 @@ import respx
 
 from lenz_io import (
     Lenz,
+    LenzError,
     LenzGoneError,
     LenzPipelineError,
     LenzRateLimitError,
@@ -154,6 +155,32 @@ class TestSubmit:
             route = r.post("/review").respond(202, json=_load("review_accepted.json"))
             client.review("draft", visibility="")
         assert "visibility" not in json.loads(route.calls.last.request.content)
+
+    def test_a_conflict_naming_the_review_returns_it(self, client, no_sleep):
+        # The first attempt's socket dropped after the server took it; the
+        # retry, under the same key, finds that review still being created.
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").mock(
+                side_effect=[
+                    httpx.ReadError("dropped"),
+                    httpx.Response(
+                        409,
+                        json={"detail": "still being created", "code": "idempotency_conflict", "review_id": "442b6aa9"},
+                    ),
+                ]
+            )
+            started = client.review("draft")
+        assert started.review_id == "442b6aa9"
+        assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+
+    def test_a_conflict_without_a_review_id_raises(self, client):
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(
+                409, json={"detail": "still being created", "code": "idempotency_conflict", "review_id": None}
+            )
+            with pytest.raises(LenzError) as exc:
+                client.review("draft")
+        assert exc.value.status_code == 409
 
     def test_empty_text_is_refused_before_the_network(self, client):
         with pytest.raises(ValueError):
