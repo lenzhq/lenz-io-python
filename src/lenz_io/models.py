@@ -271,8 +271,9 @@ class Verification(_Lax):
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
     #: A suggested rewrite of ``claim`` that this verification's findings
-    #: support, for a person to review before using it. It has not been
-    #: verified itself. ``None`` for a True verdict, when the findings
+    #: support, to use in place of the original sentence. It has not been
+    #: verified itself: before using it, review it or run it through
+    #: ``client.verify(...)``. ``None`` for a True verdict, when the findings
     #: establish no correction, and on verifications that predate the field
     #: (or a server that does not send it).
     suggested_revision: str | None = None

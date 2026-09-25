@@ -252,8 +252,8 @@ Every claim-shaped response shares these fields at top level:
 ### A suggested rewrite (`suggested_revision`)
 
 A full `Verification` can carry `suggested_revision`: a suggested rewrite of
-its `claim` that the verification's findings support, for a person to review
-before using it.
+its `claim` that the verification's findings support, to use in place of the
+original sentence.
 
 ```python
 v = client.verifications.get("a1b2c3d4")
@@ -262,8 +262,8 @@ if v.suggested_revision is not None:
     print(v.suggested_revision)  # the rewritten sentence
 ```
 
-- **It has not been verified itself.** Have a person review it before using
-  it.
+- **It has not been verified itself.** Before using it, review it or run it
+  through `client.verify(...)`.
 - **`None` for a true claim**, when no correction is established, and on
   verifications that predate the field.
 - Only on a full verification (`verify_and_wait`, `wait`,

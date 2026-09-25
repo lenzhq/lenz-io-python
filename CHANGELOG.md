@@ -13,8 +13,9 @@ current API.
 ### Added
 
 - **`suggested_revision` on `Verification`**, a string or `None`: a suggested
-  rewrite of the verification's `claim` that its findings support, for a
-  person to review before using it. It has not been verified itself. It is
+  rewrite of the verification's `claim` that its findings support, to use in
+  place of the original sentence. It has not been verified itself: before
+  using it, review it or run it through `client.verify(...)`. It is
   `None` for a true claim, when no correction is established, and on
   verifications that predate the field; an older server that does not send
   the key also reads `None`. It is on `verifications.get`, `verify_and_wait`,
