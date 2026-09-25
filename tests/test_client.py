@@ -1700,6 +1700,85 @@ class TestConnectionReuse:
         assert any("tsk_log_test" in r.message for r in caplog.records)
 
 
+_REVISION = "The Amazon produces roughly 6-9% of the world's oxygen."
+
+
+class TestSuggestedRevision:
+    """The suggested rewrite on a verification detail: a string, or `None`.
+
+    `None` covers three cases the SDK does not tell apart: the server sent
+    `null` (a True verdict, or no correction established), or it did not send
+    the key at all (an older server, or a verification predating the field).
+    """
+
+    def _detail(self, **extra):
+        return {"verification_id": "vid_r", "claim": "x", "verdict": "False", "language": "en", **extra}
+
+    def _get(self, client, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications/vid_r").respond(200, json=body)
+            return client.verifications.get("vid_r")
+
+    def test_a_present_value_is_the_rewrite(self, client):
+        assert self._get(client, self._detail(suggested_revision=_REVISION)).suggested_revision == _REVISION
+
+    def test_null_is_none(self, client):
+        assert self._get(client, self._detail(suggested_revision=None)).suggested_revision is None
+
+    def test_an_absent_key_is_none(self, client):
+        """An older server, or a verification predating the field."""
+        assert self._get(client, self._detail()).suggested_revision is None
+
+    def test_unknown_sibling_keys_do_not_break_the_client(self, client):
+        v = self._get(client, self._detail(suggested_revision=_REVISION, something_new={"a": 1}))
+        assert v.suggested_revision == _REVISION
+
+    def test_the_completed_status_body_carries_it(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verify/status/t").respond(
+                200,
+                json={"status": "completed", "result": self._detail(suggested_revision=_REVISION)},
+            )
+            st = client.get_status("t")
+        assert st.result.suggested_revision == _REVISION
+
+
+class TestSuggestedRevisionOnListItems:
+    """`GET /verifications` and `GET /library` rows carry the same field."""
+
+    def _page(self, *items):
+        return {"items": list(items), "total": len(items), "page": 1, "page_size": 20}
+
+    def _row(self, vid, **extra):
+        return {"verification_id": vid, "claim": "x", "domain": "", "language": "en", **extra}
+
+    def test_verifications_list_rows_parse_present_null_and_absent(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/verifications").respond(
+                200,
+                json=self._page(
+                    self._row("a", verdict="False", suggested_revision=_REVISION),
+                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("c", verdict="Mixed"),
+                ),
+            )
+            page = client.verifications.list()
+        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+
+    def test_library_list_rows_parse_present_null_and_absent(self, unauth_client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.get("/library").respond(
+                200,
+                json=self._page(
+                    self._row("a", verdict="False", suggested_revision=_REVISION),
+                    self._row("b", verdict="True", suggested_revision=None),
+                    self._row("c", verdict="Mixed"),
+                ),
+            )
+            page = unauth_client.library.list()
+        assert [i.suggested_revision for i in page.items] == [_REVISION, None, None]
+
+
 class TestCoverage:
     """The warranty block and the certificate download.
 

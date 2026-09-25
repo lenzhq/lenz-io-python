@@ -249,6 +249,28 @@ Every claim-shaped response shares these fields at top level:
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
+### A suggested rewrite (`suggested_revision`)
+
+A verification can carry `suggested_revision`: a suggested rewrite of its
+`claim` that the verification's findings support, to use in place of the
+original sentence.
+
+```python
+v = client.verifications.get("a1b2c3d4")
+
+if v.suggested_revision is not None:
+    print(v.suggested_revision)  # the rewritten sentence
+```
+
+- **It has not been verified itself.** Before using it, review it or run it
+  through `client.verify(...)`.
+- **`None` for a true claim**, when no correction is established, and on
+  verifications that predate the field.
+- On every verification, single or listed: `verifications.get`,
+  `verifications.list`, `library.list`, `verify_and_wait`, `wait`, a completed
+  `get_status`, and the `result` of a `verification.completed` webhook. Not on
+  `assess` rows.
+
 ### The warranty (`coverage`)
 
 Qualifying verdicts on paid Pro and Scale plans carry a contractual

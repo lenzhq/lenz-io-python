@@ -270,6 +270,14 @@ class Verification(_Lax):
     key_finding: str = ""
     executive_summary: str = ""
     warnings: list[str] = Field(default_factory=list)
+    #: A suggested rewrite of ``claim`` that this verification's findings
+    #: support, to use in place of the original sentence. It has not been
+    #: verified itself: before using it, review it or run it through
+    #: ``client.verify(...)``. ``None`` for a True verdict, when the findings
+    #: establish no correction, and on verifications that predate the field
+    #: (or a server that does not send it). On every verification, single or
+    #: listed (``VerificationListItem`` carries it too); not on ``assess`` rows.
+    suggested_revision: str | None = None
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
@@ -305,6 +313,8 @@ class VerificationListItem(_Lax):
     # The analysis's key finding (2.6.0). See ``Verification.key_finding``.
     key_finding: str = ""
     executive_summary: str = ""
+    # A suggested rewrite of ``claim``. See ``Verification.suggested_revision``.
+    suggested_revision: str | None = None
     created_at: str | None = None
     modified_at: str | None = None
     # Output language (ISO 639-1). See ``Verification.language``.

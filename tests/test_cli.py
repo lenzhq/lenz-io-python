@@ -1379,6 +1379,77 @@ def test_render_show_concise_omits_panel():
     assert "S11" not in text  # concise caps sources at 8
 
 
+# ── suggested_revision: one line under the key finding ──────────────────────
+_REWRITE = "The Earth is an oblate spheroid."
+
+
+def _with_rewrite(v, *, key_finding="The Earth is round."):
+    return v.model_copy(
+        update={
+            "key_finding": key_finding,
+            "suggested_revision": _REWRITE,
+        }
+    )
+
+
+@pytest.mark.parametrize("renderer", ["render_verification", "render_verification_full"])
+def test_a_suggested_rewrite_prints_under_the_key_finding(renderer):
+    from lenz_io.cli import render
+
+    text = _render(getattr(render, renderer), _with_rewrite(_full_verification()))
+    assert f"Suggested rewrite: {_REWRITE}" in text
+    lines = text.splitlines()
+    at = lines.index(f"Suggested rewrite: {_REWRITE}")
+    assert lines[at - 1] == "The Earth is round."  # directly under the key finding
+
+
+@pytest.mark.parametrize("renderer", ["render_verification", "render_verification_full"])
+def test_no_suggested_rewrite_prints_no_line(renderer):
+    from lenz_io.cli import render
+
+    text = _render(getattr(render, renderer), _full_verification())
+    assert "Suggested rewrite" not in text
+
+
+def test_a_suggested_rewrite_without_a_key_finding_still_prints_on_its_own_line():
+    from lenz_io.cli.render import render_verification
+
+    text = _render(render_verification, _with_rewrite(_full_verification(), key_finding=""))
+    assert f"Suggested rewrite: {_REWRITE}" in text
+
+
+def test_a_suggested_rewrite_is_printed_as_text_not_markup():
+    """The rewrite is claim text; a bracket in it must not be read as Rich markup."""
+    from lenz_io.cli.render import render_verification
+
+    v = _full_verification().model_copy(update={"suggested_revision": "Rates rose [bold]2%[/bold] in 2024."})
+    text = _render(render_verification, v)
+    assert "Rates rose [bold]2%[/bold] in 2024." in text
+
+
+def test_the_batch_block_carries_the_suggested_rewrite():
+    v = _with_rewrite(_verification(), key_finding="Sharks do get cancer.")
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="completed", result=v)})
+    assert "Sharks do get cancer." in text
+    assert f"Suggested rewrite: {_REWRITE}" in text
+
+
+def test_the_batch_block_without_a_rewrite_prints_no_line():
+    text = _details([("t-1", "c")], {"t-1": TaskStatus(status="completed", result=_verification())})
+    assert "Suggested rewrite" not in text
+
+
+def test_show_json_carries_the_suggested_revision(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    _patch_client(
+        monkeypatch,
+        FakeClient(verifications=_FakeVerifications(mapping={"ab12cd34": _with_rewrite(_full_verification())})),
+    )
+    result = runner.invoke(app, ["--json", "show", "ab12cd34"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["suggested_revision"] == _REWRITE
+
+
 def test_show_json_emits_full_object(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
