@@ -260,7 +260,7 @@ class LenzTimeoutError(LenzError):
 class LenzNeedsInputError(LenzError):
     """``verify_and_wait`` paused because the pipeline needs caller input.
 
-    Carries ``task_id``, ``kind`` ("multi_claim" / "duplicate_found"),
+    Carries ``task_id``, ``kind`` ("multi_claim"),
     ``hint`` (one sentence on what was unclear and how to
     resolve it via ``client.select`` — ``""`` from older servers) and
     ``payload`` (the full status response).

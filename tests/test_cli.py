@@ -35,7 +35,6 @@ from lenz_io.models import (
     DebateSide,
     EntityRef,
     ExtractedClaims,
-    SimilarVerification,
     Source,
     TaskAccepted,
     TaskStatus,
@@ -1148,6 +1147,9 @@ def test_verify_json_needs_input_emits_and_exits(monkeypatch):
     assert payload["status"] == "needs_input"
     assert payload["reason"] == "multi_claim"
     assert len(payload["claims"]) == 2
+    # Deprecated compatibility keys: present, always empty.
+    assert payload["candidates"] == []
+    assert payload["similar"] == []
 
 
 def test_verify_failed(monkeypatch):
@@ -1569,41 +1571,21 @@ def test_verify_claim_index_out_of_range(monkeypatch):
     assert json.loads(result.stdout)["error"]["code"] == "invalid_selection"
 
 
-def test_verify_unknown_needs_input_reason_fails_loudly(monkeypatch):
-    """A pause this release cannot resolve — ``clarification_required`` from a
-    server predating 2026-09-12, or a reason added later — ends in an error
-    that names it, never a picker or a hang."""
+@pytest.mark.parametrize("reason", ["clarification_required", "duplicate_found", "some_future_reason"])
+def test_verify_unknown_needs_input_reason_fails_loudly(monkeypatch, reason):
+    """A pause this release cannot resolve — a retired reason from an older
+    server, or one added later — ends in an error that names it, never a
+    picker or a hang."""
     monkeypatch.setenv("LENZ_API_KEY", "k")
     _patch_client(
         monkeypatch,
-        FakeClient(statuses=[TaskStatus(status="needs_input", reason="clarification_required")]),
+        FakeClient(statuses=[TaskStatus(status="needs_input", reason=reason)]),
     )
     result = runner.invoke(app, ["--json", "verify", "blob"])
     assert result.exit_code != 0
     error = json.loads(result.stdout)["error"]
     assert error["code"] == "needs_input"
-    assert "clarification_required" in error["message"]
-
-
-def test_verify_duplicate_found_json_emits_and_exits(monkeypatch):
-    monkeypatch.setenv("LENZ_API_KEY", "k")
-    _patch_client(
-        monkeypatch,
-        FakeClient(
-            statuses=[
-                TaskStatus(
-                    status="needs_input",
-                    reason="duplicate_found",
-                    similar_claims=[SimilarVerification(verification_id="dup12345", verdict="False", lenz_score=2)],
-                )
-            ]
-        ),
-    )
-    result = runner.invoke(app, ["--json", "verify", "blob"])
-    assert result.exit_code == 3
-    payload = json.loads(result.stdout)
-    assert payload["reason"] == "duplicate_found"
-    assert payload["similar"][0]["verification_id"] == "dup12345"
+    assert reason in error["message"]
 
 
 def test_verify_timeout_emits_resume_fix(monkeypatch):

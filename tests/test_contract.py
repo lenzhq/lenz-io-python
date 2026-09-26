@@ -41,6 +41,7 @@ from lenz_io.models import (
     ReviewFull,
     ReviewIssues,
     ReviewStarted,
+    SimilarVerification,
     TaskStatus,
     Usage,
     Verification,
@@ -236,7 +237,7 @@ def test_completed_body_keeps_modified_at_null():
     assert "modified_at" in payload["result"]
     assert payload["result"]["modified_at"] is None
     # …and the unset branch fields are genuinely absent, not null.
-    for absent in ("progress", "claims", "candidates", "error"):
+    for absent in ("progress", "claims", "candidates", "similar_claims", "error"):
         assert absent not in payload
 
 
@@ -332,17 +333,46 @@ def test_assess_claims_list_rows_carry_cause_and_hint():
         (AssessClaim, "candidate_claims"),
         (AssessResponse, "candidate_claims"),
         (TaskStatus, "candidates"),
+        (TaskStatus, "similar_claims"),
     ],
 )
 def test_retired_reading_lists_are_deprecated_in_the_schema_only(model_cls, field):
-    """The server still sends these keys, always ``[]`` since 2026-09-12, so
-    the models keep them. They are marked deprecated in the JSON schema only:
+    """Retired reading lists, always ``[]`` (or absent) on the wire. The
+    models keep them until their removal. They are marked deprecated in the JSON schema only:
     ``Field(deprecated=True)`` would make pydantic warn on every attribute
     read, and the contract walker above reads every one."""
     assert model_cls.model_json_schema()["properties"][field].get("deprecated") is True
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert getattr(model_cls(), field) == []
+
+
+def test_deprecated_status_lists_default_empty_when_absent():
+    """The API no longer sends ``candidates`` or ``similar_claims``; a body
+    without them reads both as ``[]``."""
+    parsed = TaskStatus.model_validate({"status": "needs_input", "reason": "multi_claim", "claims": [{"text": "A"}]})
+    assert parsed.candidates == []
+    assert parsed.similar_claims == []
+
+
+def test_status_from_an_older_server_with_similar_claims_still_parses():
+    """A body from an older server that still carries populated lists parses
+    into typed objects, so code reading them keeps working until removal."""
+    body = {
+        "status": "needs_input",
+        "task_id": "t-1",
+        "reason": "duplicate_found",
+        "claims": [],
+        "candidates": ["a reading"],
+        "similar_claims": [{"verification_id": "abc12345", "verdict": "False", "lenz_score": 2}],
+    }
+    parsed = TaskStatus.model_validate(body)
+    assert parsed.reason == "duplicate_found"
+    assert parsed.candidates == ["a reading"]
+    assert len(parsed.similar_claims) == 1
+    sim = parsed.similar_claims[0]
+    assert isinstance(sim, SimilarVerification)
+    assert (sim.verification_id, sim.verdict, sim.lenz_score) == ("abc12345", "False", 2)
 
 
 # ── Error envelopes ─────────────────────────────────────────────────────────

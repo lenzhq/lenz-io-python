@@ -731,8 +731,8 @@ class Lenz:
         """Submit + poll until the pipeline terminates.
 
         Returns the completed ``Verification`` on success. Raises:
-          * ``LenzNeedsInputError`` if the pipeline pauses (multi_claim /
-            duplicate_found). Resolve via
+          * ``LenzNeedsInputError`` if the pipeline pauses (multi_claim).
+            Resolve via
             ``client.select(task_id, ...)`` then re-call this helper on
             the new task.
           * ``LenzPipelineError`` on terminal failure.

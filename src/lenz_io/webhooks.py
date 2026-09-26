@@ -135,7 +135,7 @@ class VerificationNeedsInput(WebhookEvent):
 
     ``hint`` is one sentence on what was unclear and how to resolve it
     (``needs_input["hint"]`` on the wire); ``""`` when an older server omits
-    it or the reason is ``duplicate_found``.
+    it.
     """
 
     needs_input: dict[str, Any] = field(default_factory=dict)
