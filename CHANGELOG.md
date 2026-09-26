@@ -6,6 +6,29 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Deprecated
+
+- **`similar_claims`** and **`candidates`** on `TaskStatus`. Both are always
+  empty: the API no longer sends them, and a `needs_input` `reason` is only
+  ever `multi_claim` now (`duplicate_found` is no longer a documented
+  reason). Removal is planned for 2026-11-29, together with the other
+  deprecated fields. Until then a response without the keys reads them as
+  `[]`, and one from an older server that still carries them parses as
+  before (`similar_claims` into `SimilarVerification` objects). After the
+  removal, models still accept such a body: an unknown key is kept as an
+  extra field (`model_extra`) rather than rejected. They are marked
+  deprecated in the JSON schema only, so reading them does not warn.
+  `SimilarVerification` itself stays: it is the item type of
+  `client.related()` (`GET /verifications/{id}/related`).
+- CLI: the `candidates` and `similar` keys on the `lenz verify --json`
+  `needs_input` object are always `[]`, and go with the fields above.
+
+### Changed
+
+- CLI: `lenz verify` no longer has a separate branch for a
+  `duplicate_found` pause. Any `needs_input` reason it cannot resolve with
+  `select` ends in a `needs_input` error that names the reason.
+
 ## [2.17.0] - 2026-09-26
 
 `review`: the whole extract → assess → verify ladder on a draft in one call,

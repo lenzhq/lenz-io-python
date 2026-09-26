@@ -562,7 +562,7 @@ class TaskStatus(_Lax):
     # verifications in one loop can tell the replies apart. ``""`` from
     # older servers.
     task_id: str = ""
-    # Populated when status == 'needs_input': 'multi_claim' | 'duplicate_found'.
+    # Populated when status == 'needs_input': 'multi_claim'.
     reason: str = ""
     # One sentence on what was unclear and how to resolve it. Set on a
     # ``multi_claim`` ``needs_input`` and on a ``failed`` with
@@ -575,11 +575,12 @@ class TaskStatus(_Lax):
     result: Verification | None = None
     # needs_input branches
     claims: list[CandidateClaim] = Field(default_factory=list)
-    # Deprecated: always empty since 2026-09-12, when the
-    # ``clarification_required`` pause that filled it was retired. Kept
-    # because the server still sends the key.
+    # Deprecated, both always empty: the API no longer sends them, and
+    # ``reason`` is only ever ``multi_claim``. Kept so code that reads them
+    # keeps working; removal is planned for 2026-11-29. Marked deprecated in
+    # the JSON schema only, so reading them does not warn.
     candidates: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    similar_claims: list[SimilarVerification] = Field(default_factory=list)
+    similar_claims: list[SimilarVerification] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # failure branches. The server's failed response is
     # ``{"status": "failed", "error": "..."}`` — ``error`` is the live wire
     # field. ``failure_reason`` / ``failure_detail`` are kept for forward/back
@@ -610,7 +611,7 @@ class BatchItemResult(_Lax):
     ``status`` is a client-side rollup:
 
     - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
-    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims / similar_claims).
+    - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims).
     - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
       A verification removed by its account's retention period (HTTP 410) is ``failed``, ``status_detail`` ``None``.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.

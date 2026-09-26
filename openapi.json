@@ -2033,7 +2033,7 @@
         "type": "object"
       },
       "SimilarVerificationOut": {
-        "description": "An existing public verification that semantically resembles a\ngiven claim text.\n\nSurfaced in two places:\n\n* When duplicate detection finds a close-enough match on a fresh\n  `/verify` (the ``duplicate_found`` needs-input branch).\n* As an item in ``GET /verifications/{id}/related`` for callers\n  surfacing \"see also\" references next to a verdict.",
+        "description": "An existing public verification that semantically resembles a\ngiven claim text: an item in ``GET /verifications/{id}/related``, for\ncallers surfacing \"see also\" references next to a verdict.",
         "properties": {
           "verification_id": {
             "title": "Verification Id",
@@ -2116,7 +2116,7 @@
         "type": "object"
       },
       "StatusOut": {
-        "description": "Body of ``GET /verify/status/{task_id}``.\n\nFour shapes keyed on ``status``, and only the fields belonging to the\ncurrent one are present \u2014 ``processing`` carries ``progress``,\n``needs_input`` carries ``reason`` plus one of ``claims`` /\n``similar_claims``, ``completed`` carries ``result``,\nand ``failed`` carries the error block. Branch on ``status`` and read\nthe fields for that branch; absent is meaningful, so do not treat a\nmissing key as an empty one.\n\n``task_id`` is echoed on every shape, so a caller polling several\nverifications in one loop can tell the replies apart without threading\nthe id through their own call site.",
+        "description": "Body of ``GET /verify/status/{task_id}``.\n\nFour shapes keyed on ``status``, and only the fields belonging to the\ncurrent one are present \u2014 ``processing`` carries ``progress``,\n``needs_input`` carries ``reason`` plus ``claims``, ``completed``\ncarries ``result``,\nand ``failed`` carries the error block. Branch on ``status`` and read\nthe fields for that branch; absent is meaningful, so do not treat a\nmissing key as an empty one.\n\n``task_id`` is echoed on every shape, so a caller polling several\nverifications in one loop can tell the replies apart without threading\nthe id through their own call site.",
         "properties": {
           "status": {
             "enum": [
@@ -2145,10 +2145,7 @@
           "reason": {
             "anyOf": [
               {
-                "enum": [
-                  "multi_claim",
-                  "duplicate_found"
-                ],
+                "const": "multi_claim",
                 "type": "string"
               },
               {
@@ -2170,34 +2167,6 @@
               }
             ],
             "title": "Claims"
-          },
-          "candidates": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Candidates"
-          },
-          "similar_claims": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/SimilarVerificationOut"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Similar Claims"
           },
           "result": {
             "anyOf": [
@@ -4187,7 +4156,7 @@
         "type": "object"
       },
       "NeedsInputOut": {
-        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``) or finds a near-duplicate of an\nexisting verification (``duplicate_found``). Only one of ``claims`` or\n``similar_claims`` is populated per event, keyed on ``reason``. A vague\ninput does not pause: it is checked on its most likely reading, or fails\nas ``not_a_claim`` when there is none.\n\n``multi_claim`` is resolved by calling ``POST /verify/{task_id}/select``\nwith one of the offered claim texts. ``duplicate_found`` is NOT:\n``/select`` validates picks as claim texts, and that reason offers\nexisting verifications instead. It is informational \u2014 read\n``similar_claims`` and decide whether to resubmit.",
+        "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``). A vague input does not pause:\nit is checked on its most likely reading, or fails as ``not_a_claim``\nwhen there is none.\n\n``multi_claim`` is resolved by calling ``POST /verify/{task_id}/select``\nwith one of the offered claim texts.",
         "properties": {
           "reason": {
             "title": "Reason",
@@ -4199,22 +4168,6 @@
               "$ref": "#/components/schemas/CandidateClaimOut"
             },
             "title": "Claims",
-            "type": "array"
-          },
-          "candidates": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Candidates",
-            "type": "array"
-          },
-          "similar_claims": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/SimilarVerificationOut"
-            },
-            "title": "Similar Claims",
             "type": "array"
           },
           "hint": {

@@ -367,9 +367,6 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
             out.console.print("[dim]claims found:[/dim]")
             for i, claim in enumerate(st.claims, 1):
                 out.console.print(f"  {i}. {claim.text}")
-        for s in st.similar_claims[:5]:
-            sc = "" if s.lenz_score is None else f" (score {s.lenz_score}/10)"
-            out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{sc}  [dim]id: {s.verification_id}[/dim]")
         ref = task_id or "<task_id>"
         # Non-interactive resolution (agents/scripts): `--claim` picks by index
         # and `--detach` returns the spawned task_id(s) without blocking. Drop

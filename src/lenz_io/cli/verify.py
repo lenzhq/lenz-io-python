@@ -2,8 +2,8 @@
 interactive branches the status endpoint can return.
 
 The lifecycle is NOT just poll→verdict. ``GET /verify/status/{task_id}`` can
-return ``needs_input`` (``multi_claim`` / ``duplicate_found``); ignoring
-those would hang or misrender. Ctrl-C prints a
+return ``needs_input`` (``multi_claim``); ignoring
+it would hang or misrender. Ctrl-C prints a
 ``--resume <task_id>`` handle so an in-flight ~90s run isn't lost. The task
 handle is server-cached only ~10 min, so ``--resume`` also accepts a durable
 ``verification_id`` (falls back to ``verifications.get``).
@@ -22,7 +22,7 @@ import contextlib
 import sys
 import time
 import uuid
-from typing import Any, NoReturn
+from typing import Any
 
 import typer
 
@@ -194,8 +194,8 @@ def _poll(
                     _verify_batch(client, out, picks, timeout, detach=detach)
                     return
                 task_id = picks[0][0]
-            else:  # duplicate_found → terminal
-                _needs_input_terminal(out, task_id, st)
+            else:  # a reason this release does not know
+                raise CLIError(f"Unexpected needs_input reason: {st.reason!r}.", code="needs_input")
             selection = None
             # A pick spawns a fresh ~90s pipeline. Reset the clock so the new
             # run gets the full --timeout budget, not what's left after the
@@ -272,21 +272,6 @@ def _checkbox_picker(message: str, options: list[str]) -> list[str]:
     # ("Use arrow keys… <a> to toggle all, <i> to invert…").
     picks = questionary.checkbox(message, choices=options, instruction="(space toggle, enter submit)").ask()
     return picks or []  # None on Ctrl-C, [] on empty submit → cancel
-
-
-def _needs_input_terminal(out: Output, task_id: str, st: TaskStatus) -> NoReturn:
-    """Handle a pause that ``select`` cannot resolve (``duplicate_found``), or
-    one this release does not know. Always exits."""
-    reason = st.reason
-
-    if reason == "duplicate_found":
-        if out.json_mode:
-            _emit_needs_input(out, task_id, st)
-            raise SystemExit(3)
-        _render_similar(out, st.similar_claims)
-        raise SystemExit(0)
-
-    raise CLIError(f"Unexpected needs_input reason: {reason!r}.", code="needs_input")
 
 
 def _verify_batch(client: Lenz, out: Output, picks: list[tuple[str, str]], timeout: float, *, detach: bool) -> None:
@@ -397,17 +382,12 @@ def _emit_needs_input(out: Output, task_id: str, st: TaskStatus) -> None:
             "hint": st.hint,
             "task_id": task_id,
             "claims": [c.model_dump(mode="json") for c in st.claims],
-            "candidates": list(st.candidates),
-            "similar": [s.model_dump(mode="json") for s in st.similar_claims],
+            # Deprecated compatibility keys, always empty; removal is planned
+            # for 2026-11-29 with the ``TaskStatus`` fields they mirrored.
+            "candidates": [],
+            "similar": [],
         }
     )
-
-
-def _render_similar(out: Output, similar: list[Any]) -> None:
-    out.console.print("[yellow]This claim was already verified:[/yellow]")
-    for s in similar[:5]:
-        score = "" if s.lenz_score is None else f" (score {s.lenz_score}/10)"
-        out.console.print(f"  • [bold]{s.verdict or '?'}[/bold]{score}  [dim]id: {s.verification_id}[/dim]")
 
 
 def _resume(
