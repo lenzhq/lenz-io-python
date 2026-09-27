@@ -57,7 +57,9 @@ parses, with the new keys at their defaults.
   draft (its first `max_citations`, 1-20, are checked) or 1 to 20
   statement-source pairs (`CitationPair`: `statement` and one of `url` or
   `doi`, with optional `quotes` and, for a DOI, what the reference gives).
-  Exactly one of the two; `max_citations` with pairs raises `ValueError`. The
+  Exactly one of the two; `max_citations` with pairs raises `ValueError`.
+  `language` is the language Lenz writes the reasoning in (English when
+  omitted); hints are always in English. The
   body is a `Citecheck`, with the review's citation rows, `summary`,
   `credits` and `more_citations`. `citecheck_and_wait` raises
   `CitecheckFailed` (a `LenzPipelineError`) or `CitecheckTimeout` (a

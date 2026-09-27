@@ -211,8 +211,8 @@ class CitationPair(TypedDict, total=False):
     ``quotes``: up to 3 excerpts the statement quotes from the source, each
     15 to 500 characters and words of the statement. With a ``doi``, what the
     reference gives: ``cited_title``, ``cited_authors`` (family names),
-    ``cited_year`` (four digits), ``cited_journal``. ``language`` overrides
-    the request's for this pair. Type-only: plain dicts are sent as they are.
+    ``cited_year`` (four digits), ``cited_journal``. Type-only: plain dicts
+    are sent as they are.
     """
 
     statement: str
@@ -223,7 +223,6 @@ class CitationPair(TypedDict, total=False):
     cited_authors: list[str]
     cited_year: str
     cited_journal: str
-    language: str
 
 
 class VerifyBatchItem(TypedDict, total=False):
@@ -1085,7 +1084,10 @@ class Lenz:
           each checked as it is. ``max_citations`` does not apply.
 
         Each check answers: does the cited source say what the statement
-        says it does? ``webhook_url``: ``None`` (default) sends
+        says it does? ``language`` is the language Lenz writes the reasoning
+        in; English when omitted. Hints are always in English, and the
+        passage and the quote stay verbatim in the page's language.
+        ``webhook_url``: ``None`` (default) sends
         ``citecheck.completed`` / ``citecheck.failed`` to your credential's
         default webhook URL, ``""`` sends none, a URL sends them there. An
         ``Idempotency-Key`` is generated when you pass none: a resend with the
