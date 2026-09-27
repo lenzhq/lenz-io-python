@@ -813,7 +813,7 @@ class TestCitations:
         )
         assert s.citation_checks is not None
         assert (s.citation_checks.checked, s.citation_checks.unchecked, s.citation_checks.failed) == (6, 3, 1)
-        assert s.citation_issues == len(review.citation_issues) == 5
+        assert s.citation_issues == len(review.citation_issues) == 6
         assert s.citations_skipped is None
         by_index = {c.index: c for c in review.citations}
         assert by_index[0].result.finding == "contradicted" and by_index[0].check.snippet
@@ -821,7 +821,7 @@ class TestCitations:
         assert by_index[1].check.missing_quote == "the best in a decade"
         assert by_index[0].check.missing_quote is None
         assert review.citation_issues[3].missing_quote == "the best in a decade"
-        assert by_index[2].result.is_issue is False
+        assert by_index[2].result.finding == "partly_supported" and by_index[2].result.is_issue
         assert by_index[3].check.unchecked_reason == "partial_text" and by_index[3].check.hint
         doi = by_index[4]
         assert doi.doi == "10.1038/nature12373" and doi.check.doi_registered is True
@@ -837,6 +837,7 @@ class TestCitations:
             "page_not_found",
             "contradicted",
             "quote_not_in_source",
+            "partly_supported",
             "metadata_mismatch",
         ]
         assert review.citation_issues[1].failure is not None
@@ -863,9 +864,18 @@ class TestCitations:
         )
         assert s.citation_issues == len(review.citation_issues)
         findings = {c.result.finding for c in review.citations if c.result}
-        assert {"contradicted", "page_not_found", "metadata_mismatch", "doi_not_found", "unchecked"} <= findings
+        assert {
+            "supported",
+            "contradicted",
+            "page_not_found",
+            "metadata_mismatch",
+            "doi_not_found",
+            "unchecked",
+        } <= findings
         reasons = {c.check.unchecked_reason for c in review.citations if c.check.unchecked_reason}
-        assert {"no_statement", "unsupported_site", "invalid_url"} <= reasons
+        assert {"no_statement", "unsupported_site", "invalid_url", "partial_text"} <= reasons
+        supported = next(c for c in review.citations if c.result and c.result.finding == "supported")
+        assert supported.check.snippet and supported.check.page_read == "full" and not supported.result.is_issue
         doi = next(c for c in review.citations if c.result and c.result.finding == "metadata_mismatch")
         assert doi.check.registered is not None and doi.check.metadata_differences
 

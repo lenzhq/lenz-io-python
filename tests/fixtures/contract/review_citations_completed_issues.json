@@ -1,10 +1,10 @@
 {
-  "review_id": "450357c2",
+  "review_id": "466415de",
   "view": "issues",
   "status": "completed",
   "outcome": "issues_found",
-  "created_at": "2026-09-27T17:12:34.621217Z",
-  "completed_at": "2026-09-27T17:13:29.636404Z",
+  "created_at": "2026-09-27T17:48:15.093801Z",
+  "completed_at": "2026-09-27T17:48:53.249782Z",
   "language": "en",
   "policy": {
     "verdicts": [
@@ -36,12 +36,12 @@
       "failed": 0
     },
     "issues": 0,
-    "citations_found": 9,
-    "citations_selected": 9,
+    "citations_found": 10,
+    "citations_selected": 10,
     "citation_limit": 20,
     "citation_limit_reached": false,
     "citation_checks": {
-      "checked": 5,
+      "checked": 6,
       "unchecked": 4,
       "failed": 0
     },
@@ -56,15 +56,15 @@
   "failures": [],
   "citation_issues": [
     {
-      "citation_index": 7,
+      "citation_index": 8,
       "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
       "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
       "doi": "10.9999/lenz-not-a-registered-doi-2026",
       "statement": "A second study was retracted the following year [2].",
       "quotes": [],
       "position": {
-        "start": 810,
-        "end": 862
+        "start": 949,
+        "end": 1001
       },
       "finding": "doi_not_found",
       "source": "doi",
@@ -76,15 +76,15 @@
       "failure": null
     },
     {
-      "citation_index": 3,
+      "citation_index": 4,
       "reference": "survey",
       "cited_url": "https://en.wikipedia.org/wiki/Lenz_transport_survey_2024_nonexistent_page",
       "doi": null,
       "statement": "The city's 2024 transport survey found that most commuters cycle (survey).",
       "quotes": [],
       "position": {
-        "start": 400,
-        "end": 551
+        "start": 539,
+        "end": 690
       },
       "finding": "page_not_found",
       "source": "page",
@@ -96,27 +96,27 @@
       "failure": null
     },
     {
-      "citation_index": 1,
+      "citation_index": 2,
       "reference": "history",
       "cited_url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
       "doi": null,
       "statement": "The Eiffel Tower was completed in 1899 for the World's Fair (history).",
       "quotes": [],
       "position": {
-        "start": 147,
-        "end": 263
+        "start": 286,
+        "end": 402
       },
       "finding": "contradicted",
       "source": "support",
       "snippet": "Completed | 31 March 1889; 137 years ago [1] … it was constructed as the centrepiece of the 1889 World's Fair",
-      "rationale": "The source states that the Eiffel Tower was completed in 1889 for the 1889 World's Fair, whereas the statement claims it was completed in 1899.",
+      "rationale": "The statement claims the Eiffel Tower was completed in 1899, but the source states it was completed in 1889 for the 1889 World's Fair.",
       "metadata_differences": [],
       "missing_quote": null,
       "page_title": "Eiffel Tower - Wikipedia",
       "failure": null
     },
     {
-      "citation_index": 2,
+      "citation_index": 3,
       "reference": "mission record",
       "cited_url": "https://en.wikipedia.org/wiki/Apollo_11",
       "doi": null,
@@ -125,8 +125,8 @@
         "one giant step for all humanity"
       ],
       "position": {
-        "start": 265,
-        "end": 398
+        "start": 404,
+        "end": 537
       },
       "finding": "contradicted",
       "source": "support",
@@ -138,15 +138,15 @@
       "failure": null
     },
     {
-      "citation_index": 6,
+      "citation_index": 7,
       "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
       "cited_url": "https://doi.org/10.1038/nature12373",
       "doi": "10.1038/nature12373",
       "statement": "Diamond sensors can measure temperature inside a living cell [1].",
       "quotes": [],
       "position": {
-        "start": 743,
-        "end": 808
+        "start": 882,
+        "end": 947
       },
       "finding": "metadata_mismatch",
       "source": "metadata",

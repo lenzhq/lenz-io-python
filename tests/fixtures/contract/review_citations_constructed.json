@@ -41,7 +41,7 @@
       "unchecked": 3,
       "failed": 1
     },
-    "citation_issues": 5,
+    "citation_issues": 6,
     "citations_skipped": null
   },
   "credits": {
@@ -137,6 +137,26 @@
       "missing_quote": "the best in a decade",
       "metadata_differences": [],
       "page_title": "Interview with the minister",
+      "failure": null
+    },
+    {
+      "citation_index": 2,
+      "reference": "wage statistics",
+      "cited_url": "https://stats.example.org/wages",
+      "doi": null,
+      "statement": "Wages rose faster than prices for the second year running.",
+      "quotes": [],
+      "position": {
+        "start": 215,
+        "end": 290
+      },
+      "finding": "partly_supported",
+      "source": "support",
+      "snippet": "Real wages grew in 2024, after falling the year before.",
+      "rationale": "The page reports real wage growth in 2024 only, not for two years running.",
+      "missing_quote": null,
+      "metadata_differences": [],
+      "page_title": "Wages and prices",
       "failure": null
     },
     {
@@ -274,9 +294,9 @@
         "end": 290
       },
       "result": {
-        "finding": "supported",
+        "finding": "partly_supported",
         "source": "support",
-        "is_issue": false
+        "is_issue": true
       },
       "check": {
         "status": "completed",
@@ -286,9 +306,9 @@
         "page_language": "en",
         "source_url": "https://stats.example.org/wages",
         "source_version": null,
-        "support": "supported",
-        "snippet": "Real wages grew for the second consecutive year.",
-        "rationale": "The page reports real wage growth in both years.",
+        "support": "partly_supported",
+        "snippet": "Real wages grew in 2024, after falling the year before.",
+        "rationale": "The page reports real wage growth in 2024 only, not for two years running.",
         "quote": null,
         "missing_quote": null,
         "doi_registered": null,

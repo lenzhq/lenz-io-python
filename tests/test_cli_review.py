@@ -420,7 +420,7 @@ def test_citation_render_count_summary_and_issues():
     text = _render("review_citations_constructed.json")
     lines = text.splitlines()
     i = lines.index("23 sources cited in your draft")
-    assert lines[i + 1] == "6 checked, 5 with a problem. 4 could not be checked."
+    assert lines[i + 1] == "6 checked, 6 with a problem. 4 could not be checked."
     assert lines[i + 2] == "13 more were not checked: one check covers 10."
     # each issue: the finding, the draft's sentence, the link, the evidence
     j = lines.index("[source 1/10] Contradicted")
@@ -434,8 +434,9 @@ def test_citation_render_count_summary_and_issues():
     assert "[source 9/10] DOI not registered" in text
     assert "[source 7/10] Page not found" in text and "Part of the check failed:" in text
     assert "[source 8/10] Could not be checked this time." in text
-    # a supported or unchecked row is counted, never listed
-    assert "[source 3/10]" not in text and "[source 4/10]" not in text
+    assert "[source 3/10] Partly supported" in text
+    # an unchecked row is counted, never listed
+    assert "[source 4/10]" not in text
 
 
 def test_quote_finding_shows_the_missing_excerpt_only():
@@ -511,7 +512,7 @@ def test_progress_view_counts_the_citation_checks():
 
     console = Console(file=io.StringIO(), no_color=True, width=200)
     console.print(render_progress(ReviewFull.model_validate(_load("review_citations_verifying.json"))))
-    assert "5 of 9 sources checked" in console.file.getvalue()
+    assert "1 of 10 sources checked" in console.file.getvalue()
 
 
 def test_links_only_review_sends_max_assessments_zero(draft):
@@ -569,9 +570,11 @@ def test_one_more_over_the_cap_is_singular():
 def test_citation_render_of_a_recorded_review():
     text = _render("review_citations_completed.json")
     lines = text.splitlines()
-    i = lines.index("9 sources cited in your draft")
-    assert lines[i + 1] == "5 checked, 5 with a problem. 4 could not be checked."
-    assert "[source 2/9] Contradicted" in text and "[source 8/9] DOI not registered" in text
+    i = lines.index("10 sources cited in your draft")
+    assert lines[i + 1] == "6 checked, 5 with a problem. 4 could not be checked."
+    assert "[source 3/10] Contradicted" in text and "[source 9/10] DOI not registered" in text
+    # a supported row is counted, never listed
+    assert "[source 1/10]" not in text
     assert "The source says:" in text
 
 

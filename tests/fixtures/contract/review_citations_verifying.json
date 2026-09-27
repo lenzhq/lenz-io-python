@@ -1,9 +1,9 @@
 {
-  "review_id": "450357c2",
+  "review_id": "466415de",
   "view": "full",
   "status": "verifying",
   "outcome": null,
-  "created_at": "2026-09-27T17:12:34.621217Z",
+  "created_at": "2026-09-27T17:48:15.093801Z",
   "completed_at": null,
   "language": "en",
   "policy": {
@@ -36,16 +36,16 @@
       "failed": 0
     },
     "issues": 0,
-    "citations_found": 9,
-    "citations_selected": 9,
+    "citations_found": 10,
+    "citations_selected": 10,
     "citation_limit": 20,
     "citation_limit_reached": false,
     "citation_checks": {
-      "checked": 1,
-      "unchecked": 4,
+      "checked": 0,
+      "unchecked": 1,
       "failed": 0
     },
-    "citation_issues": 1,
+    "citation_issues": 0,
     "citations_skipped": null
   },
   "credits": {
@@ -54,46 +54,24 @@
   "poll_after_seconds": 15,
   "issues": [],
   "failures": [],
-  "citation_issues": [
-    {
-      "citation_index": 7,
-      "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
-      "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
-      "doi": "10.9999/lenz-not-a-registered-doi-2026",
-      "statement": "A second study was retracted the following year [2].",
-      "quotes": [],
-      "position": {
-        "start": 810,
-        "end": 862
-      },
-      "finding": "doi_not_found",
-      "source": "doi",
-      "snippet": null,
-      "rationale": null,
-      "metadata_differences": [],
-      "missing_quote": null,
-      "page_title": null,
-      "failure": null
-    }
-  ],
+  "citation_issues": [],
   "citation_failures": [],
   "claims": [],
   "citations": [
     {
       "index": 0,
-      "reference": "the mountain's encyclopedia entry",
-      "cited_url": "https://en.wikipedia.org/wiki/Mount_Everest",
+      "reference": "the entry on boiling points",
+      "cited_url": "https://en.wikipedia.org/wiki/Boiling_point",
       "doi": null,
-      "statement": null,
+      "statement": "Water boils at 100 degrees Celsius at sea level, according to the entry on boiling points.",
       "quotes": [],
-      "position": null,
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
+      "position": {
+        "start": 0,
+        "end": 137
       },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "running",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -108,22 +86,22 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "no_statement",
-        "hint": "No sentence of the draft could be paired with this citation, so there was nothing to check it against.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
     },
     {
       "index": 1,
-      "reference": "history",
-      "cited_url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
+      "reference": "the mountain's encyclopedia entry",
+      "cited_url": "https://en.wikipedia.org/wiki/Mount_Everest",
       "doi": null,
-      "statement": "The Eiffel Tower was completed in 1899 for the World's Fair (history).",
+      "statement": "Mount Everest stands 8,849 metres above sea level, according to the mountain's encyclopedia entry.",
       "quotes": [],
       "position": {
-        "start": 147,
-        "end": 263
+        "start": 139,
+        "end": 284
       },
       "result": null,
       "check": {
@@ -150,16 +128,14 @@
     },
     {
       "index": 2,
-      "reference": "mission record",
-      "cited_url": "https://en.wikipedia.org/wiki/Apollo_11",
+      "reference": "history",
+      "cited_url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
       "doi": null,
-      "statement": "On landing, Neil Armstrong said it was \"one giant step for all humanity\" (mission record).",
-      "quotes": [
-        "one giant step for all humanity"
-      ],
+      "statement": "The Eiffel Tower was completed in 1899 for the World's Fair (history).",
+      "quotes": [],
       "position": {
-        "start": 265,
-        "end": 398
+        "start": 286,
+        "end": 402
       },
       "result": null,
       "check": {
@@ -186,14 +162,16 @@
     },
     {
       "index": 3,
-      "reference": "survey",
-      "cited_url": "https://en.wikipedia.org/wiki/Lenz_transport_survey_2024_nonexistent_page",
+      "reference": "mission record",
+      "cited_url": "https://en.wikipedia.org/wiki/Apollo_11",
       "doi": null,
-      "statement": "The city's 2024 transport survey found that most commuters cycle (survey).",
-      "quotes": [],
+      "statement": "On landing, Neil Armstrong said it was \"one giant step for all humanity\" (mission record).",
+      "quotes": [
+        "one giant step for all humanity"
+      ],
       "position": {
-        "start": 400,
-        "end": 551
+        "start": 404,
+        "end": 537
       },
       "result": null,
       "check": {
@@ -220,22 +198,18 @@
     },
     {
       "index": 4,
-      "reference": "video",
-      "cited_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "reference": "survey",
+      "cited_url": "https://en.wikipedia.org/wiki/Lenz_transport_survey_2024_nonexistent_page",
       "doi": null,
-      "statement": "The minister explained the plan in a short video (video).",
+      "statement": "The city's 2024 transport survey found that most commuters cycle (survey).",
       "quotes": [],
       "position": {
-        "start": 553,
-        "end": 657
+        "start": 539,
+        "end": 690
       },
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "running",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -250,30 +224,26 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "unsupported_site",
-        "hint": "Links of this kind are not checked, video included. Check the passage by hand.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
     },
     {
       "index": 5,
-      "reference": "report",
-      "cited_url": "http://127.0.0.1/report.pdf",
+      "reference": "video",
+      "cited_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       "doi": null,
-      "statement": "The internal report gives the same figure (report).",
+      "statement": "The minister explained the plan in a short video (video).",
       "quotes": [],
       "position": {
-        "start": 659,
-        "end": 741
+        "start": 692,
+        "end": 796
       },
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "running",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -288,22 +258,22 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "invalid_url",
-        "hint": "The link is not a public web address, so it was not read.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
     },
     {
       "index": 6,
-      "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
-      "cited_url": "https://doi.org/10.1038/nature12373",
-      "doi": "10.1038/nature12373",
-      "statement": "Diamond sensors can measure temperature inside a living cell [1].",
+      "reference": "report",
+      "cited_url": "http://127.0.0.1/report.pdf",
+      "doi": null,
+      "statement": "The internal report gives the same figure (report).",
       "quotes": [],
       "position": {
-        "start": 743,
-        "end": 808
+        "start": 798,
+        "end": 880
       },
       "result": null,
       "check": {
@@ -330,22 +300,18 @@
     },
     {
       "index": 7,
-      "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
-      "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
-      "doi": "10.9999/lenz-not-a-registered-doi-2026",
-      "statement": "A second study was retracted the following year [2].",
+      "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
+      "cited_url": "https://doi.org/10.1038/nature12373",
+      "doi": "10.1038/nature12373",
+      "statement": "Diamond sensors can measure temperature inside a living cell [1].",
       "quotes": [],
       "position": {
-        "start": 810,
-        "end": 862
+        "start": 882,
+        "end": 947
       },
-      "result": {
-        "finding": "doi_not_found",
-        "source": "doi",
-        "is_issue": true
-      },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "running",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -356,8 +322,8 @@
         "snippet": null,
         "rationale": null,
         "quote": null,
-        "doi_registered": false,
-        "metadata": "unchecked",
+        "doi_registered": null,
+        "metadata": null,
         "metadata_differences": [],
         "registered": null,
         "unchecked_reason": null,
@@ -368,6 +334,40 @@
     },
     {
       "index": 8,
+      "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
+      "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
+      "doi": "10.9999/lenz-not-a-registered-doi-2026",
+      "statement": "A second study was retracted the following year [2].",
+      "quotes": [],
+      "position": {
+        "start": 949,
+        "end": 1001
+      },
+      "result": null,
+      "check": {
+        "status": "running",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null,
+        "missing_quote": null
+      }
+    },
+    {
+      "index": 9,
       "reference": "https://en.wikipedia.org/wiki/Fact-checking",
       "cited_url": "https://en.wikipedia.org/wiki/Fact-checking",
       "doi": null,
