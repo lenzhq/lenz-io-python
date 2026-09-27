@@ -2,7 +2,7 @@
 
 Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https://lenz.io/developers).
 
-**Five API calls, one research-depth ladder.**
+**Six API calls: one research-depth ladder, one call that runs it on a whole draft, and the citation check on its own.**
 
 - `extract` — pull verifiable claims out of any text, optionally narrowed with a `focus`. Free, 1000 calls/account/day (shared across your API keys).
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
