@@ -6,8 +6,11 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-`review` can check a draft's citations: does each linked source (a URL or a
-DOI) say what the draft says it does? Nothing the SDK already sends changes:
+## [2.18.0] - 2026-09-27
+
+`review` can check a draft's citations, and `citecheck` runs that check on
+its own, on a draft or on statement-source pairs: does each linked source (a
+URL or a DOI) say what the draft says it does? Nothing the SDK already sends changes:
 leave `max_citations` out and the request, and its idempotency key's body, are
 exactly what 2.17.0 sends. A review body without the citation keys still
 parses, with the new keys at their defaults.
