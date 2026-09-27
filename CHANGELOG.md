@@ -47,6 +47,22 @@ parses, with the new keys at their defaults.
   exits `1`, like a claim issue; a failed source check exits `2`. Then one
   line for what was found and not checked ("2 more claims and 13 more
   citations were found but not checked.").
+- **`client.citecheck(text | pairs=..., max_citations=..., language=...,
+  webhook_url=..., idempotency_key=...)`**, **`client.get_citecheck(id)`**
+  and **`client.citecheck_and_wait(...)`** for `POST /citecheck` and
+  `GET /citechecks/{citecheck_id}`: the citation check on its own. Send a
+  draft (its first `max_citations`, 1-20, are checked) or 1 to 20
+  statement-source pairs (`CitationPair`: `statement` and one of `url` or
+  `doi`, with optional `quotes` and, for a DOI, what the reference gives).
+  Exactly one of the two; `max_citations` with pairs raises `ValueError`. The
+  body is a `Citecheck`, with the review's citation rows, `summary`,
+  `credits` and `more_citations`. `citecheck_and_wait` raises
+  `CitecheckFailed` (a `LenzPipelineError`) or `CitecheckTimeout` (a
+  `LenzTimeoutError`, with `partial`). `citecheck.completed` /
+  `citecheck.failed` webhooks parse into a `CitecheckEvent`.
+- **`lenz citecheck FILE`** and **`lenz citecheck --pairs FILE.json`**, with
+  `--max-citations N`, `--detach`, `--resume ID` and `--json`; the exit code
+  follows the outcome, as for `lenz review`.
 - **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
   get a quick verdict. `lenz review draft.md --max-citations 20 --max-assessments 0`
   checks the draft's sources and no claim.

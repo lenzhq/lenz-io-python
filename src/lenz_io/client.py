@@ -76,7 +76,7 @@ import os
 import time
 import uuid
 from collections.abc import Callable
-from typing import Any, Literal, TypedDict, overload
+from typing import Any, Literal, TypedDict, TypeVar, overload
 
 import httpx
 
@@ -85,6 +85,8 @@ from .errors import (
     MAX_RETRY_AFTER_SLEEP,
     NO_RETRY_429_CODES,
     UPSTREAM_503_CODES,
+    CitecheckFailed,
+    CitecheckTimeout,
     LenzAPIError,
     LenzError,
     LenzGoneError,
@@ -103,6 +105,8 @@ from .models import (
     BatchAccepted,
     BatchItemResult,
     Certificate,
+    Citecheck,
+    CitecheckStarted,
     ExtractedClaims,
     LibraryList,
     Progress,
@@ -193,6 +197,33 @@ def _batch_item_body(item: Any) -> Any:
     body = {k: v for k, v in item.items() if k != "claim"}
     body["text"] = item["claim"] or item.get("text", "")
     return body
+
+
+#: An async job the poll loop waits on: a review or a citation check.
+_Job = TypeVar("_Job", ReviewFull, Citecheck)
+
+
+class CitationPair(TypedDict, total=False):
+    """One statement and the source it cites, for ``citecheck(pairs=...)``.
+
+    ``statement`` (1 to 1,000 characters) and exactly one of ``url`` (http or
+    https) and ``doi`` (the DOI alone, like ``10.1038/nature12373``).
+    ``quotes``: up to 3 excerpts the statement quotes from the source, each
+    15 to 500 characters and words of the statement. With a ``doi``, what the
+    reference gives: ``cited_title``, ``cited_authors`` (family names),
+    ``cited_year`` (four digits), ``cited_journal``. ``language`` overrides
+    the request's for this pair. Type-only: plain dicts are sent as they are.
+    """
+
+    statement: str
+    url: str
+    doi: str
+    quotes: list[str]
+    cited_title: str
+    cited_authors: list[str]
+    cited_year: str
+    cited_journal: str
+    language: str
 
 
 class VerifyBatchItem(TypedDict, total=False):
@@ -1027,6 +1058,123 @@ class Lenz:
         logger.info("Submitted review: %s", started.review_id)
         return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
 
+    # ── /citecheck: the citation check on its own ──
+
+    def citecheck(
+        self,
+        text: str | None = None,
+        *,
+        pairs: list[CitationPair] | None = None,
+        max_citations: int | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> CitecheckStarted:
+        """Start a citation check. Returns at once with a ``citecheck_id``;
+        use ``citecheck_and_wait`` to block until it ends, or
+        ``get_citecheck`` to read it.
+
+        Send exactly one of ``text`` and ``pairs``:
+
+        - ``text``: a draft, up to 50,000 characters, with its links
+          (markdown links, bare URLs, ``doi:`` and ``doi.org`` forms, ``[n]``
+          markers with a reference list). The first ``max_citations`` (1-20,
+          default 20) citations in the draft's order are checked; the rest are
+          listed in ``more_citations``.
+        - ``pairs``: 1 to 20 statement-source pairs (:class:`CitationPair`),
+          each checked as it is. ``max_citations`` does not apply.
+
+        Each check answers: does the cited source say what the statement
+        says it does? ``webhook_url``: ``None`` (default) sends
+        ``citecheck.completed`` / ``citecheck.failed`` to your credential's
+        default webhook URL, ``""`` sends none, a URL sends them there. An
+        ``Idempotency-Key`` is generated when you pass none: a resend with the
+        same key within 24 hours returns the same check.
+        """
+        has_text = bool(text and text.strip())
+        if has_text == (pairs is not None):
+            raise ValueError("citecheck() needs exactly one of text and pairs.")
+        if pairs is not None and max_citations is not None:
+            raise ValueError("max_citations goes with text: every pair is checked.")
+        payload: dict[str, Any] = {"text": text} if has_text else {"pairs": [dict(p) for p in pairs or []]}
+        if max_citations is not None:
+            payload["max_citations"] = max_citations
+        if language:
+            payload["language"] = language
+        if webhook_url is not None:
+            payload["webhook_url"] = webhook_url
+        headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
+        try:
+            body = self._request("POST", "/citecheck", json=payload, headers=headers)
+        except LenzError as exc:
+            # A retried submit (same key) that lands while the first attempt's
+            # check is still being created answers 409 naming that check: it
+            # exists, so this call started it.
+            conflict = exc.body if isinstance(exc.body, dict) else {}
+            existing = conflict.get("citecheck_id")
+            if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
+                return CitecheckStarted(citecheck_id=existing, status="queued")
+            raise
+        return CitecheckStarted.model_validate(body)
+
+    def get_citecheck(self, citecheck_id: str) -> Citecheck:
+        """Read a citation check. Raises :class:`LenzGoneError` (410) once
+        the account's retention period has removed it."""
+        if not citecheck_id:
+            raise ValueError("get_citecheck() needs a citecheck_id.")
+        return Citecheck.model_validate(self._request("GET", f"/citechecks/{citecheck_id}"))
+
+    def citecheck_and_wait(
+        self,
+        text: str | None = None,
+        *,
+        timeout: float = 600.0,
+        on_update: Callable[[Citecheck], None] | None = None,
+        **kw: Any,
+    ) -> Citecheck:
+        """Start a citation check (``citecheck(text, **kw)``) and poll it until
+        it ends. Returns the completed :class:`Citecheck`: read ``outcome``,
+        then ``citation_issues``.
+
+        Polls on the check's own ``poll_after_seconds`` (never faster than
+        every 5 s); ``on_update(check)`` is called on every poll whose body
+        changed. Raises :class:`CitecheckFailed` when the check ends
+        ``failed``, and :class:`CitecheckTimeout` when ``timeout`` seconds pass
+        first: the check keeps running, and the error carries its
+        ``citecheck_id`` and the last body read.
+        """
+        started = self.citecheck(text, **kw)
+        logger.info("Submitted citation check: %s", started.citecheck_id)
+        return self._wait_citecheck(started.citecheck_id, timeout=timeout, on_update=on_update)
+
+    def _wait_citecheck(
+        self,
+        citecheck_id: str,
+        *,
+        timeout: float,
+        on_update: Callable[[Citecheck], None] | None = None,
+    ) -> Citecheck:
+        """The poll loop behind ``citecheck_and_wait`` (and ``lenz citecheck --resume``)."""
+
+        def timed_out(last: Citecheck | None) -> Exception:
+            return CitecheckTimeout(
+                message=f"citecheck_and_wait timed out after {timeout}s",
+                cause="The citation check is still running server-side.",
+                fix=f"Read it later with client.get_citecheck('{citecheck_id}').",
+                doc_url="https://lenz.io/docs/citations",
+                citecheck_id=citecheck_id,
+                partial=last,
+            )
+
+        return self._wait_job(
+            f"/citechecks/{citecheck_id}",
+            timeout=timeout,
+            on_update=on_update,
+            parse=lambda body: Citecheck.model_validate(body) if _is_citecheck_body(body, citecheck_id) else None,
+            failed=_citecheck_failed,
+            timed_out=timed_out,
+        )
+
     def _wait_review(
         self,
         review_id: str,
@@ -1034,63 +1182,89 @@ class Lenz:
         timeout: float,
         on_update: Callable[[ReviewFull], None] | None = None,
     ) -> ReviewFull:
-        """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``).
+        """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``)."""
+
+        def timed_out(last: ReviewFull | None) -> Exception:
+            return ReviewTimeout(
+                message=f"review_and_wait timed out after {timeout}s",
+                cause="The review is still running server-side.",
+                fix=f"Read it later with client.get_review('{review_id}').",
+                doc_url="https://lenz.io/docs/quickstart",
+                review_id=review_id,
+                partial=last,
+            )
+
+        return self._wait_job(
+            f"/reviews/{review_id}",
+            timeout=timeout,
+            on_update=on_update,
+            parse=lambda body: ReviewFull.model_validate(body) if _is_full_review_body(body, review_id) else None,
+            failed=_review_failed,
+            timed_out=timed_out,
+        )
+
+    def _wait_job(
+        self,
+        path: str,
+        *,
+        timeout: float,
+        on_update: Callable[[_Job], None] | None,
+        parse: Callable[[Any], _Job | None],
+        failed: Callable[[_Job], Exception],
+        timed_out: Callable[[_Job | None], Exception],
+    ) -> _Job:
+        """The poll loop behind every ``*_and_wait`` of an async job (a review,
+        a citation check).
 
         Like the verification poll, it always reads once more at the deadline
         before giving up. A failed read (a 5xx, a network error, a 429) is
         retried on the next round, after the wait the server stated if it
         stated one, rather than raised; anything else (404, 403, 410) raises.
+        ``parse`` returns the job's model, or ``None`` for a 200 that is not
+        this job's body (a failed poll).
         """
         deadline = time.monotonic() + timeout
-        last: ReviewFull | None = None
+        last: _Job | None = None
         last_dump: dict[str, Any] | None = None
         while True:
             # One request per poll, bounded by what is left of the deadline:
             # the client's own retry ladder inside a poll could run minutes
             # past it. A failed poll is retried on the next round instead.
             stated_wait: float | None = None
-            review: ReviewFull | None = None
+            job: _Job | None = None
             remaining = deadline - time.monotonic()
             try:
-                body = self._request(
-                    "GET", f"/reviews/{review_id}", max_retries=0, timeout=max(1.0, min(remaining, self._timeout))
-                )
-                if not _is_full_review_body(body, review_id):
-                    raise ValueError("not this review's full body")
-                review = ReviewFull.model_validate(body)
+                body = self._request("GET", path, max_retries=0, timeout=max(1.0, min(remaining, self._timeout)))
+                job = parse(body)
+                if job is None:
+                    raise ValueError("not this job's body")
             except ValueError:
                 # A body this release cannot read (pydantic's ValidationError
                 # is a ValueError): read again next round, as for a 5xx.
-                logger.debug("unreadable review body for %s", review_id, exc_info=True)
+                logger.debug("unreadable body for %s", path, exc_info=True)
+                job = None
             except (LenzAPIError, LenzRateLimitError) as exc:
                 # A stated wait paces the next poll, capped like the retry
                 # ladder caps it: an untyped proxy 503 can state an hour.
                 wait = getattr(exc, "retry_after", None)
                 stated_wait = float(min(wait, MAX_RETRY_AFTER_SLEEP)) if isinstance(wait, int) and wait > 0 else None
-            if review is not None:
-                dump = review.model_dump()
+            if job is not None:
+                dump = job.model_dump()
                 if dump != last_dump:
                     last_dump = dump
                     if on_update is not None:
                         try:
-                            on_update(review.model_copy(deep=True))
+                            on_update(job.model_copy(deep=True))
                         except Exception:
-                            logger.debug("on_update callback raised for review %s", review_id, exc_info=True)
-                last = review
-                if review.status == "completed":
-                    return review
-                if review.status == "failed":
-                    raise _review_failed(review)
+                            logger.debug("on_update callback raised for %s", path, exc_info=True)
+                last = job
+                if job.status == "completed":
+                    return job
+                if job.status == "failed":
+                    raise failed(job)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise ReviewTimeout(
-                    message=f"review_and_wait timed out after {timeout}s",
-                    cause="The review is still running server-side.",
-                    fix=f"Read it later with client.get_review('{review_id}').",
-                    doc_url="https://lenz.io/docs/quickstart",
-                    review_id=review_id,
-                    partial=last,
-                )
+                raise timed_out(last)
             if stated_wait is not None:
                 sleep_for = max(REVIEW_POLL_FLOOR, stated_wait)
             else:
@@ -1508,6 +1682,37 @@ def _is_full_review_body(body: Any, review_id: str) -> bool:
         and body.get("review_id") == review_id
         and isinstance(body.get("status"), str)
         and all(isinstance(body.get(k), list) for k in ("issues", "failures", "claims"))
+    )
+
+
+def _is_citecheck_body(body: Any, citecheck_id: str) -> bool:
+    """Whether a 200 is this citation check: its id, a status and the three
+    lists. Anything else is a failed poll, never a result."""
+    return (
+        isinstance(body, dict)
+        and body.get("citecheck_id") == citecheck_id
+        and isinstance(body.get("status"), str)
+        and all(isinstance(body.get(k), list) for k in ("citations", "citation_issues", "citation_failures"))
+    )
+
+
+def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
+    failure = check.failure
+    reason = (failure.failure_reason if failure else None) or ""
+    hint = (failure.hint if failure else None) or ""
+    retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
+    return CitecheckFailed(
+        message=f"Citation check failed: {reason or 'the server sent no failure block'}",
+        cause=hint or reason or "No failure block on the failed check.",
+        fix=hint or ("Retry the same request after a short wait." if retryable else "Check the request and resubmit."),
+        doc_url=(failure.docs_url if failure else "") or "https://lenz.io/docs/errors",
+        citecheck_id=check.citecheck_id,
+        error_code=reason,
+        failure_reason=reason,
+        failure_class=(failure.failure_class if failure else "") or "",
+        retryable=retryable,
+        hint=hint,
+        citecheck=check,
     )
 
 

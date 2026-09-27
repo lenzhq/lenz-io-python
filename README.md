@@ -2,11 +2,12 @@
 
 Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https://lenz.io/developers).
 
-**Five API calls, one research-depth ladder.**
+**Six API calls: one research-depth ladder, one call that runs it on a whole draft, and the citation check on its own.**
 
 - `extract` — pull verifiable claims out of any text, optionally narrowed with a `focus`. Free, 1000 calls/account/day (shared across your API keys).
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
+- `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
 - `ask` — follow-up questions grounded on a verification. Sync, paid.
 - `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
 
@@ -46,6 +47,8 @@ lenz review draft.md             # the whole draft: quick verdicts, deep checks;
 lenz review draft.md --issues    # only the issues
 lenz review draft.md --max-citations 10   # also check the draft's first 10 sources (links, DOIs)
 lenz review draft.md --max-citations 20 --max-assessments 0   # only the sources, no claim
+lenz citecheck draft.md          # the citation check on its own
+lenz citecheck --pairs pairs.json   # statement-source pairs, each checked as it is
 lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
@@ -201,6 +204,47 @@ checks the draft's first N sources and prints their count and their issues
 after the claims; a source issue exits `1` like a claim one.
 `lenz review draft.md --max-citations 20 --max-assessments 0` checks the
 sources and no claim.
+
+## Check a draft's citations
+
+`citecheck` runs the citation check on its own, without the rest of a review:
+does each cited source say what the draft says it does? Send a draft (its
+links are read from the text, as for `review`) or the statement-source pairs
+yourself.
+
+```python
+check = client.citecheck_and_wait(draft, max_citations=10)
+print(check.outcome)  # clean | issues_found | incomplete | unchecked
+for c in check.citation_issues:  # most serious first
+    print(c.finding, c.cited_url or c.doi, c.statement)
+
+# Pairs: each checked as it is (max_citations does not apply)
+check = client.citecheck_and_wait(
+    pairs=[
+        {
+            "statement": "Water boils at 100 degrees Celsius at sea level.",
+            "url": "https://en.wikipedia.org/wiki/Boiling_point",
+        },
+        {
+            "statement": "Diamond sensors can measure temperature in a living cell.",
+            "doi": "10.1038/nature12373",
+            "cited_year": "2013",
+        },
+    ]
+)
+```
+
+The body carries the same rows as a review's: `citations`, `citation_issues`,
+`citation_failures`, `summary` and `more_citations` (the draft's citations past
+`max_citations`, found but not checked). `client.citecheck(...)` returns a
+`citecheck_id` at once; read it with `client.get_citecheck(citecheck_id)`.
+`citecheck_and_wait` raises `CitecheckFailed` when the check fails and
+`CitecheckTimeout` after `timeout` seconds. The `citecheck.completed` and
+`citecheck.failed` webhooks parse into a `CitecheckEvent`.
+
+From the terminal: `lenz citecheck draft.md` (or `--pairs pairs.json`, a JSON
+list of pairs) prints the count, the key numbers and each source issue, and
+exits `0` clean, `1` issues found, `2` anything else.
 
 ## Quickstart — the canonical integration
 

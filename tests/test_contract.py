@@ -36,6 +36,8 @@ from lenz_io.models import (
     AssessClaim,
     AssessResponse,
     Certificate,
+    Citecheck,
+    CitecheckStarted,
     ExtractedClaims,
     LibraryList,
     ReviewFull,
@@ -190,6 +192,13 @@ def _load(name: str) -> dict:
         # to produce on demand (our failure with and without a finding), and
         # a supported row. Same keys as the recorded bodies.
         ("review_citations_constructed.json", ReviewFull),
+        # A review with the claims and citations found past its caps, recorded.
+        ("review_citations_more.json", ReviewFull),
+        # /citecheck, recorded: the receipt, a check of a draft's first four
+        # citations, and a check of two statement-source pairs.
+        ("citecheck_accepted.json", CitecheckStarted),
+        ("citecheck_completed.json", Citecheck),
+        ("citecheck_pairs_completed.json", Citecheck),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):

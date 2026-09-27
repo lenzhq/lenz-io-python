@@ -14,6 +14,7 @@ import typer
 from lenz_io import __version__
 from lenz_io.client import DEFAULT_BASE_URL
 
+from . import citecheck as citecheck_mod
 from . import commands
 from . import review as review_mod
 from . import verify as verify_mod
@@ -71,6 +72,7 @@ app.command("extract")(commands.extract)
 app.command("assess")(commands.assess)
 app.command("verify")(verify_mod.verify)
 app.command("review")(review_mod.review)
+app.command("citecheck")(citecheck_mod.citecheck)
 app.command("status")(commands.status)
 app.command("show")(commands.show)
 app.command("ask")(commands.ask)

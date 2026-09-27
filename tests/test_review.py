@@ -922,3 +922,11 @@ class TestCitations:
         body["citations"][3]["check"]["page_read"] = "a_value_added_later"
         row = ReviewFull.model_validate(body).citations[3]
         assert (row.check.unchecked_reason, row.check.page_read) == ("inconclusive", "a_value_added_later")
+
+
+def test_a_recorded_review_lists_what_it_found_past_its_caps():
+    review = ReviewFull.model_validate(_load("review_citations_more.json"))
+    assert review.policy.max_assessments == 0 and review.policy.max_citations == 4
+    assert review.more_claims is not None and len(review.more_claims) == 4
+    assert review.more_citations is not None and len(review.more_citations) == 6
+    assert all(m.sentence for m in review.more_citations)
