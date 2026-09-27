@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Union
 
 import typer
 from rich.markup import escape
@@ -449,7 +449,9 @@ def _sources(n: int) -> str:
 
 
 #: A body that carries citation rows: a review (either view) or a citation check.
-CitedBody = ReviewFull | ReviewIssues | Citecheck
+#: ``Union``, not ``|``: this alias is evaluated at import, and Python 3.9 has
+#: no ``|`` between classes.
+CitedBody = Union[ReviewFull, ReviewIssues, Citecheck]
 
 
 def citation_count_lines(review: CitedBody) -> list[str]:
