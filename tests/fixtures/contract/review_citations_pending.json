@@ -18,7 +18,6 @@
     "max_assessments": 0,
     "max_verifications": 0,
     "depth": "standard",
-    "check_citations": true,
     "max_citations": 20
   },
   "summary": {

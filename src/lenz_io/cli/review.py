@@ -12,15 +12,15 @@ never read an outage as a clean draft::
 
     0  clean          every selected claim checked, no issue
     1  issues_found   at least one claim is False, Mostly False or Mixed, or
-                      (with --citations) a source does not say what the
-                      draft says it does
+                      (with --max-citations) a source does not say what
+                      the draft says it does
     2  anything else  incomplete, unchecked, failed, timed out, or an error
                       (a bad key, no credits, a bad flag)
 
-``--citations`` also checks the draft's sources (its links and DOIs; in a
-file, keep links as markdown links). Their count and their issues print after
-the claims. ``--citations --max-assessments 0`` checks the sources and no
-claim.
+``--max-citations N`` also checks the draft's first N sources (its links and
+DOIs; in a file, keep links as markdown links). Their count and their issues
+print after the claims. ``--max-citations 20 --max-assessments 0`` checks the
+sources and no claim.
 
 ``--detach`` submits and prints the ``review_id``; ``lenz review --resume <id>``
 picks it up again, as does Ctrl-C's hint.
@@ -72,7 +72,7 @@ def review(
         metavar="N",
         min=0,
         max=20,
-        help="Quick-check at most N claims (0-20, default 20; 0 = no claim, e.g. with --citations).",
+        help="Quick-check at most N claims (0-20, default 20; 0 = no claim, e.g. with --max-citations).",
     ),
     max_verifications: int = typer.Option(
         None, "--max-verifications", metavar="N", help="Deep-check at most N claims (default 5; 0 = quick checks only)."
@@ -80,11 +80,13 @@ def review(
     depth: str = typer.Option(
         None, "--depth", metavar="standard|low", help="Depth of every deep check. 'low' costs half the credits."
     ),
-    citations: bool = typer.Option(
-        False, "--citations", help="Also check the draft's sources: does each link say what the draft says?"
-    ),
     max_citations: int = typer.Option(
-        None, "--max-citations", metavar="N", help="With --citations: check the first N sources (1-20, default 20)."
+        None,
+        "--max-citations",
+        metavar="N",
+        min=0,
+        max=20,
+        help="Also check the draft's first N sources (0-20): does each link say what the draft says?",
     ),
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the review_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
@@ -112,15 +114,12 @@ def review(
             review_id = resume
         else:
             chosen_depth = _parse_depth(depth)
-            if max_citations is not None and not citations:
-                raise CLIError("--max-citations needs --citations.", code="invalid_usage", exit_code=2)
             text = _read_draft(draft)
             started = client.review(
                 text,
                 max_assessments=max_assessments,
                 max_verifications=max_verifications,
                 depth=chosen_depth,
-                check_citations=True if citations else None,
                 max_citations=max_citations,
             )
             review_id = started.review_id
@@ -284,7 +283,7 @@ def render_progress(review: ReviewFull | None) -> Any:
 def _citation_progress(review: ReviewFull) -> str:
     """ "7 of 10 sources checked" while the citation checks run."""
     s = review.summary
-    if not review.policy.check_citations or not s.citations_selected:
+    if not review.policy.max_citations or not s.citations_selected:
         return ""
     counts = s.citation_checks
     done = (counts.checked + counts.unchecked + counts.failed) if counts is not None else 0
@@ -412,12 +411,14 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
             out.console.print("\n[green]No issues.[/green]")
         _rewrite_note(out, review)
         render_citations(out, review)
+        _more_note(out, review)
         return
     for c in review.claims:
         out.console.print()
         _render_claim(out, c, n)
     _rewrite_note(out, review)
     render_citations(out, review)
+    _more_note(out, review)
 
 
 def _rewrite_note(out: Output, review: ReviewFull) -> None:
@@ -449,17 +450,23 @@ def _sources(n: int) -> str:
 
 def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
     """The count heading and the line under it, as plain text; ``[]`` when
-    the review did not ask for the citation check (or ``citations_skipped`` is
-    ``switched_off``).
+    the review checks no citation (``policy.max_citations`` is 0) or
+    ``citations_skipped`` is ``switched_off``.
 
     While checks run: the heading, then "Lenz checks…". Once every row has
     ended: the heading, then the key numbers, then (over the cap) how many
     more were not checked."""
     s = review.summary
-    if not review.policy.check_citations or s.citations_skipped == "switched_off":
+    if s.citations_skipped == "switched_off":
         return []
     if s.citations_skipped == "url_input":
         return ["Sources on a linked page are not checked. Paste the page's text instead to check them."]
+    if s.citations_skipped == "insufficient_credits":
+        return ["The sources were not checked: not enough credits."]
+    if s.citations_skipped:
+        return ["The sources were not checked."]
+    if not review.policy.max_citations:
+        return []
     found = s.citations_found
     if found is None:
         return []
@@ -568,3 +575,25 @@ def render_citations(out: Output, review: ReviewFull | ReviewIssues) -> None:
         out.console.print(
             "\n[dim]A reviewer's note is reasoning, not a checked source; the quoted passage is from the page.[/dim]"
         )
+
+
+def more_found_line(review: ReviewFull | ReviewIssues) -> str:
+    """ "2 more claims and 13 more citations were found but not checked.";
+    ``""`` when there are none (or the draft has not been read)."""
+    claims = len(review.more_claims or [])
+    citations = len(review.more_citations or [])
+    parts = []
+    if claims:
+        parts.append(f"{claims} more {'claim' if claims == 1 else 'claims'}")
+    if citations:
+        parts.append(f"{citations} more {'citation' if citations == 1 else 'citations'}")
+    if not parts:
+        return ""
+    verb = "was" if claims + citations == 1 else "were"
+    return f"{' and '.join(parts)} {verb} found but not checked."
+
+
+def _more_note(out: Output, review: ReviewFull | ReviewIssues) -> None:
+    line = more_found_line(review)
+    if line:
+        out.console.print(f"\n[dim]{escape(line)}[/dim]")

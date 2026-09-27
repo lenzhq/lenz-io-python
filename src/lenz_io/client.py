@@ -437,20 +437,6 @@ class _LibraryNamespace:
         return LibraryList.model_validate(body)
 
 
-def _citations_option(check: bool | None, maximum: int | None) -> dict[str, Any] | None:
-    """The request's ``citations`` object, or ``None`` to send no key at all
-    (so the body, and its idempotency hash, stay what they were without the
-    option). Only the options set are sent."""
-    if check is None and maximum is None:
-        return None
-    if check is None:
-        raise ValueError("max_citations needs check_citations=True.")
-    option: dict[str, Any] = {"check": check}
-    if maximum is not None:
-        option["max"] = maximum
-    return option
-
-
 class Lenz:
     """Top-level client.
 
@@ -898,7 +884,6 @@ class Lenz:
         max_assessments: int | None = None,
         max_verifications: int | None = None,
         depth: str | None = None,
-        check_citations: bool | None = None,
         max_citations: int | None = None,
         language: str = "",
         webhook_url: str | None = None,
@@ -920,16 +905,15 @@ class Lenz:
         (default 5; ``0`` makes a quick-only review) at ``depth``
         (``"standard"``, the default, or ``"low"``). ``None`` leaves a knob at
         the server default; an empty list switches that rule off.
-        ``max_assessments=0`` checks no claim (with ``check_citations=True``:
+        ``max_assessments=0`` checks no claim (with ``max_citations``:
         a review of the draft's citations only).
 
-        ``check_citations=True`` also checks the draft's citations (links and
-        DOIs, read from ``text``; keep a link as a markdown link,
+        ``max_citations=N`` (1-20) also checks the draft's first N citations
+        (links and DOIs, read from ``text``; keep a link as a markdown link,
         ``[words](https://...)``): does each source say what the draft says
-        it does? The first ``max_citations`` (1-20, default 20) in the draft's
-        order are checked. The findings are in ``citations``
-        and ``citation_issues``. Both left at ``None`` send nothing, and the
-        review is exactly as without them.
+        it does? The findings are in ``citations`` and ``citation_issues``;
+        the ones found past N are listed in ``more_citations``. ``None`` or
+        ``0`` checks no citation and sends nothing.
 
         Credits: 1 per claim assessed, plus 10 (5 at ``depth="low"``) per
         deep check. ``credits.charged`` on the review says what it cost.
@@ -966,11 +950,12 @@ class Lenz:
         ):
             if value is not None:
                 escalate[name] = value
+        # 0 means no citation check, the server default: sent as nothing, so
+        # the body (and its idempotency hash) is what it is without the option.
+        if max_citations:
+            escalate["max_citations"] = max_citations
         if escalate:
             payload["escalate"] = escalate
-        citations = _citations_option(check_citations, max_citations)
-        if citations is not None:
-            payload["citations"] = citations
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         try:
             body = self._request("POST", "/review", json=payload, headers=headers)

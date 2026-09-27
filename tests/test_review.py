@@ -773,37 +773,26 @@ class TestCitations:
     def test_not_asked_sends_nothing_and_the_body_is_as_before(self, client):
         body = self._body(client)
         assert body == {"text": "draft", "visibility": "private"}
-        assert self._body(client, check_citations=None, max_citations=None) == body
+        # None and 0 both mean no citation check: nothing is sent.
+        assert self._body(client, max_citations=None) == body
+        assert self._body(client, max_citations=0) == body
 
-    @pytest.mark.parametrize(
-        ("kw", "expected"),
-        [
-            ({"check_citations": True}, {"check": True}),
-            ({"check_citations": True, "max_citations": 10}, {"check": True, "max": 10}),
-            ({"check_citations": False}, {"check": False}),
-            ({"check_citations": False, "max_citations": 5}, {"check": False, "max": 5}),
-        ],
-    )
-    def test_the_options_are_sent_as_the_citations_object(self, client, kw, expected):
-        body = self._body(client, **kw)
-        assert body["citations"] == expected
-        assert "escalate" not in body
-
-    def test_max_citations_alone_is_refused_before_any_request(self, client):
-        with respx.mock(base_url=BASE, assert_all_called=False) as r:
-            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
-            with pytest.raises(ValueError, match="max_citations needs check_citations=True"):
-                client.review("draft", max_citations=5)
-        assert not route.called
+    def test_max_citations_is_sent_inside_escalate(self, client):
+        body = self._body(client, max_citations=10)
+        assert body["escalate"] == {"max_citations": 10}
+        assert "citations" not in body
 
     def test_citations_only_review_sends_max_assessments_zero(self, client):
-        body = self._body(client, check_citations=True, max_assessments=0)
-        assert body["escalate"] == {"max_assessments": 0}
-        assert body["citations"] == {"check": True}
+        body = self._body(client, max_citations=20, max_assessments=0)
+        assert body["escalate"] == {"max_assessments": 0, "max_citations": 20}
 
     def test_every_row_state_parses(self):
         review = ReviewFull.model_validate(_load("review_citations_constructed.json"))
-        assert review.policy.check_citations is True and review.policy.max_citations == 10
+        assert review.policy.max_citations == 10
+        assert review.more_claims == []
+        assert [m.index for m in review.more_citations or []] == [10]
+        more = (review.more_citations or [])[0]
+        assert more.sentence and more.position is not None and more.cited_url
         s = review.summary
         assert (s.citations_found, s.citations_selected, s.citation_limit, s.citation_limit_reached) == (
             23,
@@ -898,7 +887,8 @@ class TestCitations:
         assert not any(k.startswith("citation") for k in body)
         review = ReviewFull.model_validate(body)
         assert (review.citations, review.citation_issues, review.citation_failures) == ([], [], [])
-        assert review.policy.check_citations is False and review.policy.max_citations is None
+        assert review.policy.max_citations is None
+        assert review.more_claims is None and review.more_citations is None
         s = review.summary
         assert (s.citations_found, s.citations_selected, s.citation_limit, s.citation_limit_reached) == (
             None,

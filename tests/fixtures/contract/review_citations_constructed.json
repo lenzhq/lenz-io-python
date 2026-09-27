@@ -18,7 +18,6 @@
     "max_assessments": 0,
     "max_verifications": 0,
     "depth": "standard",
-    "check_citations": true,
     "max_citations": 10
   },
   "summary": {
@@ -198,6 +197,20 @@
         "retryable": true,
         "hint": "The check ran out of time. Review the draft again.",
         "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    }
+  ],
+  "more_claims": [],
+  "more_citations": [
+    {
+      "index": 10,
+      "reference": "the housing figures",
+      "cited_url": "https://example.gov/housing-2024",
+      "doi": null,
+      "sentence": "Housing completions rose by a fifth, according to the housing figures.",
+      "position": {
+        "start": 2491,
+        "end": 2562
       }
     }
   ],

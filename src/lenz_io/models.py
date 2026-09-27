@@ -940,9 +940,8 @@ class EscalationPolicy(_Lax):
     max_assessments: int = 20
     max_verifications: int = 5
     depth: str = "standard"
-    #: Whether the review checks the draft's citations (``check_citations``).
-    check_citations: bool = False
-    #: The resolved citation cap; ``None`` when citations are not checked.
+    #: How many of the draft's citations the review checks; ``0`` (or
+    #: ``None`` from an older server) when it checks none.
     max_citations: int | None = None
 
 
@@ -1013,7 +1012,8 @@ class ReviewSummary(_Lax):
     #: ``len(citation_issues)``.
     citation_issues: int = 0
     #: Why the citation check was asked for and did not run: ``url_input``
-    #: (the draft was one URL) or ``switched_off``. An open set.
+    #: (the draft was one URL), ``insufficient_credits`` or ``switched_off``.
+    #: An open set.
     citations_skipped: str | None = None
 
 
@@ -1299,6 +1299,19 @@ class ReviewCitationIssue(_Lax):
     failure: FailureBlock | None = None
 
 
+class ReviewMoreCitation(_Lax):
+    """A citation found in the draft past the ones this review checked:
+    found but not checked. Send it in a later request to check it.
+    ``sentence`` is the draft's sentence around it."""
+
+    index: int = 0
+    reference: str | None = None
+    cited_url: str | None = None
+    doi: str | None = None
+    sentence: str | None = None
+    position: ReviewCitationPosition | None = None
+
+
 class ReviewCitationFailure(_Lax):
     """A citation whose check failed with nothing established."""
 
@@ -1344,6 +1357,12 @@ class ReviewEnvelope(_Lax):
     failures: list[ReviewFailure] = Field(default_factory=list)
     citation_issues: list[ReviewCitationIssue] = Field(default_factory=list)
     citation_failures: list[ReviewCitationFailure] = Field(default_factory=list)
+    #: Claims found past ``max_assessments``, in the draft's order: found but
+    #: not checked. ``None`` until the draft is read, ``[]`` when there are none.
+    more_claims: list[str] | None = None
+    #: Citations found past the ones checked (up to 100): found but not
+    #: checked. ``None`` until the draft is read, ``[]`` when there are none.
+    more_citations: list[ReviewMoreCitation] | None = None
     failure: FailureBlock | None = None
 
 
@@ -1403,6 +1422,7 @@ __all__ = [
     "ReviewFull",
     "ReviewIssue",
     "ReviewIssues",
+    "ReviewMoreCitation",
     "ReviewResult",
     "ReviewStarted",
     "ReviewSummary",
