@@ -875,3 +875,10 @@ class TestCitations:
             assert len(event.review.citations) == 10
             assert event.review.citation_issues[0].finding == "doi_not_found"
             assert event.review.citation_failures[0].citation_index == 7
+
+    def test_an_unchecked_reason_passes_through_as_a_string(self):
+        body = _load("review_citations_completed.json")
+        body["citations"][3]["check"]["unchecked_reason"] = "inconclusive"
+        body["citations"][3]["check"]["page_read"] = "a_value_added_later"
+        row = ReviewFull.model_validate(body).citations[3]
+        assert (row.check.unchecked_reason, row.check.page_read) == ("inconclusive", "a_value_added_later")

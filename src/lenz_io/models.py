@@ -1219,7 +1219,7 @@ class ReviewCitationCheck(_Lax):
     - ``unchecked_reason`` and ``hint``: why the finding is ``unchecked`` and
       what to do next. The reasons are an open set, e.g. ``no_text``,
       ``partial_text``, ``login_required``, ``unsupported_site``,
-      ``no_statement``, ``invalid_url``, ``other_version``, ``ambiguous``,
+      ``no_statement``, ``invalid_url``, ``other_version``, ``inconclusive``,
       ``ambiguous_reference``.
     - ``failure``: on a ``failed`` check.
     """
