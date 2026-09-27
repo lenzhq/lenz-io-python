@@ -8,7 +8,7 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification. Sync, paid.
-- `review` — the ladder on a whole draft in one call: the issues back, with suggested rewrites, in 2-4 min. Async, paid.
+- `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
@@ -42,7 +42,7 @@ lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
-lenz review draft.md             # a whole draft: quick verdicts, deep checks on the doubtful ones (2-4 min)
+lenz review draft.md             # the whole draft: quick verdicts, deep checks; its citations too, if asked
 lenz review draft.md --issues    # only the issues
 lenz review draft.md --citations # also check the draft's sources (its links and DOIs)
 lenz review draft.md --citations --max-assessments 0   # only the sources, no claim

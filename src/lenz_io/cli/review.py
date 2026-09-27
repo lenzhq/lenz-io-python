@@ -90,7 +90,7 @@ def review(
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
 ) -> None:
-    """Review a whole draft (2-4 min). Exit code: 0 clean, 1 issues found, 2 incomplete or failed.
+    """Review a draft, its citations too if asked. Exit codes: 0 clean, 1 issues, 2 anything else.
 
     Costs 1 credit per claim checked, plus 10 per deep check (5 at --depth low).
     """
