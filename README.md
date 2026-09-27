@@ -7,9 +7,9 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 - `extract` — pull verifiable claims out of any text, optionally narrowed with a `focus`. Free, 1000 calls/account/day (shared across your API keys).
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
+- `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
 - `ask` — follow-up questions grounded on a verification. Sync, paid.
 - `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
-- `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
@@ -221,8 +221,15 @@ for c in check.citation_issues:  # most serious first
 # Pairs: each checked as it is (max_citations does not apply)
 check = client.citecheck_and_wait(
     pairs=[
-        {"statement": "Water boils at 100 degrees Celsius at sea level.", "url": "https://en.wikipedia.org/wiki/Boiling_point"},
-        {"statement": "Diamond sensors can measure temperature in a living cell.", "doi": "10.1038/nature12373", "cited_year": "2013"},
+        {
+            "statement": "Water boils at 100 degrees Celsius at sea level.",
+            "url": "https://en.wikipedia.org/wiki/Boiling_point",
+        },
+        {
+            "statement": "Diamond sensors can measure temperature in a living cell.",
+            "doi": "10.1038/nature12373",
+            "cited_year": "2013",
+        },
     ]
 )
 ```
