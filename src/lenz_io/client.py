@@ -1111,7 +1111,7 @@ class Lenz:
             # check is still being created answers 409 naming that check: it
             # exists, so this call started it.
             conflict = exc.body if isinstance(exc.body, dict) else {}
-            existing = conflict.get("citecheck_id") or conflict.get("review_id")
+            existing = conflict.get("citecheck_id")
             if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
                 return CitecheckStarted(citecheck_id=existing, status="queued")
             raise

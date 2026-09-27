@@ -114,14 +114,23 @@ class TestSubmit:
                 client.citecheck(*args, **kw)
         assert not route.called
 
-    @pytest.mark.parametrize("key", ["citecheck_id", "review_id"])
-    def test_a_conflict_naming_the_check_is_the_receipt(self, client, key):
+    def test_a_conflict_naming_the_check_is_the_receipt(self, client):
         with respx.mock(base_url=BASE) as r:
             r.post("/citecheck").respond(
-                409, json={"detail": "still being created", "code": "idempotency_conflict", key: CHECK_ID}
+                409, json={"detail": "still being created", "code": "idempotency_conflict", "citecheck_id": CHECK_ID}
             )
             started = client.citecheck(DRAFT, idempotency_key="k")
         assert started.citecheck_id == CHECK_ID
+
+    def test_a_conflict_naming_no_check_raises(self, client):
+        from lenz_io import LenzError
+
+        with respx.mock(base_url=BASE) as r:
+            r.post("/citecheck").respond(
+                409, json={"detail": "still being created", "code": "idempotency_conflict", "citecheck_id": None}
+            )
+            with pytest.raises(LenzError):
+                client.citecheck(DRAFT, idempotency_key="k")
 
 
 # ── read ────────────────────────────────────────────────────────────────────
