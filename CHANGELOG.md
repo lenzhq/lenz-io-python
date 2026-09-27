@@ -17,7 +17,7 @@ body from one that does not still parses, with the new keys empty.
 - **`client.review(text, check_citations=True, max_citations=N)`**, sent as
   the API's `citations` object (`{"check": true, "max": N}`), only the options
   you set. The first `max_citations` (1-20, default 20) citations in the
-  draft's order are checked, at no charge. `max_citations` without
+  draft's order are checked. `max_citations` without
   `check_citations` raises `ValueError`. `review_and_wait` passes both through.
 - **`max_assessments=0`**: a review that checks no claim, e.g. a review of the
   draft's citations only.
@@ -41,6 +41,9 @@ body from one that does not still parses, with the new keys empty.
   contradicted. 3 could not be checked."), then each source issue with the
   draft's sentence, the link and the passage from the source. A source issue
   exits `1`, like a claim issue; a failed source check exits `2`.
+- **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
+  get a quick verdict. `lenz review draft.md --citations --max-assessments 0`
+  checks the draft's sources and no claim.
 
 ### Deprecated
 

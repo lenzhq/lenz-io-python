@@ -45,6 +45,7 @@ lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # a whole draft: quick verdicts, deep checks on the doubtful ones (2-4 min)
 lenz review draft.md --issues    # only the issues
 lenz review draft.md --citations # also check the draft's sources (its links and DOIs)
+lenz review draft.md --citations --max-assessments 0   # only the sources, no claim
 lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
@@ -150,7 +151,7 @@ draft's citations, its links and DOIs: does each source say what the draft
 says it does? Links are read from `text`, so keep a link as a markdown link
 (`[words](https://...)`); a Word or Google document pasted as plain text loses
 them. The first `max_citations` (1-20, default 20) in the draft's order are
-checked, at no charge. With `max_assessments=0` the review checks the sources
+checked. With `max_assessments=0` the review checks the sources
 and no claim.
 
 ```python
@@ -192,11 +193,13 @@ new review.
 they arrive and rewrites each row as its deep check lands. The exit code is the
 outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
 unchecked, failed, timed out, or an error). `--issues` prints only the issues,
-`--json` the review body, `--max-verifications N` and `--depth low` set the
-policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
+`--json` the review body, `--max-assessments N`, `--max-verifications N` and
+`--depth low` set the policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
 (and exits `0`: it submitted, it did not review). `--citations` also checks the
 draft's sources (`--max-citations N` for the first N) and prints their count
 and their issues after the claims; a source issue exits `1` like a claim one.
+`lenz review draft.md --citations --max-assessments 0` checks the sources and
+no claim.
 
 ## Quickstart — the canonical integration
 

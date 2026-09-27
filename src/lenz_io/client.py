@@ -927,7 +927,7 @@ class Lenz:
         DOIs, read from ``text``; keep a link as a markdown link,
         ``[words](https://...)``): does each source say what the draft says
         it does? The first ``max_citations`` (1-20, default 20) in the draft's
-        order are checked, at no charge. The findings are in ``citations``
+        order are checked. The findings are in ``citations``
         and ``citation_issues``. Both left at ``None`` send nothing, and the
         review is exactly as without them.
 

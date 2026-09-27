@@ -502,3 +502,29 @@ def test_progress_view_counts_the_citation_checks():
     console = Console(file=io.StringIO(), no_color=True, width=200)
     console.print(render_progress(ReviewFull.model_validate(_load("review_citations_verifying.json"))))
     assert "1 of 3 sources checked" in console.file.getvalue()
+
+
+def test_links_only_review_sends_max_assessments_zero(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_citations_completed.json")
+        result = _invoke("review", draft, "--citations", "--max-assessments", "0", "--json")
+    assert result.exit_code == 2, result.output  # the fixture's outcome is incomplete
+    body = json.loads(post.calls.last.request.content)
+    assert body["escalate"] == {"max_assessments": 0}
+    assert body["citations"] == {"check": True}
+
+
+def test_max_assessments_is_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--max-assessments", "5", "--json")
+    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_assessments": 5}
+
+
+@pytest.mark.parametrize("value", ["-1", "21"])
+def test_max_assessments_out_of_range_is_refused(draft, value):
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        post, _ = _serve(r, "review_completed.json")
+        result = _invoke("review", draft, "--max-assessments", value, "--json")
+    assert result.exit_code == 2
+    assert not post.called

@@ -19,7 +19,8 @@ never read an outage as a clean draft::
 
 ``--citations`` also checks the draft's sources (its links and DOIs; in a
 file, keep links as markdown links). Their count and their issues print after
-the claims.
+the claims. ``--citations --max-assessments 0`` checks the sources and no
+claim.
 
 ``--detach`` submits and prints the ``review_id``; ``lenz review --resume <id>``
 picks it up again, as does Ctrl-C's hint.
@@ -65,6 +66,14 @@ def review(
     ctx: typer.Context,
     draft: str = typer.Argument(None, help="The draft: a file path, '-' (or a pipe) for stdin, or one http(s) URL."),
     issues: bool = typer.Option(False, "--issues", help="Print only the issues (and any failed rows)."),
+    max_assessments: int = typer.Option(
+        None,
+        "--max-assessments",
+        metavar="N",
+        min=0,
+        max=20,
+        help="Quick-check at most N claims (0-20, default 20; 0 = no claim, e.g. with --citations).",
+    ),
     max_verifications: int = typer.Option(
         None, "--max-verifications", metavar="N", help="Deep-check at most N claims (default 5; 0 = quick checks only)."
     ),
@@ -72,7 +81,7 @@ def review(
         None, "--depth", metavar="standard|low", help="Depth of every deep check. 'low' costs half the credits."
     ),
     citations: bool = typer.Option(
-        False, "--citations", help="Also check the draft's sources: does each link say what the draft says? Free."
+        False, "--citations", help="Also check the draft's sources: does each link say what the draft says?"
     ),
     max_citations: int = typer.Option(
         None, "--max-citations", metavar="N", help="With --citations: check the first N sources (1-20, default 20)."
@@ -108,6 +117,7 @@ def review(
             text = _read_draft(draft)
             started = client.review(
                 text,
+                max_assessments=max_assessments,
                 max_verifications=max_verifications,
                 depth=chosen_depth,
                 check_citations=True if citations else None,
