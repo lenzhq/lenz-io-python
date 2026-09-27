@@ -854,7 +854,7 @@ class TestCitations:
         assert not hasattr(review, "citations")
 
     @pytest.mark.parametrize("name", ["review_completed.json", "review_failed_no_claim.json"])
-    def test_a_body_from_a_server_without_the_feature_parses(self, name):
+    def test_a_body_without_the_citation_keys_parses(self, name):
         body = _load(name)
         assert not any(k.startswith("citation") for k in body)
         review = ReviewFull.model_validate(body)

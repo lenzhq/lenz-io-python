@@ -449,7 +449,8 @@ def _sources(n: int) -> str:
 
 def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
     """The count heading and the line under it, as plain text; ``[]`` when
-    the review did not ask for the citation check (or it was switched off).
+    the review did not ask for the citation check (or ``citations_skipped`` is
+    ``switched_off``).
 
     While checks run: the heading, then "Lenz checks…". Once every row has
     ended: the heading, then the summary line, then (over the cap) how many
