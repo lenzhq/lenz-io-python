@@ -45,9 +45,11 @@ except ImportError:
     __version__ = "0.0.0+local"
 
 # Public surface
-from .client import API_VERSION, DEFAULT_BASE_URL, Lenz, VerifyBatchItem
+from .client import API_VERSION, DEFAULT_BASE_URL, CitationPair, Lenz, VerifyBatchItem
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
+    CitecheckFailed,
+    CitecheckTimeout,
     LenzAPIError,
     LenzAuthError,
     LenzError,
@@ -76,6 +78,8 @@ from .models import (
     BatchItemResult,
     CandidateClaim,
     Certificate,
+    Citecheck,
+    CitecheckStarted,
     Coverage,
     CoverageReason,
     CoverageStatus,
@@ -115,6 +119,7 @@ from .models import (
 )
 from .webhooks import (
     CertificateTimestamped,
+    CitecheckEvent,
     LenzWebhooks,
     ReviewEvent,
     VerificationCompleted,
@@ -141,6 +146,12 @@ __all__ = [
     "CandidateClaim",
     "Certificate",
     "CertificateTimestamped",
+    "CitationPair",
+    "Citecheck",
+    "CitecheckEvent",
+    "CitecheckFailed",
+    "CitecheckStarted",
+    "CitecheckTimeout",
     "Coverage",
     "CoverageReason",
     "CoverageStatus",

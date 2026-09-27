@@ -1322,6 +1322,67 @@ class ReviewCitationFailure(_Lax):
     failure: FailureBlock | None = None
 
 
+# ── /citecheck ──────────────────────────────────────────────────────────
+#
+# ``POST /citecheck`` checks the citations of a draft, or statement-source
+# pairs sent as they are, without the rest of a review. The rows, issues and
+# failures are the review's own models.
+
+
+class CitecheckStarted(_Lax):
+    """Returned by ``POST /citecheck`` (HTTP 202). ``status`` is always
+    ``"queued"``: the receipt, not the current state."""
+
+    citecheck_id: str = ""
+    status: str = "queued"
+
+
+class CitecheckPolicy(_Lax):
+    """``max_citations``: how many citations are checked (for pairs, the
+    number of pairs: every pair is checked)."""
+
+    max_citations: int | None = None
+
+
+class CitecheckSummary(_Lax):
+    """Counts over the check, as on a review's ``summary``. ``citations_found``
+    is the citations in the text, or the pairs sent; ``None`` until read."""
+
+    citations_found: int | None = None
+    citations_selected: int | None = None
+    citation_limit: int | None = None
+    citation_limit_reached: bool | None = None
+    citation_checks: ReviewCitationCheckCounts | None = None
+    citation_issues: int = 0
+
+
+class Citecheck(_Lax):
+    """``GET /citechecks/{citecheck_id}``: a citation check as it stands.
+
+    ``status``: ``queued`` → ``checking`` → ``completed``, or ``failed``.
+    ``outcome`` is ``None`` until it ends, then ``clean``, ``issues_found``,
+    ``incomplete`` (a citation could not be checked for a reason of ours) or
+    ``unchecked``. ``citations``, ``citation_issues`` and ``citation_failures``
+    are the review's rows. ``more_citations`` lists the citations of the text
+    past the ones checked; ``None`` until the text is read, ``[]`` for pairs.
+    """
+
+    citecheck_id: str = ""
+    status: str = ""
+    outcome: str | None = None
+    created_at: str = ""
+    completed_at: str | None = None
+    poll_after_seconds: int | None = None
+    policy: CitecheckPolicy = Field(default_factory=CitecheckPolicy)
+    summary: CitecheckSummary = Field(default_factory=CitecheckSummary)
+    credits: ReviewCredits = Field(default_factory=ReviewCredits)
+    citations: list[ReviewCitation] = Field(default_factory=list)
+    citation_issues: list[ReviewCitationIssue] = Field(default_factory=list)
+    citation_failures: list[ReviewCitationFailure] = Field(default_factory=list)
+    more_citations: list[ReviewMoreCitation] | None = None
+    failure: FailureBlock | None = None
+
+
 class ReviewEnvelope(_Lax):
     """What both views of ``GET /reviews/{review_id}`` carry.
 
@@ -1391,6 +1452,10 @@ __all__ = [
     "BatchAccepted",
     "BatchItemResult",
     "CandidateClaim",
+    "Citecheck",
+    "CitecheckPolicy",
+    "CitecheckStarted",
+    "CitecheckSummary",
     "DebateSide",
     "EntityRef",
     "Escalation",

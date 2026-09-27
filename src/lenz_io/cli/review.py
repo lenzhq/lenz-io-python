@@ -38,7 +38,7 @@ from rich.markup import escape
 
 from lenz_io import Lenz
 from lenz_io.errors import LenzError, ReviewFailed, ReviewTimeout
-from lenz_io.models import ReviewCitationIssue, ReviewClaim, ReviewFull, ReviewIssues
+from lenz_io.models import Citecheck, ReviewCitationIssue, ReviewClaim, ReviewFull, ReviewIssues
 
 from ._run import execute, read_text_arg
 from .context import CLIState
@@ -448,24 +448,30 @@ def _sources(n: int) -> str:
     return f"{n} {'source' if n == 1 else 'sources'}"
 
 
-def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
+#: A body that carries citation rows: a review (either view) or a citation check.
+CitedBody = ReviewFull | ReviewIssues | Citecheck
+
+
+def citation_count_lines(review: CitedBody) -> list[str]:
     """The count heading and the line under it, as plain text; ``[]`` when
     the review checks no citation (``policy.max_citations`` is 0) or
     ``citations_skipped`` is ``switched_off``.
 
     While checks run: the heading, then "Lenz checks…". Once every row has
     ended: the heading, then the key numbers, then (over the cap) how many
-    more were not checked."""
+    more were not checked. A citation check always checks its citations."""
     s = review.summary
-    if s.citations_skipped == "switched_off":
+    skipped = getattr(s, "citations_skipped", None)
+    if skipped == "switched_off":
         return []
-    if s.citations_skipped == "url_input":
+    if skipped == "url_input":
         return ["Sources on a linked page are not checked. Paste the page's text instead to check them."]
-    if s.citations_skipped == "insufficient_credits":
+    if skipped == "insufficient_credits":
         return ["The sources were not checked: not enough credits."]
-    if s.citations_skipped:
+    if skipped:
         return ["The sources were not checked."]
-    if not review.policy.max_citations:
+    is_check = isinstance(review, Citecheck)
+    if not is_check and not review.policy.max_citations:
         return []
     found = s.citations_found
     if found is None:
@@ -493,7 +499,7 @@ def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
     return lines
 
 
-def citation_summary_line(review: ReviewFull | ReviewIssues) -> str:
+def citation_summary_line(review: CitedBody) -> str:
     """ "8 checked, 7 with a problem. 2 could not be checked."
 
     The key numbers only: citations checked, those with a problem (the
@@ -547,7 +553,7 @@ def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> N
         out.console.print(f"  [yellow]Part of the check failed:[/yellow] {escape(hint)}")
 
 
-def render_citations(out: Output, review: ReviewFull | ReviewIssues) -> None:
+def render_citations(out: Output, review: CitedBody) -> None:
     """After the claims: the count line and the summary line, then the
     citation issues, then the citations that could not be checked this time."""
     lines = citation_count_lines(review)
@@ -577,10 +583,10 @@ def render_citations(out: Output, review: ReviewFull | ReviewIssues) -> None:
         )
 
 
-def more_found_line(review: ReviewFull | ReviewIssues) -> str:
+def more_found_line(review: CitedBody) -> str:
     """ "2 more claims and 13 more citations were found but not checked.";
     ``""`` when there are none (or the draft has not been read)."""
-    claims = len(review.more_claims or [])
+    claims = len(getattr(review, "more_claims", None) or [])
     citations = len(review.more_citations or [])
     parts = []
     if claims:

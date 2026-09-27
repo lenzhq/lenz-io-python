@@ -24,7 +24,7 @@ import warnings
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .models import ReviewFull
+    from .models import Citecheck, ReviewFull
 
 
 class LenzError(Exception):
@@ -361,6 +361,32 @@ class ReviewFailed(LenzPipelineError):
     review: ReviewFull | None = None
 
 
+class CitecheckTimeout(LenzTimeoutError):
+    """``citecheck_and_wait`` reached its ``timeout`` before the check ended.
+
+    The check keeps running server-side. ``citecheck_id`` resumes it
+    (``client.get_citecheck(citecheck_id)``), and ``partial`` is the last body
+    read, or ``None`` when no read succeeded.
+    """
+
+    citecheck_id: str = ""
+    partial: Citecheck | None = None
+
+
+class CitecheckFailed(LenzPipelineError):
+    """A citation check ended ``failed``.
+
+    ``error_code`` is ``citecheck.failure.failure_reason`` (an open set),
+    ``hint`` the server's one sentence on what to do next, ``retryable``
+    whether resending the same request can help, and ``citecheck`` the final
+    body. A subclass of :class:`LenzPipelineError`.
+    """
+
+    citecheck_id: str = ""
+    error_code: str = ""
+    citecheck: Citecheck | None = None
+
+
 class LenzWebhookSignatureError(LenzError):
     """``LenzWebhooks.parse`` rejected a payload.
 
@@ -673,6 +699,8 @@ __all__ = [
     "MAX_RETRY_AFTER_SLEEP",
     "NO_RETRY_429_CODES",
     "UPSTREAM_503_CODES",
+    "CitecheckFailed",
+    "CitecheckTimeout",
     "LenzAPIError",
     "LenzAuthError",
     "LenzError",

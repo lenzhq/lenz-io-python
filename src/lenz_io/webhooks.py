@@ -35,7 +35,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from .errors import LenzWebhookSignatureError
-from .models import ReviewFull
+from .models import Citecheck, ReviewFull
 
 SIGNATURE_HEADER = "X-Lenz-Signature"
 SIGNATURE_PREFIX = "sha256="
@@ -181,6 +181,23 @@ class ReviewEvent(WebhookEvent):
     review: ReviewFull | None = None
 
 
+@dataclass
+class CitecheckEvent(WebhookEvent):
+    """``event=citecheck.completed`` or ``citecheck.failed`` — a citation
+    check ended.
+
+    ``citecheck`` is the final check (the same body ``get_citecheck``
+    returns), or ``None`` if it could not be parsed (``raw["citecheck"]``
+    still has it). Deduplicate on ``event_id``: it is the same on every
+    delivery attempt of one event. ``task_id`` identifies the delivery and
+    cannot be polled on ``/verify/status``.
+    """
+
+    event_id: str = ""
+    citecheck_id: str = ""
+    citecheck: Citecheck | None = None
+
+
 def _build_event(payload: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
     event = str(payload.get("event") or "")
@@ -264,6 +281,25 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             review_id=str(payload.get("review_id") or ""),
             review=review,
         )
+    if event in ("citecheck.completed", "citecheck.failed"):
+        body = payload.get("citecheck")
+        try:
+            check = Citecheck.model_validate(body) if isinstance(body, dict) else None
+        except ValueError:
+            check = None
+        return CitecheckEvent(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=payload,
+            event_id=str(payload.get("event_id") or ""),
+            citecheck_id=str(payload.get("citecheck_id") or ""),
+            citecheck=check,
+        )
     # Unknown event type — return generic. Future-compatible: ignore events
     # you do not handle rather than failing the delivery.
     return WebhookEvent(
@@ -286,7 +322,8 @@ def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:
     use :meth:`LenzWebhooks.parse`, which checks the signature and the replay
     window first.
 
-    Returns a :class:`ReviewEvent` for ``review.*``, the matching verification
+    Returns a :class:`ReviewEvent` for ``review.*``, a :class:`CitecheckEvent`
+    for ``citecheck.*``, the matching verification
     or certificate event otherwise, and a plain :class:`WebhookEvent` for an
     event type this release does not know. Branch with ``isinstance`` and
     ignore events you do not handle.
@@ -409,6 +446,7 @@ class LenzWebhooks:
 
 __all__ = [
     "SIGNATURE_HEADER",
+    "CitecheckEvent",
     "LenzWebhooks",
     "ReviewEvent",
     "VerificationCompleted",
