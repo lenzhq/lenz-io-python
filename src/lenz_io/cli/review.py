@@ -430,8 +430,8 @@ def _rewrite_note(out: Output, review: ReviewFull) -> None:
 
 # ── citations (--citations) ─────────────────────────────────────────────────
 
-#: The issue findings, most serious first, with the words the summary line and
-#: each issue use for them.
+#: The issue findings, most serious first, with the words each issue uses for
+#: them.
 CITATION_FINDING_WORDS = {
     "doi_not_found": "DOI not registered",
     "page_not_found": "page not found",
@@ -453,8 +453,8 @@ def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
     ``switched_off``).
 
     While checks run: the heading, then "Lenz checks…". Once every row has
-    ended: the heading, then the summary line, then (over the cap) how many
-    were not checked."""
+    ended: the heading, then the key numbers, then (over the cap) how many
+    more were not checked."""
     s = review.summary
     if not review.policy.check_citations or s.citations_skipped == "switched_off":
         return []
@@ -481,33 +481,29 @@ def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
         return [heading, "Lenz checks each one: does the source say what your draft says it does."]
     lines = [heading, citation_summary_line(review)]
     if other:
-        verb = "is" if other == 1 else "are"
-        lines.append(f"The other {other} {verb} not checked; one check covers at most {selected}.")
+        verb = "was" if other == 1 else "were"
+        lines.append(f"{other} more {verb} not checked: one check covers {selected}.")
     return lines
 
 
 def citation_summary_line(review: ReviewFull | ReviewIssues) -> str:
-    """ "7 checked. 2 contradicted, 1 page not found. 3 could not be checked."
+    """ "8 checked, 7 with a problem. 2 could not be checked."
 
-    Numbers first: the checked count, then each issue finding that occurs,
-    most serious first ("supported" is never named), then the rows that could
-    not be checked, and those that could not be checked this time (a failure
-    of ours)."""
-    counts = review.summary.citation_checks
+    The key numbers only: citations checked, those with a problem (the
+    citation issues) and those that could not be checked (for a reason of the
+    page, the draft or ours). Each part only when it is not zero."""
+    s = review.summary
+    counts = s.citation_checks
     checked = counts.checked if counts is not None else 0
-    by_finding: dict[str, int] = {}
-    for issue in review.citation_issues:
-        by_finding[issue.finding] = by_finding.get(issue.finding, 0) + 1
-    parts = [f"{checked} checked."]
-    found = [f"{by_finding[f]} {words}" for f, words in CITATION_FINDING_WORDS.items() if by_finding.get(f)]
-    found += [f"{n} {f.replace('_', ' ')}" for f, n in by_finding.items() if f not in CITATION_FINDING_WORDS]
-    if found:
-        parts.append(", ".join(found) + ".")
-    if counts is not None and counts.unchecked:
-        parts.append(f"{counts.unchecked} could not be checked.")
-    if counts is not None and counts.failed:
-        parts.append(f"{counts.failed} could not be checked this time.")
-    return " ".join(parts)
+    not_checked = (counts.unchecked + counts.failed) if counts is not None else 0
+    problems = s.citation_issues or len(review.citation_issues)
+    first = [f"{checked} checked"] if checked else []
+    if problems:
+        first.append(f"{problems} with a problem")
+    parts = [", ".join(first) + "."] if first else []
+    if not_checked:
+        parts.append(f"{not_checked} could not be checked.")
+    return " ".join(parts) or "0 checked."
 
 
 def _finding_words(finding: str) -> str:

@@ -420,11 +420,8 @@ def test_citation_render_count_summary_and_issues():
     text = _render("review_citations_completed.json")
     lines = text.splitlines()
     i = lines.index("23 sources cited in your draft")
-    assert lines[i + 1] == (
-        "6 checked. 1 DOI not registered, 1 page not found, 1 contradicted, 1 quote not in the source,"
-        " 1 reference details differ. 3 could not be checked. 1 could not be checked this time."
-    )
-    assert lines[i + 2] == "The other 13 are not checked; one check covers at most 10."
+    assert lines[i + 1] == "6 checked, 5 with a problem. 4 could not be checked."
+    assert lines[i + 2] == "13 more were not checked: one check covers 10."
     # each issue: the finding, the draft's sentence, the link, the evidence
     j = lines.index("[source 1/10] Contradicted")
     assert lines[j + 1].strip() == "Unemployment fell to 4.1% in 2024, according to a report from the ministry."
@@ -541,3 +538,29 @@ def test_max_assessments_out_of_range_is_refused(draft, value):
         result = _invoke("review", draft, "--max-assessments", value, "--json")
     assert result.exit_code == 2
     assert not post.called
+
+
+@pytest.mark.parametrize(
+    ("checks", "issues", "expected"),
+    [
+        ({"checked": 8, "unchecked": 1, "failed": 1}, 7, "8 checked, 7 with a problem. 2 could not be checked."),
+        ({"checked": 8, "unchecked": 0, "failed": 0}, 0, "8 checked."),
+        ({"checked": 3, "unchecked": 0, "failed": 0}, 3, "3 checked, 3 with a problem."),
+        ({"checked": 0, "unchecked": 2, "failed": 0}, 0, "2 could not be checked."),
+    ],
+)
+def test_citation_summary_line_is_the_key_numbers(checks, issues, expected):
+    from lenz_io.cli.review import citation_summary_line
+
+    body = _load("review_citations_completed.json")
+    body["summary"].update(citation_checks=checks, citation_issues=issues)
+    body["citation_issues"] = body["citation_issues"][:issues]
+    assert citation_summary_line(ReviewFull.model_validate(body)) == expected
+
+
+def test_one_more_over_the_cap_is_singular():
+    from lenz_io.cli.review import citation_count_lines
+
+    body = _load("review_citations_completed.json")
+    body["summary"].update(citations_found=11)
+    assert citation_count_lines(ReviewFull.model_validate(body))[-1] == "1 more was not checked: one check covers 10."

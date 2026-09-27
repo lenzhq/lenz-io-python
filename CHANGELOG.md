@@ -41,8 +41,8 @@ parses, with the new keys at their defaults.
   `ReviewCitationCheckCounts`) live in `lenz_io.models`.
 - **`ReviewEvent.review`** and `parse_webhook` carry the same keys.
 - **`lenz review --citations [--max-citations N]`**: after the claims, the
-  count ("23 sources cited in your draft"), a summary line ("6 checked. 1
-  contradicted. 3 could not be checked."), then each source issue with the
+  count ("23 sources cited in your draft"), the key numbers ("8 checked, 7
+  with a problem. 2 could not be checked."), then each source issue with the
   draft's sentence, the link and the passage from the source. A source issue
   exits `1`, like a claim issue; a failed source check exits `2`.
 - **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
