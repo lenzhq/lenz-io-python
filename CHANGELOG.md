@@ -6,6 +6,22 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`lenz review --issues` is a complete editor's view.** Every source issue
+  prints its reviewer's note, "Not in the source" included (it has no passage
+  to quote, so its reason used to be dropped). The sources Lenz could not
+  check are listed under "Check these by hand", each with why. Claims whose
+  final verdict is not an issue but has low confidence get their own "Low
+  confidence" section. Links print on one line, never wrapped by the CLI, so
+  a terminal keeps them clickable.
+
+### Added
+
+- **`lenz review --language CODE`** and **`lenz citecheck --language CODE`**:
+  the language the results are written in (ISO 639-1, e.g. `de`). Default
+  English.
+
 ## [2.18.0] - 2026-09-27
 
 `review` can check a draft's citations, and `citecheck` runs that check on

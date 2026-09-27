@@ -446,8 +446,10 @@ def test_citation_render_count_summary_and_issues():
     assert "[source 7/10] Page not found" in text and "Part of the check failed:" in text
     assert "[source 8/10] Could not be checked this time." in text
     assert "[source 3/10] Partly supported" in text
-    # an unchecked row is counted, never listed
-    assert "[source 4/10]" not in text
+    # an unchecked row is not an issue: it is listed once, to check by hand
+    by_hand = text.index("Check these by hand")
+    assert text.index("[source 4/10]") > by_hand
+    assert text.count("[source 4/10]") == 1
 
 
 def test_quote_finding_shows_the_missing_excerpt_only():
@@ -631,3 +633,79 @@ def test_no_max_citations_prints_no_sources_section():
     body = _load("review_citations_constructed.json")
     body["policy"]["max_citations"] = 0
     assert citation_count_lines(ReviewFull.model_validate(body)) == []
+
+
+# ── the editor's view: every reason, what to check by hand, clickable links ─
+
+
+def test_a_not_in_source_issue_prints_its_reason():
+    body = _load("review_citations_completed.json")
+    body["citation_issues"] = [
+        dict(
+            body["citation_issues"][0],
+            finding="not_in_source",
+            source="support",
+            snippet=None,
+            rationale="The page does not mention the four risk tiers.",
+        )
+    ]
+    text = _render_body(body)
+    assert "Not in the source" in text
+    assert "Reviewer's note: The page does not mention the four risk tiers." in text
+    assert "The source says:" not in text
+
+
+def test_sources_that_could_not_be_checked_are_listed_with_why():
+    text = _render("review_citations_completed.json")
+    assert "Check these by hand" in text
+    after = text[text.index("Check these by hand") :]
+    assert "Lenz does not read this site." in after or "not checked" in after.lower()
+    assert "https://www.youtube.com/watch?v=dQw4w9WgXcQ" in after
+
+
+def test_a_long_link_is_never_hard_wrapped():
+    body = _load("review_citations_completed.json")
+    long_url = "https://example.org/" + "a" * 250
+    body["citation_issues"][0]["cited_url"] = long_url
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=80, highlight=False)
+    render_review(out, ReviewFull.model_validate(body), issues_only=True)
+    assert "  " + long_url + "\n" in buf.getvalue()
+
+
+def test_the_issues_view_shows_low_confidence_claims():
+    body = _load("review_completed.json")
+    target = next(c for c in body["claims"] if c["result"] and not c["result"]["is_issue"])
+    target["result"]["confidence"] = "low"
+    text = _render_body(body, issues_only=True)
+    assert "Low confidence" in text
+    assert target["claim"] in text[text.index("Low confidence") :]
+
+
+def test_the_issues_view_has_no_low_confidence_section_without_one():
+    assert "Low confidence" not in _render("review_completed.json", issues_only=True)
+
+
+def test_language_is_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--language", "DE", "--json")
+    assert json.loads(post.calls.last.request.content)["language"] == "de"
+
+
+def test_no_language_sends_none(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--json")
+    assert "language" not in json.loads(post.calls.last.request.content)
+
+
+def _render_body(body: dict, *, issues_only: bool = False) -> str:
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body), issues_only=issues_only)
+    return buf.getvalue()

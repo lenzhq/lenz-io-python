@@ -88,6 +88,12 @@ def review(
         max=20,
         help="Also check the draft's first N sources (0-20): does each link say what the draft says?",
     ),
+    language: str = typer.Option(
+        None,
+        "--language",
+        metavar="CODE",
+        help="Write the results in this language (ISO 639-1, e.g. de). Default English.",
+    ),
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the review_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
@@ -121,6 +127,7 @@ def review(
                 max_verifications=max_verifications,
                 depth=chosen_depth,
                 max_citations=max_citations,
+                language=(language or "").strip().lower(),
             )
             review_id = started.review_id
             if detach:
@@ -337,6 +344,14 @@ def _print_text(out: Output, text: str | None, *, style: str = "") -> None:
             out.console.print(Text("  " + line, style=style), soft_wrap=True)
 
 
+def _print_link(out: Output, url: str) -> None:
+    """A link on its own line, never wrapped by us: a terminal wraps it
+    itself and keeps it one clickable link."""
+    from rich.text import Text
+
+    out.console.print(Text("  " + url, style="blue"), soft_wrap=True)
+
+
 def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
     out.console.print(f"[bold]\\[{c.index + 1}/{n}][/bold] {escape(c.claim or '')}")
     a, v = c.assessment, c.verification
@@ -352,7 +367,7 @@ def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
         if v.suggested_rewrite:
             out.console.print(f"  [dim]Suggested rewrite:[/dim] {escape(v.suggested_rewrite)}")
         if v.url:
-            out.console.print(f"  [blue]{escape(v.url)}[/blue]")
+            _print_link(out, v.url)
         return
     out.console.print(f"  {_verdict_text(a.verdict, a.confidence)} [dim]· quick check[/dim]")
     _print_text(out, a.rationale, style="dim")
@@ -380,7 +395,7 @@ def _render_issue(out: Output, i: Any, n: int) -> None:
     elif i.source != "verification" and i.escalation is not None and i.escalation.disposition != "planned":
         out.console.print(f"  [dim]Not deep-checked ({escape(i.escalation.disposition)}).[/dim]")
     if i.url:
-        out.console.print(f"  [blue]{escape(i.url)}[/blue]")
+        _print_link(out, i.url)
 
 
 def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False) -> None:
@@ -401,6 +416,12 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
             out.console.print(f"[bold]\\[{f.claim_index + 1}/{n}][/bold] {escape(f.claim or '')}")
             hint = (f.failure.hint if f.failure else None) or "failed"
             out.console.print(f"  [red]{escape(f.stage.capitalize() or 'Check')} failed:[/red] {escape(hint)}")
+        uncertain = _low_confidence_claims(review)
+        if uncertain:
+            out.console.print("\n[bold]Low confidence[/bold] [dim](not an issue, but worth a second look)[/dim]")
+            for c in uncertain:
+                out.console.print()
+                _render_claim(out, c, n)
         if (
             not review.issues
             and not review.failures
@@ -419,6 +440,11 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
     _rewrite_note(out, review)
     render_citations(out, review)
     _more_note(out, review)
+
+
+def _low_confidence_claims(review: ReviewFull) -> list[ReviewClaim]:
+    """Claims whose final verdict is not an issue but carries low confidence."""
+    return [c for c in review.claims if c.result is not None and not c.result.is_issue and c.result.confidence == "low"]
 
 
 def _rewrite_note(out: Output, review: ReviewFull) -> None:
@@ -452,6 +478,20 @@ def _sources(n: int) -> str:
 #: ``Union``, not ``|``: this alias is evaluated at import, and Python 3.9 has
 #: no ``|`` between classes.
 CitedBody = Union[ReviewFull, ReviewIssues, Citecheck]
+
+
+#: Why a source could not be checked, when the server sent no hint.
+_UNCHECKED_WORDS = {
+    "no_text": "The page gave no text to read.",
+    "partial_text": "Only part of the page could be read, so a missing passage proves nothing.",
+    "login_required": "The page needs a login.",
+    "unsupported_site": "Lenz does not read this site.",
+    "no_statement": "No sentence in the draft rests on this source.",
+    "other_version": "Only a preprint could be read, and its wording may differ from the published paper.",
+    "inconclusive": "The check could not decide from this page.",
+    "ambiguous_reference": "The DOI could not be read off the reference with certainty.",
+    "invalid_url": "This is not a public web address.",
+}
 
 
 def citation_count_lines(review: CitedBody) -> list[str]:
@@ -533,12 +573,15 @@ def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> N
     _print_text(out, i.statement)
     link = i.cited_url or (f"doi:{i.doi}" if i.doi else None)
     if link:
-        out.console.print(f"  [blue]{escape(link)}[/blue]")
+        _print_link(out, link)
     elif i.reference:
         _print_text(out, i.reference, style="dim")
-    if i.source == "support" and i.snippet:
-        out.console.print("  [dim]The source says:[/dim]")
-        _print_text(out, f"\u201c{i.snippet}\u201d")
+    if i.source == "support":
+        # "Not in the source" carries no passage, only the reason: print the
+        # reason whenever there is one.
+        if i.snippet:
+            out.console.print("  [dim]The source says:[/dim]")
+            _print_text(out, f"\u201c{i.snippet}\u201d")
         if i.rationale:
             _print_text(out, f"Reviewer's note: {i.rationale}", style="dim")
     elif i.source == "quote" and (i.missing_quote or i.quotes):
@@ -575,10 +618,22 @@ def render_citations(out: Output, review: CitedBody) -> None:
         link = f.cited_url or (f"doi:{f.doi}" if f.doi else f.reference or "")
         out.console.print(f"[bold]\\[{label}][/bold] [yellow]Could not be checked this time.[/yellow]")
         if link:
-            out.console.print(f"  [blue]{escape(link)}[/blue]")
+            _print_link(out, link)
         hint = f.failure.hint if f.failure else None
         if hint:
             _print_text(out, hint, style="dim")
+    unchecked = [
+        c for c in getattr(review, "citations", []) if c.result is not None and c.result.finding == "unchecked"
+    ]
+    if unchecked:
+        out.console.print("\n[bold]Check these by hand[/bold] [dim](Lenz could not check them)[/dim]")
+        for c in unchecked:
+            label = f"source {c.index + 1}/{total}" if total else f"source {c.index + 1}"
+            link = c.cited_url or (f"doi:{c.doi}" if c.doi else c.reference or "")
+            reason = c.check.hint or _UNCHECKED_WORDS.get(c.check.unchecked_reason or "", "It could not be checked.")
+            out.console.print(f"[bold]\\[{label}][/bold] {escape(reason)}")
+            if link:
+                _print_link(out, link)
     if review.citation_issues:
         out.console.print(
             "\n[dim]A reviewer's note is reasoning, not a checked source; the quoted passage is from the page.[/dim]"
