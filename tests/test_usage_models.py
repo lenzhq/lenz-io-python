@@ -209,13 +209,3 @@ def test_coverage_reason_names_the_account_switch():
     assert "account" in get_args(CoverageReason)
     # Wire order: "account" sits right after "plan".
     assert get_args(CoverageReason)[:2] == ("plan", "account")
-
-
-def test_citation_block_parses_and_is_none_when_absent():
-    with_block = dict(
-        POOL_PAYLOAD,
-        citation={"quota_used": 130, "quota_total": 5200, "quota_remaining": 5070, "remaining": 5070},
-    )
-    usage = Usage.model_validate(with_block)
-    assert usage.citation is not None and usage.citation.remaining == 5070
-    assert Usage.model_validate(POOL_PAYLOAD).citation is None

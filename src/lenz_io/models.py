@@ -833,9 +833,6 @@ class Usage(_Lax):
     ask: UsageCapacity = Field(default_factory=UsageCapacity)
     #: DEPRECATED — removed 2026-11-29. See :attr:`verify`.
     assess: UsageCapacity = Field(default_factory=UsageCapacity)
-    #: The pool seen as citation checks, the same projection as
-    #: :attr:`assess`. ``None`` when the server sends no ``citation`` block.
-    citation: UsageCapacity | None = None
     extract: UsageExtract = Field(default_factory=UsageExtract)
     # Whether this key has a webhook signing secret provisioned. ``POST /verify``
     # with a ``webhook_url`` is rejected without one, so callers that rely on
