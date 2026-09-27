@@ -179,11 +179,17 @@ def _load(name: str) -> dict:
         ("review_failed_no_claim.json", ReviewFull),
         ("review_failed_insufficient_credits.json", ReviewFull),
         ("review_completed_issues.json", ReviewIssues),
-        # The citation check: every row state (waiting, fine, an issue, not
-        # checkable, our failure with and without a finding) in both views.
+        # The citation check, recorded: every row pending, some running, the
+        # finished review in both views, and a quote finding.
+        ("review_citations_pending.json", ReviewFull),
         ("review_citations_verifying.json", ReviewFull),
         ("review_citations_completed.json", ReviewFull),
         ("review_citations_completed_issues.json", ReviewIssues),
+        ("review_citations_quote.json", ReviewFull),
+        # CONSTRUCTED, not recorded: the row states a live run cannot be made
+        # to produce on demand (our failure with and without a finding), and
+        # a supported row. Same keys as the recorded bodies.
+        ("review_citations_constructed.json", ReviewFull),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):

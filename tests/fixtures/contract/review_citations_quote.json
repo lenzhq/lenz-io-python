@@ -1,0 +1,161 @@
+{
+  "review_id": "b2ec3b6a",
+  "view": "full",
+  "status": "completed",
+  "outcome": "issues_found",
+  "created_at": "2026-09-27T17:13:52.906449Z",
+  "completed_at": "2026-09-27T17:14:15.884214Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 0,
+    "max_verifications": 0,
+    "depth": "standard",
+    "check_citations": true,
+    "max_citations": 20
+  },
+  "summary": {
+    "claims_selected": 0,
+    "claim_limit": 0,
+    "claim_limit_reached": true,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 0,
+      "failed": 0
+    },
+    "verifications": {
+      "planned": 0,
+      "completed": 0,
+      "failed": 0
+    },
+    "issues": 0,
+    "citations_found": 2,
+    "citations_selected": 2,
+    "citation_limit": 20,
+    "citation_limit_reached": false,
+    "citation_checks": {
+      "checked": 1,
+      "unchecked": 1,
+      "failed": 0
+    },
+    "citation_issues": 1,
+    "citations_skipped": null
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": null,
+  "issues": [],
+  "failures": [],
+  "citation_issues": [
+    {
+      "citation_index": 1,
+      "reference": "biography",
+      "cited_url": "https://en.wikipedia.org/wiki/Gustave_Eiffel",
+      "doi": null,
+      "statement": "Gustave Eiffel told reporters that he \"built the tower to stand for a thousand years\" (biography).",
+      "quotes": [
+        "built the tower to stand for a thousand years"
+      ],
+      "position": {
+        "start": 139,
+        "end": 285
+      },
+      "finding": "quote_not_in_source",
+      "source": "quote",
+      "snippet": null,
+      "rationale": null,
+      "metadata_differences": [],
+      "missing_quote": "built the tower to stand for a thousand years",
+      "page_title": "Gustave Eiffel - Wikipedia",
+      "failure": null
+    }
+  ],
+  "citation_failures": [],
+  "claims": [],
+  "citations": [
+    {
+      "index": 0,
+      "reference": "the entry on boiling points",
+      "cited_url": "https://en.wikipedia.org/wiki/Boiling_point",
+      "doi": null,
+      "statement": null,
+      "quotes": [],
+      "position": null,
+      "result": {
+        "finding": "unchecked",
+        "source": null,
+        "is_issue": false
+      },
+      "check": {
+        "status": "completed",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": "no_statement",
+        "hint": "No sentence of the draft could be paired with this citation, so there was nothing to check it against.",
+        "failure": null,
+        "missing_quote": null
+      }
+    },
+    {
+      "index": 1,
+      "reference": "biography",
+      "cited_url": "https://en.wikipedia.org/wiki/Gustave_Eiffel",
+      "doi": null,
+      "statement": "Gustave Eiffel told reporters that he \"built the tower to stand for a thousand years\" (biography).",
+      "quotes": [
+        "built the tower to stand for a thousand years"
+      ],
+      "position": {
+        "start": 139,
+        "end": 285
+      },
+      "result": {
+        "finding": "quote_not_in_source",
+        "source": "quote",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Gustave Eiffel - Wikipedia",
+        "page_published_date": "2002-02-25",
+        "page_language": "en",
+        "source_url": "https://en.wikipedia.org/wiki/Gustave_Eiffel",
+        "source_version": null,
+        "support": "not_in_source",
+        "snippet": null,
+        "rationale": "The source text does not mention Gustave Eiffel telling reporters that he built the tower to stand for a thousand years.",
+        "quote": "not_in_source",
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null,
+        "missing_quote": "built the tower to stand for a thousand years"
+      }
+    }
+  ],
+  "failure": null
+}

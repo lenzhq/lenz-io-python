@@ -1,0 +1,591 @@
+{
+  "review_id": "7c1e0d52",
+  "view": "full",
+  "status": "completed",
+  "outcome": "incomplete",
+  "created_at": "2026-09-27T10:00:00.000000Z",
+  "completed_at": "2026-09-27T10:01:40.000000Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 0,
+    "max_verifications": 0,
+    "depth": "standard",
+    "check_citations": true,
+    "max_citations": 10
+  },
+  "summary": {
+    "claims_selected": 0,
+    "claim_limit": 0,
+    "claim_limit_reached": true,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 0,
+      "failed": 0
+    },
+    "verifications": null,
+    "issues": 0,
+    "citations_found": 23,
+    "citations_selected": 10,
+    "citation_limit": 10,
+    "citation_limit_reached": true,
+    "citation_checks": {
+      "checked": 6,
+      "unchecked": 3,
+      "failed": 1
+    },
+    "citation_issues": 5,
+    "citations_skipped": null
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": null,
+  "issues": [],
+  "failures": [],
+  "citation_issues": [
+    {
+      "citation_index": 8,
+      "reference": "doi:10.9999/not-a-registered-doi",
+      "cited_url": "https://doi.org/10.9999/not-a-registered-doi",
+      "doi": "10.9999/not-a-registered-doi",
+      "statement": "Inflation settled near 2%, the central bank said.",
+      "quotes": [],
+      "position": {
+        "start": 2421,
+        "end": 2490
+      },
+      "finding": "doi_not_found",
+      "source": "doi",
+      "snippet": null,
+      "rationale": null,
+      "missing_quote": null,
+      "metadata_differences": [],
+      "page_title": null,
+      "failure": null
+    },
+    {
+      "citation_index": 6,
+      "reference": "the trade figures",
+      "cited_url": "https://example.gov/trade-2024",
+      "doi": null,
+      "statement": "Exports grew by 3% last year.",
+      "quotes": [],
+      "position": {
+        "start": 2300,
+        "end": 2360
+      },
+      "finding": "page_not_found",
+      "source": "page",
+      "snippet": null,
+      "rationale": null,
+      "missing_quote": null,
+      "metadata_differences": [],
+      "page_title": null,
+      "failure": {
+        "failure_reason": "timeout",
+        "failure_class": "upstream_unavailable",
+        "retryable": true,
+        "hint": "The check ran out of time. Review the draft again.",
+        "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    },
+    {
+      "citation_index": 0,
+      "reference": "a report from the ministry",
+      "cited_url": "https://example.gov/report-2024",
+      "doi": null,
+      "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry.",
+      "quotes": [],
+      "position": {
+        "start": 0,
+        "end": 118
+      },
+      "finding": "contradicted",
+      "source": "support",
+      "snippet": "The unemployment rate averaged 4.6% in 2024, down from 4.9%.",
+      "rationale": "The report gives 4.6% for 2024; the draft says 4.1%.",
+      "missing_quote": null,
+      "metadata_differences": [],
+      "page_title": "Labour market report 2024",
+      "failure": null
+    },
+    {
+      "citation_index": 1,
+      "reference": "the minister said",
+      "cited_url": "https://news.example.com/minister-interview",
+      "doi": null,
+      "statement": "The minister said the figures were \"the best in a decade\".",
+      "quotes": [
+        "the best in a decade"
+      ],
+      "position": {
+        "start": 119,
+        "end": 214
+      },
+      "finding": "quote_not_in_source",
+      "source": "quote",
+      "snippet": null,
+      "rationale": null,
+      "missing_quote": "the best in a decade",
+      "metadata_differences": [],
+      "page_title": "Interview with the minister",
+      "failure": null
+    },
+    {
+      "citation_index": 4,
+      "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
+      "cited_url": "https://doi.org/10.1038/nature12373",
+      "doi": "10.1038/nature12373",
+      "statement": "Diamond sensors can measure temperature inside a living cell [5].",
+      "quotes": [],
+      "position": {
+        "start": 2210,
+        "end": 2275
+      },
+      "finding": "metadata_mismatch",
+      "source": "metadata",
+      "snippet": null,
+      "rationale": null,
+      "missing_quote": null,
+      "metadata_differences": [
+        {
+          "field": "year",
+          "cited": "2015",
+          "registered": "2013"
+        }
+      ],
+      "page_title": "Nanometre-scale thermometry in a living cell",
+      "failure": null
+    }
+  ],
+  "citation_failures": [
+    {
+      "citation_index": 7,
+      "reference": "the agency's statement",
+      "cited_url": "https://example.org/statement",
+      "doi": null,
+      "failure": {
+        "failure_reason": "timeout",
+        "failure_class": "upstream_unavailable",
+        "retryable": true,
+        "hint": "The check ran out of time. Review the draft again.",
+        "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    }
+  ],
+  "failure": null,
+  "claims": [],
+  "citations": [
+    {
+      "index": 0,
+      "reference": "a report from the ministry",
+      "cited_url": "https://example.gov/report-2024",
+      "doi": null,
+      "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry.",
+      "quotes": [],
+      "position": {
+        "start": 0,
+        "end": 118
+      },
+      "result": {
+        "finding": "contradicted",
+        "source": "support",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Labour market report 2024",
+        "page_published_date": "2025-01-14",
+        "page_language": "en",
+        "source_url": "https://example.gov/report-2024",
+        "source_version": null,
+        "support": "contradicted",
+        "snippet": "The unemployment rate averaged 4.6% in 2024, down from 4.9%.",
+        "rationale": "The report gives 4.6% for 2024; the draft says 4.1%.",
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 1,
+      "reference": "the minister said",
+      "cited_url": "https://news.example.com/minister-interview",
+      "doi": null,
+      "statement": "The minister said the figures were \"the best in a decade\".",
+      "quotes": [
+        "the best in a decade"
+      ],
+      "position": {
+        "start": 119,
+        "end": 214
+      },
+      "result": {
+        "finding": "quote_not_in_source",
+        "source": "quote",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Interview with the minister",
+        "page_published_date": null,
+        "page_language": "en",
+        "source_url": "https://news.example.com/minister-interview",
+        "source_version": null,
+        "support": "supported",
+        "snippet": "The minister said the figures were encouraging.",
+        "rationale": "The interview has the minister commenting on the figures.",
+        "quote": "not_in_source",
+        "missing_quote": "the best in a decade",
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 2,
+      "reference": "wage statistics",
+      "cited_url": "https://stats.example.org/wages",
+      "doi": null,
+      "statement": "Wages rose faster than prices for the second year running.",
+      "quotes": [],
+      "position": {
+        "start": 215,
+        "end": 290
+      },
+      "result": {
+        "finding": "supported",
+        "source": "support",
+        "is_issue": false
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Wages and prices",
+        "page_published_date": null,
+        "page_language": "en",
+        "source_url": "https://stats.example.org/wages",
+        "source_version": null,
+        "support": "supported",
+        "snippet": "Real wages grew for the second consecutive year.",
+        "rationale": "The page reports real wage growth in both years.",
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 3,
+      "reference": "a paywalled analysis",
+      "cited_url": "https://paper.example.com/analysis",
+      "doi": null,
+      "statement": "Youth unemployment halved over the same period.",
+      "quotes": [],
+      "position": {
+        "start": 291,
+        "end": 360
+      },
+      "result": {
+        "finding": "unchecked",
+        "source": null,
+        "is_issue": false
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "partial",
+        "page_title": "Analysis",
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": "https://paper.example.com/analysis",
+        "source_version": null,
+        "support": "unchecked",
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": "partial_text",
+        "hint": "Only part of the page could be read. Send a link to the full text to check it.",
+        "failure": null
+      }
+    },
+    {
+      "index": 4,
+      "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
+      "cited_url": "https://doi.org/10.1038/nature12373",
+      "doi": "10.1038/nature12373",
+      "statement": "Diamond sensors can measure temperature inside a living cell [5].",
+      "quotes": [],
+      "position": {
+        "start": 2210,
+        "end": 2275
+      },
+      "result": {
+        "finding": "metadata_mismatch",
+        "source": "metadata",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Nanometre-scale thermometry in a living cell",
+        "page_published_date": "2013-07-31",
+        "page_language": "en",
+        "source_url": "https://www.nature.com/articles/nature12373",
+        "source_version": "published",
+        "support": "supported",
+        "snippet": "we demonstrate a new approach to nanoscale thermometry that uses coherent manipulation of the electronic spin associated with nitrogen-vacancy colour centres in diamond",
+        "rationale": "The paper reports temperature measurement in living cells with diamond sensors.",
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": true,
+        "metadata": "mismatch",
+        "metadata_differences": [
+          {
+            "field": "year",
+            "cited": "2015",
+            "registered": "2013"
+          }
+        ],
+        "registered": {
+          "title": "Nanometre-scale thermometry in a living cell",
+          "authors": [
+            "Kucsko",
+            "Maurer",
+            "Yao",
+            "Kubo"
+          ],
+          "year": 2013,
+          "journal": "Nature"
+        },
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 5,
+      "reference": "Further reading",
+      "cited_url": "https://example.net/further-reading",
+      "doi": null,
+      "statement": null,
+      "quotes": [],
+      "position": null,
+      "result": {
+        "finding": "unchecked",
+        "source": null,
+        "is_issue": false
+      },
+      "check": {
+        "status": "completed",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": "no_statement",
+        "hint": "No sentence in the draft rests on this source.",
+        "failure": null
+      }
+    },
+    {
+      "index": 6,
+      "reference": "the trade figures",
+      "cited_url": "https://example.gov/trade-2024",
+      "doi": null,
+      "statement": "Exports grew by 3% last year.",
+      "quotes": [],
+      "position": {
+        "start": 2300,
+        "end": 2360
+      },
+      "result": {
+        "finding": "page_not_found",
+        "source": "page",
+        "is_issue": true
+      },
+      "check": {
+        "status": "failed",
+        "page_read": "not_found",
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": {
+          "failure_reason": "timeout",
+          "failure_class": "upstream_unavailable",
+          "retryable": true,
+          "hint": "The check ran out of time. Review the draft again.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+        }
+      }
+    },
+    {
+      "index": 7,
+      "reference": "the agency's statement",
+      "cited_url": "https://example.org/statement",
+      "doi": null,
+      "statement": "The agency confirmed the numbers in a statement.",
+      "quotes": [],
+      "position": {
+        "start": 2361,
+        "end": 2420
+      },
+      "result": null,
+      "check": {
+        "status": "failed",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": {
+          "failure_reason": "timeout",
+          "failure_class": "upstream_unavailable",
+          "retryable": true,
+          "hint": "The check ran out of time. Review the draft again.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+        }
+      }
+    },
+    {
+      "index": 8,
+      "reference": "doi:10.9999/not-a-registered-doi",
+      "cited_url": "https://doi.org/10.9999/not-a-registered-doi",
+      "doi": "10.9999/not-a-registered-doi",
+      "statement": "Inflation settled near 2%, the central bank said.",
+      "quotes": [],
+      "position": {
+        "start": 2421,
+        "end": 2490
+      },
+      "result": {
+        "finding": "doi_not_found",
+        "source": "doi",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "none",
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": false,
+        "metadata": "unchecked",
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 9,
+      "reference": "a video",
+      "cited_url": "https://video.example.com/watch?v=abc",
+      "doi": null,
+      "statement": "Wages rose faster than prices for the second year running.",
+      "quotes": [],
+      "position": {
+        "start": 215,
+        "end": 290
+      },
+      "result": {
+        "finding": "unchecked",
+        "source": null,
+        "is_issue": false
+      },
+      "check": {
+        "status": "completed",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "missing_quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": "unsupported_site",
+        "hint": "Lenz does not read this site.",
+        "failure": null
+      }
+    }
+  ]
+}

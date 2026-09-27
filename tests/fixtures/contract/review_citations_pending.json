@@ -41,11 +41,11 @@
     "citation_limit": 20,
     "citation_limit_reached": false,
     "citation_checks": {
-      "checked": 1,
-      "unchecked": 4,
+      "checked": 0,
+      "unchecked": 0,
       "failed": 0
     },
-    "citation_issues": 1,
+    "citation_issues": 0,
     "citations_skipped": null
   },
   "credits": {
@@ -54,28 +54,7 @@
   "poll_after_seconds": 15,
   "issues": [],
   "failures": [],
-  "citation_issues": [
-    {
-      "citation_index": 7,
-      "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
-      "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
-      "doi": "10.9999/lenz-not-a-registered-doi-2026",
-      "statement": "A second study was retracted the following year [2].",
-      "quotes": [],
-      "position": {
-        "start": 810,
-        "end": 862
-      },
-      "finding": "doi_not_found",
-      "source": "doi",
-      "snippet": null,
-      "rationale": null,
-      "metadata_differences": [],
-      "missing_quote": null,
-      "page_title": null,
-      "failure": null
-    }
-  ],
+  "citation_issues": [],
   "citation_failures": [],
   "claims": [],
   "citations": [
@@ -87,13 +66,9 @@
       "statement": null,
       "quotes": [],
       "position": null,
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -108,8 +83,8 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "no_statement",
-        "hint": "No sentence of the draft could be paired with this citation, so there was nothing to check it against.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
@@ -119,15 +94,12 @@
       "reference": "history",
       "cited_url": "https://en.wikipedia.org/wiki/Eiffel_Tower",
       "doi": null,
-      "statement": "The Eiffel Tower was completed in 1899 for the World's Fair (history).",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 147,
-        "end": 263
-      },
+      "position": null,
       "result": null,
       "check": {
-        "status": "running",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -153,17 +125,12 @@
       "reference": "mission record",
       "cited_url": "https://en.wikipedia.org/wiki/Apollo_11",
       "doi": null,
-      "statement": "On landing, Neil Armstrong said it was \"one giant step for all humanity\" (mission record).",
-      "quotes": [
-        "one giant step for all humanity"
-      ],
-      "position": {
-        "start": 265,
-        "end": 398
-      },
+      "statement": null,
+      "quotes": [],
+      "position": null,
       "result": null,
       "check": {
-        "status": "running",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -189,15 +156,12 @@
       "reference": "survey",
       "cited_url": "https://en.wikipedia.org/wiki/Lenz_transport_survey_2024_nonexistent_page",
       "doi": null,
-      "statement": "The city's 2024 transport survey found that most commuters cycle (survey).",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 400,
-        "end": 551
-      },
+      "position": null,
       "result": null,
       "check": {
-        "status": "running",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -223,19 +187,12 @@
       "reference": "video",
       "cited_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       "doi": null,
-      "statement": "The minister explained the plan in a short video (video).",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 553,
-        "end": 657
-      },
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "position": null,
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -250,8 +207,8 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "unsupported_site",
-        "hint": "Links of this kind are not checked, video included. Check the passage by hand.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
@@ -261,19 +218,12 @@
       "reference": "report",
       "cited_url": "http://127.0.0.1/report.pdf",
       "doi": null,
-      "statement": "The internal report gives the same figure (report).",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 659,
-        "end": 741
-      },
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "position": null,
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -288,8 +238,8 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "invalid_url",
-        "hint": "The link is not a public web address, so it was not read.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
@@ -299,15 +249,12 @@
       "reference": "Kucsko G. et al. Nanometre-scale thermometry in a living cell. Nature (2015). doi:10.1038/nature12373",
       "cited_url": "https://doi.org/10.1038/nature12373",
       "doi": "10.1038/nature12373",
-      "statement": "Diamond sensors can measure temperature inside a living cell [1].",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 743,
-        "end": 808
-      },
+      "position": null,
       "result": null,
       "check": {
-        "status": "running",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -333,19 +280,12 @@
       "reference": "Smith J. A study that was never published. Journal of Examples (2019). doi:10.9999/lenz-not-a-registered-doi-2026",
       "cited_url": "https://doi.org/10.9999/lenz-not-a-registered-doi-2026",
       "doi": "10.9999/lenz-not-a-registered-doi-2026",
-      "statement": "A second study was retracted the following year [2].",
+      "statement": null,
       "quotes": [],
-      "position": {
-        "start": 810,
-        "end": 862
-      },
-      "result": {
-        "finding": "doi_not_found",
-        "source": "doi",
-        "is_issue": true
-      },
+      "position": null,
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -356,8 +296,8 @@
         "snippet": null,
         "rationale": null,
         "quote": null,
-        "doi_registered": false,
-        "metadata": "unchecked",
+        "doi_registered": null,
+        "metadata": null,
         "metadata_differences": [],
         "registered": null,
         "unchecked_reason": null,
@@ -374,13 +314,9 @@
       "statement": null,
       "quotes": [],
       "position": null,
-      "result": {
-        "finding": "unchecked",
-        "source": null,
-        "is_issue": false
-      },
+      "result": null,
       "check": {
-        "status": "completed",
+        "status": "pending",
         "page_read": null,
         "page_title": null,
         "page_published_date": null,
@@ -395,8 +331,8 @@
         "metadata": null,
         "metadata_differences": [],
         "registered": null,
-        "unchecked_reason": "no_statement",
-        "hint": "No sentence of the draft could be paired with this citation, so there was nothing to check it against.",
+        "unchecked_reason": null,
+        "hint": null,
         "failure": null,
         "missing_quote": null
       }
