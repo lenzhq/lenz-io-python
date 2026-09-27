@@ -529,9 +529,11 @@ def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> N
         _print_text(out, f"\u201c{i.snippet}\u201d")
         if i.rationale:
             _print_text(out, f"Reviewer's note: {i.rationale}", style="dim")
-    elif i.source == "quote" and i.quotes:
+    elif i.source == "quote" and (i.missing_quote or i.quotes):
         out.console.print("  [dim]These quoted words were not found in the source:[/dim]")
-        for q in i.quotes:
+        # The excerpt the check did not find; an older body names none, so
+        # every quote is shown.
+        for q in [i.missing_quote] if i.missing_quote else i.quotes:
             _print_text(out, f"\u201c{q}\u201d")
     elif i.source == "metadata":
         for d in i.metadata_differences:

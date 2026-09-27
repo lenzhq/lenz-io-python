@@ -441,6 +441,19 @@ def test_citation_render_count_summary_and_issues():
     assert "[source 3/10]" not in text and "[source 4/10]" not in text
 
 
+def test_quote_finding_shows_the_missing_excerpt_only():
+    body = _load("review_citations_completed.json")
+    body["citation_issues"][3]["quotes"] = ["found words here", "the best in a decade"]
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body))
+    text = buf.getvalue()
+    assert "\u201cthe best in a decade\u201d" in text
+    assert "found words here" not in text
+
+
 def test_citation_render_issues_only_view_keeps_the_citations():
     text = _render("review_citations_completed.json", issues_only=True)
     assert "23 sources cited in your draft" in text and "[source 1/10] Contradicted" in text

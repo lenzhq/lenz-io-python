@@ -1212,7 +1212,9 @@ class ReviewCitationCheck(_Lax):
       of the source it rests on; ``rationale`` is a reviewer's note, not a
       checked source.
     - ``quote``: ``matched``, ``not_in_source`` or ``unchecked``; ``None``
-      when the draft quoted nothing from this source.
+      when the draft quoted nothing from this source. ``missing_quote`` is
+      the quoted excerpt the quote check did not find; ``None`` unless
+      ``quote`` is ``not_in_source``.
     - ``doi_registered``, ``metadata`` (``consistent``, ``mismatch`` or
       ``unchecked``), ``metadata_differences`` and ``registered``: set for a
       DOI only.
@@ -1235,6 +1237,7 @@ class ReviewCitationCheck(_Lax):
     snippet: str | None = None
     rationale: str | None = None
     quote: str | None = None
+    missing_quote: str | None = None
     doi_registered: bool | None = None
     metadata: str | None = None
     metadata_differences: list[ReviewCitationDifference] = Field(default_factory=list)
@@ -1272,8 +1275,9 @@ class ReviewCitationIssue(_Lax):
     most serious first, then in the draft's order.
 
     ``snippet`` and ``rationale`` are set only when ``source`` is
-    ``support``. On ``metadata_mismatch``, ``metadata_differences`` says what
-    differs. ``failure`` is set when another part of the check failed after
+    ``support``. On ``quote_not_in_source``, ``missing_quote`` is the quoted
+    excerpt that was not found. On ``metadata_mismatch``,
+    ``metadata_differences`` says what differs. ``failure`` is set when another part of the check failed after
     the finding was established.
     """
 
@@ -1288,6 +1292,7 @@ class ReviewCitationIssue(_Lax):
     source: str | None = None
     snippet: str | None = None
     rationale: str | None = None
+    missing_quote: str | None = None
     metadata_differences: list[ReviewCitationDifference] = Field(default_factory=list)
     page_title: str | None = None
     failure: FailureBlock | None = None

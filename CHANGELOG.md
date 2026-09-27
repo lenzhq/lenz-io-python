@@ -25,7 +25,9 @@ body from one that does not still parses, with the new keys empty.
   citation: `reference`, `cited_url`, `doi`, `statement`, `quotes`,
   `position`, the derived `result` and the `check`), and on both views
   `citation_issues` (`ReviewCitationIssue`, most serious first) and
-  `citation_failures` (`ReviewCitationFailure`). `summary` gains
+  `citation_failures` (`ReviewCitationFailure`). On a quote finding,
+  `missing_quote` (on the check and on the issue) is the excerpt that was not
+  found. `summary` gains
   `citations_found`, `citations_selected`, `citation_limit`,
   `citation_limit_reached`, `citation_checks` (`checked`, `unchecked`,
   `failed`), `citation_issues` and `citations_skipped`; `policy` gains

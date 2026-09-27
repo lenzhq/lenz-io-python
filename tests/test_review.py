@@ -818,6 +818,9 @@ class TestCitations:
         by_index = {c.index: c for c in review.citations}
         assert by_index[0].result.finding == "contradicted" and by_index[0].check.snippet
         assert by_index[1].quotes == ["the best in a decade"] and by_index[1].check.quote == "not_in_source"
+        assert by_index[1].check.missing_quote == "the best in a decade"
+        assert by_index[0].check.missing_quote is None
+        assert review.citation_issues[3].missing_quote == "the best in a decade"
         assert by_index[2].result.is_issue is False
         assert by_index[3].check.unchecked_reason == "partial_text" and by_index[3].check.hint
         doi = by_index[4]
@@ -875,6 +878,14 @@ class TestCitations:
             assert len(event.review.citations) == 10
             assert event.review.citation_issues[0].finding == "doi_not_found"
             assert event.review.citation_failures[0].citation_index == 7
+
+    def test_missing_quote_defaults_to_none_on_a_body_without_it(self):
+        body = _load("review_citations_completed.json")
+        del body["citations"][1]["check"]["missing_quote"]
+        del body["citation_issues"][3]["missing_quote"]
+        review = ReviewFull.model_validate(body)
+        assert review.citations[1].check.missing_quote is None
+        assert review.citation_issues[3].missing_quote is None
 
     def test_an_unchecked_reason_passes_through_as_a_string(self):
         body = _load("review_citations_completed.json")
