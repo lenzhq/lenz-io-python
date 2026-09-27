@@ -380,27 +380,38 @@ def test_no_line_carries_trailing_spaces():
             assert line == line.rstrip(), repr(line)
 
 
-# ── --citations ─────────────────────────────────────────────────────────────
+# ── --max-citations ─────────────────────────────────────────────────────────
 
 
-def test_citations_flags_are_sent(draft):
+def test_max_citations_is_sent_inside_escalate(draft):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_citations_constructed.json")
-        _invoke("review", draft, "--citations", "--max-citations", "10", "--json")
-    assert json.loads(post.calls.last.request.content)["citations"] == {"check": True, "max": 10}
+        _invoke("review", draft, "--max-citations", "10", "--json")
+    body = json.loads(post.calls.last.request.content)
+    assert body["escalate"] == {"max_citations": 10}
+    assert "citations" not in body
 
 
-def test_without_citations_nothing_is_sent(draft):
+def test_without_max_citations_nothing_is_sent(draft):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_completed.json")
         _invoke("review", draft, "--json")
-    assert "citations" not in json.loads(post.calls.last.request.content)
+    assert "escalate" not in json.loads(post.calls.last.request.content)
 
 
-def test_max_citations_without_citations_is_refused(draft):
+def test_the_citations_flag_is_gone(draft):
     with respx.mock(base_url=BASE, assert_all_called=False) as r:
         post, _ = _serve(r, "review_completed.json")
-        result = _invoke("review", draft, "--max-citations", "5", "--json")
+        result = _invoke("review", draft, "--citations", "--json")
+    assert result.exit_code == 2
+    assert not post.called
+
+
+@pytest.mark.parametrize("value", ["-1", "21"])
+def test_max_citations_out_of_range_is_refused(draft, value):
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        post, _ = _serve(r, "review_completed.json")
+        result = _invoke("review", draft, "--max-citations", value, "--json")
     assert result.exit_code == 2
     assert not post.called
 
@@ -412,7 +423,7 @@ def test_a_citation_outcome_sets_the_exit_code_like_a_claim_one(draft, outcome, 
     with respx.mock(base_url=BASE) as r:
         r.post("/review").respond(202, json=dict(_load("review_accepted.json"), review_id=body["review_id"]))
         r.get(f"/reviews/{body['review_id']}").respond(200, json=body)
-        result = _invoke("review", draft, "--citations", "--json")
+        result = _invoke("review", draft, "--max-citations", "10", "--json")
     assert result.exit_code == code, result.output
 
 
@@ -518,11 +529,10 @@ def test_progress_view_counts_the_citation_checks():
 def test_links_only_review_sends_max_assessments_zero(draft):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_citations_constructed.json")
-        result = _invoke("review", draft, "--citations", "--max-assessments", "0", "--json")
+        result = _invoke("review", draft, "--max-citations", "20", "--max-assessments", "0", "--json")
     assert result.exit_code == 2, result.output  # the fixture's outcome is incomplete
     body = json.loads(post.calls.last.request.content)
-    assert body["escalate"] == {"max_assessments": 0}
-    assert body["citations"] == {"check": True}
+    assert body["escalate"] == {"max_assessments": 0, "max_citations": 20}
 
 
 def test_max_assessments_is_sent(draft):
@@ -582,3 +592,42 @@ def test_citation_render_of_a_recorded_quote_finding():
     text = _render("review_citations_quote.json")
     assert "These quoted words were not found in the source:" in text
     assert "“built the tower to stand for a thousand years”" in text
+
+
+def test_more_found_line():
+    from lenz_io.cli.review import more_found_line
+
+    def line(claims, citations):
+        body = _load("review_citations_constructed.json")
+        body["more_claims"] = claims
+        body["more_citations"] = citations
+        return more_found_line(ReviewFull.model_validate(body))
+
+    cit = _load("review_citations_constructed.json")["more_citations"][0]
+    assert line(["a", "b"], [cit] * 13) == "2 more claims and 13 more citations were found but not checked."
+    assert line([], [cit]) == "1 more citation was found but not checked."
+    assert line(["a"], []) == "1 more claim was found but not checked."
+    assert line([], []) == "" and line(None, None) == ""
+
+
+def test_the_more_line_prints_after_the_citations():
+    text = _render("review_citations_constructed.json")
+    assert text.rstrip().endswith("1 more citation was found but not checked.")
+
+
+def test_skipped_for_credits_says_so():
+    from lenz_io.cli.review import citation_count_lines
+
+    body = _load("review_citations_constructed.json")
+    body["summary"].update(citations_skipped="insufficient_credits", citations_found=None)
+    assert citation_count_lines(ReviewFull.model_validate(body)) == [
+        "The sources were not checked: not enough credits."
+    ]
+
+
+def test_no_max_citations_prints_no_sources_section():
+    from lenz_io.cli.review import citation_count_lines
+
+    body = _load("review_citations_constructed.json")
+    body["policy"]["max_citations"] = 0
+    assert citation_count_lines(ReviewFull.model_validate(body)) == []

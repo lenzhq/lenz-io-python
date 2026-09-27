@@ -44,8 +44,8 @@ lenz show    <verification_id>   # full report — sources, warnings, panel + de
 lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # the whole draft: quick verdicts, deep checks; its citations too, if asked
 lenz review draft.md --issues    # only the issues
-lenz review draft.md --citations # also check the draft's sources (its links and DOIs)
-lenz review draft.md --citations --max-assessments 0   # only the sources, no claim
+lenz review draft.md --max-citations 10   # also check the draft's first 10 sources (links, DOIs)
+lenz review draft.md --max-citations 20 --max-assessments 0   # only the sources, no claim
 lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
@@ -146,16 +146,15 @@ claim with both checks; `failures` lists the ones whose work failed. The
 top-level types are importable from `lenz_io`; the nested ones (`ReviewAssessment`,
 `ReviewVerification`, `ReviewSummary`, …) from `lenz_io.models`.
 
-**Checking the draft's sources.** `check_citations=True` also checks the
-draft's citations, its links and DOIs: does each source say what the draft
-says it does? Links are read from `text`, so keep a link as a markdown link
-(`[words](https://...)`); a Word or Google document pasted as plain text loses
-them. The first `max_citations` (1-20, default 20) in the draft's order are
-checked. With `max_assessments=0` the review checks the sources
-and no claim.
+**Checking the draft's sources.** `max_citations=N` (1-20) also checks the
+draft's first N citations, its links and DOIs: does each source say what the
+draft says it does? Links are read from `text`, so keep a link as a markdown
+link (`[words](https://...)`); a Word or Google document pasted as plain text
+loses them. With `max_assessments=0` the review checks the sources and no
+claim.
 
 ```python
-review = client.review_and_wait(text=draft, check_citations=True, max_assessments=0)
+review = client.review_and_wait(text=draft, max_citations=20, max_assessments=0)
 s = review.summary
 print(f"{s.citations_found} found, {s.citations_selected} checked")
 for c in review.citation_issues:  # most serious first
@@ -172,7 +171,9 @@ citation with its `check`; a row that could not be checked says why in
 `citation_failures` lists the ones that failed on our side. A citation issue
 makes `outcome` `issues_found` even when `issues` is empty. `rationale` is a
 reviewer's note, not a checked source; `snippet` is the passage from the page.
-Leave both options out and nothing is sent: the review is as before.
+`more_claims` and `more_citations` list what the draft holds past
+`max_assessments` and `max_citations`: found, not checked, to send in a later
+request. Leave `max_citations` out (or `0`) and no citation is checked.
 
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
@@ -195,11 +196,11 @@ outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
 unchecked, failed, timed out, or an error). `--issues` prints only the issues,
 `--json` the review body, `--max-assessments N`, `--max-verifications N` and
 `--depth low` set the policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
-(and exits `0`: it submitted, it did not review). `--citations` also checks the
-draft's sources (`--max-citations N` for the first N) and prints their count
-and their issues after the claims; a source issue exits `1` like a claim one.
-`lenz review draft.md --citations --max-assessments 0` checks the sources and
-no claim.
+(and exits `0`: it submitted, it did not review). `--max-citations N` also
+checks the draft's first N sources and prints their count and their issues
+after the claims; a source issue exits `1` like a claim one.
+`lenz review draft.md --max-citations 20 --max-assessments 0` checks the
+sources and no claim.
 
 ## Quickstart — the canonical integration
 

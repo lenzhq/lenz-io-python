@@ -8,17 +8,16 @@ All notable changes to this SDK are documented here. Format follows
 
 `review` can check a draft's citations: does each linked source (a URL or a
 DOI) say what the draft says it does? Nothing the SDK already sends changes:
-leave the new options out and the request, and its idempotency key's body, are
+leave `max_citations` out and the request, and its idempotency key's body, are
 exactly what 2.17.0 sends. A review body without the citation keys still
 parses, with the new keys at their defaults.
 
 ### Added
 
-- **`client.review(text, check_citations=True, max_citations=N)`**, sent as
-  the API's `citations` object (`{"check": true, "max": N}`), only the options
-  you set. The first `max_citations` (1-20, default 20) citations in the
-  draft's order are checked. `max_citations` without
-  `check_citations` raises `ValueError`. `review_and_wait` passes both through.
+- **`client.review(text, max_citations=N)`** (1-20), sent inside the API's
+  `escalate` object as `escalate.max_citations`: the draft's first N
+  citations are checked. `None` or `0` sends nothing and checks none.
+  `review_and_wait` passes it through.
 - **`max_assessments=0`**: a review that checks no claim, e.g. a review of the
   draft's citations only.
 - **The citation models.** `ReviewFull.citations` (one `ReviewCitation` per
@@ -31,20 +30,25 @@ parses, with the new keys at their defaults.
   `citations_found`, `citations_selected`, `citation_limit`,
   `citation_limit_reached`, `citation_checks` (`checked`, `unchecked`,
   `failed`), `citation_issues` and `citations_skipped`; `policy` gains
-  `check_citations` and `max_citations`. Every new key has a default (`[]`,
-  `None`, `0`, `False`), and every finding, reason and status is a plain
+  `max_citations`. `more_claims` and `more_citations` (`ReviewMoreCitation`:
+  `index`, `reference`, `cited_url`, `doi`, `sentence`, `position`) list what
+  the draft holds past `max_assessments` and `max_citations`: found but not
+  checked; `None` until the draft is read. Every new key has a default (`[]`,
+  `None`, `0`), and every finding, reason and status is a plain
   string, so a value the API adds later passes through. The nested shapes
   (`ReviewCitationCheck`, `ReviewCitationResult`, `ReviewCitationPosition`,
   `ReviewCitationRecord`, `ReviewCitationDifference`,
   `ReviewCitationCheckCounts`) live in `lenz_io.models`.
 - **`ReviewEvent.review`** and `parse_webhook` carry the same keys.
-- **`lenz review --citations [--max-citations N]`**: after the claims, the
+- **`lenz review --max-citations N`** (0-20): after the claims, the
   count ("23 sources cited in your draft"), the key numbers ("8 checked, 7
   with a problem. 2 could not be checked."), then each source issue with the
   draft's sentence, the link and the passage from the source. A source issue
-  exits `1`, like a claim issue; a failed source check exits `2`.
+  exits `1`, like a claim issue; a failed source check exits `2`. Then one
+  line for what was found and not checked ("2 more claims and 13 more
+  citations were found but not checked.").
 - **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
-  get a quick verdict. `lenz review draft.md --citations --max-assessments 0`
+  get a quick verdict. `lenz review draft.md --max-citations 20 --max-assessments 0`
   checks the draft's sources and no claim.
 
 ### Deprecated
