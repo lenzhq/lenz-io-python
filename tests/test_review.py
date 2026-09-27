@@ -755,3 +755,180 @@ def test_review_names_are_public():
         assert name not in lenz_io.__all__, name
         assert name in lenz_io.models.__all__, name
     assert Lenz.review.__doc__ and Lenz.get_review.__doc__ and Lenz.review_and_wait.__doc__
+
+
+# ── citations ───────────────────────────────────────────────────────────────
+
+
+class TestCitations:
+    """The citation check: the request's ``citations`` option, sent only when
+    asked for, and the rows, issues, failures and counts it adds to the body."""
+
+    def _body(self, client, **kw) -> dict:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
+            client.review("draft", idempotency_key="k", **kw)
+        return json.loads(route.calls.last.request.content)
+
+    def test_not_asked_sends_nothing_and_the_body_is_as_before(self, client):
+        body = self._body(client)
+        assert body == {"text": "draft", "visibility": "private"}
+        assert self._body(client, check_citations=None, max_citations=None) == body
+
+    @pytest.mark.parametrize(
+        ("kw", "expected"),
+        [
+            ({"check_citations": True}, {"check": True}),
+            ({"check_citations": True, "max_citations": 10}, {"check": True, "max": 10}),
+            ({"check_citations": False}, {"check": False}),
+            ({"check_citations": False, "max_citations": 5}, {"check": False, "max": 5}),
+        ],
+    )
+    def test_the_options_are_sent_as_the_citations_object(self, client, kw, expected):
+        body = self._body(client, **kw)
+        assert body["citations"] == expected
+        assert "escalate" not in body
+
+    def test_max_citations_alone_is_refused_before_any_request(self, client):
+        with respx.mock(base_url=BASE, assert_all_called=False) as r:
+            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
+            with pytest.raises(ValueError, match="max_citations needs check_citations=True"):
+                client.review("draft", max_citations=5)
+        assert not route.called
+
+    def test_citations_only_review_sends_max_assessments_zero(self, client):
+        body = self._body(client, check_citations=True, max_assessments=0)
+        assert body["escalate"] == {"max_assessments": 0}
+        assert body["citations"] == {"check": True}
+
+    def test_every_row_state_parses(self):
+        review = ReviewFull.model_validate(_load("review_citations_constructed.json"))
+        assert review.policy.check_citations is True and review.policy.max_citations == 10
+        s = review.summary
+        assert (s.citations_found, s.citations_selected, s.citation_limit, s.citation_limit_reached) == (
+            23,
+            10,
+            10,
+            True,
+        )
+        assert s.citation_checks is not None
+        assert (s.citation_checks.checked, s.citation_checks.unchecked, s.citation_checks.failed) == (6, 3, 1)
+        assert s.citation_issues == len(review.citation_issues) == 6
+        assert s.citations_skipped is None
+        by_index = {c.index: c for c in review.citations}
+        assert by_index[0].result.finding == "contradicted" and by_index[0].check.snippet
+        assert by_index[1].quotes == ["the best in a decade"] and by_index[1].check.quote == "not_in_source"
+        assert by_index[1].check.missing_quote == "the best in a decade"
+        assert by_index[0].check.missing_quote is None
+        assert review.citation_issues[3].missing_quote == "the best in a decade"
+        assert by_index[2].result.finding == "partly_supported" and by_index[2].result.is_issue
+        assert by_index[3].check.unchecked_reason == "partial_text" and by_index[3].check.hint
+        doi = by_index[4]
+        assert doi.doi == "10.1038/nature12373" and doi.check.doi_registered is True
+        assert doi.check.registered.year == 2013 and doi.check.registered.authors[0] == "Kucsko"
+        assert doi.check.metadata_differences[0].field == "year"
+        assert by_index[5].statement is None and by_index[5].position is None
+        # our failure, a finding established: the finding stands, the failure rides it
+        assert by_index[6].check.status == "failed" and by_index[6].result.finding == "page_not_found"
+        # our failure, nothing established
+        assert by_index[7].result is None and by_index[7].check.failure.retryable is True
+        assert [i.finding for i in review.citation_issues] == [
+            "doi_not_found",
+            "page_not_found",
+            "contradicted",
+            "quote_not_in_source",
+            "partly_supported",
+            "metadata_mismatch",
+        ]
+        assert review.citation_issues[1].failure is not None
+        assert [f.citation_index for f in review.citation_failures] == [7]
+        assert review.issues == [] and review.outcome == "incomplete"
+
+    def test_waiting_rows_have_no_result(self):
+        pending = ReviewFull.model_validate(_load("review_citations_pending.json"))
+        assert pending.status == "verifying" and pending.outcome is None
+        assert {(c.check.status, c.result) for c in pending.citations} == {("pending", None)}
+        running = ReviewFull.model_validate(_load("review_citations_verifying.json"))
+        assert all(c.result is None for c in running.citations if c.check.status == "running")
+        assert all(c.result is not None for c in running.citations if c.check.status == "completed")
+        assert {c.check.status for c in running.citations} == {"running", "completed"}
+
+    def test_a_recorded_review_reads_through(self):
+        review = ReviewFull.model_validate(_load("review_citations_completed.json"))
+        assert review.status == "completed" and review.outcome == "issues_found"
+        assert review.issues == [] and review.claims == []
+        s = review.summary
+        assert s.citation_checks is not None
+        assert (
+            s.citations_selected == s.citation_checks.checked + s.citation_checks.unchecked + s.citation_checks.failed
+        )
+        assert s.citation_issues == len(review.citation_issues)
+        findings = {c.result.finding for c in review.citations if c.result}
+        assert {
+            "supported",
+            "contradicted",
+            "page_not_found",
+            "metadata_mismatch",
+            "doi_not_found",
+            "unchecked",
+        } <= findings
+        reasons = {c.check.unchecked_reason for c in review.citations if c.check.unchecked_reason}
+        assert {"no_statement", "unsupported_site", "invalid_url", "partial_text"} <= reasons
+        supported = next(c for c in review.citations if c.result and c.result.finding == "supported")
+        assert supported.check.snippet and supported.check.page_read == "full" and not supported.result.is_issue
+        doi = next(c for c in review.citations if c.result and c.result.finding == "metadata_mismatch")
+        assert doi.check.registered is not None and doi.check.metadata_differences
+
+    def test_a_recorded_quote_finding_names_the_missing_excerpt(self):
+        review = ReviewFull.model_validate(_load("review_citations_quote.json"))
+        issue = next(i for i in review.citation_issues if i.finding == "quote_not_in_source")
+        assert issue.missing_quote and issue.missing_quote in issue.quotes
+        row = review.citations[issue.citation_index]
+        assert row.check.quote == "not_in_source" and row.check.missing_quote == issue.missing_quote
+
+    def test_issues_view_carries_the_citation_lists(self):
+        review = ReviewIssues.model_validate(_load("review_citations_completed_issues.json"))
+        full = ReviewFull.model_validate(_load("review_citations_completed.json"))
+        assert [i.finding for i in review.citation_issues] == [i.finding for i in full.citation_issues]
+        assert review.citation_failures == [] and not hasattr(review, "citations")
+
+    @pytest.mark.parametrize("name", ["review_completed.json", "review_failed_no_claim.json"])
+    def test_a_body_without_the_citation_keys_parses(self, name):
+        body = _load(name)
+        assert not any(k.startswith("citation") for k in body)
+        review = ReviewFull.model_validate(body)
+        assert (review.citations, review.citation_issues, review.citation_failures) == ([], [], [])
+        assert review.policy.check_citations is False and review.policy.max_citations is None
+        s = review.summary
+        assert (s.citations_found, s.citations_selected, s.citation_limit, s.citation_limit_reached) == (
+            None,
+            None,
+            None,
+            None,
+        )
+        assert (s.citation_checks, s.citation_issues, s.citations_skipped) == (None, 0, None)
+
+    def test_the_webhook_carries_the_citation_keys(self):
+        payload = dict(_load("review_webhook_completed.json"), review=_load("review_citations_constructed.json"))
+        payload["review_id"] = payload["review"]["review_id"]
+        raw, headers = _signed(payload)
+        for event in (LenzWebhooks(secret=SECRET).parse(raw, headers), parse_webhook(payload)):
+            assert isinstance(event, ReviewEvent)
+            assert len(event.review.citations) == 10
+            assert event.review.citation_issues[0].finding == "doi_not_found"
+            assert event.review.citation_failures[0].citation_index == 7
+
+    def test_missing_quote_defaults_to_none_on_a_body_without_it(self):
+        body = _load("review_citations_constructed.json")
+        del body["citations"][1]["check"]["missing_quote"]
+        del body["citation_issues"][3]["missing_quote"]
+        review = ReviewFull.model_validate(body)
+        assert review.citations[1].check.missing_quote is None
+        assert review.citation_issues[3].missing_quote is None
+
+    def test_an_unchecked_reason_passes_through_as_a_string(self):
+        body = _load("review_citations_constructed.json")
+        body["citations"][3]["check"]["unchecked_reason"] = "inconclusive"
+        body["citations"][3]["check"]["page_read"] = "a_value_added_later"
+        row = ReviewFull.model_validate(body).citations[3]
+        assert (row.check.unchecked_reason, row.check.page_read) == ("inconclusive", "a_value_added_later")

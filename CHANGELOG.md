@@ -6,6 +6,47 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+`review` can check a draft's citations: does each linked source (a URL or a
+DOI) say what the draft says it does? Nothing the SDK already sends changes:
+leave the new options out and the request, and its idempotency key's body, are
+exactly what 2.17.0 sends. A review body without the citation keys still
+parses, with the new keys at their defaults.
+
+### Added
+
+- **`client.review(text, check_citations=True, max_citations=N)`**, sent as
+  the API's `citations` object (`{"check": true, "max": N}`), only the options
+  you set. The first `max_citations` (1-20, default 20) citations in the
+  draft's order are checked. `max_citations` without
+  `check_citations` raises `ValueError`. `review_and_wait` passes both through.
+- **`max_assessments=0`**: a review that checks no claim, e.g. a review of the
+  draft's citations only.
+- **The citation models.** `ReviewFull.citations` (one `ReviewCitation` per
+  citation: `reference`, `cited_url`, `doi`, `statement`, `quotes`,
+  `position`, the derived `result` and the `check`), and on both views
+  `citation_issues` (`ReviewCitationIssue`, most serious first) and
+  `citation_failures` (`ReviewCitationFailure`). On a quote finding,
+  `missing_quote` (on the check and on the issue) is the excerpt that was not
+  found. `summary` gains
+  `citations_found`, `citations_selected`, `citation_limit`,
+  `citation_limit_reached`, `citation_checks` (`checked`, `unchecked`,
+  `failed`), `citation_issues` and `citations_skipped`; `policy` gains
+  `check_citations` and `max_citations`. Every new key has a default (`[]`,
+  `None`, `0`, `False`), and every finding, reason and status is a plain
+  string, so a value the API adds later passes through. The nested shapes
+  (`ReviewCitationCheck`, `ReviewCitationResult`, `ReviewCitationPosition`,
+  `ReviewCitationRecord`, `ReviewCitationDifference`,
+  `ReviewCitationCheckCounts`) live in `lenz_io.models`.
+- **`ReviewEvent.review`** and `parse_webhook` carry the same keys.
+- **`lenz review --citations [--max-citations N]`**: after the claims, the
+  count ("23 sources cited in your draft"), the key numbers ("8 checked, 7
+  with a problem. 2 could not be checked."), then each source issue with the
+  draft's sentence, the link and the passage from the source. A source issue
+  exits `1`, like a claim issue; a failed source check exits `2`.
+- **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
+  get a quick verdict. `lenz review draft.md --citations --max-assessments 0`
+  checks the draft's sources and no claim.
+
 ### Deprecated
 
 - **`similar_claims`** and **`candidates`** on `TaskStatus`. Both are always

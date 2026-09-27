@@ -8,7 +8,7 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 - `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `ask` — follow-up questions grounded on a verification. Sync, paid.
-- `review` — the ladder on a whole draft in one call: the issues back, with suggested rewrites, in 2-4 min. Async, paid.
+- `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
 generators, deep-research products, due-diligence platforms, vertical
@@ -42,8 +42,10 @@ lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
-lenz review draft.md             # a whole draft: quick verdicts, deep checks on the doubtful ones (2-4 min)
+lenz review draft.md             # the whole draft: quick verdicts, deep checks; its citations too, if asked
 lenz review draft.md --issues    # only the issues
+lenz review draft.md --citations # also check the draft's sources (its links and DOIs)
+lenz review draft.md --citations --max-assessments 0   # only the sources, no claim
 lenz usage                       # credits left, what they buy, and when they reset
 lenz config                      # show which key/base URL is in use
 ```
@@ -144,6 +146,34 @@ claim with both checks; `failures` lists the ones whose work failed. The
 top-level types are importable from `lenz_io`; the nested ones (`ReviewAssessment`,
 `ReviewVerification`, `ReviewSummary`, …) from `lenz_io.models`.
 
+**Checking the draft's sources.** `check_citations=True` also checks the
+draft's citations, its links and DOIs: does each source say what the draft
+says it does? Links are read from `text`, so keep a link as a markdown link
+(`[words](https://...)`); a Word or Google document pasted as plain text loses
+them. The first `max_citations` (1-20, default 20) in the draft's order are
+checked. With `max_assessments=0` the review checks the sources
+and no claim.
+
+```python
+review = client.review_and_wait(text=draft, check_citations=True, max_assessments=0)
+s = review.summary
+print(f"{s.citations_found} found, {s.citations_selected} checked")
+for c in review.citation_issues:  # most serious first
+    print(c.finding, c.cited_url or c.doi, c.statement)
+    if c.snippet:
+        print("  The source says:", c.snippet)
+```
+
+`finding` is one of `doi_not_found`, `page_not_found`, `contradicted`,
+`quote_not_in_source`, `not_in_source`, `partly_supported` or
+`metadata_mismatch`, most serious first. `citations` lists every checked
+citation with its `check`; a row that could not be checked says why in
+`check.unchecked_reason` and what to do in `check.hint`, and
+`citation_failures` lists the ones that failed on our side. A citation issue
+makes `outcome` `issues_found` even when `issues` is empty. `rationale` is a
+reviewer's note, not a checked source; `snippet` is the passage from the page.
+Leave both options out and nothing is sent: the review is as before.
+
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
 they are in and each deep check as it lands; without it the helper is silent.
@@ -163,9 +193,13 @@ new review.
 they arrive and rewrites each row as its deep check lands. The exit code is the
 outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
 unchecked, failed, timed out, or an error). `--issues` prints only the issues,
-`--json` the review body, `--max-verifications N` and `--depth low` set the
-policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
-(and exits `0`: it submitted, it did not review).
+`--json` the review body, `--max-assessments N`, `--max-verifications N` and
+`--depth low` set the policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
+(and exits `0`: it submitted, it did not review). `--citations` also checks the
+draft's sources (`--max-citations N` for the first N) and prints their count
+and their issues after the claims; a source issue exits `1` like a claim one.
+`lenz review draft.md --citations --max-assessments 0` checks the sources and
+no claim.
 
 ## Quickstart — the canonical integration
 

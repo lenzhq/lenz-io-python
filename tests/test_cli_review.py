@@ -378,3 +378,207 @@ def test_no_line_carries_trailing_spaces():
     for fixture in ("review_completed.json", "review_incomplete.json"):
         for line in _render(fixture).splitlines():
             assert line == line.rstrip(), repr(line)
+
+
+# ── --citations ─────────────────────────────────────────────────────────────
+
+
+def test_citations_flags_are_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_citations_constructed.json")
+        _invoke("review", draft, "--citations", "--max-citations", "10", "--json")
+    assert json.loads(post.calls.last.request.content)["citations"] == {"check": True, "max": 10}
+
+
+def test_without_citations_nothing_is_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--json")
+    assert "citations" not in json.loads(post.calls.last.request.content)
+
+
+def test_max_citations_without_citations_is_refused(draft):
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        post, _ = _serve(r, "review_completed.json")
+        result = _invoke("review", draft, "--max-citations", "5", "--json")
+    assert result.exit_code == 2
+    assert not post.called
+
+
+@pytest.mark.parametrize(("outcome", "code"), [("issues_found", 1), ("incomplete", 2), ("clean", 0)])
+def test_a_citation_outcome_sets_the_exit_code_like_a_claim_one(draft, outcome, code):
+    body = _load("review_citations_constructed.json")
+    body["outcome"] = outcome
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review").respond(202, json=dict(_load("review_accepted.json"), review_id=body["review_id"]))
+        r.get(f"/reviews/{body['review_id']}").respond(200, json=body)
+        result = _invoke("review", draft, "--citations", "--json")
+    assert result.exit_code == code, result.output
+
+
+def test_citation_render_count_summary_and_issues():
+    text = _render("review_citations_constructed.json")
+    lines = text.splitlines()
+    i = lines.index("23 sources cited in your draft")
+    assert lines[i + 1] == "6 checked, 6 with a problem. 4 could not be checked."
+    assert lines[i + 2] == "13 more were not checked: one check covers 10."
+    # each issue: the finding, the draft's sentence, the link, the evidence
+    j = lines.index("[source 1/10] Contradicted")
+    assert lines[j + 1].strip() == "Unemployment fell to 4.1% in 2024, according to a report from the ministry."
+    assert lines[j + 2].strip() == "https://example.gov/report-2024"
+    assert "The source says:" in lines[j + 3]
+    assert "The unemployment rate averaged 4.6% in 2024, down from 4.9%." in lines[j + 4]
+    assert "Reviewer's note: The report gives 4.6% for 2024; the draft says 4.1%." in text
+    assert "[source 2/10] Quote not in the source" in text and "the best in a decade" in text
+    assert "Your reference says 2015; the record says 2013." in text
+    assert "[source 9/10] DOI not registered" in text
+    assert "[source 7/10] Page not found" in text and "Part of the check failed:" in text
+    assert "[source 8/10] Could not be checked this time." in text
+    assert "[source 3/10] Partly supported" in text
+    # an unchecked row is counted, never listed
+    assert "[source 4/10]" not in text
+
+
+def test_quote_finding_shows_the_missing_excerpt_only():
+    body = _load("review_citations_constructed.json")
+    body["citation_issues"][3]["quotes"] = ["found words here", "the best in a decade"]
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body))
+    text = buf.getvalue()
+    assert "\u201cthe best in a decade\u201d" in text
+    assert "found words here" not in text
+
+
+def test_citation_render_issues_only_view_keeps_the_citations():
+    text = _render("review_citations_constructed.json", issues_only=True)
+    assert "23 sources cited in your draft" in text and "[source 1/10] Contradicted" in text
+    assert "No issues." not in text
+
+
+def test_citation_count_line_cases():
+    from lenz_io.cli.review import citation_count_lines
+
+    base = _load("review_citations_constructed.json")
+
+    def lines(**summary):
+        body = json.loads(json.dumps(base))
+        body["summary"].update(summary)
+        return citation_count_lines(ReviewFull.model_validate(body))
+
+    running = {"checked": 1, "unchecked": 0, "failed": 0}
+    assert lines(citations_found=8, citations_selected=8, citation_checks=running) == [
+        "8 sources cited in your draft",
+        "Lenz checks each one: does the source say what your draft says it does.",
+    ]
+    assert lines(citations_found=1, citations_selected=1, citation_checks=None) == [
+        "1 source cited in your draft",
+        "Lenz checks each one: does the source say what your draft says it does.",
+    ]
+    assert lines(citation_checks=running) == [
+        "23 sources cited in your draft",
+        "Lenz checks the first 10: does the source say what your draft says it does. "
+        "The other 13 are not checked; one check covers at most 10.",
+    ]
+    assert lines(citations_found=0, citations_selected=0) == [
+        "No links found in the draft, so no sources were checked."
+    ]
+    assert lines(citations_found=None, citations_skipped="url_input") == [
+        "Sources on a linked page are not checked. Paste the page's text instead to check them."
+    ]
+    assert lines(citations_skipped="switched_off") == []
+    assert citation_count_lines(ReviewFull.model_validate(_load("review_completed.json"))) == []
+
+
+def test_a_review_without_citations_renders_as_before():
+    assert "source" not in _render("review_completed.json").lower().replace("sourced", "")
+
+
+def test_citation_text_is_not_read_as_markup():
+    body = _load("review_citations_constructed.json")
+    body["citation_issues"][2]["snippet"] = "A [bold]tag[/bold] in page text."
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body))
+    assert "A [bold]tag[/bold] in page text." in buf.getvalue()
+
+
+def test_progress_view_counts_the_citation_checks():
+    from lenz_io.cli.review import render_progress
+
+    console = Console(file=io.StringIO(), no_color=True, width=200)
+    console.print(render_progress(ReviewFull.model_validate(_load("review_citations_verifying.json"))))
+    assert "1 of 10 sources checked" in console.file.getvalue()
+
+
+def test_links_only_review_sends_max_assessments_zero(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_citations_constructed.json")
+        result = _invoke("review", draft, "--citations", "--max-assessments", "0", "--json")
+    assert result.exit_code == 2, result.output  # the fixture's outcome is incomplete
+    body = json.loads(post.calls.last.request.content)
+    assert body["escalate"] == {"max_assessments": 0}
+    assert body["citations"] == {"check": True}
+
+
+def test_max_assessments_is_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--max-assessments", "5", "--json")
+    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_assessments": 5}
+
+
+@pytest.mark.parametrize("value", ["-1", "21"])
+def test_max_assessments_out_of_range_is_refused(draft, value):
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        post, _ = _serve(r, "review_completed.json")
+        result = _invoke("review", draft, "--max-assessments", value, "--json")
+    assert result.exit_code == 2
+    assert not post.called
+
+
+@pytest.mark.parametrize(
+    ("checks", "issues", "expected"),
+    [
+        ({"checked": 8, "unchecked": 1, "failed": 1}, 7, "8 checked, 7 with a problem. 2 could not be checked."),
+        ({"checked": 8, "unchecked": 0, "failed": 0}, 0, "8 checked."),
+        ({"checked": 3, "unchecked": 0, "failed": 0}, 3, "3 checked, 3 with a problem."),
+        ({"checked": 0, "unchecked": 2, "failed": 0}, 0, "2 could not be checked."),
+    ],
+)
+def test_citation_summary_line_is_the_key_numbers(checks, issues, expected):
+    from lenz_io.cli.review import citation_summary_line
+
+    body = _load("review_citations_constructed.json")
+    body["summary"].update(citation_checks=checks, citation_issues=issues)
+    body["citation_issues"] = body["citation_issues"][:issues]
+    assert citation_summary_line(ReviewFull.model_validate(body)) == expected
+
+
+def test_one_more_over_the_cap_is_singular():
+    from lenz_io.cli.review import citation_count_lines
+
+    body = _load("review_citations_constructed.json")
+    body["summary"].update(citations_found=11)
+    assert citation_count_lines(ReviewFull.model_validate(body))[-1] == "1 more was not checked: one check covers 10."
+
+
+def test_citation_render_of_a_recorded_review():
+    text = _render("review_citations_completed.json")
+    lines = text.splitlines()
+    i = lines.index("10 sources cited in your draft")
+    assert lines[i + 1] == "6 checked, 5 with a problem. 4 could not be checked."
+    assert "[source 3/10] Contradicted" in text and "[source 9/10] DOI not registered" in text
+    # a supported row is counted, never listed
+    assert "[source 1/10]" not in text
+    assert "The source says:" in text
+
+
+def test_citation_render_of_a_recorded_quote_finding():
+    text = _render("review_citations_quote.json")
+    assert "These quoted words were not found in the source:" in text
+    assert "“built the tower to stand for a thousand years”" in text

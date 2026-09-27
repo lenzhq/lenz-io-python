@@ -940,6 +940,10 @@ class EscalationPolicy(_Lax):
     max_assessments: int = 20
     max_verifications: int = 5
     depth: str = "standard"
+    #: Whether the review checks the draft's citations (``check_citations``).
+    check_citations: bool = False
+    #: The resolved citation cap; ``None`` when citations are not checked.
+    max_citations: int | None = None
 
 
 class Escalation(_Lax):
@@ -969,9 +973,23 @@ class ReviewVerificationCounts(_Lax):
     failed: int = 0
 
 
+class ReviewCitationCheckCounts(_Lax):
+    """Three disjoint counts over the citation rows. ``checked``: a finding
+    other than ``unchecked``. ``unchecked``: could not be checked, for a
+    reason of the page or the draft. ``failed``: no finding, for a reason of
+    ours. A row still running is in none of the three."""
+
+    checked: int = 0
+    unchecked: int = 0
+    failed: int = 0
+
+
 class ReviewSummary(_Lax):
     """Counts over the review. A count is ``None`` until what it counts is
-    known (``claims_selected`` before the draft has been read)."""
+    known (``claims_selected`` before the draft has been read).
+
+    The ``citation*`` counts are ``None`` (``citation_issues`` 0) on a review
+    that did not ask for the citation check."""
 
     claims_selected: int | None = None
     #: The resolved ``max_assessments``.
@@ -983,11 +1001,26 @@ class ReviewSummary(_Lax):
     assessments: ReviewAssessmentCounts | None = None
     verifications: ReviewVerificationCounts | None = None
     issues: int = 0
+    #: Citations with a URL or a DOI in the draft (exact; each use counts).
+    citations_found: int | None = None
+    #: How many of them the review checks: the first, in the draft's order.
+    citations_selected: int | None = None
+    #: The resolved ``max_citations``.
+    citation_limit: int | None = None
+    #: ``citations_found`` is over ``citation_limit``.
+    citation_limit_reached: bool | None = None
+    citation_checks: ReviewCitationCheckCounts | None = None
+    #: ``len(citation_issues)``.
+    citation_issues: int = 0
+    #: Why the citation check was asked for and did not run: ``url_input``
+    #: (the draft was one URL) or ``switched_off``. An open set.
+    citations_skipped: str | None = None
 
 
 class ReviewCredits(_Lax):
-    """``charged`` is the net credits the review cost the account. It is
-    final once no deep check is running: read it at ``completed``."""
+    """``charged`` is the net credits the review cost the account, its
+    citation checks included. It is final once no deep check or citation
+    check is running: read it at ``completed``."""
 
     charged: int = 0
 
@@ -1125,6 +1158,157 @@ class ReviewFailure(_Lax):
     failure: FailureBlock | None = None
 
 
+class ReviewCitationPosition(_Lax):
+    """Where a citation's ``statement`` sits in the text as sent: ``start`` and
+    ``end`` in Unicode code points, link syntax included."""
+
+    start: int = 0
+    end: int = 0
+
+
+class ReviewCitationResult(_Lax):
+    """The one answer to read for a citation, derived from its ``check``.
+
+    ``finding``, most serious first: ``doi_not_found``, ``page_not_found``,
+    ``contradicted``, ``quote_not_in_source``, ``not_in_source``,
+    ``partly_supported``, ``metadata_mismatch`` (each an issue), then
+    ``supported`` and ``unchecked``. ``source`` says which check the finding
+    came from: ``doi``, ``page``, ``support``, ``quote`` or ``metadata``;
+    ``None`` on ``unchecked``.
+    """
+
+    finding: str = ""
+    source: str | None = None
+    is_issue: bool = False
+
+
+class ReviewCitationRecord(_Lax):
+    """A DOI's record in the registry."""
+
+    title: str | None = None
+    authors: list[str] = Field(default_factory=list)
+    year: int | None = None
+    journal: str | None = None
+
+
+class ReviewCitationDifference(_Lax):
+    """One way the reference differs from the registry's record. ``field``
+    is ``title``, ``authors``, ``year`` or ``journal``."""
+
+    field: str = ""
+    cited: str | None = None
+    registered: str | None = None
+
+
+class ReviewCitationCheck(_Lax):
+    """A citation's check. ``status`` is progress, as on ``assessment``:
+    ``pending`` | ``running`` | ``completed`` | ``failed``.
+
+    - ``page_read``: ``full``, ``partial``, ``not_found`` or ``none``.
+    - ``source_url``: where the text was actually read from (after
+      redirects, or a free copy of a paper). ``source_version``, for a DOI:
+      ``published``, ``accepted`` or ``submitted``.
+    - ``support``: ``supported``, ``partly_supported``, ``contradicted``,
+      ``not_in_source`` or ``unchecked``. ``snippet`` is the verified passage
+      of the source it rests on; ``rationale`` is a reviewer's note, not a
+      checked source.
+    - ``quote``: ``matched``, ``not_in_source`` or ``unchecked``; ``None``
+      when the draft quoted nothing from this source. ``missing_quote`` is
+      the quoted excerpt the quote check did not find; ``None`` unless
+      ``quote`` is ``not_in_source``.
+    - ``doi_registered``, ``metadata`` (``consistent``, ``mismatch`` or
+      ``unchecked``), ``metadata_differences`` and ``registered``: set for a
+      DOI only.
+    - ``unchecked_reason`` and ``hint``: why the finding is ``unchecked`` and
+      what to do next. The reasons are an open set, e.g. ``no_text``,
+      ``partial_text``, ``login_required``, ``unsupported_site``,
+      ``no_statement``, ``invalid_url``, ``other_version``, ``inconclusive``,
+      ``ambiguous_reference``.
+    - ``failure``: on a ``failed`` check.
+    """
+
+    status: str = ""
+    page_read: str | None = None
+    page_title: str | None = None
+    page_published_date: str | None = None
+    page_language: str | None = None
+    source_url: str | None = None
+    source_version: str | None = None
+    support: str | None = None
+    snippet: str | None = None
+    rationale: str | None = None
+    quote: str | None = None
+    missing_quote: str | None = None
+    doi_registered: bool | None = None
+    metadata: str | None = None
+    metadata_differences: list[ReviewCitationDifference] = Field(default_factory=list)
+    registered: ReviewCitationRecord | None = None
+    unchecked_reason: str | None = None
+    hint: str | None = None
+    failure: FailureBlock | None = None
+
+
+class ReviewCitation(_Lax):
+    """One citation of the draft (a URL or a DOI where the draft uses it), in
+    the draft's order. Only on a review that asked for the citation check.
+
+    ``reference`` is the citation as the draft writes it; ``statement`` the
+    draft's sentence it is attached to, with link syntax reduced to its
+    words; ``quotes`` the words the draft quotes from this source.
+    ``position`` locates ``statement`` in the text as sent. ``result`` is
+    ``None`` until the check has ended, and on a failed row with nothing
+    established.
+    """
+
+    index: int = 0
+    reference: str | None = None
+    cited_url: str | None = None
+    doi: str | None = None
+    statement: str | None = None
+    quotes: list[str] = Field(default_factory=list)
+    position: ReviewCitationPosition | None = None
+    result: ReviewCitationResult | None = None
+    check: ReviewCitationCheck = Field(default_factory=ReviewCitationCheck)
+
+
+class ReviewCitationIssue(_Lax):
+    """A citation whose finding is an issue (see ``ReviewCitationResult``);
+    most serious first, then in the draft's order.
+
+    ``snippet`` and ``rationale`` are set only when ``source`` is
+    ``support``. On ``quote_not_in_source``, ``missing_quote`` is the quoted
+    excerpt that was not found. On ``metadata_mismatch``,
+    ``metadata_differences`` says what differs. ``failure`` is set when another part of the check failed after
+    the finding was established.
+    """
+
+    citation_index: int = 0
+    reference: str | None = None
+    cited_url: str | None = None
+    doi: str | None = None
+    statement: str | None = None
+    quotes: list[str] = Field(default_factory=list)
+    position: ReviewCitationPosition | None = None
+    finding: str = ""
+    source: str | None = None
+    snippet: str | None = None
+    rationale: str | None = None
+    missing_quote: str | None = None
+    metadata_differences: list[ReviewCitationDifference] = Field(default_factory=list)
+    page_title: str | None = None
+    failure: FailureBlock | None = None
+
+
+class ReviewCitationFailure(_Lax):
+    """A citation whose check failed with nothing established."""
+
+    citation_index: int = 0
+    reference: str | None = None
+    cited_url: str | None = None
+    doi: str | None = None
+    failure: FailureBlock | None = None
+
+
 class ReviewEnvelope(_Lax):
     """What both views of ``GET /reviews/{review_id}`` carry.
 
@@ -1133,6 +1317,12 @@ class ReviewEnvelope(_Lax):
     ends, then one of ``clean`` (every selected claim checked, no issue),
     ``issues_found``, ``incomplete`` (some work failed) or ``unchecked`` (it
     failed before any claim was checked; ``failure`` says why).
+
+    On a review that asked for the citation check, a citation issue makes
+    ``outcome`` ``issues_found`` too (``issues`` may then be empty: the rows
+    are in ``citation_issues``), and a failed citation check makes it
+    ``incomplete``. ``status`` reads ``verifying`` while deep checks or
+    citation checks are running.
 
     ``issues`` and ``failures`` can change until ``completed``.
     ``poll_after_seconds`` is how long to wait before reading again; ``None``
@@ -1152,6 +1342,8 @@ class ReviewEnvelope(_Lax):
     poll_after_seconds: int | None = None
     issues: list[ReviewIssue] = Field(default_factory=list)
     failures: list[ReviewFailure] = Field(default_factory=list)
+    citation_issues: list[ReviewCitationIssue] = Field(default_factory=list)
+    citation_failures: list[ReviewCitationFailure] = Field(default_factory=list)
     failure: FailureBlock | None = None
 
 
@@ -1160,6 +1352,7 @@ class ReviewFull(ReviewEnvelope):
 
     view: str = "full"
     claims: list[ReviewClaim] = Field(default_factory=list)
+    citations: list[ReviewCitation] = Field(default_factory=list)
 
 
 class ReviewIssues(ReviewEnvelope):
@@ -1193,6 +1386,15 @@ __all__ = [
     "RelatedVerifications",
     "ReviewAssessment",
     "ReviewAssessmentCounts",
+    "ReviewCitation",
+    "ReviewCitationCheck",
+    "ReviewCitationCheckCounts",
+    "ReviewCitationDifference",
+    "ReviewCitationFailure",
+    "ReviewCitationIssue",
+    "ReviewCitationPosition",
+    "ReviewCitationRecord",
+    "ReviewCitationResult",
     "ReviewClaim",
     "ReviewCredits",
     "ReviewEntity",
