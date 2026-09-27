@@ -11,9 +11,15 @@ The exit code is the review's ``outcome``, so a CI step can gate on it and
 never read an outage as a clean draft::
 
     0  clean          every selected claim checked, no issue
-    1  issues_found   at least one claim is False, Mostly False or Mixed
+    1  issues_found   at least one claim is False, Mostly False or Mixed, or
+                      (with --citations) a source does not say what the
+                      draft says it does
     2  anything else  incomplete, unchecked, failed, timed out, or an error
                       (a bad key, no credits, a bad flag)
+
+``--citations`` also checks the draft's sources (its links and DOIs; in a
+file, keep links as markdown links). Their count and their issues print after
+the claims.
 
 ``--detach`` submits and prints the ``review_id``; ``lenz review --resume <id>``
 picks it up again, as does Ctrl-C's hint.
@@ -31,7 +37,7 @@ from rich.markup import escape
 
 from lenz_io import Lenz
 from lenz_io.errors import LenzError, ReviewFailed, ReviewTimeout
-from lenz_io.models import ReviewClaim, ReviewFull
+from lenz_io.models import ReviewCitationIssue, ReviewClaim, ReviewFull, ReviewIssues
 
 from ._run import execute, read_text_arg
 from .context import CLIState
@@ -65,6 +71,12 @@ def review(
     depth: str = typer.Option(
         None, "--depth", metavar="standard|low", help="Depth of every deep check. 'low' costs half the credits."
     ),
+    citations: bool = typer.Option(
+        False, "--citations", help="Also check the draft's sources: does each link say what the draft says? Free."
+    ),
+    max_citations: int = typer.Option(
+        None, "--max-citations", metavar="N", help="With --citations: check the first N sources (1-20, default 20)."
+    ),
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the review_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
@@ -91,8 +103,16 @@ def review(
             review_id = resume
         else:
             chosen_depth = _parse_depth(depth)
+            if max_citations is not None and not citations:
+                raise CLIError("--max-citations needs --citations.", code="invalid_usage", exit_code=2)
             text = _read_draft(draft)
-            started = client.review(text, max_verifications=max_verifications, depth=chosen_depth)
+            started = client.review(
+                text,
+                max_verifications=max_verifications,
+                depth=chosen_depth,
+                check_citations=True if citations else None,
+                max_citations=max_citations,
+            )
             review_id = started.review_id
             if detach:
                 _emit_detached(out, review_id)
@@ -236,7 +256,7 @@ def render_progress(review: ReviewFull | None) -> Any:
     from rich.table import Table
     from rich.text import Text
 
-    if review is None or not review.claims:
+    if review is None or (not review.claims and not review.summary.citations_selected):
         return Spinner("dots", text=Text("Reading the draft…", style="dim"))
     table = Table.grid(padding=(0, 2))
     table.add_column(justify="right", style="dim")
@@ -245,7 +265,20 @@ def render_progress(review: ReviewFull | None) -> Any:
     n = len(review.claims)
     for c in review.claims:
         table.add_row(f"[{c.index + 1}/{n}]", _progress_cell(c), Text(_truncate(c.claim or "")))
+    progress = _citation_progress(review)
+    if progress:
+        table.add_row("", Text(progress, style="dim"), Text(""))
     return table
+
+
+def _citation_progress(review: ReviewFull) -> str:
+    """ "7 of 10 sources checked" while the citation checks run."""
+    s = review.summary
+    if not review.policy.check_citations or not s.citations_selected:
+        return ""
+    counts = s.citation_checks
+    done = (counts.checked + counts.unchecked + counts.failed) if counts is not None else 0
+    return f"{done} of {s.citations_selected} {'source' if s.citations_selected == 1 else 'sources'} checked"
 
 
 def _count(n: int, one: str, many: str | None = None) -> str:
@@ -359,14 +392,22 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
             out.console.print(f"[bold]\\[{f.claim_index + 1}/{n}][/bold] {escape(f.claim or '')}")
             hint = (f.failure.hint if f.failure else None) or "failed"
             out.console.print(f"  [red]{escape(f.stage.capitalize() or 'Check')} failed:[/red] {escape(hint)}")
-        if not review.issues and not review.failures and review.failure is None:
+        if (
+            not review.issues
+            and not review.failures
+            and not review.citation_issues
+            and not review.citation_failures
+            and review.failure is None
+        ):
             out.console.print("\n[green]No issues.[/green]")
         _rewrite_note(out, review)
+        render_citations(out, review)
         return
     for c in review.claims:
         out.console.print()
         _render_claim(out, c, n)
     _rewrite_note(out, review)
+    render_citations(out, review)
 
 
 def _rewrite_note(out: Output, review: ReviewFull) -> None:
@@ -374,4 +415,147 @@ def _rewrite_note(out: Output, review: ReviewFull) -> None:
         out.console.print(
             "\n[dim]A suggested rewrite has not been verified itself: review it, or run it through "
             "`lenz verify`, before you use it.[/dim]"
+        )
+
+
+# ── citations (--citations) ─────────────────────────────────────────────────
+
+#: The issue findings, most serious first, with the words the summary line and
+#: each issue use for them.
+CITATION_FINDING_WORDS = {
+    "doi_not_found": "DOI not registered",
+    "page_not_found": "page not found",
+    "contradicted": "contradicted",
+    "quote_not_in_source": "quote not in the source",
+    "not_in_source": "not in the source",
+    "partly_supported": "partly supported",
+    "metadata_mismatch": "reference details differ",
+}
+
+
+def _sources(n: int) -> str:
+    return f"{n} {'source' if n == 1 else 'sources'}"
+
+
+def citation_count_lines(review: ReviewFull | ReviewIssues) -> list[str]:
+    """The count heading and the line under it, as plain text; ``[]`` when
+    the review did not ask for the citation check (or it was switched off).
+
+    While checks run: the heading, then "Lenz checks…". Once every row has
+    ended: the heading, then the summary line, then (over the cap) how many
+    were not checked."""
+    s = review.summary
+    if not review.policy.check_citations or s.citations_skipped == "switched_off":
+        return []
+    if s.citations_skipped == "url_input":
+        return ["Sources on a linked page are not checked. Paste the page's text instead to check them."]
+    found = s.citations_found
+    if found is None:
+        return []
+    if found == 0:
+        return ["No links found in the draft, so no sources were checked."]
+    heading = f"{_sources(found)} cited in your draft"
+    selected = s.citations_selected or 0
+    other = max(0, found - selected)
+    counts = s.citation_checks
+    ended = counts is not None and counts.checked + counts.unchecked + counts.failed >= selected
+    if not ended or counts is None:
+        if other:
+            verb = "is" if other == 1 else "are"
+            return [
+                heading,
+                f"Lenz checks the first {selected}: does the source say what your draft says it does. "
+                f"The other {other} {verb} not checked; one check covers at most {selected}.",
+            ]
+        return [heading, "Lenz checks each one: does the source say what your draft says it does."]
+    lines = [heading, citation_summary_line(review)]
+    if other:
+        verb = "is" if other == 1 else "are"
+        lines.append(f"The other {other} {verb} not checked; one check covers at most {selected}.")
+    return lines
+
+
+def citation_summary_line(review: ReviewFull | ReviewIssues) -> str:
+    """ "7 checked. 2 contradicted, 1 page not found. 3 could not be checked."
+
+    Numbers first: the checked count, then each issue finding that occurs,
+    most serious first ("supported" is never named), then the rows that could
+    not be checked, and those that could not be checked this time (a failure
+    of ours)."""
+    counts = review.summary.citation_checks
+    checked = counts.checked if counts is not None else 0
+    by_finding: dict[str, int] = {}
+    for issue in review.citation_issues:
+        by_finding[issue.finding] = by_finding.get(issue.finding, 0) + 1
+    parts = [f"{checked} checked."]
+    found = [f"{by_finding[f]} {words}" for f, words in CITATION_FINDING_WORDS.items() if by_finding.get(f)]
+    found += [f"{n} {f.replace('_', ' ')}" for f, n in by_finding.items() if f not in CITATION_FINDING_WORDS]
+    if found:
+        parts.append(", ".join(found) + ".")
+    if counts is not None and counts.unchecked:
+        parts.append(f"{counts.unchecked} could not be checked.")
+    if counts is not None and counts.failed:
+        parts.append(f"{counts.failed} could not be checked this time.")
+    return " ".join(parts)
+
+
+def _finding_words(finding: str) -> str:
+    words = CITATION_FINDING_WORDS.get(finding, finding.replace("_", " "))
+    return words[:1].upper() + words[1:]
+
+
+def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> None:
+    """Finding, the draft's sentence, the link, then the evidence."""
+    label = f"source {i.citation_index + 1}/{total}" if total else f"source {i.citation_index + 1}"
+    out.console.print(f"[bold]\\[{label}][/bold] [red]{escape(_finding_words(i.finding))}[/red]")
+    _print_text(out, i.statement)
+    link = i.cited_url or (f"doi:{i.doi}" if i.doi else None)
+    if link:
+        out.console.print(f"  [blue]{escape(link)}[/blue]")
+    elif i.reference:
+        _print_text(out, i.reference, style="dim")
+    if i.source == "support" and i.snippet:
+        out.console.print("  [dim]The source says:[/dim]")
+        _print_text(out, f"\u201c{i.snippet}\u201d")
+        if i.rationale:
+            _print_text(out, f"Reviewer's note: {i.rationale}", style="dim")
+    elif i.source == "quote" and i.quotes:
+        out.console.print("  [dim]These quoted words were not found in the source:[/dim]")
+        for q in i.quotes:
+            _print_text(out, f"\u201c{q}\u201d")
+    elif i.source == "metadata":
+        for d in i.metadata_differences:
+            _print_text(out, f"Your reference says {d.cited or '(none)'}; the record says {d.registered or '(none)'}.")
+    if i.failure is not None:
+        hint = i.failure.hint or i.failure.failure_reason or "failed"
+        out.console.print(f"  [yellow]Part of the check failed:[/yellow] {escape(hint)}")
+
+
+def render_citations(out: Output, review: ReviewFull | ReviewIssues) -> None:
+    """After the claims: the count line and the summary line, then the
+    citation issues, then the citations that could not be checked this time."""
+    lines = citation_count_lines(review)
+    if not lines:
+        return
+    out.console.print()
+    out.console.print(f"[bold]{escape(lines[0])}[/bold]")
+    for line in lines[1:]:
+        out.console.print(escape(line))
+    total = review.summary.citations_selected or 0
+    for i in review.citation_issues:
+        out.console.print()
+        _render_citation_issue(out, i, total)
+    for f in review.citation_failures:
+        out.console.print()
+        label = f"source {f.citation_index + 1}/{total}" if total else f"source {f.citation_index + 1}"
+        link = f.cited_url or (f"doi:{f.doi}" if f.doi else f.reference or "")
+        out.console.print(f"[bold]\\[{label}][/bold] [yellow]Could not be checked this time.[/yellow]")
+        if link:
+            out.console.print(f"  [blue]{escape(link)}[/blue]")
+        hint = f.failure.hint if f.failure else None
+        if hint:
+            _print_text(out, hint, style="dim")
+    if review.citation_issues:
+        out.console.print(
+            "\n[dim]A reviewer's note is reasoning, not a checked source; the quoted passage is from the page.[/dim]"
         )

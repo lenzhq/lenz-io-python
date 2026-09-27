@@ -179,6 +179,11 @@ def _load(name: str) -> dict:
         ("review_failed_no_claim.json", ReviewFull),
         ("review_failed_insufficient_credits.json", ReviewFull),
         ("review_completed_issues.json", ReviewIssues),
+        # The citation check: every row state (waiting, fine, an issue, not
+        # checkable, our failure with and without a finding) in both views.
+        ("review_citations_verifying.json", ReviewFull),
+        ("review_citations_completed.json", ReviewFull),
+        ("review_citations_completed_issues.json", ReviewIssues),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):

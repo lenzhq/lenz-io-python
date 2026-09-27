@@ -1,0 +1,184 @@
+{
+  "review_id": "7c1e0d52",
+  "view": "full",
+  "status": "verifying",
+  "outcome": null,
+  "created_at": "2026-09-27T10:00:00.000000Z",
+  "completed_at": null,
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 0,
+    "max_verifications": 0,
+    "depth": "standard",
+    "check_citations": true,
+    "max_citations": 10
+  },
+  "summary": {
+    "claims_selected": 0,
+    "claim_limit": 0,
+    "claim_limit_reached": true,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 0,
+      "failed": 0
+    },
+    "verifications": null,
+    "issues": 0,
+    "citations_found": 3,
+    "citations_selected": 3,
+    "citation_limit": 10,
+    "citation_limit_reached": false,
+    "citation_checks": {
+      "checked": 1,
+      "unchecked": 0,
+      "failed": 0
+    },
+    "citation_issues": 1,
+    "citations_skipped": null
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": 5,
+  "issues": [],
+  "failures": [],
+  "citation_issues": [
+    {
+      "citation_index": 0,
+      "reference": "a report from the ministry",
+      "cited_url": "https://example.gov/report-2024",
+      "doi": null,
+      "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry.",
+      "quotes": [],
+      "position": {
+        "start": 0,
+        "end": 118
+      },
+      "finding": "contradicted",
+      "source": "support",
+      "snippet": "The unemployment rate averaged 4.6% in 2024, down from 4.9%.",
+      "rationale": "The report gives 4.6% for 2024; the draft says 4.1%.",
+      "metadata_differences": [],
+      "page_title": "Labour market report 2024",
+      "failure": null
+    }
+  ],
+  "citation_failures": [],
+  "failure": null,
+  "claims": [],
+  "citations": [
+    {
+      "index": 0,
+      "reference": "a report from the ministry",
+      "cited_url": "https://example.gov/report-2024",
+      "doi": null,
+      "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry.",
+      "quotes": [],
+      "position": {
+        "start": 0,
+        "end": 118
+      },
+      "result": {
+        "finding": "contradicted",
+        "source": "support",
+        "is_issue": true
+      },
+      "check": {
+        "status": "completed",
+        "page_read": "full",
+        "page_title": "Labour market report 2024",
+        "page_published_date": "2025-01-14",
+        "page_language": "en",
+        "source_url": "https://example.gov/report-2024",
+        "source_version": null,
+        "support": "contradicted",
+        "snippet": "The unemployment rate averaged 4.6% in 2024, down from 4.9%.",
+        "rationale": "The report gives 4.6% for 2024; the draft says 4.1%.",
+        "quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 1,
+      "reference": "the minister said",
+      "cited_url": "https://news.example.com/minister-interview",
+      "doi": null,
+      "statement": "The minister said the figures were \"the best in a decade\".",
+      "quotes": [
+        "the best in a decade"
+      ],
+      "position": {
+        "start": 119,
+        "end": 214
+      },
+      "result": null,
+      "check": {
+        "status": "pending",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    },
+    {
+      "index": 2,
+      "reference": "wage statistics",
+      "cited_url": "https://stats.example.org/wages",
+      "doi": null,
+      "statement": "Wages rose faster than prices for the second year running.",
+      "quotes": [],
+      "position": {
+        "start": 215,
+        "end": 290
+      },
+      "result": null,
+      "check": {
+        "status": "running",
+        "page_read": null,
+        "page_title": null,
+        "page_published_date": null,
+        "page_language": null,
+        "source_url": null,
+        "source_version": null,
+        "support": null,
+        "snippet": null,
+        "rationale": null,
+        "quote": null,
+        "doi_registered": null,
+        "metadata": null,
+        "metadata_differences": [],
+        "registered": null,
+        "unchecked_reason": null,
+        "hint": null,
+        "failure": null
+      }
+    }
+  ]
+}
