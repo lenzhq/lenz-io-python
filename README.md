@@ -187,6 +187,26 @@ and `text` still carries the passage. `more_claim_locations` does the same for
 order, `None` until the draft is read. A citation's `position` is the same
 `Position`, with `text` `None` (the row carries the `statement`).
 
+**Suggested edits.** `suggest_edits=True` also returns, for each claim whose
+deep check suggests a rewrite, the smallest edits to the draft that make it
+say what the rewrite says, in the draft's own language. They cost no credits
+beyond the deep check, and the review completes once they are settled. Each
+claim row (and its issue) carries `suggested_edits`: `status` `"pending"` or
+`"completed"`, and `edits`, each a span of the `text` you sent (`start`/`end`
+in code points, `text` the exact slice) and its `replacement`. `edits == []`
+means no edit could be made safely. They are not themselves verified.
+
+```python
+review = client.review_and_wait(text=draft, suggest_edits=True)
+chars = list(draft)  # code points
+for claim in review.claims:
+    block = claim.suggested_edits
+    for e in sorted(block.edits if block and block.edits else [], key=lambda e: e.start, reverse=True):
+        if "".join(chars[e.start : e.end]) == e.text:  # skip if the draft changed
+            chars[e.start : e.end] = list(e.replacement)
+edited = "".join(chars)
+```
+
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
 they are in and each deep check as it lands; without it the helper is silent.

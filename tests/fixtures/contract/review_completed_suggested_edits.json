@@ -1,0 +1,170 @@
+{
+  "review_id": "8a92fc05",
+  "view": "full",
+  "status": "completed",
+  "outcome": "issues_found",
+  "created_at": "2026-09-28T20:17:31.793608Z",
+  "completed_at": "2026-09-28T20:17:31.830806Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 5,
+    "depth": "standard",
+    "suggest_edits": true,
+    "max_citations": 0
+  },
+  "summary": {
+    "claims_selected": 1,
+    "claim_limit": 20,
+    "claim_limit_reached": false,
+    "input_truncated": false,
+    "assessments": {
+      "completed": 1,
+      "failed": 0
+    },
+    "verifications": {
+      "planned": 1,
+      "completed": 1,
+      "failed": 0
+    },
+    "issues": 1,
+    "citations_found": null,
+    "citations_selected": null,
+    "citation_limit": null,
+    "citation_limit_reached": null,
+    "citation_checks": null,
+    "citation_issues": 0,
+    "citations_skipped": null
+  },
+  "credits": {
+    "charged": 11
+  },
+  "poll_after_seconds": null,
+  "issues": [
+    {
+      "claim_index": 0,
+      "claim": "Acme grew 20% in 2024",
+      "verified_claim": null,
+      "verdict": "False",
+      "confidence": "high",
+      "source": "verification",
+      "verification_id": "89578ddc",
+      "verification_status": "completed",
+      "verification_url": "https://lenz.io/api/v1/verifications/89578ddc",
+      "url": "https://lenz.io/c/acme-grew-20-in-2024-89578ddc",
+      "escalation": {
+        "matched_rules": [
+          "verdict"
+        ],
+        "disposition": "planned"
+      },
+      "key_finding": "Finding for Acme grew 20% in 2024",
+      "rationale": null,
+      "suggested_rewrite": "Fixed: Acme grew 20% in 2024",
+      "failure": null,
+      "suggested_edits": {
+        "status": "completed",
+        "edits": [
+          {
+            "position": 0,
+            "start": 23,
+            "end": 26,
+            "text": "20%",
+            "replacement": "15%"
+          }
+        ]
+      }
+    }
+  ],
+  "failures": [],
+  "citation_issues": [],
+  "citation_failures": [],
+  "claims": [
+    {
+      "index": 0,
+      "claim": "Acme grew 20% in 2024",
+      "positions": [
+        {
+          "start": 13,
+          "end": 34,
+          "text": "Acme grew 20% in 2024"
+        }
+      ],
+      "result": {
+        "verdict": "False",
+        "confidence": "high",
+        "source": "verification",
+        "is_issue": true
+      },
+      "assessment": {
+        "status": "completed",
+        "verdict": "False",
+        "confidence": "high",
+        "rationale": null,
+        "dissent": null,
+        "verification_url": null,
+        "error_code": null,
+        "identified_claims": [],
+        "hint": null,
+        "failure": null
+      },
+      "escalation": {
+        "matched_rules": [
+          "verdict"
+        ],
+        "disposition": "planned"
+      },
+      "verification": {
+        "status": "completed",
+        "content_status": "available",
+        "task_id": "447ffbe905984236be5a63b0a09a53c4",
+        "verification_id": "89578ddc",
+        "claim": "Acme grew 20% in 2024",
+        "language": "en",
+        "visibility": "private",
+        "depth": "standard",
+        "domain": "",
+        "entities": [],
+        "verdict": "False",
+        "confidence": "high",
+        "lenz_score": 2,
+        "key_finding": "Finding for Acme grew 20% in 2024",
+        "executive_summary": "Summary for Acme grew 20% in 2024",
+        "suggested_rewrite": "Fixed: Acme grew 20% in 2024",
+        "warnings": [
+          "w1"
+        ],
+        "created_at": "2026-09-28T20:17:31.809979+00:00",
+        "modified_at": null,
+        "verification_url": "https://lenz.io/api/v1/verifications/89578ddc",
+        "url": "https://lenz.io/c/acme-grew-20-in-2024-89578ddc",
+        "failure": null
+      },
+      "suggested_edits": {
+        "status": "completed",
+        "edits": [
+          {
+            "position": 0,
+            "start": 23,
+            "end": 26,
+            "text": "20%",
+            "replacement": "15%"
+          }
+        ]
+      }
+    }
+  ],
+  "citations": [],
+  "failure": null,
+  "more_claims": [],
+  "more_claim_locations": [],
+  "more_citations": []
+}

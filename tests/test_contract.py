@@ -202,6 +202,9 @@ def _load(name: str) -> dict:
         # `positions` and the envelope's `more_claim_locations`. Same fixture
         # as the Node SDK.
         ("review_completed_located.json", ReviewFull),
+        # A review that asked for suggested edits: a claim row's and its
+        # issue's `suggested_edits`. Same fixture as the Node SDK.
+        ("review_completed_suggested_edits.json", ReviewFull),
         # /citecheck, recorded: the receipt, a check of a draft's first four
         # citations, and a check of two statement-source pairs.
         ("citecheck_accepted.json", CitecheckStarted),

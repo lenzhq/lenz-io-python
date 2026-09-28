@@ -1069,7 +1069,7 @@
     },
     "/api/v1/citechecks/{citecheck_id}": {
       "get": {
-        "operationId": "get_citecheck",
+        "operationId": "getCitecheck",
         "summary": "Get a citation check",
         "parameters": [
           {
@@ -3113,6 +3113,18 @@
             ],
             "description": "How many of the draft's citations (links, DOIs, [n] markers with a reference list), in its order, are checked: does each source say what the draft attributes to it? 1 credit per checked citation. Default 0: no citation check. Guide: https://lenz.io/docs/citations",
             "title": "Max Citations"
+          },
+          "suggest_edits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For each claim whose deep check suggests a rewrite, the smallest edits to the draft that make it say what the rewrite says, written in the draft's language (claims[].suggested_edits). No extra credits. The review completes once they are settled. Default false. Guide: https://lenz.io/docs/citations",
+            "title": "Suggest Edits"
           }
         },
         "title": "EscalationPolicyIn",
@@ -4043,6 +4055,17 @@
                 "type": "null"
               }
             ]
+          },
+          "suggested_edits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewSuggestedEditsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Asked with `escalate.suggest_edits`. `null` when not asked, when the claim got no completed deep check with a suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
           }
         },
         "required": [
@@ -4589,6 +4612,17 @@
                 "type": "null"
               }
             ]
+          },
+          "suggested_edits": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewSuggestedEditsOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A copy of its claim row's `suggested_edits`. Asked with `escalate.suggest_edits`. `null` when not asked, when the claim got no completed deep check with a suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
           }
         },
         "required": [
@@ -4949,6 +4983,11 @@
             "default": 0,
             "title": "Max Citations",
             "type": "integer"
+          },
+          "suggest_edits": {
+            "default": false,
+            "title": "Suggest Edits",
+            "type": "boolean"
           }
         },
         "required": [
@@ -5060,6 +5099,41 @@
         "title": "ReviewResultOut",
         "type": "object"
       },
+      "ReviewSuggestedEditsOut": {
+        "description": "The smallest edits to the draft that make it say what the claim's deep\ncheck rewrite says, in the draft's language. Review content, never part of\nthe verification: a verification is shared, your draft is not.",
+        "properties": {
+          "status": {
+            "description": "`pending` while they are computed (poll the review); `completed` once SETTLED, which includes settling on no edit (`edits: []`).",
+            "enum": [
+              "pending",
+              "completed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "edits": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuggestedEditOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`null` while pending; `[]` when settled with no edit (the passage could not be edited safely, no edit passed the checks, or computing it failed on our side). Not itself verified: review it before you use it.",
+            "title": "Edits"
+          }
+        },
+        "required": [
+          "status",
+          "edits"
+        ],
+        "title": "ReviewSuggestedEditsOut",
+        "type": "object"
+      },
       "ReviewSummaryOut": {
         "properties": {
           "claims_selected": {
@@ -5088,7 +5162,7 @@
                 "type": "null"
               }
             ],
-            "description": "The draft held at least claim_limit claims: more MAY exist.",
+            "description": "True when the draft held at least claim_limit claims (claims found >= claim_limit): the reading stops at the limit, so more MAY exist. False when it held fewer. Null until the draft is read.",
             "title": "Claim Limit Reached"
           },
           "input_truncated": {
@@ -5164,7 +5238,7 @@
                 "type": "null"
               }
             ],
-            "description": "citations_found is over the cap.",
+            "description": "True when citations_found is more than citation_limit: the rest are in more_citations, found and not checked. False when every citation found was selected, exactly citation_limit included. Null until the text is read.",
             "title": "Citation Limit Reached"
           },
           "citation_checks": {
@@ -5490,6 +5564,46 @@
         "title": "ReviewVerificationOut",
         "type": "object"
       },
+      "SuggestedEditOut": {
+        "description": "One replacement in the draft: a `PositionOut` whose span is always\nin `text` as you sent it.",
+        "properties": {
+          "start": {
+            "description": "Where the replaced span starts in `text` as you sent it, in Unicode code points. Half-open with `end`, inside `positions[position]`.",
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "description": "Where the replaced span ends, exclusive.",
+            "title": "End",
+            "type": "integer"
+          },
+          "text": {
+            "description": "Exactly the slice of `text` at `start`..`end`, as you sent it.",
+            "title": "Text",
+            "type": "string"
+          },
+          "position": {
+            "description": "Which of the claim row's `positions` the edit sits in (index); a grouping hint.",
+            "minimum": 0,
+            "title": "Position",
+            "type": "integer"
+          },
+          "replacement": {
+            "description": "What replaces it; '' deletes it.",
+            "title": "Replacement",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "text",
+          "position",
+          "replacement"
+        ],
+        "title": "SuggestedEditOut",
+        "type": "object"
+      },
       "CitecheckAcceptedOut": {
         "properties": {
           "citecheck_id": {
@@ -5710,6 +5824,7 @@
                 "type": "null"
               }
             ],
+            "default": "",
             "description": "The language Lenz writes the reasoning in. English when omitted. Hints are always in English.",
             "title": "Language"
           },
@@ -5778,6 +5893,11 @@
               }
             ],
             "title": "Completed At"
+          },
+          "language": {
+            "description": "The language the reasoning is written in, as the review envelope echoes it.",
+            "title": "Language",
+            "type": "string"
           },
           "poll_after_seconds": {
             "anyOf": [
@@ -5855,6 +5975,7 @@
           "outcome",
           "created_at",
           "completed_at",
+          "language",
           "poll_after_seconds",
           "policy",
           "summary",
@@ -5930,6 +6051,7 @@
                 "type": "null"
               }
             ],
+            "description": "True when citations_found is more than citation_limit: the rest are in more_citations, found and not checked. False when every citation found was selected, exactly citation_limit included. Null until the text is read.",
             "title": "Citation Limit Reached"
           },
           "citation_checks": {
