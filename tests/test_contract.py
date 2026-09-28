@@ -40,6 +40,7 @@ from lenz_io.models import (
     CitecheckStarted,
     ExtractedClaims,
     LibraryList,
+    Position,
     ReviewFull,
     ReviewIssues,
     ReviewStarted,
@@ -198,7 +199,7 @@ def _load(name: str) -> dict:
         # A review with the claims and citations found past its caps, recorded.
         ("review_citations_more.json", ReviewFull),
         # A review of a draft whose claims were located: every claim row's
-        # `positions` and the envelope's `more_claim_positions`. Same fixture
+        # `positions` and the envelope's `more_claim_locations`. Same fixture
         # as the Node SDK.
         ("review_completed_located.json", ReviewFull),
         # /citecheck, recorded: the receipt, a check of a draft's first four
@@ -334,21 +335,34 @@ def test_extract_located_positions_index_the_text_as_sent():
 
 def test_review_located_positions_span_their_passage():
     """Each review claim position is a half-open code-point span whose
-    length is the passage's, for the claim rows and ``more_claim_positions``
-    alike (one entry per ``more_claims`` string)."""
+    length is the passage's, for the claim rows and ``more_claim_locations``
+    alike (one ``ClaimLocation`` per ``more_claims`` string, same order)."""
     payload = _load("review_completed_located.json")
-    assert "more_claim_positions" in payload
+    assert "more_claim_locations" in payload and "more_claim_positions" not in payload
     parsed = ReviewFull.model_validate(payload)
-    assert parsed.more_claims is not None and parsed.more_claim_positions is not None
-    assert len(parsed.more_claim_positions) == len(parsed.more_claims)
-    groups = [c.positions for c in parsed.claims] + list(parsed.more_claim_positions)
+    assert parsed.more_claims is not None and parsed.more_claim_locations is not None
+    assert [loc.claim for loc in parsed.more_claim_locations] == parsed.more_claims
+    groups = [c.positions for c in parsed.claims] + [loc.positions for loc in parsed.more_claim_locations]
     assert groups and all(g for g in groups)
     for group in groups:
         assert group is not None
         for pos in group:
-            assert pos.start is not None and pos.end is not None
+            assert pos.start is not None and pos.end is not None and pos.text is not None
             assert 0 <= pos.start < pos.end
             assert pos.end - pos.start == len(pos.text)
+
+
+def test_a_citation_position_is_the_same_position_without_text():
+    """A citation's ``position`` is the one ``Position`` model: offsets set,
+    ``text`` null (the row carries the statement)."""
+    parsed = ReviewFull.model_validate(_load("review_citations_completed.json"))
+    positions = [c.position for c in parsed.citations if c.position is not None]
+    positions += [i.position for i in parsed.citation_issues if i.position is not None]
+    positions += [m.position for m in parsed.more_citations or [] if m.position is not None]
+    assert positions
+    for pos in positions:
+        assert isinstance(pos, Position)
+        assert pos.start is not None and pos.end is not None and pos.text is None
 
 
 def test_assess_multiclaim_round_trips():

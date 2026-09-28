@@ -848,7 +848,7 @@
             }
           }
         },
-        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nOnly claims traced directly back to the draft are checked: a claim found\nnowhere in it, or found with a different figure, is left out (as\n`/extract` does with `locate: true`). Each claim row's `positions` says\nwhere the draft makes it, and `more_claim_positions` does the same for\n`more_claims`: `start` / `end` in Unicode code points of `text` as you\nsent it, half-open, the same system as a citation's `position`.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
+        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nOnly claims traced directly back to the draft are checked: a claim found\nnowhere in it is left out (as `/extract` does with `locate: true`). Each\nclaim row's `positions` says where the draft makes it, and\n`more_claim_locations` gives `{claim, positions}` for each of\n`more_claims`. Claim and citation positions share one shape, `{start, end,\ntext}`: `start` / `end` in Unicode code points of `text` as you sent it,\nhalf-open, and `text` the passage (`null` on a citation, whose row carries\nthe statement). For a URL draft `start` / `end` are `null` and `text`\ncarries the passage.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
         "tags": [
           "Review"
         ],
@@ -1654,17 +1654,24 @@
       "ClaimLocationOut": {
         "properties": {
           "claim": {
-            "description": "The claim, exactly as it appears in `claim` / `identified_claims`.",
+            "description": "The claim, exactly as it appears in the claim list it belongs to.",
             "title": "Claim",
             "type": "string"
           },
           "positions": {
-            "description": "Every place the text makes the claim, in text order: at least one, at most 10.",
-            "items": {
-              "$ref": "#/components/schemas/ClaimPositionOut"
-            },
-            "title": "Positions",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PositionOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every place the text makes the claim, in text order, at most 10. `null` only when this claim could not be placed (on /extract every returned claim was placed).",
+            "title": "Positions"
           }
         },
         "required": [
@@ -1672,46 +1679,6 @@
           "positions"
         ],
         "title": "ClaimLocationOut",
-        "type": "object"
-      },
-      "ClaimPositionOut": {
-        "properties": {
-          "start": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Where the passage starts in `text` as you sent it, in Unicode code points (not UTF-16 units or bytes). `null` when `text` was a URL: the page is not returned, so there is nothing to index.",
-            "title": "Start"
-          },
-          "end": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Where the passage ends, exclusive; `null` as for `start`.",
-            "title": "End"
-          },
-          "text": {
-            "description": "The passage itself, as it appears in the text.",
-            "title": "Text",
-            "type": "string"
-          }
-        },
-        "required": [
-          "start",
-          "end",
-          "text"
-        ],
-        "title": "ClaimPositionOut",
         "type": "object"
       },
       "ExtractOut": {
@@ -1804,6 +1771,53 @@
           }
         },
         "title": "ExtractedEntityOut",
+        "type": "object"
+      },
+      "PositionOut": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the passage starts in `text` as you sent it, in Unicode code points (not UTF-16 units or bytes). Half-open with `end`. `null` when `text` was a URL: the page is not returned, so there is nothing to index, and `text` carries the passage instead.",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the passage ends, exclusive; `null` as for `start`.",
+            "title": "End"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The passage itself, as it appears in the text. `null` on a citation position, whose row already carries the statement.",
+            "title": "Text"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "text"
+        ],
+        "title": "PositionOut",
         "type": "object"
       },
       "ExtractIn": {
@@ -3699,7 +3713,7 @@
           "position": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+                "$ref": "#/components/schemas/PositionOut"
               },
               {
                 "type": "null"
@@ -3883,7 +3897,7 @@
           "position": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+                "$ref": "#/components/schemas/PositionOut"
               },
               {
                 "type": "null"
@@ -3915,25 +3929,6 @@
           "check"
         ],
         "title": "ReviewCitationOut",
-        "type": "object"
-      },
-      "ReviewCitationPositionOut": {
-        "properties": {
-          "start": {
-            "description": "Of the statement in the text as sent, in Unicode code points.",
-            "title": "Start",
-            "type": "integer"
-          },
-          "end": {
-            "title": "End",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "start",
-          "end"
-        ],
-        "title": "ReviewCitationPositionOut",
         "type": "object"
       },
       "ReviewCitationResultOut": {
@@ -4005,7 +4000,7 @@
             "anyOf": [
               {
                 "items": {
-                  "$ref": "#/components/schemas/ClaimPositionOut"
+                  "$ref": "#/components/schemas/PositionOut"
                 },
                 "type": "array"
               },
@@ -4013,7 +4008,7 @@
                 "type": "null"
               }
             ],
-            "description": "Where the draft makes this claim: every place, in text order, at most 10. `start` / `end` are Unicode code points of `text` as you sent it, half-open, the same system as a citation's `position`. Only claims traced back to the draft are listed at all. `null` when the draft was a URL, when the claims could not be located, or once a zero-retention draft is gone.",
+            "description": "Where the draft makes this claim: every place, in text order, at most 10, in the same shape as a citation's `position`: `start` / `end` in Unicode code points of `text` as you sent it, half-open, and the passage in `text`. For a URL draft `start` / `end` are `null` and `text` carries the passage. Only claims traced back to the draft are listed at all. `null` when the claim could not be placed, or once a zero-retention draft is gone.",
             "title": "Positions"
           },
           "result": {
@@ -4348,21 +4343,11 @@
             "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
             "title": "More Claims"
           },
-          "more_claim_positions": {
+          "more_claim_locations": {
             "anyOf": [
               {
                 "items": {
-                  "anyOf": [
-                    {
-                      "items": {
-                        "$ref": "#/components/schemas/ClaimPositionOut"
-                      },
-                      "type": "array"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ClaimLocationOut"
                 },
                 "type": "array"
               },
@@ -4370,8 +4355,8 @@
                 "type": "null"
               }
             ],
-            "description": "Where the draft makes each of `more_claims`, one list per claim in the same order (see a claim row's `positions`). Null until the draft is read, for a URL, or when the claims could not be located.",
-            "title": "More Claim Positions"
+            "description": "Where the draft makes each of `more_claims`, in the same order: `{claim, positions}`, the shape `/extract` returns with `locate: true` (see a claim row's `positions`). Null until the draft is read.",
+            "title": "More Claim Locations"
           },
           "more_citations": {
             "anyOf": [
@@ -4747,21 +4732,11 @@
             "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
             "title": "More Claims"
           },
-          "more_claim_positions": {
+          "more_claim_locations": {
             "anyOf": [
               {
                 "items": {
-                  "anyOf": [
-                    {
-                      "items": {
-                        "$ref": "#/components/schemas/ClaimPositionOut"
-                      },
-                      "type": "array"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
+                  "$ref": "#/components/schemas/ClaimLocationOut"
                 },
                 "type": "array"
               },
@@ -4769,8 +4744,8 @@
                 "type": "null"
               }
             ],
-            "description": "Where the draft makes each of `more_claims`, one list per claim in the same order (see a claim row's `positions`). Null until the draft is read, for a URL, or when the claims could not be located.",
-            "title": "More Claim Positions"
+            "description": "Where the draft makes each of `more_claims`, in the same order: `{claim, positions}`, the shape `/extract` returns with `locate: true` (see a claim row's `positions`). Null until the draft is read.",
+            "title": "More Claim Locations"
           },
           "more_citations": {
             "anyOf": [
@@ -4911,7 +4886,7 @@
           "position": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+                "$ref": "#/components/schemas/PositionOut"
               },
               {
                 "type": "null"

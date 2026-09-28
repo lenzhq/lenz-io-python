@@ -953,8 +953,9 @@ class Lenz:
         Only claims traced directly back to the draft are checked: a claim
         found nowhere in it, or found with a different figure, is left out.
         Each claim row's ``positions`` says where the draft makes it (code
-        point offsets into ``text``), and ``more_claim_positions`` does the
-        same for ``more_claims``.
+        point offsets into ``text``; for a URL draft, ``None`` offsets and
+        the passage), and ``more_claim_locations`` does the same for
+        ``more_claims`` (one ``ClaimLocation`` per string).
 
         ``max_citations=N`` (1-20) also checks the draft's first N citations
         (links and DOIs, read from ``text``; keep a link as a markdown link,
