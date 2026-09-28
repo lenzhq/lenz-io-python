@@ -154,6 +154,13 @@ parses, with the new keys at their defaults.
   `duplicate_found` pause. Any `needs_input` reason it cannot resolve with
   `select` ends in a `needs_input` error that names the reason.
 
+### Fixed
+
+- **`lenz verify` waits the server's `poll_after_seconds`** between polls, one
+  task or a batch (the shortest hint among the tasks still running), instead of
+  a fixed 2.5 s; 2.5 s stays the fallback when the body carries no hint, as the
+  client's `*_and_wait` helpers already did.
+
 ## [2.17.0] - 2026-09-26
 
 `review`: the whole extract → assess → verify ladder on a draft in one call,

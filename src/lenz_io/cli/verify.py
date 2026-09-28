@@ -35,7 +35,18 @@ from .context import CLIState
 from .errors import CLIError
 from .render import Output, render_batch_details, render_batch_table, render_verification
 
-POLL_INTERVAL = 2.5  # seconds — never sub-second; the pipeline runs ~90s.
+POLL_INTERVAL = 2.5  # seconds: the fallback when the server gives no hint.
+
+
+def _next_wait(statuses: list[TaskStatus | None]) -> float:
+    """How long to wait before the next poll: the server's shortest valid
+    ``progress.poll_after_seconds`` among ``statuses`` (the same bounds the
+    client's ``*_and_wait`` helpers apply), else ``POLL_INTERVAL``."""
+    from lenz_io.client import _poll_hint
+
+    hints = [h for h in (_poll_hint(getattr(st, "progress", None)) for st in statuses if st is not None) if h]
+    return min(hints) if hints else POLL_INTERVAL
+
 
 # Accepted --depth values. 'standard' is the server default; 'low' runs a
 # shallower check — fewer sources, faster. Same models, half the credits
@@ -232,7 +243,7 @@ def _wait_until_actionable(
                 if spinner is not None:
                     p = st.progress
                     spinner.update(_step_label(p.step, p.index, p.total))
-                time.sleep(POLL_INTERVAL)
+                time.sleep(_next_wait([st]))
     except KeyboardInterrupt:
         out.resume_hint(task_id)
         raise SystemExit(130) from None
@@ -342,7 +353,7 @@ def _poll_all(
             if on_update:
                 on_update()
             if pending:
-                time.sleep(POLL_INTERVAL)
+                time.sleep(_next_wait([statuses.get(t) for t in pending]))
     except KeyboardInterrupt:
         out.err.print("\n[yellow]Detached — these keep running. Re-attach:[/yellow]")
         for tid in (t for t, _ in picks if t in pending):
