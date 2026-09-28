@@ -107,9 +107,9 @@ class FakeClient:
         if name in self._raises:
             raise self._raises[name]
 
-    def extract(self, *, text, language="", focus=""):
+    def extract(self, *, text, language="", focus="", locate=None):
         self._maybe_raise("extract")
-        self.extract_calls.append({"text": text, "language": language, "focus": focus})
+        self.extract_calls.append({"text": text, "language": language, "focus": focus, "locate": locate})
         return self._extract
 
     def assess(self, claim="", *, text="", claims=None, language="", timeout=None):
@@ -444,6 +444,72 @@ def test_extract_omits_focus_by_default(monkeypatch):
     result = runner.invoke(app, ["--json", "extract", "some text"])
     assert result.exit_code == 0
     assert fake.extract_calls[-1]["focus"] == ""
+
+
+@pytest.mark.parametrize(
+    "flags,expected",
+    [([], None), (["--locate"], True), (["--no-locate"], False)],
+)
+def test_extract_locate_flag_passes_through(monkeypatch, flags, expected):
+    """Unset stays ``None`` so the SDK sends nothing and the server default
+    governs; either flag is passed as an explicit bool."""
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "some text", *flags])
+    assert result.exit_code == 0
+    assert fake.extract_calls[-1]["locate"] is expected
+
+
+def _render_pretty(extracted):
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_extract
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200)
+    render_extract(out, extracted)
+    return buf.getvalue()
+
+
+def test_extract_pretty_renders_positions():
+    extracted = ExtractedClaims.model_validate(
+        {
+            "status": "ready",
+            "claim": "A rose 5%.",
+            "identified_claims": ["A rose 5%.", "B fell [bold]."],
+            "locations": [
+                {"claim": "A rose 5%.", "positions": [{"start": 0, "end": 11, "text": "A grew 5 %."}]},
+                {"claim": "B fell [bold].", "positions": [{"start": 12, "end": 26, "text": "B fell [bold]."}]},
+            ],
+        }
+    )
+    text = _render_pretty(extracted)
+    assert 'at 0-11: "A grew 5 %."' in text
+    # The passage is the user's text: printed literally, never as markup.
+    assert 'at 12-26: "B fell [bold]."' in text
+
+
+def test_extract_pretty_renders_url_positions_without_a_span():
+    extracted = ExtractedClaims.model_validate(
+        {
+            "status": "ready",
+            "claim": "A rose 5%.",
+            "identified_claims": [],
+            "locations": [{"claim": "A rose 5%.", "positions": [{"start": None, "end": None, "text": "A grew 5 %."}]}],
+        }
+    )
+    text = _render_pretty(extracted)
+    assert 'at "A grew 5 %."' in text
+
+
+def test_extract_pretty_without_locations_prints_no_positions():
+    text = _render_pretty(ExtractedClaims.model_validate({"status": "ready", "claim": "A rose 5%."}))
+    assert " at " not in text
 
 
 def test_extract_pretty_renders_no_match_distinctly():

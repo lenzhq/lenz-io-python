@@ -35,6 +35,7 @@ pip install "lenz-io[cli]"       # or into your current environment
 lenz login                       # paste an API key (free — get one at lenz.io/api-credentials)
 lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
+lenz extract "$(cat draft.txt)" --locate                    # where the text makes each claim
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
@@ -331,7 +332,7 @@ your own claims. Use webhooks for production async flows.
 
 ## What you get on the client
 
-- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract). Each attempt waits up to 90s by default (a timeout is retried like any transport error); `timeout=` overrides it for that call.
+- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 90s by default (a timeout is retried like any transport error); `timeout=` overrides it for that call.
 - **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~10s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~10-25s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 45s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
@@ -770,6 +771,42 @@ On the CLI:
 
 ```bash
 lenz extract "$(cat deck.txt)" --focus "market size and competitors"
+```
+
+### Locating claims in your text
+
+Pass `locate=True` to keep only the claims that can be traced directly back
+to your text, and to learn where the text makes each one:
+
+```python
+out = client.extract(text=draft, locate=True)
+for loc in out.locations or []:
+    for pos in loc.positions:
+        print(loc.claim, "->", pos.text)
+        if pos.start is not None:
+            assert draft[pos.start : pos.end] == pos.text
+```
+
+A claim found nowhere in the text, or found with a different figure, is left
+out; if that leaves no claim, `status` is `"not_a_claim"`. `locations` has one
+`ClaimLocation` per returned claim, in the order of `identified_claims` (one
+entry for a single `claim`), each with its `positions` (every place the text
+makes it, in text order, at least one and at most 10). `start` and `end` index
+the text you sent in Unicode code points, so `text[start:end]` works natively;
+`end` is exclusive. Both are `None` when the input was a URL, since the page is
+not returned; `pos.text` always carries the passage.
+
+`locations` is `[]` when every claim was left out (`status` is then
+`"not_a_claim"`), and `None` when `locate` was not set, when the extraction
+found no claims, or
+when the claims could not be located — the list is then returned unfiltered.
+Locating adds a few seconds. `locate` defaults to off; leave it `None` to use
+the server default, or pass `False` to turn it off explicitly.
+
+On the CLI:
+
+```bash
+lenz extract "$(cat draft.txt)" --locate
 ```
 
 ## Multi-language output
