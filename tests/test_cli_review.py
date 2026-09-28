@@ -733,14 +733,15 @@ def test_the_run_opens_by_saying_what_it_checks(draft, human, args, line):
     with respx.mock(base_url=BASE) as r:
         _serve(r, "review_completed.json")
         result = _invoke("review", draft, *args)
-    assert line in result.stderr
+    # `output` is stdout and stderr together, on every click version.
+    assert line in result.output
 
 
 def test_json_mode_prints_no_opening_line(draft):
     with respx.mock(base_url=BASE) as r:
         _serve(r, "review_completed.json")
         result = _invoke("review", draft, "--json")
-    assert "Checking" not in result.stderr
+    assert "Checking" not in result.output
     json.loads(result.stdout)
 
 
