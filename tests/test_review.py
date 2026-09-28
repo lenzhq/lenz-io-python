@@ -930,3 +930,50 @@ def test_a_recorded_review_lists_what_it_found_past_its_caps():
     assert review.more_claims is not None and len(review.more_claims) == 4
     assert review.more_citations is not None and len(review.more_citations) == 6
     assert all(m.sentence for m in review.more_citations)
+
+
+# ── claim positions ─────────────────────────────────────────────────────────
+
+
+def test_a_located_review_says_where_the_draft_makes_each_claim():
+    review = ReviewFull.model_validate(_load("review_completed_located.json"))
+    assert review.claims and all(c.positions for c in review.claims)
+    first = review.claims[0].positions
+    assert first is not None
+    assert (first[0].start, first[0].end, first[0].text) == (2, 49, review.claims[0].claim)
+    assert review.more_claims is not None and review.more_claim_positions is not None
+    assert len(review.more_claim_positions) == len(review.more_claims)
+    assert review.more_claim_positions[0] is not None and review.more_claim_positions[0][0].start == 315
+
+
+def test_null_positions_parse_as_none():
+    """A URL draft, claims that could not be located, or a zero-retention
+    draft that is gone: ``positions`` is null."""
+    body = _load("review_completed_located.json")
+    for c in body["claims"]:
+        c["positions"] = None
+    body["more_claim_positions"] = None
+    review = ReviewFull.model_validate(body)
+    assert all(c.positions is None for c in review.claims)
+    assert review.more_claim_positions is None
+
+
+def test_an_older_server_without_positions_parses():
+    body = _load("review_completed_located.json")
+    for c in body["claims"]:
+        del c["positions"]
+    del body["more_claim_positions"]
+    review = ReviewFull.model_validate(body)
+    assert all(c.positions is None for c in review.claims)
+    assert review.more_claim_positions is None
+    issues = ReviewIssues.model_validate(_load("review_completed_issues.json"))
+    assert issues.more_claim_positions is None
+
+
+def test_the_issues_view_carries_more_claim_positions():
+    body = _load("review_completed_located.json")
+    body["view"] = "issues"
+    del body["claims"]
+    issues = ReviewIssues.model_validate(body)
+    assert issues.more_claim_positions is not None and issues.more_claim_positions[0] is not None
+    assert issues.more_claim_positions[0][0].text == "The plant opened in 2019."

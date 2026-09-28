@@ -197,6 +197,10 @@ def _load(name: str) -> dict:
         ("review_citations_constructed.json", ReviewFull),
         # A review with the claims and citations found past its caps, recorded.
         ("review_citations_more.json", ReviewFull),
+        # A review of a draft whose claims were located: every claim row's
+        # `positions` and the envelope's `more_claim_positions`. Same fixture
+        # as the Node SDK.
+        ("review_completed_located.json", ReviewFull),
         # /citecheck, recorded: the receipt, a check of a draft's first four
         # citations, and a check of two statement-source pairs.
         ("citecheck_accepted.json", CitecheckStarted),
@@ -326,6 +330,25 @@ def test_extract_located_positions_index_the_text_as_sent():
             # In bounds first: a slice silently clamps an end past the text.
             assert 0 <= pos.start < pos.end <= len(text)
             assert text[pos.start : pos.end] == pos.text
+
+
+def test_review_located_positions_span_their_passage():
+    """Each review claim position is a half-open code-point span whose
+    length is the passage's, for the claim rows and ``more_claim_positions``
+    alike (one entry per ``more_claims`` string)."""
+    payload = _load("review_completed_located.json")
+    assert "more_claim_positions" in payload
+    parsed = ReviewFull.model_validate(payload)
+    assert parsed.more_claims is not None and parsed.more_claim_positions is not None
+    assert len(parsed.more_claim_positions) == len(parsed.more_claims)
+    groups = [c.positions for c in parsed.claims] + list(parsed.more_claim_positions)
+    assert groups and all(g for g in groups)
+    for group in groups:
+        assert group is not None
+        for pos in group:
+            assert pos.start is not None and pos.end is not None
+            assert 0 <= pos.start < pos.end
+            assert pos.end - pos.start == len(pos.text)
 
 
 def test_assess_multiclaim_round_trips():

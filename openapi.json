@@ -848,7 +848,7 @@
             }
           }
         },
-        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
+        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nOnly claims traced directly back to the draft are checked: a claim found\nnowhere in it, or found with a different figure, is left out (as\n`/extract` does with `locate: true`). Each claim row's `positions` says\nwhere the draft makes it, and `more_claim_positions` does the same for\n`more_claims`: `start` / `end` in Unicode code points of `text` as you\nsent it, half-open, the same system as a citation's `position`.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
         "tags": [
           "Review"
         ],
@@ -4001,6 +4001,21 @@
             ],
             "title": "Claim"
           },
+          "positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClaimPositionOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the draft makes this claim: every place, in text order, at most 10. `start` / `end` are Unicode code points of `text` as you sent it, half-open, the same system as a citation's `position`. Only claims traced back to the draft are listed at all. `null` when the draft was a URL, when the claims could not be located, or once a zero-retention draft is gone.",
+            "title": "Positions"
+          },
           "result": {
             "anyOf": [
               {
@@ -4332,6 +4347,31 @@
             ],
             "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
             "title": "More Claims"
+          },
+          "more_claim_positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/ClaimPositionOut"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the draft makes each of `more_claims`, one list per claim in the same order (see a claim row's `positions`). Null until the draft is read, for a URL, or when the claims could not be located.",
+            "title": "More Claim Positions"
           },
           "more_citations": {
             "anyOf": [
@@ -4706,6 +4746,31 @@
             ],
             "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
             "title": "More Claims"
+          },
+          "more_claim_positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "items": {
+                        "$ref": "#/components/schemas/ClaimPositionOut"
+                      },
+                      "type": "array"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the draft makes each of `more_claims`, one list per claim in the same order (see a claim row's `positions`). Null until the draft is read, for a URL, or when the claims could not be located.",
+            "title": "More Claim Positions"
           },
           "more_citations": {
             "anyOf": [
