@@ -59,7 +59,8 @@
       "quotes": [],
       "position": {
         "start": 2421,
-        "end": 2490
+        "end": 2490,
+        "text": null
       },
       "finding": "doi_not_found",
       "source": "doi",
@@ -79,7 +80,8 @@
       "quotes": [],
       "position": {
         "start": 2300,
-        "end": 2360
+        "end": 2360,
+        "text": null
       },
       "finding": "page_not_found",
       "source": "page",
@@ -105,7 +107,8 @@
       "quotes": [],
       "position": {
         "start": 0,
-        "end": 118
+        "end": 118,
+        "text": null
       },
       "finding": "contradicted",
       "source": "support",
@@ -127,7 +130,8 @@
       ],
       "position": {
         "start": 119,
-        "end": 214
+        "end": 214,
+        "text": null
       },
       "finding": "quote_not_in_source",
       "source": "quote",
@@ -147,7 +151,8 @@
       "quotes": [],
       "position": {
         "start": 215,
-        "end": 290
+        "end": 290,
+        "text": null
       },
       "finding": "partly_supported",
       "source": "support",
@@ -167,7 +172,8 @@
       "quotes": [],
       "position": {
         "start": 2210,
-        "end": 2275
+        "end": 2275,
+        "text": null
       },
       "finding": "metadata_mismatch",
       "source": "metadata",
@@ -210,7 +216,8 @@
       "sentence": "Housing completions rose by a fifth, according to the housing figures.",
       "position": {
         "start": 2491,
-        "end": 2562
+        "end": 2562,
+        "text": null
       }
     }
   ],
@@ -226,7 +233,8 @@
       "quotes": [],
       "position": {
         "start": 0,
-        "end": 118
+        "end": 118,
+        "text": null
       },
       "result": {
         "finding": "contradicted",
@@ -266,7 +274,8 @@
       ],
       "position": {
         "start": 119,
-        "end": 214
+        "end": 214,
+        "text": null
       },
       "result": {
         "finding": "quote_not_in_source",
@@ -304,7 +313,8 @@
       "quotes": [],
       "position": {
         "start": 215,
-        "end": 290
+        "end": 290,
+        "text": null
       },
       "result": {
         "finding": "partly_supported",
@@ -342,7 +352,8 @@
       "quotes": [],
       "position": {
         "start": 291,
-        "end": 360
+        "end": 360,
+        "text": null
       },
       "result": {
         "finding": "unchecked",
@@ -380,7 +391,8 @@
       "quotes": [],
       "position": {
         "start": 2210,
-        "end": 2275
+        "end": 2275,
+        "text": null
       },
       "result": {
         "finding": "metadata_mismatch",
@@ -469,7 +481,8 @@
       "quotes": [],
       "position": {
         "start": 2300,
-        "end": 2360
+        "end": 2360,
+        "text": null
       },
       "result": {
         "finding": "page_not_found",
@@ -513,7 +526,8 @@
       "quotes": [],
       "position": {
         "start": 2361,
-        "end": 2420
+        "end": 2420,
+        "text": null
       },
       "result": null,
       "check": {
@@ -553,7 +567,8 @@
       "quotes": [],
       "position": {
         "start": 2421,
-        "end": 2490
+        "end": 2490,
+        "text": null
       },
       "result": {
         "finding": "doi_not_found",
@@ -591,7 +606,8 @@
       "quotes": [],
       "position": {
         "start": 215,
-        "end": 290
+        "end": 290,
+        "text": null
       },
       "result": {
         "finding": "unchecked",

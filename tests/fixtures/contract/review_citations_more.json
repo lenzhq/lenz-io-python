@@ -63,7 +63,8 @@
       "quotes": [],
       "position": {
         "start": 286,
-        "end": 402
+        "end": 402,
+        "text": null
       },
       "finding": "contradicted",
       "source": "support",
@@ -85,7 +86,8 @@
       ],
       "position": {
         "start": 404,
-        "end": 537
+        "end": 537,
+        "text": null
       },
       "finding": "contradicted",
       "source": "support",
@@ -109,7 +111,8 @@
       "quotes": [],
       "position": {
         "start": 0,
-        "end": 137
+        "end": 137,
+        "text": null
       },
       "result": {
         "finding": "supported",
@@ -147,7 +150,8 @@
       "quotes": [],
       "position": {
         "start": 139,
-        "end": 284
+        "end": 284,
+        "text": null
       },
       "result": {
         "finding": "unchecked",
@@ -185,7 +189,8 @@
       "quotes": [],
       "position": {
         "start": 286,
-        "end": 402
+        "end": 402,
+        "text": null
       },
       "result": {
         "finding": "contradicted",
@@ -225,7 +230,8 @@
       ],
       "position": {
         "start": 404,
-        "end": 537
+        "end": 537,
+        "text": null
       },
       "result": {
         "finding": "contradicted",
@@ -271,7 +277,8 @@
       "sentence": "The city's 2024 transport survey found that most commuters cycle (survey).",
       "position": {
         "end": 690,
-        "start": 539
+        "start": 539,
+        "text": null
       }
     },
     {
@@ -282,7 +289,8 @@
       "sentence": "The minister explained the plan in a short video (video).",
       "position": {
         "end": 796,
-        "start": 692
+        "start": 692,
+        "text": null
       }
     },
     {
@@ -293,7 +301,8 @@
       "sentence": "The internal report gives the same figure (report).",
       "position": {
         "end": 880,
-        "start": 798
+        "start": 798,
+        "text": null
       }
     },
     {
@@ -304,7 +313,8 @@
       "sentence": "Diamond sensors can measure temperature inside a living cell [1].",
       "position": {
         "end": 947,
-        "start": 882
+        "start": 882,
+        "text": null
       }
     },
     {
@@ -315,7 +325,8 @@
       "sentence": "A second study was retracted the following year [2].",
       "position": {
         "end": 1001,
-        "start": 949
+        "start": 949,
+        "text": null
       }
     },
     {
@@ -326,7 +337,8 @@
       "sentence": "Further reading: https://en.wikipedia.org/wiki/Fact-checking",
       "position": {
         "end": 1063,
-        "start": 1003
+        "start": 1003,
+        "text": null
       }
     }
   ]

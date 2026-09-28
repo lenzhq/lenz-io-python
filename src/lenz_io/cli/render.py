@@ -154,9 +154,10 @@ def _render_positions(out: Output, result: ExtractedClaims, claim: str, *, inden
     for loc in result.locations or []:
         if (loc.claim or "").strip() != claim:
             continue
-        for pos in loc.positions:
+        for pos in loc.positions or []:
             span = f"{pos.start}-{pos.end}: " if pos.start is not None and pos.end is not None else ""
-            out.console.print(f'{indent}at {span}"{pos.text}"', markup=False, highlight=False)
+            passage = f'"{pos.text}"' if pos.text is not None else ""
+            out.console.print(f"{indent}at {span}{passage}".rstrip(), markup=False, highlight=False)
         return
 
 

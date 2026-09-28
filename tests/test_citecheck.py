@@ -195,6 +195,30 @@ class TestWait:
         assert seen == ["checking", "completed"]
         assert no_sleep == [5.0]
 
+    @pytest.mark.parametrize("hint, expected", [(12, [12.0]), (7, [7.0]), (None, [10.0])])
+    def test_waits_the_checks_own_poll_after_seconds(self, client, no_sleep, hint, expected):
+        """The body's ``poll_after_seconds`` paces the next read; only a body
+        without one falls back to the fixed interval."""
+        running = dict(_running(), poll_after_seconds=hint)
+        with respx.mock(base_url=BASE) as r:
+            r.post("/citecheck").respond(202, json=_load("citecheck_accepted.json"))
+            r.get(f"/citechecks/{CHECK_ID}").mock(
+                side_effect=[httpx.Response(200, json=running), httpx.Response(200, json=COMPLETED)]
+            )
+            client.citecheck_and_wait(DRAFT)
+        assert no_sleep == expected
+
+    def test_a_missing_poll_after_seconds_key_uses_the_fixed_interval(self, client, no_sleep):
+        running = _running()
+        del running["poll_after_seconds"]
+        with respx.mock(base_url=BASE) as r:
+            r.post("/citecheck").respond(202, json=_load("citecheck_accepted.json"))
+            r.get(f"/citechecks/{CHECK_ID}").mock(
+                side_effect=[httpx.Response(200, json=running), httpx.Response(200, json=COMPLETED)]
+            )
+            client.citecheck_and_wait(DRAFT)
+        assert no_sleep == [10.0]
+
     def test_a_body_that_is_not_this_check_is_a_failed_poll(self, client, no_sleep):
         with respx.mock(base_url=BASE) as r:
             r.post("/citecheck").respond(202, json=_load("citecheck_accepted.json"))

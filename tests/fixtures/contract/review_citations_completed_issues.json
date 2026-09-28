@@ -63,7 +63,8 @@
       "quotes": [],
       "position": {
         "start": 949,
-        "end": 1001
+        "end": 1001,
+        "text": null
       },
       "finding": "doi_not_found",
       "source": "doi",
@@ -83,7 +84,8 @@
       "quotes": [],
       "position": {
         "start": 539,
-        "end": 690
+        "end": 690,
+        "text": null
       },
       "finding": "page_not_found",
       "source": "page",
@@ -103,7 +105,8 @@
       "quotes": [],
       "position": {
         "start": 286,
-        "end": 402
+        "end": 402,
+        "text": null
       },
       "finding": "contradicted",
       "source": "support",
@@ -125,7 +128,8 @@
       ],
       "position": {
         "start": 404,
-        "end": 537
+        "end": 537,
+        "text": null
       },
       "finding": "contradicted",
       "source": "support",
@@ -145,7 +149,8 @@
       "quotes": [],
       "position": {
         "start": 882,
-        "end": 947
+        "end": 947,
+        "text": null
       },
       "finding": "metadata_mismatch",
       "source": "metadata",

@@ -62,9 +62,12 @@ parses, with the new keys at their defaults.
   checked; `None` until the draft is read. Every new key has a default (`[]`,
   `None`, `0`), and every finding, reason and status is a plain
   string, so a value the API adds later passes through. The nested shapes
-  (`ReviewCitationCheck`, `ReviewCitationResult`, `ReviewCitationPosition`,
-  `ReviewCitationRecord`, `ReviewCitationDifference`,
-  `ReviewCitationCheckCounts`) live in `lenz_io.models`.
+  (`ReviewCitationCheck`, `ReviewCitationResult`, `ReviewCitationRecord`,
+  `ReviewCitationDifference`, `ReviewCitationCheckCounts`) live in
+  `lenz_io.models`. A citation's `position` (on `ReviewCitation`,
+  `ReviewCitationIssue` and `ReviewMoreCitation`) is a `Position`, the same
+  model as a claim's: `start` and `end` set, `text` `None` (the row carries
+  the `statement`).
 - **`ReviewEvent.review`** and `parse_webhook` carry the same keys.
 - **`lenz review --max-citations N`** (0-20): after the claims, the
   count ("23 sources cited in your draft"), the key numbers ("8 checked, 7
@@ -101,35 +104,43 @@ parses, with the new keys at their defaults.
   a list that ends up empty answers `status: "not_a_claim"`. Locating adds a
   few seconds. `locate` defaults to false: leave it `None` and nothing is
   sent (the server default governs); an explicit `False` is sent.
+- **`Position`** (`start`, `end`, `text`): one model for every place in the
+  text you sent, a claim's passage or a citation's statement. `start`/`end`
+  index the text as sent in Unicode code points, half-open, so
+  `text[start:end]` is the passage (`end` exclusive); both are `None` when
+  the input was a URL. `text` is the passage (for a URL input, the only
+  pointer to it), and `None` on a citation's `position`, whose row carries
+  the statement. Exported from `lenz_io`.
 - **`ExtractedClaims.locations`** (`list[ClaimLocation] | None`): one
-  `ClaimLocation` (`claim`, `positions`) per returned claim, in the order of
-  `identified_claims` (one entry for a single `claim`). Each `ClaimPosition`
-  has `start`, `end` and `text`: `start`/`end` index the text as sent in
-  Unicode code points, so `text[start:end]` is the passage (`end`
-  exclusive); both are `None` when the input was a URL. `locations` is `[]`
+  `ClaimLocation` (`claim`, `positions: list[Position] | None`) per returned
+  claim, in the order of `identified_claims` (one entry for a single
+  `claim`). `positions` is `None` only when that claim could not be placed;
+  on `/extract` every returned claim is placed. `locations` is `[]`
   when every claim was left out, and `None` when `locate` was not set, when
   the extraction found no claims, or when the
   claims could not be located (the list is then returned unfiltered). A body
-  from an older server without the key parses as `None`. `ClaimLocation` and
-  `ClaimPosition` are exported from `lenz_io`.
+  from an older server without the key parses as `None`. `ClaimLocation` is
+  exported from `lenz_io`.
 - **`lenz extract --locate / --no-locate`**: unset by default (the server
   decides). The pretty output prints each claim's passages, with their
   `start`-`end` span when there is one.
 - **`/review` checks only the claims traced directly back to the draft**, as
   `extract(locate=True)` does: a claim found nowhere in the draft, or found
   with a different figure, is left out.
-- **`ReviewClaim.positions`** (`list[ClaimPosition] | None`): every place the
+- **`ReviewClaim.positions`** (`list[Position] | None`): every place the
   draft makes the claim, in text order, at most 10. `start`/`end` index the
   `text` as sent in Unicode code points (`text[start:end]`, `end`
-  exclusive), the same coordinates as a citation's `position`. `None` when
-  the draft was a URL, when the claims could not be located, or once a
-  zero-retention draft is gone.
-- **`more_claim_positions`** on both review views
-  (`list[list[ClaimPosition] | None] | None`): one entry per `more_claims`
-  string, same order. `None` until the draft is read, for a URL, or when the
-  claims could not be located. A body from an older server without either
-  key parses as `None`. `lenz review` prints a claim's first position as
-  `· at start-end` when there is one.
+  exclusive), the same coordinates as a citation's `position`. For a URL
+  draft, `start`/`end` are `None` and `text` carries the passage, as
+  `/extract` does for a URL. `None` when the claims could not be located, or
+  once a zero-retention draft is gone.
+- **`more_claim_locations`** on both review views
+  (`list[ClaimLocation] | None`): one `ClaimLocation` (`claim`, `positions`)
+  per `more_claims` string, same order, the shape `extract(locate=True)`
+  returns. `None` until the draft is read. `more_claims` stays `list[str]`.
+  A body from an older server without either key parses as `None`.
+  `lenz review` prints a claim's first position as `· at start-end` when it
+  has offsets (never for a URL draft).
 
 ### Deprecated
 

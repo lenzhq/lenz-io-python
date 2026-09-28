@@ -342,7 +342,7 @@ class TestVerify:
         assert out.locations is None
 
     def test_extract_parses_locations(self, client):
-        from lenz_io import ClaimLocation, ClaimPosition
+        from lenz_io import ClaimLocation, Position
 
         text = "A rose 5%. A rose 5% again."
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -369,7 +369,8 @@ class TestVerify:
         (loc,) = out.locations
         assert isinstance(loc, ClaimLocation)
         assert loc.claim == out.claim
-        assert all(isinstance(p, ClaimPosition) for p in loc.positions)
+        assert loc.positions is not None
+        assert all(isinstance(p, Position) for p in loc.positions)
         assert [text[p.start : p.end] for p in loc.positions] == [p.text for p in loc.positions]
 
     def test_extract_parses_url_locations_without_offsets(self, client):

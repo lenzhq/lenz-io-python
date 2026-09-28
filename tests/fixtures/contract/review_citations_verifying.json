@@ -66,7 +66,8 @@
       "quotes": [],
       "position": {
         "start": 0,
-        "end": 137
+        "end": 137,
+        "text": null
       },
       "result": null,
       "check": {
@@ -100,7 +101,8 @@
       "quotes": [],
       "position": {
         "start": 139,
-        "end": 284
+        "end": 284,
+        "text": null
       },
       "result": null,
       "check": {
@@ -134,7 +136,8 @@
       "quotes": [],
       "position": {
         "start": 286,
-        "end": 402
+        "end": 402,
+        "text": null
       },
       "result": null,
       "check": {
@@ -170,7 +173,8 @@
       ],
       "position": {
         "start": 404,
-        "end": 537
+        "end": 537,
+        "text": null
       },
       "result": null,
       "check": {
@@ -204,7 +208,8 @@
       "quotes": [],
       "position": {
         "start": 539,
-        "end": 690
+        "end": 690,
+        "text": null
       },
       "result": null,
       "check": {
@@ -238,7 +243,8 @@
       "quotes": [],
       "position": {
         "start": 692,
-        "end": 796
+        "end": 796,
+        "text": null
       },
       "result": null,
       "check": {
@@ -272,7 +278,8 @@
       "quotes": [],
       "position": {
         "start": 798,
-        "end": 880
+        "end": 880,
+        "text": null
       },
       "result": null,
       "check": {
@@ -306,7 +313,8 @@
       "quotes": [],
       "position": {
         "start": 882,
-        "end": 947
+        "end": 947,
+        "text": null
       },
       "result": null,
       "check": {
@@ -340,7 +348,8 @@
       "quotes": [],
       "position": {
         "start": 949,
-        "end": 1001
+        "end": 1001,
+        "text": null
       },
       "result": null,
       "check": {
