@@ -2440,3 +2440,32 @@ def test_poll_all_marks_a_removed_task_failed_and_keeps_polling_the_rest():
     assert statuses["t-1"].status == "failed"
     assert "no longer available" in statuses["t-1"].error
     assert statuses["t-2"].status == "completed"
+
+
+# ── polling honours the server's poll_after_seconds ─────────────────────────
+def _status(tid, status, hint=None):
+    from lenz_io.models import Progress
+
+    return TaskStatus(task_id=tid, status=status, progress=Progress(poll_after_seconds=hint))
+
+
+def test_next_wait_takes_the_servers_hint_else_the_fallback():
+    assert verify_mod._next_wait([_status("a", "processing", 7)]) == 7.0
+    assert verify_mod._next_wait([_status("a", "processing", None)]) == verify_mod.POLL_INTERVAL
+    # Out of the client's bounds (1-30 s): ignored, like *_and_wait does.
+    assert verify_mod._next_wait([_status("a", "processing", 300)]) == verify_mod.POLL_INTERVAL
+    # A batch waits the shortest hint among what is still pending.
+    assert verify_mod._next_wait([_status("a", "processing", 9), _status("b", "processing", 4), None]) == 4.0
+
+
+def test_the_batch_poll_sleeps_the_hint(monkeypatch):
+    from lenz_io.cli.render import Output
+
+    slept = []
+    monkeypatch.setattr(verify_mod.time, "sleep", lambda s: slept.append(s))
+    fake = _batch_client({"t1": [_status("t1", "processing", 6), _status("t1", "completed")]})
+    statuses = {}
+    out = Output(json_mode=False, no_color=True)
+    verify_mod._poll_all(fake, out, [("t1", "A claim.")], 60.0, statuses, on_update=None)
+    assert slept == [6.0]
+    assert statuses["t1"].status == "completed"
