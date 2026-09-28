@@ -165,14 +165,16 @@ def test_reads_the_file_and_sends_the_flags(draft):
         _invoke("review", draft, "--max-verifications", "2", "--depth", "low", "--json")
     body = json.loads(post.calls.last.request.content)
     assert body["text"] == "The EU AI Act entered into force on 1 August 2024.\n"
-    assert body["escalate"] == {"max_verifications": 2, "depth": "low"}
+    assert body["escalate"] == {"max_verifications": 2, "depth": "low", "max_citations": 20}
 
 
-def test_default_submit_sends_no_policy(draft):
+def test_default_submit_checks_20_citations_and_nothing_else(draft):
+    # The CLI's own default: the draft's sources are checked unless told
+    # otherwise. Every other knob is left to the server.
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_completed.json")
         _invoke("review", draft, "--json")
-    assert "escalate" not in json.loads(post.calls.last.request.content)
+    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_citations": 20}
 
 
 def test_a_url_is_sent_as_the_text():
@@ -392,11 +394,18 @@ def test_max_citations_is_sent_inside_escalate(draft):
     assert "citations" not in body
 
 
-def test_without_max_citations_nothing_is_sent(draft):
+def test_max_citations_zero_sends_no_citation_check(draft):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_completed.json")
-        _invoke("review", draft, "--json")
+        _invoke("review", draft, "--max-citations", "0", "--json")
     assert "escalate" not in json.loads(post.calls.last.request.content)
+
+
+def test_the_sdk_default_checks_no_citation():
+    # Only the CLI turns citations on: the library's review() sends nothing.
+    import inspect
+
+    assert inspect.signature(Lenz.review).parameters["max_citations"].default is None
 
 
 def test_the_citations_flag_is_gone(draft):
@@ -446,8 +455,10 @@ def test_citation_render_count_summary_and_issues():
     assert "[source 7/10] Page not found" in text and "Part of the check failed:" in text
     assert "[source 8/10] Could not be checked this time." in text
     assert "[source 3/10] Partly supported" in text
-    # an unchecked row is counted, never listed
-    assert "[source 4/10]" not in text
+    # an unchecked row is not an issue: it is listed once, to check by hand
+    by_hand = text.index("Check these by hand")
+    assert text.index("[source 4/10]") > by_hand
+    assert text.count("[source 4/10]") == 1
 
 
 def test_quote_finding_shows_the_missing_excerpt_only():
@@ -539,7 +550,7 @@ def test_max_assessments_is_sent(draft):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_completed.json")
         _invoke("review", draft, "--max-assessments", "5", "--json")
-    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_assessments": 5}
+    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_assessments": 5, "max_citations": 20}
 
 
 @pytest.mark.parametrize("value", ["-1", "21"])
@@ -631,3 +642,109 @@ def test_no_max_citations_prints_no_sources_section():
     body = _load("review_citations_constructed.json")
     body["policy"]["max_citations"] = 0
     assert citation_count_lines(ReviewFull.model_validate(body)) == []
+
+
+# ── the editor's view: every reason, what to check by hand, clickable links ─
+
+
+def test_a_not_in_source_issue_prints_its_reason():
+    body = _load("review_citations_completed.json")
+    body["citation_issues"] = [
+        dict(
+            body["citation_issues"][0],
+            finding="not_in_source",
+            source="support",
+            snippet=None,
+            rationale="The page does not mention the four risk tiers.",
+        )
+    ]
+    text = _render_body(body)
+    assert "Not in the source" in text
+    assert "Reviewer's note: The page does not mention the four risk tiers." in text
+    assert "The source says:" not in text
+
+
+def test_sources_that_could_not_be_checked_are_listed_with_why():
+    text = _render("review_citations_completed.json")
+    assert "Check these by hand" in text
+    after = text[text.index("Check these by hand") :]
+    assert "Lenz does not read this site." in after or "not checked" in after.lower()
+    assert "https://www.youtube.com/watch?v=dQw4w9WgXcQ" in after
+
+
+def test_a_long_link_is_never_hard_wrapped():
+    body = _load("review_citations_completed.json")
+    long_url = "https://example.org/" + "a" * 250
+    body["citation_issues"][0]["cited_url"] = long_url
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=80, highlight=False)
+    render_review(out, ReviewFull.model_validate(body), issues_only=True)
+    assert "  " + long_url + "\n" in buf.getvalue()
+
+
+def test_the_issues_view_shows_low_confidence_claims():
+    body = _load("review_completed.json")
+    target = next(c for c in body["claims"] if c["result"] and not c["result"]["is_issue"])
+    target["result"]["confidence"] = "low"
+    text = _render_body(body, issues_only=True)
+    assert "Low confidence" in text
+    assert target["claim"] in text[text.index("Low confidence") :]
+
+
+def test_the_issues_view_has_no_low_confidence_section_without_one():
+    assert "Low confidence" not in _render("review_completed.json", issues_only=True)
+
+
+def test_language_is_sent(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--language", "DE", "--json")
+    assert json.loads(post.calls.last.request.content)["language"] == "de"
+
+
+def test_no_language_sends_none(draft):
+    with respx.mock(base_url=BASE) as r:
+        post, _ = _serve(r, "review_completed.json")
+        _invoke("review", draft, "--json")
+    assert "language" not in json.loads(post.calls.last.request.content)
+
+
+def _render_body(body: dict, *, issues_only: bool = False) -> str:
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body), issues_only=issues_only)
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("args", "line"),
+    [
+        ((), "Checking claims and up to 20 citations…"),
+        (("--max-citations", "5"), "Checking claims and up to 5 citations…"),
+        (("--max-citations", "0"), "Checking claims…"),
+        (("--max-assessments", "0"), "Checking up to 20 citations…"),
+    ],
+)
+def test_the_run_opens_by_saying_what_it_checks(draft, human, args, line):
+    with respx.mock(base_url=BASE) as r:
+        _serve(r, "review_completed.json")
+        result = _invoke("review", draft, *args)
+    # `output` is stdout and stderr together, on every click version.
+    assert line in result.output
+
+
+def test_json_mode_prints_no_opening_line(draft):
+    with respx.mock(base_url=BASE) as r:
+        _serve(r, "review_completed.json")
+        result = _invoke("review", draft, "--json")
+    assert "Checking" not in result.output
+    json.loads(result.stdout)
+
+
+def test_help_states_the_citation_default_and_its_cost():
+    result = runner.invoke(app, ["review", "--help"], env={"COLUMNS": "200"})
+    assert "default 20" in result.stdout and "1 credit per checked citation" in result.stdout

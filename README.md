@@ -43,10 +43,10 @@ lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
-lenz review draft.md             # the whole draft: quick verdicts, deep checks; its citations too, if asked
+lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
 lenz review draft.md --issues    # only the issues
-lenz review draft.md --max-citations 10   # also check the draft's first 10 sources (links, DOIs)
-lenz review draft.md --max-citations 20 --max-assessments 0   # only the sources, no claim
+lenz review draft.md --max-citations 0    # claims only, no source checked
+lenz review draft.md --max-assessments 0  # only the sources, no claim
 lenz citecheck draft.md          # the citation check on its own
 lenz citecheck --pairs pairs.json   # statement-source pairs, each checked as it is
 lenz usage                       # credits left, what they buy, and when they reset
@@ -199,11 +199,13 @@ outcome, for CI: `0` clean, `1` issues found, `2` anything else (incomplete,
 unchecked, failed, timed out, or an error). `--issues` prints only the issues,
 `--json` the review body, `--max-assessments N`, `--max-verifications N` and
 `--depth low` set the policy, and `--detach` prints the `review_id` for `lenz review --resume <id>`
-(and exits `0`: it submitted, it did not review). `--max-citations N` also
-checks the draft's first N sources and prints their count and their issues
-after the claims; a source issue exits `1` like a claim one.
-`lenz review draft.md --max-citations 20 --max-assessments 0` checks the
-sources and no claim.
+(and exits `0`: it submitted, it did not review). The draft's first 20 sources
+are checked too (1 credit per checked citation), and their count and their
+issues print after the claims; a source issue exits `1` like a claim one.
+`--max-citations N` checks the first N and `--max-citations 0` none, and
+`lenz review draft.md --max-assessments 0` checks the sources and no claim.
+This default is the CLI's: `client.review()` checks no citation unless you
+pass `max_citations`.
 
 ## Check a draft's citations
 

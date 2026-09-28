@@ -58,6 +58,12 @@ def citecheck(
         max=20,
         help="With a draft: check its first N sources (1-20, default 20).",
     ),
+    language: str = typer.Option(
+        None,
+        "--language",
+        metavar="CODE",
+        help="Write the reasoning in this language (ISO 639-1, e.g. de). Default English.",
+    ),
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the citecheck_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="CITECHECK_ID", help="Pick up a check started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
@@ -71,6 +77,8 @@ def citecheck(
             _work(client)
         except KeyboardInterrupt:
             raise SystemExit(130) from None
+
+    lang = (language or "").strip().lower()
 
     def _work(client: Lenz) -> None:
         if resume:
@@ -87,9 +95,9 @@ def citecheck(
                         code="invalid_usage",
                         exit_code=2,
                     )
-                started = client.citecheck(pairs=_read_pairs(pairs))
+                started = client.citecheck(pairs=_read_pairs(pairs), language=lang)
             else:
-                started = client.citecheck(_read_draft(draft), max_citations=max_citations)
+                started = client.citecheck(_read_draft(draft), max_citations=max_citations, language=lang)
             citecheck_id = started.citecheck_id
             if detach:
                 _emit_detached(out, citecheck_id)

@@ -179,3 +179,14 @@ def test_the_render_of_a_clean_check_of_pairs():
     text = _render(body)
     assert "2 sources cited in your draft" in text and "No issues." in text
     assert "found but not checked" not in text
+
+
+def test_citecheck_language_is_sent(draft, pairs_file):
+    with respx.mock(base_url=BASE) as r:
+        post = _serve(r)
+        _invoke("citecheck", draft, "--language", "de", "--json")
+    assert json.loads(post.calls.last.request.content)["language"] == "de"
+    with respx.mock(base_url=BASE) as r:
+        post = _serve(r, _load("citecheck_pairs_completed.json"))
+        _invoke("citecheck", "--pairs", pairs_file, "--language", "fr", "--json")
+    assert json.loads(post.calls.last.request.content)["language"] == "fr"
