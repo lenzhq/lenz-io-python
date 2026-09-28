@@ -124,8 +124,10 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.console.print(f"[bold]{len(claims)} claims found:[/bold]")
         for i, claim in enumerate(claims, 1):
             out.console.print(f"  {i}. {claim}")
+            _render_positions(out, result, claim, indent="     ")
     elif claims:
         out.console.print(f"[bold]Claim:[/bold] {claims[0]}")
+        _render_positions(out, result, claims[0], indent="  ")
     elif result.status == "no_match":
         # Distinct from the empty case below: the text DID have claims, they
         # just fell outside the focus. Saying "no claim found" here would send
@@ -140,6 +142,22 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
     # hint next to a multi-claim list reads as if it belongs to one of them.
     if len(claims) == 1:
         out.console.print(f'\n[dim]Verify it:[/dim] lenz verify "{claims[0]}"')
+
+
+def _render_positions(out: Output, result: ExtractedClaims, claim: str, *, indent: str) -> None:
+    """Where the text makes ``claim``, when the call asked to ``locate``.
+
+    One line per position: the ``start``-``end`` span (absent for a URL
+    input, where there is nothing to index) and the passage itself. The
+    passage is the user's own text, so it prints with ``markup=False``.
+    """
+    for loc in result.locations or []:
+        if (loc.claim or "").strip() != claim:
+            continue
+        for pos in loc.positions:
+            span = f"{pos.start}-{pos.end}: " if pos.start is not None and pos.end is not None else ""
+            out.console.print(f'{indent}at {span}"{pos.text}"', markup=False, highlight=False)
+        return
 
 
 def render_assess(out: Output, result: AssessResponse) -> None:

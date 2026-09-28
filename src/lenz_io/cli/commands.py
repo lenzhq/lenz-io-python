@@ -6,6 +6,7 @@ renders. All error/exit handling lives in :func:`._run.execute`; ``verify``
 from __future__ import annotations
 
 import os
+from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import typer
@@ -36,6 +37,13 @@ def extract(
         "--focus",
         help='Narrow to the claims that matter, e.g. "market size and competitors".',
     ),
+    # ``Optional`` rather than ``bool | None``: typer evaluates the
+    # annotation at runtime, and the CLI still runs on Python 3.9.
+    locate: Optional[bool] = typer.Option(  # noqa: UP045
+        None,
+        "--locate/--no-locate",
+        help="Keep only the claims traced back to the text, with where it makes each. Default: server decides (off).",
+    ),
 ) -> None:
     """Pull verifiable claims out of text. No credit charge (1000/day) — but needs a key."""
     state: CLIState = ctx.obj
@@ -44,7 +52,7 @@ def extract(
     def work(client: Lenz) -> None:
         payload = read_text_arg(text)
         with out.working("Extracting claims…"):
-            result = client.extract(text=payload, focus=focus)
+            result = client.extract(text=payload, focus=focus, locate=locate)
         render_extract(out, result)
 
     execute(state, needs_key=True, work=work)

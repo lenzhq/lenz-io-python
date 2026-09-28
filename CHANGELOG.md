@@ -94,6 +94,27 @@ parses, with the new keys at their defaults.
 - **`lenz review --max-assessments N`** (0-20): how many of the draft's claims
   get a quick verdict. `lenz review draft.md --max-citations 20 --max-assessments 0`
   checks the draft's sources and no claim.
+- **`client.extract(text, locate=True)`**: only the claims that could be
+  traced directly back to the text are returned, and the new
+  `ExtractedClaims.locations` says where the text makes each one. A claim
+  found nowhere in the text, or found with a different figure, is left out;
+  a list that ends up empty answers `status: "not_a_claim"`. Locating adds a
+  few seconds. `locate` defaults to false: leave it `None` and nothing is
+  sent (the server default governs); an explicit `False` is sent.
+- **`ExtractedClaims.locations`** (`list[ClaimLocation] | None`): one
+  `ClaimLocation` (`claim`, `positions`) per returned claim, in the order of
+  `identified_claims` (one entry for a single `claim`). Each `ClaimPosition`
+  has `start`, `end` and `text`: `start`/`end` index the text as sent in
+  Unicode code points, so `text[start:end]` is the passage (`end`
+  exclusive); both are `None` when the input was a URL. `locations` is `[]`
+  when every claim was left out, and `None` when `locate` was not set, when
+  the extraction found no claims, or when the
+  claims could not be located (the list is then returned unfiltered). A body
+  from an older server without the key parses as `None`. `ClaimLocation` and
+  `ClaimPosition` are exported from `lenz_io`.
+- **`lenz extract --locate / --no-locate`**: unset by default (the server
+  decides). The pretty output prints each claim's passages, with their
+  `start`-`end` span when there is one.
 
 ### Deprecated
 

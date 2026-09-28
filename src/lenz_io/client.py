@@ -598,6 +598,7 @@ class Lenz:
         text: str,
         language: str = "",
         focus: str = "",
+        locate: bool | None = None,
         timeout: float | None = None,
     ) -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
@@ -620,12 +621,23 @@ class Lenz:
         list is never substituted. Widen the focus and call again. A focused
         call costs the same single unit of the daily cap.
 
+        ``locate`` (optional): with ``True``, only the claims that could be
+        traced directly back to the text are returned, and ``locations``
+        says where the text makes each one (``start``/``end`` index the
+        ``text`` you sent, in code points, so ``text[start:end]`` is the
+        passage). A claim found nowhere in the text, or found with a
+        different figure, is left out; if that leaves no claim, ``status``
+        is ``"not_a_claim"``. Locating adds a few seconds. If the claims
+        cannot be located, ``locations`` is ``None`` and the list is returned
+        unfiltered. Leave it ``None`` to use the server default (currently
+        off); an explicit ``False`` is sent as such.
+
         ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
         the client default for this one request. Otherwise ``extract`` uses
         ``EXTRACT_TIMEOUT`` (90s), or your client timeout when you configured
         a longer one: a long input can take more than 30s to extract.
         """
-        return self._extract(text=text, language=language, focus=focus, timeout=timeout)
+        return self._extract(text=text, language=language, focus=focus, locate=locate, timeout=timeout)
 
     def assess(
         self,
@@ -1506,6 +1518,7 @@ class Lenz:
         text: str,
         language: str = "",
         focus: str = "",
+        locate: bool | None = None,
         timeout: float | None = None,
     ) -> ExtractedClaims:
         payload: dict[str, Any] = {"text": text}
@@ -1515,6 +1528,10 @@ class Lenz:
         # contract, and a cap duplicated here would drift from it.
         if focus:
             payload["focus"] = focus
+        # Sent only when set, so an explicit False reaches the server and an
+        # omitted value leaves the server default in charge.
+        if locate is not None:
+            payload["locate"] = locate
         if timeout is None:
             timeout = self._timeout_at_least(EXTRACT_TIMEOUT)
         body = self._request("POST", "/extract", json=payload, timeout=timeout)

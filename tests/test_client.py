@@ -308,6 +308,88 @@ class TestVerify:
         # response.
         assert out.claim == "The earth is flat."
 
+    @pytest.mark.parametrize("locate", [True, False])
+    def test_extract_sends_an_explicit_locate(self, client, locate):
+        """An explicit ``False`` is sent too: only ``None`` defers to the
+        server default."""
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json={"status": "ready", "claim": "A.", "locations": None})
+            client.extract(text="A document.", locate=locate)
+        assert json.loads(route.calls.last.request.content)["locate"] is locate
+
+    def test_extract_omits_locate_by_default(self, client):
+        import json
+
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(200, json={"status": "ready", "claim": "A."})
+            client.extract(text="A document.")
+        assert "locate" not in json.loads(route.calls.last.request.content)
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"status": "ready", "claim": "A.", "locations": None},
+            # An older server omits the key.
+            {"status": "ready", "claim": "A."},
+        ],
+    )
+    def test_extract_locations_null_or_absent_is_none(self, client, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/extract").respond(200, json=body)
+            out = client.extract(text="A document.")
+        assert out.locations is None
+
+    def test_extract_parses_locations(self, client):
+        from lenz_io import ClaimLocation, ClaimPosition
+
+        text = "A rose 5%. A rose 5% again."
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/extract").respond(
+                200,
+                json={
+                    "status": "ready",
+                    "claim": "A rose 5%.",
+                    "identified_claims": [],
+                    "original_input": text,
+                    "locations": [
+                        {
+                            "claim": "A rose 5%.",
+                            "positions": [
+                                {"start": 0, "end": 10, "text": "A rose 5%."},
+                                {"start": 11, "end": 20, "text": "A rose 5%"},
+                            ],
+                        }
+                    ],
+                },
+            )
+            out = client.extract(text=text, locate=True)
+        assert out.locations is not None
+        (loc,) = out.locations
+        assert isinstance(loc, ClaimLocation)
+        assert loc.claim == out.claim
+        assert all(isinstance(p, ClaimPosition) for p in loc.positions)
+        assert [text[p.start : p.end] for p in loc.positions] == [p.text for p in loc.positions]
+
+    def test_extract_parses_url_locations_without_offsets(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/extract").respond(
+                200,
+                json={
+                    "status": "ready",
+                    "claim": "A rose 5%.",
+                    "original_input": "https://example.com/a",
+                    "locations": [
+                        {"claim": "A rose 5%.", "positions": [{"start": None, "end": None, "text": "A grew 5 %."}]}
+                    ],
+                },
+            )
+            out = client.extract(text="https://example.com/a", locate=True)
+        assert out.locations is not None
+        pos = out.locations[0].positions[0]
+        assert (pos.start, pos.end, pos.text) == (None, None, "A grew 5 %.")
+
     def test_get_status_returns_typed_status(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.get("/verify/status/tsk_001").respond(

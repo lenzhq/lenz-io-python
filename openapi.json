@@ -3,7 +3,7 @@
   "info": {
     "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Five API calls for AI product teams\n\nA research-depth ladder: find claims, judge them fast, prove them deep, follow up, review a whole draft.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 20, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or up to a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n- `POST /review` \u2014 the extract \u2192 assess \u2192 verify ladder on a whole draft, returning the issues with suggested rewrites in 2-4 min. Async, 1 credit per claim assessed + 10 (5 at `depth: \"low\"`) per claim verified.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: one /review call\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# Extract, assess, and verify the doubtful claims in one call (async, 2-4 min)\ndraft = \"The EU AI Act took effect in March 2024. It sorts AI systems into four risk tiers.\"\nreview = client.review_and_wait(text=draft)\nfor i in review.issues:\n    print(i.verdict, i.claim, i.suggested_rewrite)\n```\n\nThe default policy: a quick verdict on every claim (up to 20), and the deep check on the rows whose quick verdict is `False`, `Mostly False` or `Mixed`, or whose confidence is `low`, up to five. Change it in `escalate`. To deep-check the rows the cap left out (`escalation.disposition == \"cap\"`), send them to `/verify/batch`. A resend with the same `Idempotency-Key` within 24 hours returns the same review; a new key is a new review.\n\n## The primitives, call by call: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on every claim in ONE call (typically 10-25s, 3-model panel):\n# a list of up to 20, one row per claim, in the order you sent them.\nquick = client.assess(claims=claims).claims\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Rows we ran out of time on are free and worth resending; the rest of the\n# Error rows (no_claim, framing_failed) want a different input.\nretry = [c.claim for c in quick if c.error_code == \"timeout\"]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.verdict != \"Error\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of four shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026); on the webhook the same value rides in `error`. `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nOne of those reasons comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `not_a_claim` (the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **Whole drafts**: `POST /review` with `webhook_url`; handle `review.completed` (a `ReviewWebhookPayload`, deduped on `event_id`) and read `review.issues[]`.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`); not on `/assess` rows.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key for `verify_and_wait`; on other calls pass `idempotency_key` yourself.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. The SDKs send the header when you pass a key yourself: `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node; neither generates one for ask, because a repeated question is usually deliberate. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` and `POST /review` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events. Events: `verification.completed`, `verification.failed`, `certificate.timestamped`, and for a review `review.completed` / `review.failed` (switch on `event`; a review's own deep checks fire no `verification.*` events).\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Four API calls and one to run them\n\nA research-depth ladder: find claims, judge fast, prove deep, citecheck; `/review` runs them all.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 20, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about, and `locate: true` keeps only the claims traced back to the text, with where each is made. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 fast 3-model frontier panel verdict, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or up to a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel.\n- `POST /verify` \u2014 full multi-model pipeline with citations in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /citecheck` \u2014 does each cited source say what the text attributes to it: send pairs of a statement and its URL or DOI, or a whole text. Async; 1 credit per checked citation, refunded when a citation could not be checked ([guide](https://lenz.io/docs/citations)).\n- `POST /review` \u2014 the extract \u2192 assess \u2192 verify ladder on a whole draft, returning the issues with suggested rewrites in 2-4 min. Async, 1 credit per claim assessed + 10 (5 at `depth: \"low\"`) per claim verified. With `escalate.max_citations` (0-20, default 0) it also checks whether each source the draft cites says what the draft attributes to it, at 1 credit per checked citation (one that could not be checked is refunded) ([guide](https://lenz.io/docs/citations)). `more_claims` and `more_citations` list what the review found and did not check, at no cost; send them to `/assess` and `/citecheck` to check the rest.\n- Also `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: one /review call\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# Extract, assess, and verify the doubtful claims in one call (async, 2-4 min)\ndraft = \"The EU AI Act took effect in March 2024. It sorts AI systems into four risk tiers.\"\nreview = client.review_and_wait(text=draft)\nfor i in review.issues:\n    print(i.verdict, i.claim, i.suggested_rewrite)\n```\n\nThe default policy: a quick verdict on every claim (up to 20), and the deep check on the rows whose quick verdict is `False`, `Mostly False` or `Mixed`, or whose confidence is `low`, up to five. Change it in `escalate`. To deep-check the rows the cap left out (`escalation.disposition == \"cap\"`), send them to `/verify/batch`. A resend with the same `Idempotency-Key` within 24 hours returns the same review; a new key is a new review.\n\n## The primitives, call by call: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# identified_claims is the complete ordered list when >1 claim is\n# found (top claim included \u2014 iterate it alone); for a single claim\n# it is [] and the claim lives in .claim.\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = extracted.identified_claims or [extracted.claim]\n\n# 2. Fast verdict on every claim in ONE call (typically 10-25s, 3-model panel):\n# a list of up to 20, one row per claim, in the order you sent them.\nquick = client.assess(claims=claims).claims\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Rows we ran out of time on are free and worth resending; the rest of the\n# Error rows (no_claim, framing_failed) want a different input.\nretry = [c.claim for c in quick if c.error_code == \"timeout\"]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.verdict != \"Error\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of four shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries two axes. `failure_reason` says **where** the pipeline stopped (`research_empty`, `conclusion_failed`, `task_stuck`, \u2026); on the webhook the same value rides in `error`. `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `insufficient_evidence` | We looked; the sources are not there | `false` |\n| `invalid_input` | Not a checkable claim, an unreadable URL | `false` |\n| `cancelled` | You stopped it | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n\nBranch on `retryable`, not on `failure_reason`: the same reason can mean either. `failure_class` is a **closed set** \u2014 these five values are stable identifiers. `failure_reason` is an open, informational set (`task_error`, `task_stuck`, `not_a_claim`, \u2026 will appear). A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nOne of those reasons comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `not_a_claim` (the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **Whole drafts**: `POST /review` with `webhook_url`; handle `review.completed` (a `ReviewWebhookPayload`, deduped on `event_id`) and read `review.issues[]` and `review.citation_issues[]`.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\" | \"Error\"`.\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads).\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`); not on `/assess` rows.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 fast 3-model verdict.\n- **Verify** \u2014 deep multi-model pipeline: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED: a `low` request answered from a cached `standard` verdict still costs the low price. A `/verify/batch` may mix depths per item and is billed per item.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. The per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs auto-generate a key for `verify_and_wait`; on other calls pass `idempotency_key` yourself.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. The SDKs send the header when you pass a key yourself: `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node; neither generates one for ask, because a repeated question is usually deliberate. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | An identical request is already in flight | Yes, shortly |\n| 422 | Malformed input | No |\n| 429 | Rate limit (the per-account `/extract` daily cap) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`) failed deterministically \u2014 a schema or parse failure | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`), or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` and `POST /review` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events. Events: `verification.completed`, `verification.failed`, `certificate.timestamped`, and for a review `review.completed` / `review.failed` (switch on `event`; a review's own deep checks fire no `verification.*` events).\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/terms"
   },
   "paths": {
@@ -274,7 +274,7 @@
             }
           }
         },
-        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the extraction step on its own \u2014 no research, no debate, no credit\ncharge. Enumerates every distinct major factual\nclaim in the input (up to 20), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `not_a_claim` \u2014 the input contains no verifiable factual claim at all.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\n`text` can also be a single public web page URL (http or https, nothing\nelse in the field). Lenz reads the page, or a YouTube video's transcript,\nand extracts the claims from its first 50,000 characters. Pages behind a\nlogin (Facebook, Instagram, Threads, LinkedIn) can't be read. A URL call\ntypically takes 5-40 seconds, so give it a 90-second client timeout (SDK\n2.13 and later do). A page that cannot be read answers 502\n`extraction_failed`; when the services that read pages are down, 503\n`upstream_unavailable` with `Retry-After`. Neither uses a unit of the\ndaily cap.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys.",
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the extraction step on its own \u2014 no research, no debate, no credit\ncharge. Enumerates every distinct major factual\nclaim in the input (up to 20), ordered most-check-worthy-first.\n`identified_claims` is the complete ordered list when more than one\nclaim is found \u2014 iterate it alone; don't concatenate it with `claim`\n(the top claim appears in both). Claims returned here verify cleanly\nwhen submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `not_a_claim` \u2014 the input contains no verifiable factual claim at all.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\n`text` can also be a single public web page URL (http or https, nothing\nelse in the field). Lenz reads the page, or a YouTube video's transcript,\nand extracts the claims from its first 50,000 characters. Pages behind a\nlogin (Facebook, Instagram, Threads, LinkedIn) can't be read. A URL call\ntypically takes 5-40 seconds, so give it a 90-second client timeout (SDK\n2.13 and later do). A page that cannot be read answers 502\n`extraction_failed`; when the services that read pages are down, 503\n`upstream_unavailable` with `Retry-After`. Neither uses a unit of the\ndaily cap.\n\nPass `locate: true` to keep only the claims that can be traced directly\nback to your text, and get `locations`: for each returned claim, the\npassages that make it, with `start` / `end` offsets into `text` as you\nsent it, in Unicode code points. A claim the text does not make, or makes\nwith a different figure, is left out, so the list says what the author\nwrote and nothing else. Offsets count code points, not UTF-16 units: in\nJavaScript slice with `Array.from(text).slice(start, end).join('')`.\nFor a URL the offsets are `null` and each position carries its passage.\nLocating adds a few seconds, never more than 20. If it cannot run,\n`locations` is `null` and the claims are returned unfiltered. `locate`\ndefaults to `false`.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys.",
         "tags": [
           "Extract"
         ],
@@ -803,11 +803,26 @@
             }
           },
           "422": {
-            "description": "Unprocessable Entity",
+            "description": "The body names a field or a value the endpoint does not take.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                },
+                "example": {
+                  "detail": "payload.escalate.verdicts: Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True.",
+                  "code": "invalid_verdict_label",
+                  "errors": [
+                    {
+                      "loc": [
+                        "body",
+                        "payload",
+                        "escalate",
+                        "verdicts"
+                      ],
+                      "msg": "Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True."
+                    }
+                  ]
                 }
               }
             }
@@ -833,7 +848,7 @@
             }
           }
         },
-        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
+        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).",
         "tags": [
           "Review"
         ],
@@ -960,6 +975,162 @@
             "lang": "Shell",
             "label": "cURL",
             "source": "curl \"https://lenz.io/api/v1/reviews/a1b2c3d4?view=issues\" \\\n  -H \"Authorization: Bearer lenz_...\"\n# Poll every poll_after_seconds until status is completed or failed,\n# then read outcome and issues[] (verdict, key_finding, suggested_rewrite).\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/citecheck": {
+      "post": {
+        "operationId": "citecheck",
+        "summary": "Check the citations of a draft",
+        "parameters": [],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckAcceptedOut"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "Check whether each cited source says what the draft attributes to it.\n\nSend `text` (a draft with its links: markdown links, bare URLs, `doi:` and\n`doi.org` forms, `[n]` markers with a reference list) or `pairs` (up to 20\nstatements, each with the `url` or `doi` it cites). Returns 202 with a\n`citecheck_id`; read the check at the `Location`\n(`GET /citechecks/{citecheck_id}`), or receive `citecheck.completed` /\n`citecheck.failed` at your webhook.\n\nIt costs 1 credit per checked citation: at most 1 credit per citation you\nsend (or `max_citations` for a text), and a citation that could not be\nchecked is refunded. `credits.charged` on the check says what it cost.",
+        "tags": [
+          "Citecheck"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitecheckIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/citechecks/{citecheck_id}": {
+      "get": {
+        "operationId": "get_citecheck",
+        "summary": "Get a citation check",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "citecheck_id",
+            "schema": {
+              "title": "Citecheck Id",
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CitecheckErrorOut"
+                }
+              }
+            }
+          }
+        },
+        "description": "The check as it stands. Poll no faster than `poll_after_seconds`; read\n`citation_issues[]` at `completed`.",
+        "tags": [
+          "Citecheck"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
           }
         ]
       }
@@ -1480,8 +1651,71 @@
         "title": "AssessIn",
         "type": "object"
       },
+      "ClaimLocationOut": {
+        "properties": {
+          "claim": {
+            "description": "The claim, exactly as it appears in `claim` / `identified_claims`.",
+            "title": "Claim",
+            "type": "string"
+          },
+          "positions": {
+            "description": "Every place the text makes the claim, in text order: at least one, at most 10.",
+            "items": {
+              "$ref": "#/components/schemas/ClaimPositionOut"
+            },
+            "title": "Positions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "claim",
+          "positions"
+        ],
+        "title": "ClaimLocationOut",
+        "type": "object"
+      },
+      "ClaimPositionOut": {
+        "properties": {
+          "start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the passage starts in `text` as you sent it, in Unicode code points (not UTF-16 units or bytes). `null` when `text` was a URL: the page is not returned, so there is nothing to index.",
+            "title": "Start"
+          },
+          "end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the passage ends, exclusive; `null` as for `start`.",
+            "title": "End"
+          },
+          "text": {
+            "description": "The passage itself, as it appears in the text.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "text"
+        ],
+        "title": "ClaimPositionOut",
+        "type": "object"
+      },
       "ExtractOut": {
-        "description": "The claims found in the submitted text.\n\n`claim` is the most check-worthy claim. `identified_claims` is the\ncomplete ordered list when more than one claim was found (the top claim\nincluded \u2014 iterate it on its own) and `[]` for a single claim.\n\n`status` is `ready` when claims were found, `not_a_claim` when the text\ncontains no verifiable factual claim, and `no_match` when a `focus` was\ngiven and no claim falls within it.",
+        "description": "The claims found in the submitted text.\n\n`claim` is the most check-worthy claim. `identified_claims` is the\ncomplete ordered list when more than one claim was found (the top claim\nincluded \u2014 iterate it on its own) and `[]` for a single claim.\n\n`status` is `ready` when claims were found, `not_a_claim` when the text\ncontains no verifiable factual claim, and `no_match` when a `focus` was\ngiven and no claim falls within it.\n\nWith `locate: true`, only claims traced back to the text are listed, and\n`locations` gives the passages that make each one.",
         "properties": {
           "status": {
             "default": "ready",
@@ -1536,6 +1770,21 @@
             "default": "",
             "title": "Original Input",
             "type": "string"
+          },
+          "locations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ClaimLocationOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only with `locate: true`: where the text makes each returned claim, one entry per claim in the order of `identified_claims` (one entry for a single `claim`). `[]` when every claim was left out (`status` is then `not_a_claim`). `null` when `locate` was not set, when the extraction found no claims, or when the claims could not be located.",
+            "title": "Locations"
           }
         },
         "title": "ExtractOut",
@@ -1576,6 +1825,18 @@
             "maxLength": 300,
             "title": "Focus",
             "type": "string"
+          },
+          "locate": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional, default `false`. When `true`, only claims that could be traced directly back to your text are returned, and `locations` says where in the text each one is made. A claim found nowhere in the text, or found with a different figure, is left out; so is a list that ends up empty, which answers `not_a_claim`. Adds a few seconds, never more than 20. If the claims cannot be located, `locations` is `null` and the list is returned unfiltered.",
+            "title": "Locate"
           }
         },
         "required": [
@@ -2030,56 +2291,6 @@
           "poll_after_seconds"
         ],
         "title": "ProgressOut",
-        "type": "object"
-      },
-      "SimilarVerificationOut": {
-        "description": "An existing public verification that semantically resembles a\ngiven claim text: an item in ``GET /verifications/{id}/related``, for\ncallers surfacing \"see also\" references next to a verdict.",
-        "properties": {
-          "verification_id": {
-            "title": "Verification Id",
-            "type": "string"
-          },
-          "claim": {
-            "title": "Claim",
-            "type": "string"
-          },
-          "verdict": {
-            "default": "",
-            "title": "Verdict",
-            "type": "string"
-          },
-          "confidence": {
-            "default": "low",
-            "title": "Confidence",
-            "type": "string"
-          },
-          "lenz_score": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Lenz Score"
-          },
-          "url": {
-            "default": "",
-            "title": "Url",
-            "type": "string"
-          },
-          "distance": {
-            "title": "Distance",
-            "type": "number"
-          }
-        },
-        "required": [
-          "verification_id",
-          "claim",
-          "distance"
-        ],
-        "title": "SimilarVerificationOut",
         "type": "object"
       },
       "SourceOut": {
@@ -2603,6 +2814,56 @@
         "title": "RelatedVerificationsOut",
         "type": "object"
       },
+      "SimilarVerificationOut": {
+        "description": "An existing public verification that semantically resembles a\ngiven claim text: an item in ``GET /verifications/{id}/related``, for\ncallers surfacing \"see also\" references next to a verdict.",
+        "properties": {
+          "verification_id": {
+            "title": "Verification Id",
+            "type": "string"
+          },
+          "claim": {
+            "title": "Claim",
+            "type": "string"
+          },
+          "verdict": {
+            "default": "",
+            "title": "Verdict",
+            "type": "string"
+          },
+          "confidence": {
+            "default": "low",
+            "title": "Confidence",
+            "type": "string"
+          },
+          "lenz_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lenz Score"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "distance": {
+            "title": "Distance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "verification_id",
+          "claim",
+          "distance"
+        ],
+        "title": "SimilarVerificationOut",
+        "type": "object"
+      },
       "AskIn": {
         "properties": {
           "message": {
@@ -2799,14 +3060,14 @@
             "anyOf": [
               {
                 "maximum": 20,
-                "minimum": 1,
+                "minimum": 0,
                 "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "How many of the draft's claims, most check-worthy first, get a quick verdict. Default 20.",
+            "description": "How many of the draft's claims, most check-worthy first, get a quick verdict. Default 20. 0: no quick checks (a review that checks only the citations).",
             "title": "Max Assessments"
           },
           "depth": {
@@ -2824,6 +3085,20 @@
             ],
             "description": "Depth of every deep check. Default standard.",
             "title": "Depth"
+          },
+          "max_citations": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many of the draft's citations (links, DOIs, [n] markers with a reference list), in its order, are checked: does each source say what the draft attributes to it? 1 credit per checked citation. Default 0: no citation check. Guide: https://lenz.io/docs/citations",
+            "title": "Max Citations"
           }
         },
         "title": "EscalationPolicyIn",
@@ -3028,6 +3303,685 @@
           "status"
         ],
         "title": "ReviewAssessmentOut",
+        "type": "object"
+      },
+      "ReviewCitationCheckOut": {
+        "properties": {
+          "status": {
+            "enum": [
+              "pending",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "page_read": {
+            "anyOf": [
+              {
+                "enum": [
+                  "full",
+                  "partial",
+                  "not_found",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What reading the source gave: full, partial (cut short, a teaser or an abstract alone), not_found, none.",
+            "title": "Page Read"
+          },
+          "page_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Title"
+          },
+          "page_published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Published Date"
+          },
+          "page_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Language"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the text was actually read from.",
+            "title": "Source Url"
+          },
+          "source_version": {
+            "anyOf": [
+              {
+                "enum": [
+                  "published",
+                  "accepted",
+                  "submitted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Version"
+          },
+          "support": {
+            "anyOf": [
+              {
+                "enum": [
+                  "supported",
+                  "partly_supported",
+                  "contradicted",
+                  "not_in_source",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Support"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The passage from the source the support answer rests on, checked against the page text.",
+            "title": "Snippet"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The reviewer's sentence: reasoning, not a checked source.",
+            "title": "Rationale"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "enum": [
+                  "matched",
+                  "not_in_source",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "missing_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first of quotes the source does not contain; null unless quote is not_in_source.",
+            "title": "Missing Quote"
+          },
+          "doi_registered": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi Registered"
+          },
+          "metadata": {
+            "anyOf": [
+              {
+                "enum": [
+                  "consistent",
+                  "mismatch",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata"
+          },
+          "metadata_differences": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewMetadataDifferenceOut"
+            },
+            "title": "Metadata Differences",
+            "type": "array"
+          },
+          "registered": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewRegisteredOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unchecked_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the finding is unchecked; an extensible string.",
+            "title": "Unchecked Reason"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReviewCitationCheckOut",
+        "type": "object"
+      },
+      "ReviewCitationCountsOut": {
+        "description": "Three disjoint counts; once every check has ended they add up to citations_selected.",
+        "properties": {
+          "checked": {
+            "description": "A finding other than unchecked.",
+            "title": "Checked",
+            "type": "integer"
+          },
+          "unchecked": {
+            "description": "Could not be checked, for a reason of the page or the draft.",
+            "title": "Unchecked",
+            "type": "integer"
+          },
+          "failed": {
+            "description": "No finding, for a reason of ours.",
+            "title": "Failed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "checked",
+          "unchecked",
+          "failed"
+        ],
+        "title": "ReviewCitationCountsOut",
+        "type": "object"
+      },
+      "ReviewCitationFailedRowOut": {
+        "properties": {
+          "citation_index": {
+            "title": "Citation Index",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "cited_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "citation_index",
+          "reference",
+          "cited_url",
+          "doi",
+          "failure"
+        ],
+        "title": "ReviewCitationFailedRowOut",
+        "type": "object"
+      },
+      "ReviewCitationIssueOut": {
+        "properties": {
+          "citation_index": {
+            "title": "Citation Index",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "cited_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement"
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finding": {
+            "enum": [
+              "doi_not_found",
+              "page_not_found",
+              "contradicted",
+              "quote_not_in_source",
+              "not_in_source",
+              "partly_supported",
+              "metadata_mismatch",
+              "supported",
+              "unchecked"
+            ],
+            "title": "Finding",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "doi",
+                  "page",
+                  "support",
+                  "quote",
+                  "metadata"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "snippet": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set only when source is support.",
+            "title": "Snippet"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set only when source is support.",
+            "title": "Rationale"
+          },
+          "metadata_differences": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewMetadataDifferenceOut"
+            },
+            "title": "Metadata Differences",
+            "type": "array"
+          },
+          "missing_quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set only when finding is quote_not_in_source.",
+            "title": "Missing Quote"
+          },
+          "page_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Title"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "citation_index",
+          "reference",
+          "cited_url",
+          "doi",
+          "statement",
+          "position",
+          "finding",
+          "source",
+          "snippet",
+          "rationale",
+          "page_title",
+          "failure"
+        ],
+        "title": "ReviewCitationIssueOut",
+        "type": "object"
+      },
+      "ReviewCitationOut": {
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "cited_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "statement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement"
+          },
+          "quotes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationResultOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "check": {
+            "$ref": "#/components/schemas/ReviewCitationCheckOut"
+          }
+        },
+        "required": [
+          "index",
+          "reference",
+          "cited_url",
+          "doi",
+          "statement",
+          "position",
+          "result",
+          "check"
+        ],
+        "title": "ReviewCitationOut",
+        "type": "object"
+      },
+      "ReviewCitationPositionOut": {
+        "properties": {
+          "start": {
+            "description": "Of the statement in the text as sent, in Unicode code points.",
+            "title": "Start",
+            "type": "integer"
+          },
+          "end": {
+            "title": "End",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "ReviewCitationPositionOut",
+        "type": "object"
+      },
+      "ReviewCitationResultOut": {
+        "properties": {
+          "finding": {
+            "enum": [
+              "doi_not_found",
+              "page_not_found",
+              "contradicted",
+              "quote_not_in_source",
+              "not_in_source",
+              "partly_supported",
+              "metadata_mismatch",
+              "supported",
+              "unchecked"
+            ],
+            "title": "Finding",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "doi",
+                  "page",
+                  "support",
+                  "quote",
+                  "metadata"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "is_issue": {
+            "title": "Is Issue",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "finding",
+          "source",
+          "is_issue"
+        ],
+        "title": "ReviewCitationResultOut",
         "type": "object"
       },
       "ReviewClaimOut": {
@@ -3265,6 +4219,7 @@
             "type": "string"
           },
           "status": {
+            "description": "verifying: deep checks or citation checks are running.",
             "enum": [
               "queued",
               "assessing",
@@ -3290,7 +4245,7 @@
                 "type": "null"
               }
             ],
-            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth.",
+            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth. issues_found with an empty issues[] means the rows are in citation_issues[].",
             "title": "Outcome"
           },
           "created_at": {
@@ -3346,6 +4301,53 @@
             "title": "Failures",
             "type": "array"
           },
+          "citation_issues": {
+            "default": [],
+            "description": "Citations whose source does not say what the draft says; [] when the check was not asked.",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationIssueOut"
+            },
+            "title": "Citation Issues",
+            "type": "array"
+          },
+          "citation_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationFailedRowOut"
+            },
+            "title": "Citation Failures",
+            "type": "array"
+          },
+          "more_claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
+            "title": "More Claims"
+          },
+          "more_citations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReviewMoreCitationOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Citations found past the ones selected (up to 100): found but not checked; send them in a later request to check them. Null until the draft is read.",
+            "title": "More Citations"
+          },
           "failure": {
             "anyOf": [
               {
@@ -3366,6 +4368,14 @@
               "$ref": "#/components/schemas/ReviewClaimOut"
             },
             "title": "Claims",
+            "type": "array"
+          },
+          "citations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationOut"
+            },
+            "title": "Citations",
             "type": "array"
           }
         },
@@ -3583,6 +4593,7 @@
             "type": "string"
           },
           "status": {
+            "description": "verifying: deep checks or citation checks are running.",
             "enum": [
               "queued",
               "assessing",
@@ -3608,7 +4619,7 @@
                 "type": "null"
               }
             ],
-            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth.",
+            "description": "Null until terminal. clean covers the selected claims at the policy's chosen depth. issues_found with an empty issues[] means the rows are in citation_issues[].",
             "title": "Outcome"
           },
           "created_at": {
@@ -3664,6 +4675,53 @@
             "title": "Failures",
             "type": "array"
           },
+          "citation_issues": {
+            "default": [],
+            "description": "Citations whose source does not say what the draft says; [] when the check was not asked.",
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationIssueOut"
+            },
+            "title": "Citation Issues",
+            "type": "array"
+          },
+          "citation_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationFailedRowOut"
+            },
+            "title": "Citation Failures",
+            "type": "array"
+          },
+          "more_claims": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Claims found past max_assessments, in the draft's order: found but not checked; send them in a later request to check them. Null until the draft is read.",
+            "title": "More Claims"
+          },
+          "more_citations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReviewMoreCitationOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Citations found past the ones selected (up to 100): found but not checked; send them in a later request to check them. Null until the draft is read.",
+            "title": "More Citations"
+          },
           "failure": {
             "anyOf": [
               {
@@ -3697,6 +4755,110 @@
           "view"
         ],
         "title": "ReviewIssuesOut",
+        "type": "object"
+      },
+      "ReviewMetadataDifferenceOut": {
+        "properties": {
+          "field": {
+            "enum": [
+              "title",
+              "authors",
+              "year",
+              "journal"
+            ],
+            "title": "Field",
+            "type": "string"
+          },
+          "cited": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited"
+          },
+          "registered": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registered"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "title": "ReviewMetadataDifferenceOut",
+        "type": "object"
+      },
+      "ReviewMoreCitationOut": {
+        "description": "A citation found in the draft and not checked by this request.",
+        "properties": {
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "cited_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cited Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doi"
+          },
+          "sentence": {
+            "description": "The draft sentence around the citation, at most 1,000 characters.",
+            "title": "Sentence",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationPositionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "index",
+          "sentence"
+        ],
+        "title": "ReviewMoreCitationOut",
         "type": "object"
       },
       "ReviewPolicyOut": {
@@ -3742,6 +4904,11 @@
             ],
             "title": "Depth",
             "type": "string"
+          },
+          "max_citations": {
+            "default": 0,
+            "title": "Max Citations",
+            "type": "integer"
           }
         },
         "required": [
@@ -3752,6 +4919,53 @@
           "depth"
         ],
         "title": "ReviewPolicyOut",
+        "type": "object"
+      },
+      "ReviewRegisteredOut": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "authors": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Authors",
+            "type": "array"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          },
+          "journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Journal"
+          }
+        },
+        "title": "ReviewRegisteredOut",
         "type": "object"
       },
       "ReviewResultOut": {
@@ -3864,6 +5078,87 @@
           "issues": {
             "title": "Issues",
             "type": "integer"
+          },
+          "citations_found": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Citations with a URL or DOI in the text the review read (after the 50,000 character cut); null until the draft is read, or when the check was not asked.",
+            "title": "Citations Found"
+          },
+          "citations_selected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The ones this review works on: the first in the draft's order.",
+            "title": "Citations Selected"
+          },
+          "citation_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The resolved cap.",
+            "title": "Citation Limit"
+          },
+          "citation_limit_reached": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "citations_found is over the cap.",
+            "title": "Citation Limit Reached"
+          },
+          "citation_checks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationCountsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citation_issues": {
+            "default": 0,
+            "description": "Rows in citation_issues[]; 0 when the check was not asked.",
+            "title": "Citation Issues",
+            "type": "integer"
+          },
+          "citations_skipped": {
+            "anyOf": [
+              {
+                "enum": [
+                  "url_input",
+                  "switched_off",
+                  "insufficient_credits"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the check was asked for and did not run.",
+            "title": "Citations Skipped"
           }
         },
         "required": [
@@ -4155,6 +5450,467 @@
         "title": "ReviewVerificationOut",
         "type": "object"
       },
+      "CitecheckAcceptedOut": {
+        "properties": {
+          "citecheck_id": {
+            "title": "Citecheck Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "description": "The acceptance receipt, not the current state.",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "citecheck_id",
+          "status"
+        ],
+        "title": "CitecheckAcceptedOut",
+        "type": "object"
+      },
+      "CitecheckErrorOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "citecheck_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With idempotency_conflict: the check this key is creating, once it exists.",
+            "title": "Citecheck Id"
+          },
+          "purged_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Purged At"
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
+          }
+        },
+        "required": [
+          "detail",
+          "code"
+        ],
+        "title": "CitecheckErrorOut",
+        "type": "object"
+      },
+      "CitationPairIn": {
+        "additionalProperties": false,
+        "description": "One statement and the source it cites: a URL or a DOI, never both.",
+        "properties": {
+          "statement": {
+            "description": "The sentence that cites the source, at most 1,000 characters.",
+            "title": "Statement",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The cited page: http or https, at most 2,000 bytes.",
+            "title": "Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The cited DOI alone, like 10.1038/nature12373.",
+            "title": "Doi"
+          },
+          "quotes": {
+            "default": [],
+            "description": "At most 3 excerpts the statement quotes from the source, each 15 to 500 characters and words of the statement.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Quotes",
+            "type": "array"
+          },
+          "cited_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `doi`: the title the reference gives.",
+            "title": "Cited Title"
+          },
+          "cited_authors": {
+            "default": [],
+            "description": "With `doi`: the authors, family names, at most 10.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cited Authors",
+            "type": "array"
+          },
+          "cited_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `doi`: the year the reference gives, four digits.",
+            "title": "Cited Year"
+          },
+          "cited_journal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `doi`: the journal the reference gives.",
+            "title": "Cited Journal"
+          }
+        },
+        "required": [
+          "statement"
+        ],
+        "title": "CitationPairIn",
+        "type": "object"
+      },
+      "CitecheckIn": {
+        "additionalProperties": false,
+        "description": "A draft whose citations to check, or the statement-source pairs themselves.",
+        "properties": {
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The draft, up to 50,000 characters, with its links (markdown links, bare URLs, doi: and doi.org forms, [n] markers with a reference list). Send exactly one of text and pairs.",
+            "title": "Text"
+          },
+          "pairs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CitationPairIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1 to 20 statement-source pairs to check as they are. Send exactly one of text and pairs.",
+            "title": "Pairs"
+          },
+          "max_citations": {
+            "anyOf": [
+              {
+                "maximum": 20,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With text: how many citations, in the draft's order. Default 20.",
+            "title": "Max Citations"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The language Lenz writes the reasoning in. English when omitted. Hints are always in English.",
+            "title": "Language"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Omitted or null: the credential's default webhook URL. \"\": no webhook. A URL: citecheck.completed / citecheck.failed go there.",
+            "title": "Webhook Url"
+          }
+        },
+        "title": "CitecheckIn",
+        "type": "object"
+      },
+      "CitecheckOut": {
+        "properties": {
+          "citecheck_id": {
+            "title": "Citecheck Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "checking",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "clean",
+                  "issues_found",
+                  "incomplete",
+                  "unchecked"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null until terminal. incomplete: a citation could not be checked for a reason of ours.",
+            "title": "Outcome"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "poll_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poll After Seconds"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/CitecheckPolicyOut"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/CitecheckSummaryOut"
+          },
+          "credits": {
+            "$ref": "#/components/schemas/ReviewCreditsOut"
+          },
+          "citations": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationOut"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "citation_issues": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationIssueOut"
+            },
+            "title": "Citation Issues",
+            "type": "array"
+          },
+          "citation_failures": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ReviewCitationFailedRowOut"
+            },
+            "title": "Citation Failures",
+            "type": "array"
+          },
+          "more_citations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReviewMoreCitationOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Citations found in the text past the ones selected (up to 100): found but not checked; send them in a later request to check them. Null until the text is read; [] for pairs.",
+            "title": "More Citations"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewFailureOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "citecheck_id",
+          "status",
+          "outcome",
+          "created_at",
+          "completed_at",
+          "poll_after_seconds",
+          "policy",
+          "summary",
+          "credits",
+          "failure"
+        ],
+        "title": "CitecheckOut",
+        "type": "object"
+      },
+      "CitecheckPolicyOut": {
+        "properties": {
+          "max_citations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many citations the check selects: for text, the limit (default 20); for pairs, the number of pairs checked.",
+            "title": "Max Citations"
+          }
+        },
+        "required": [
+          "max_citations"
+        ],
+        "title": "CitecheckPolicyOut",
+        "type": "object"
+      },
+      "CitecheckSummaryOut": {
+        "properties": {
+          "citations_found": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Citations with a URL or DOI in the text, or the pairs sent; null until read.",
+            "title": "Citations Found"
+          },
+          "citations_selected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citations Selected"
+          },
+          "citation_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Limit"
+          },
+          "citation_limit_reached": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Citation Limit Reached"
+          },
+          "citation_checks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewCitationCountsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "citation_issues": {
+            "default": 0,
+            "title": "Citation Issues",
+            "type": "integer"
+          }
+        },
+        "title": "CitecheckSummaryOut",
+        "type": "object"
+      },
       "NeedsInputOut": {
         "description": "Inline body for webhook ``event=verification.needs_input``.\n\nThe pipeline pauses for caller input when framing splits the text into\nmultiple distinct claims (``multi_claim``). A vague input does not pause:\nit is checked on its most likely reading, or fails as ``not_a_claim``\nwhen there is none.\n\n``multi_claim`` is resolved by calling ``POST /verify/{task_id}/select``\nwith one of the offered claim texts.",
         "properties": {
@@ -4383,6 +6139,62 @@
         ],
         "title": "ReviewWebhookPayload",
         "type": "object"
+      },
+      "CitecheckWebhookPayload": {
+        "description": "Body of ``citecheck.completed`` / ``citecheck.failed``.\n\n``event_id`` is stable per (check, event): dedupe on it. ``task_id`` is the\ndelivery identity, not pollable on ``/verify/status``.",
+        "properties": {
+          "event": {
+            "enum": [
+              "citecheck.completed",
+              "citecheck.failed"
+            ],
+            "title": "Event",
+            "type": "string"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "string"
+          },
+          "citecheck_id": {
+            "title": "Citecheck Id",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "citecheck": {
+            "$ref": "#/components/schemas/CitecheckOut"
+          },
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "delivered_at": {
+            "title": "Delivered At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "event_id",
+          "citecheck_id",
+          "task_id",
+          "status",
+          "citecheck",
+          "attempt",
+          "delivered_at"
+        ],
+        "title": "CitecheckWebhookPayload",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -4414,6 +6226,10 @@
     {
       "name": "Review",
       "description": "The whole recipe in one call: find the claims in a draft, quick-check each, deep-check the ones that look wrong or uncertain, and get the issues back with suggested rewrites. Async, two to four minutes; poll the review or receive review.completed at a webhook."
+    },
+    {
+      "name": "Citecheck",
+      "description": "Check whether each cited source says what a draft attributes to it: from a draft with its links, or from statement-source pairs. Async; 1 credit per checked citation, and a source that could not be checked is not charged."
     },
     {
       "name": "Ask",
@@ -4552,6 +6368,48 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ReviewWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "citecheck.completed": {
+      "post": {
+        "summary": "citecheck.completed",
+        "description": "Fires once when a citation check (POST /citecheck) ends with every citation checked or not checkable. The body is CitecheckWebhookPayload: switch on `event` and dedupe on `event_id`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitecheckWebhookPayload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Your endpoint should return 2xx within 5 seconds. Non-2xx triggers retries at 10s / 60s / 600s (3 retries after the initial delivery, 4 attempts total)."
+          }
+        }
+      }
+    },
+    "citecheck.failed": {
+      "post": {
+        "summary": "citecheck.failed",
+        "description": "Fires once when a citation check ends without a result (no citation in the text, no credits, an outage).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CitecheckWebhookPayload"
               }
             }
           }

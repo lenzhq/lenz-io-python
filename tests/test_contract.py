@@ -143,6 +143,9 @@ def _load(name: str) -> dict:
         # `no_match` (a focus that nothing matched) must validate into the
         # same model with the same key set — a new status, never a new shape.
         ("extract_response_no_match.json", ExtractedClaims),
+        # `locate=True`: the same model with `locations`. Same fixture as the
+        # Node SDK.
+        ("extract_response_located.json", ExtractedClaims),
         ("assess_single_claim.json", AssessResponse),
         ("assess_multiclaim.json", AssessResponse),
         # The list form: one row per item, Error rows in position with their
@@ -304,6 +307,25 @@ def test_webhook_payload_completed_walks_result_as_verification():
     errors = _check(result, Verification, "result")
     if errors:
         pytest.fail("\n".join(["webhook_payload_completed.json → Verification:", *errors]))
+
+
+def test_extract_located_positions_index_the_text_as_sent():
+    """``start``/``end`` are code-point offsets into the text as sent, so a
+    Python slice recovers the passage. The fixture's text opens with an
+    emoji (one code point, two UTF-16 units): a UTF-16 or byte offset would
+    be off here."""
+    payload = _load("extract_response_located.json")
+    parsed = ExtractedClaims.model_validate(payload)
+    assert parsed.locations is not None
+    assert [loc.claim for loc in parsed.locations] == parsed.identified_claims
+    text = parsed.original_input
+    for loc in parsed.locations:
+        assert loc.positions
+        for pos in loc.positions:
+            assert pos.start is not None and pos.end is not None
+            # In bounds first: a slice silently clamps an end past the text.
+            assert 0 <= pos.start < pos.end <= len(text)
+            assert text[pos.start : pos.end] == pos.text
 
 
 def test_assess_multiclaim_round_trips():

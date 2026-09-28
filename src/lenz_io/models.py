@@ -353,6 +353,33 @@ class ExtractedEntity(_Lax):
     type: str = ""
 
 
+class ClaimPosition(_Lax):
+    """One place in the submitted text that makes a located claim.
+
+    ``start`` and ``end`` index the ``text`` you sent, in Unicode code
+    points, so ``original_input[start:end]`` is the passage in Python;
+    ``end`` is exclusive. Both are ``None`` when the input was a URL: the
+    page is not returned, so there is nothing to index. ``text`` is the
+    passage as it appears, and is always present.
+    """
+
+    start: int | None = None
+    end: int | None = None
+    text: str = ""
+
+
+class ClaimLocation(_Lax):
+    """Where the submitted text makes one returned claim.
+
+    ``claim`` is exactly as in ``ExtractedClaims.claim`` /
+    ``identified_claims``. ``positions`` lists every place the text makes
+    it, in text order: at least one, at most 10.
+    """
+
+    claim: str = ""
+    positions: list[ClaimPosition] = Field(default_factory=list)
+
+
 #: The ``ExtractedClaims.status`` values this release knows about:
 #:
 #:     from lenz_io import ExtractStatus
@@ -384,6 +411,15 @@ class ExtractedClaims(_Lax):
     when a ``focus`` was given and no claim fell within it — ``no_match``.
     ``no_match`` is a successful answer, not an error: ``identified_claims``
     is empty and the unfocused list is never substituted for it.
+
+    ``locations`` is set only on a call made with ``locate=True``: one
+    ``ClaimLocation`` per returned claim, in the order of
+    ``identified_claims`` (one entry for a single ``claim``). It is ``[]``
+    when every claim was left out (``status`` is then ``"not_a_claim"``),
+    and ``None`` when ``locate`` was not set, when the extraction found no
+    claims, or when the
+    claims could not be located (the list is then returned unfiltered).
+    Older servers omit the key; it parses as ``None``.
     """
 
     status: str = ""
@@ -396,6 +432,7 @@ class ExtractedClaims(_Lax):
     key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
+    locations: list[ClaimLocation] | None = None
 
 
 class AssessClaim(_Lax):
@@ -1456,6 +1493,8 @@ __all__ = [
     "CitecheckPolicy",
     "CitecheckStarted",
     "CitecheckSummary",
+    "ClaimLocation",
+    "ClaimPosition",
     "DebateSide",
     "EntityRef",
     "Escalation",
