@@ -90,6 +90,12 @@ class TestSubmit:
         ]
         assert self._body(client, pairs=pairs) == {"pairs": pairs}
 
+    def test_a_pair_has_no_language_of_its_own(self):
+        from lenz_io import CitationPair
+
+        # `language` is request-level only: the output language of the reasoning.
+        assert "language" not in CitationPair.__annotations__
+
     def test_sends_an_idempotency_key(self, client):
         with respx.mock(base_url=BASE) as r:
             route = r.post("/citecheck").respond(202, json=_load("citecheck_accepted.json"))
