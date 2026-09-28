@@ -1027,3 +1027,59 @@ def test_the_issues_view_carries_more_claim_locations():
     (located,) = issues.more_claim_locations
     assert located.claim == "The plant opened in 2019."
     assert located.positions is not None and located.positions[0].text == "The plant opened in 2019."
+
+
+# ── suggested edits ─────────────────────────────────────────────────────────
+
+
+class TestSuggestedEdits:
+    def _body(self, client, **kw) -> dict:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json=_load("review_accepted.json"))
+            client.review("draft", idempotency_key="k", **kw)
+        return json.loads(route.calls.last.request.content)
+
+    def test_not_asked_sends_nothing_and_the_body_is_as_before(self, client):
+        body = self._body(client)
+        assert body == {"text": "draft", "visibility": "private"}
+        assert self._body(client, suggest_edits=False) == body
+
+    def test_asked_is_sent_inside_escalate(self, client):
+        assert self._body(client, suggest_edits=True)["escalate"] == {"suggest_edits": True}
+        both = self._body(client, suggest_edits=True, max_verifications=2)
+        assert both["escalate"] == {"max_verifications": 2, "suggest_edits": True}
+
+    def test_the_block_parses_on_the_claim_row_and_its_issue(self):
+        from lenz_io import SuggestedEdit, SuggestedEdits
+
+        review = ReviewFull.model_validate(_load("review_completed_suggested_edits.json"))
+        assert review.policy.suggest_edits is True
+        block = review.claims[0].suggested_edits
+        assert isinstance(block, SuggestedEdits) and block.status == "completed"
+        (edit,) = block.edits or []
+        assert isinstance(edit, SuggestedEdit)
+        assert (edit.position, edit.start, edit.end, edit.text, edit.replacement) == (0, 23, 26, "20%", "15%")
+        # Placed inside the passage it names, in the text as sent.
+        position = (review.claims[0].positions or [])[edit.position]
+        assert position.start <= edit.start < edit.end <= position.end
+        assert review.issues[0].suggested_edits == block
+
+    def test_applying_the_edits_to_the_text_as_sent(self):
+        review = ReviewFull.model_validate(_load("review_completed_suggested_edits.json"))
+        position = (review.claims[0].positions or [])[0]
+        # The passage is the slice of the text as sent at the position.
+        sent = " " * (position.start or 0) + (position.text or "")
+        chars = list(sent)
+        for e in sorted(review.claims[0].suggested_edits.edits or [], key=lambda e: e.start, reverse=True):
+            assert "".join(chars[e.start : e.end]) == e.text
+            chars[e.start : e.end] = list(e.replacement)
+        assert "".join(chars).strip() == (position.text or "").replace("20%", "15%")
+
+    def test_pending_and_absent(self):
+        from lenz_io import ReviewClaim, ReviewIssue
+
+        pending = ReviewClaim.model_validate({"suggested_edits": {"status": "pending", "edits": None}})
+        assert pending.suggested_edits is not None and pending.suggested_edits.edits is None
+        # From a server that predates the field, or a review that did not ask.
+        assert ReviewClaim.model_validate({}).suggested_edits is None
+        assert ReviewIssue.model_validate({}).suggested_edits is None

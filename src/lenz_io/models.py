@@ -986,6 +986,9 @@ class EscalationPolicy(_Lax):
     #: How many of the draft's citations the review checks; ``0`` (or
     #: ``None`` from an older server) when it checks none.
     max_citations: int | None = None
+    #: Whether the review computes suggested edits (``False`` from an older
+    #: server).
+    suggest_edits: bool = False
 
 
 class Escalation(_Lax):
@@ -1142,6 +1145,38 @@ class ReviewVerification(_Lax):
     failure: FailureBlock | None = None
 
 
+class SuggestedEdit(_Lax):
+    """One replacement in the draft: the span ``start``..``end`` of the
+    ``text`` you sent (Unicode code points, ``end`` exclusive, as in
+    ``Position``), ``text`` exactly that slice, and ``replacement`` what takes
+    its place (``""`` deletes it). ``position`` is the index of the claim
+    row's ``positions`` entry the edit sits in, for grouping by passage.
+
+    Compare ``text`` with your draft before you apply an edit, so a draft that
+    changed since is never edited in the wrong place."""
+
+    position: int = 0
+    start: int = 0
+    end: int = 0
+    text: str = ""
+    replacement: str = ""
+
+
+class SuggestedEdits(_Lax):
+    """The smallest edits to the draft that make it say what the claim's deep
+    check ``suggested_rewrite`` says, in the draft's own language
+    (``review(..., suggest_edits=True)``).
+
+    ``status`` is ``"pending"`` while they are computed (``edits`` is
+    ``None``; keep polling) and ``"completed"`` once settled, which includes
+    settling on none (``edits == []``: no edit could be made safely, or it
+    could not be computed). They are not themselves verified:
+    review them before you publish."""
+
+    status: str = ""
+    edits: list[SuggestedEdit] | None = None
+
+
 class ReviewClaim(_Lax):
     """One claim of the draft, in the order the draft's claims were read.
 
@@ -1166,6 +1201,12 @@ class ReviewClaim(_Lax):
     assessment: ReviewAssessment = Field(default_factory=ReviewAssessment)
     escalation: Escalation | None = None
     verification: ReviewVerification | None = None
+    #: The claim's suggested edits to the draft (``review(...,
+    #: suggest_edits=True)``). ``None`` when not asked, when the claim got no
+    #: completed deep check with a suggested rewrite, when its passage is not in a
+    #: supported language or could not be placed, once a zero-retention draft
+    #: is gone, and from servers that predate the field.
+    suggested_edits: SuggestedEdits | None = None
 
 
 class ReviewIssue(_Lax):
@@ -1199,6 +1240,8 @@ class ReviewIssue(_Lax):
     #: through ``verify``, before you use it.
     suggested_rewrite: str | None = None
     failure: FailureBlock | None = None
+    #: A copy of its claim row's ``suggested_edits``.
+    suggested_edits: SuggestedEdits | None = None
 
 
 class ReviewFailure(_Lax):

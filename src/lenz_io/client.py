@@ -927,6 +927,7 @@ class Lenz:
         max_verifications: int | None = None,
         depth: str | None = None,
         max_citations: int | None = None,
+        suggest_edits: bool = False,
         language: str = "",
         webhook_url: str | None = None,
         visibility: str = "private",
@@ -963,6 +964,13 @@ class Lenz:
         it does? The findings are in ``citations`` and ``citation_issues``;
         the ones found past N are listed in ``more_citations``. ``None`` or
         ``0`` checks no citation and sends nothing.
+
+        ``suggest_edits=True`` also returns, for each claim whose deep check
+        suggests a rewrite, the smallest edits to the draft that make it say
+        what the rewrite says, in the draft's own language
+        (``ReviewClaim.suggested_edits``, copied on its issue). They cost no
+        credits beyond the deep check, and the review completes once they are
+        settled. ``False`` sends nothing.
 
         Credits: 1 per claim assessed, plus 10 (5 at ``depth="low"``) per
         deep check. ``credits.charged`` on the review says what it cost.
@@ -1003,6 +1011,9 @@ class Lenz:
         # the body (and its idempotency hash) is what it is without the option.
         if max_citations:
             escalate["max_citations"] = max_citations
+        # Sent only when asked, for the same reason.
+        if suggest_edits:
+            escalate["suggest_edits"] = True
         if escalate:
             payload["escalate"] = escalate
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}

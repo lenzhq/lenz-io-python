@@ -25,6 +25,16 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- **`review(..., suggest_edits=True)`**: for each claim whose deep check
+  suggests a rewrite, the smallest edits to the draft that make it say what
+  the rewrite says, in the draft's own language, as
+  `ReviewClaim.suggested_edits` (copied on `ReviewIssue.suggested_edits`): a
+  `SuggestedEdits` block (`status`, `edits`) of `SuggestedEdit` spans
+  (`position`, `start`, `end`, `text`, `replacement`) of the text you sent.
+  `review.policy.suggest_edits` (`EscalationPolicy`) echoes the option. Leave it out and the request,
+  and its idempotency key's body, are exactly as before; a body without the
+  keys parses with them at `None` / `False`. Needs a server that knows the
+  option: an older one refuses it with a 422.
 - **`lenz review --language CODE`** and **`lenz citecheck --language CODE`**:
   the language the results are written in (ISO 639-1, e.g. `de`). Default
   English.
