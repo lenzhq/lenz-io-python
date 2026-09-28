@@ -12,15 +12,16 @@ never read an outage as a clean draft::
 
     0  clean          every selected claim checked, no issue
     1  issues_found   at least one claim is False, Mostly False or Mixed, or
-                      (with --max-citations) a source does not say what
-                      the draft says it does
+                      a source does not say what the draft says it does
     2  anything else  incomplete, unchecked, failed, timed out, or an error
                       (a bad key, no credits, a bad flag)
 
-``--max-citations N`` also checks the draft's first N sources (its links and
-DOIs; in a file, keep links as markdown links). Their count and their issues
-print after the claims. ``--max-citations 20 --max-assessments 0`` checks the
-sources and no claim.
+The draft's first 20 sources (its links and DOIs; in a file, keep links as
+markdown links) are checked too, at 1 credit per checked citation: their
+count and their issues print after the claims. ``--max-citations N`` checks
+the first N, and ``--max-citations 0`` none. ``--max-assessments 0`` checks
+the sources and no claim. This default is the CLI's own: the SDK's
+``review()`` checks no citation unless asked.
 
 ``--detach`` submits and prints the ``review_id``; ``lenz review --resume <id>``
 picks it up again, as does Ctrl-C's hint.
@@ -86,7 +87,7 @@ def review(
         metavar="N",
         min=0,
         max=20,
-        help="Also check the draft's first N sources (0-20): does each link say what the draft says?",
+        help="Check the draft's first N sources (0-20, default 20; 0 = none). 1 credit per checked citation.",
     ),
     language: str = typer.Option(
         None,
@@ -98,9 +99,9 @@ def review(
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
 ) -> None:
-    """Review a draft, its citations too if asked. Exit codes: 0 clean, 1 issues, 2 anything else.
+    """Review a draft and its sources. Exit codes: 0 clean, 1 issues, 2 anything else.
 
-    Costs 1 credit per claim checked, plus 10 per deep check (5 at --depth low).
+    Costs 1 credit per claim checked, plus 10 per deep check (5 at --depth low), plus 1 per checked citation.
     """
     state: CLIState = ctx.obj
     out = state.output
@@ -121,12 +122,15 @@ def review(
         else:
             chosen_depth = _parse_depth(depth)
             text = _read_draft(draft)
+            citations = DEFAULT_MAX_CITATIONS if max_citations is None else max_citations
+            if not out.json_mode:
+                out.err.print(f"[dim]{escape(opening_line(max_assessments, citations))}[/dim]")
             started = client.review(
                 text,
                 max_assessments=max_assessments,
                 max_verifications=max_verifications,
                 depth=chosen_depth,
-                max_citations=max_citations,
+                max_citations=citations,
                 language=(language or "").strip().lower(),
             )
             review_id = started.review_id
@@ -149,6 +153,21 @@ def review(
         raise SystemExit(exit_code_for_review(final))
 
     execute(state, needs_key=True, work=work, error_exit=EXIT_OTHER)
+
+
+#: The CLI checks a draft's sources unless told otherwise. The SDK's own
+#: ``review()`` default stays none, as the API's does.
+DEFAULT_MAX_CITATIONS = 20
+
+
+def opening_line(max_assessments: int | None, max_citations: int) -> str:
+    """What the run is about to do: "Checking claims and up to 20 citations…"."""
+    claims = max_assessments != 0
+    if claims and max_citations:
+        return f"Checking claims and up to {max_citations} citations…"
+    if max_citations:
+        return f"Checking up to {max_citations} citations…"
+    return "Checking claims…"
 
 
 def exit_code_for_review(review: ReviewFull) -> int:
