@@ -832,7 +832,10 @@ print(v.verdict, v.language)
 ```
 
 Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`, `nl`, `sv`, `da`,
-`no`, `fi`, `bg`. Per-item override on `verify_batch`:
+`no`, `fi`, `bg`. To ask for another language, contact us at
+https://lenz.io/contact.
+
+Per-item override on `verify_batch`:
 
 ```python
 batch = client.verify_batch(
