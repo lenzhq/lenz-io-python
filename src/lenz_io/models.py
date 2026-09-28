@@ -1169,7 +1169,8 @@ class SuggestedEdits(_Lax):
 
     ``status`` is ``"pending"`` while they are computed (``edits`` is
     ``None``; keep polling) and ``"completed"`` once settled, which includes
-    settling on none (``edits == []``). They are not themselves verified:
+    settling on none (``edits == []``: no edit could be made safely, or it
+    could not be computed). They are not themselves verified:
     review them before you publish."""
 
     status: str = ""
@@ -1202,7 +1203,7 @@ class ReviewClaim(_Lax):
     verification: ReviewVerification | None = None
     #: The claim's suggested edits to the draft (``review(...,
     #: suggest_edits=True)``). ``None`` when not asked, when the claim got no
-    #: deep check with a suggested rewrite, when its passage is not in a
+    #: completed deep check with a suggested rewrite, when its passage is not in a
     #: supported language or could not be placed, once a zero-retention draft
     #: is gone, and from servers that predate the field.
     suggested_edits: SuggestedEdits | None = None

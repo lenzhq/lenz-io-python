@@ -194,16 +194,22 @@ beyond the deep check, and the review completes once they are settled. Each
 claim row (and its issue) carries `suggested_edits`: `status` `"pending"` or
 `"completed"`, and `edits`, each a span of the `text` you sent (`start`/`end`
 in code points, `text` the exact slice) and its `replacement`. `edits == []`
-means no edit could be made safely. They are not themselves verified.
+means no edit could be made safely, or it could not be computed. They are not
+themselves verified. Two claims that share a passage can return overlapping
+edits: apply one of them.
+
+Offsets all index the text you sent, so apply every claim's edits together,
+from the end of the text back:
 
 ```python
 review = client.review_and_wait(text=draft, suggest_edits=True)
+edits = [e for c in review.claims if c.suggested_edits for e in c.suggested_edits.edits or []]
 chars = list(draft)  # code points
-for claim in review.claims:
-    block = claim.suggested_edits
-    for e in sorted(block.edits if block and block.edits else [], key=lambda e: e.start, reverse=True):
-        if "".join(chars[e.start : e.end]) == e.text:  # skip if the draft changed
-            chars[e.start : e.end] = list(e.replacement)
+taken_from = len(chars)
+for e in sorted(edits, key=lambda e: e.start, reverse=True):
+    if e.end <= taken_from and "".join(chars[e.start : e.end]) == e.text:  # no overlap, draft unchanged
+        chars[e.start : e.end] = list(e.replacement)
+        taken_from = e.start
 edited = "".join(chars)
 ```
 

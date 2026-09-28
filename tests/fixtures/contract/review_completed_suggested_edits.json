@@ -68,7 +68,7 @@
       },
       "key_finding": "Finding for Acme grew 20% in 2024",
       "rationale": null,
-      "suggested_rewrite": "Fixed: Acme grew 20% in 2024",
+      "suggested_rewrite": "Acme grew 15% in 2024",
       "failure": null,
       "suggested_edits": {
         "status": "completed",
@@ -138,7 +138,7 @@
         "lenz_score": 2,
         "key_finding": "Finding for Acme grew 20% in 2024",
         "executive_summary": "Summary for Acme grew 20% in 2024",
-        "suggested_rewrite": "Fixed: Acme grew 20% in 2024",
+        "suggested_rewrite": "Acme grew 15% in 2024",
         "warnings": [
           "w1"
         ],
