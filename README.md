@@ -179,10 +179,13 @@ reviewer's note, not a checked source; `snippet` is the passage from the page.
 `max_assessments` and `max_citations`: found, not checked, to send in a later
 request. Leave `max_citations` out (or `0`) and no citation is checked.
 Only claims traced directly back to the draft are checked. Each claim row's
-`positions` says where the draft makes it (`start`/`end` are code-point
-offsets into `text`, so `text[start:end]` is the passage), and
-`more_claim_positions` does the same for `more_claims`, one entry per string;
-both are `None` for a URL draft or when the claims could not be located.
+`positions` says where the draft makes it (a `Position`: `start`/`end` are
+code-point offsets into `text`, so `text[start:end]` is the passage, and
+`text` is the passage itself). For a URL draft `start` and `end` are `None`
+and `text` still carries the passage. `more_claim_locations` does the same for
+`more_claims`: one `ClaimLocation` (`claim`, `positions`) per string, same
+order, `None` until the draft is read. A citation's `position` is the same
+`Position`, with `text` `None` (the row carries the `statement`).
 
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
@@ -786,7 +789,7 @@ to your text, and to learn where the text makes each one:
 ```python
 out = client.extract(text=draft, locate=True)
 for loc in out.locations or []:
-    for pos in loc.positions:
+    for pos in loc.positions or []:
         print(loc.claim, "->", pos.text)
         if pos.start is not None:
             assert draft[pos.start : pos.end] == pos.text
@@ -796,10 +799,11 @@ A claim found nowhere in the text, or found with a different figure, is left
 out; if that leaves no claim, `status` is `"not_a_claim"`. `locations` has one
 `ClaimLocation` per returned claim, in the order of `identified_claims` (one
 entry for a single `claim`), each with its `positions` (every place the text
-makes it, in text order, at least one and at most 10). `start` and `end` index
-the text you sent in Unicode code points, so `text[start:end]` works natively;
-`end` is exclusive. Both are `None` when the input was a URL, since the page is
-not returned; `pos.text` always carries the passage.
+makes it, in text order, at least one and at most 10). Each is a `Position`:
+`start` and `end` index the text you sent in Unicode code points, so
+`text[start:end]` works natively; `end` is exclusive. Both are `None` when the
+input was a URL, since the page is not returned; `pos.text` carries the
+passage.
 
 `locations` is `[]` when every claim was left out (`status` is then
 `"not_a_claim"`), and `None` when `locate` was not set, when the extraction

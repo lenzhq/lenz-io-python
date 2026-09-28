@@ -20,6 +20,7 @@ import pytest
 import respx
 
 from lenz_io import (
+    ClaimLocation,
     Lenz,
     LenzError,
     LenzGoneError,
@@ -455,6 +456,28 @@ class TestReviewAndWait:
             )
             client.review_and_wait("draft")
         assert no_sleep == [5]
+
+    def test_waits_the_reviews_own_hint_when_it_is_longer_than_the_default(self, client, no_sleep):
+        slow = _load("review_assessing.json")
+        slow["poll_after_seconds"] = 25
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(
+                side_effect=[httpx.Response(200, json=slow), httpx.Response(200, json=_load("review_completed.json"))]
+            )
+            client.review_and_wait("draft")
+        assert no_sleep == [25]
+
+    def test_a_missing_poll_hint_key_uses_a_default(self, client, no_sleep):
+        body = _load("review_assessing.json")
+        del body["poll_after_seconds"]
+        with respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json=_load("review_accepted.json"))
+            r.get("/reviews/442b6aa9").mock(
+                side_effect=[httpx.Response(200, json=body), httpx.Response(200, json=_load("review_completed.json"))]
+            )
+            client.review_and_wait("draft")
+        assert no_sleep == [10]
 
     def test_a_missing_poll_hint_uses_a_default(self, client, no_sleep):
         body = _load("review_assessing.json")
@@ -941,39 +964,66 @@ def test_a_located_review_says_where_the_draft_makes_each_claim():
     first = review.claims[0].positions
     assert first is not None
     assert (first[0].start, first[0].end, first[0].text) == (2, 49, review.claims[0].claim)
-    assert review.more_claims is not None and review.more_claim_positions is not None
-    assert len(review.more_claim_positions) == len(review.more_claims)
-    assert review.more_claim_positions[0] is not None and review.more_claim_positions[0][0].start == 315
+    assert review.more_claims is not None and review.more_claim_locations is not None
+    assert [loc.claim for loc in review.more_claim_locations] == review.more_claims
+    located = review.more_claim_locations[0]
+    assert isinstance(located, ClaimLocation)
+    assert located.positions is not None and located.positions[0].start == 315
 
 
 def test_null_positions_parse_as_none():
-    """A URL draft, claims that could not be located, or a zero-retention
-    draft that is gone: ``positions`` is null."""
+    """Claims that could not be located, or a zero-retention draft that is
+    gone: ``positions`` is null; before the draft is read,
+    ``more_claim_locations`` is null."""
     body = _load("review_completed_located.json")
     for c in body["claims"]:
         c["positions"] = None
-    body["more_claim_positions"] = None
+    body["more_claim_locations"][0]["positions"] = None
     review = ReviewFull.model_validate(body)
     assert all(c.positions is None for c in review.claims)
-    assert review.more_claim_positions is None
+    assert review.more_claim_locations is not None
+    assert review.more_claim_locations[0].positions is None
+    body["more_claim_locations"] = None
+    assert ReviewFull.model_validate(body).more_claim_locations is None
+
+
+def test_a_url_review_carries_passages_without_offsets():
+    """A URL draft: every position has ``start``/``end`` null and the passage
+    in ``text``, as ``/extract`` does for a URL."""
+    body = _load("review_completed_located.json")
+    for c in body["claims"]:
+        for pos in c["positions"]:
+            pos["start"] = pos["end"] = None
+    review = ReviewFull.model_validate(body)
+    for c in review.claims:
+        assert c.positions
+        for pos in c.positions:
+            assert pos.start is None and pos.end is None and pos.text
 
 
 def test_an_older_server_without_positions_parses():
     body = _load("review_completed_located.json")
     for c in body["claims"]:
         del c["positions"]
-    del body["more_claim_positions"]
+    del body["more_claim_locations"]
     review = ReviewFull.model_validate(body)
     assert all(c.positions is None for c in review.claims)
-    assert review.more_claim_positions is None
+    assert review.more_claim_locations is None
     issues = ReviewIssues.model_validate(_load("review_completed_issues.json"))
-    assert issues.more_claim_positions is None
+    assert issues.more_claim_locations is None
 
 
-def test_the_issues_view_carries_more_claim_positions():
+def test_the_retired_more_claim_positions_key_is_not_a_field():
+    assert "more_claim_positions" not in ReviewFull.model_fields
+    assert "more_claim_positions" not in ReviewIssues.model_fields
+
+
+def test_the_issues_view_carries_more_claim_locations():
     body = _load("review_completed_located.json")
     body["view"] = "issues"
     del body["claims"]
     issues = ReviewIssues.model_validate(body)
-    assert issues.more_claim_positions is not None and issues.more_claim_positions[0] is not None
-    assert issues.more_claim_positions[0][0].text == "The plant opened in 2019."
+    assert issues.more_claim_locations is not None
+    (located,) = issues.more_claim_locations
+    assert located.claim == "The plant opened in 2019."
+    assert located.positions is not None and located.positions[0].text == "The plant opened in 2019."

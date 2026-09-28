@@ -65,7 +65,8 @@
       ],
       "position": {
         "start": 139,
-        "end": 285
+        "end": 285,
+        "text": null
       },
       "finding": "quote_not_in_source",
       "source": "quote",
@@ -126,7 +127,8 @@
       ],
       "position": {
         "start": 139,
-        "end": 285
+        "end": 285,
+        "text": null
       },
       "result": {
         "finding": "quote_not_in_source",

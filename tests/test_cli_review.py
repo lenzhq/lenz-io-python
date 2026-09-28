@@ -289,6 +289,17 @@ def test_full_render_shows_where_the_draft_first_makes_each_claim():
     assert " · at " not in _render("review_completed.json")
 
 
+def test_a_url_review_prints_no_span():
+    """A URL draft's positions carry the passage but no offsets: no suffix."""
+    body = _load("review_completed_located.json")
+    for c in body["claims"]:
+        for pos in c["positions"]:
+            pos["start"] = pos["end"] = None
+    text = _render_body(body)
+    assert "[1/4] The EU AI Act entered into force in March 2024.\n" in text
+    assert " · at " not in text
+
+
 def test_issues_render_shows_quick_issues_and_failures():
     text = _render("review_incomplete.json", issues_only=True)
     assert "incomplete" in text

@@ -373,7 +373,8 @@ def _print_link(out: Output, url: str) -> None:
 
 def _position_suffix(c: ReviewClaim) -> str:
     """`` · at 2-49``: where the draft first makes the claim, when the server
-    located it (never for a URL draft or an older server)."""
+    placed it by offset (never for a URL draft, whose positions carry the
+    passage only, or an older server)."""
     first = c.positions[0] if c.positions else None
     if first is None or first.start is None or first.end is None:
         return ""

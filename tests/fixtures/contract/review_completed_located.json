@@ -308,13 +308,16 @@
   "more_claims": [
     "The plant opened in 2019."
   ],
-  "more_claim_positions": [
-    [
-      {
-        "start": 315,
-        "end": 340,
-        "text": "The plant opened in 2019."
-      }
-    ]
+  "more_claim_locations": [
+    {
+      "claim": "The plant opened in 2019.",
+      "positions": [
+        {
+          "start": 315,
+          "end": 340,
+          "text": "The plant opened in 2019."
+        }
+      ]
+    }
   ]
 }

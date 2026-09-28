@@ -353,31 +353,37 @@ class ExtractedEntity(_Lax):
     type: str = ""
 
 
-class ClaimPosition(_Lax):
-    """One place in the submitted text that makes a located claim.
+class Position(_Lax):
+    """One place in the text you sent: a claim's passage, or a citation's
+    statement.
 
     ``start`` and ``end`` index the ``text`` you sent, in Unicode code
-    points, so ``original_input[start:end]`` is the passage in Python;
-    ``end`` is exclusive. Both are ``None`` when the input was a URL: the
-    page is not returned, so there is nothing to index. ``text`` is the
-    passage as it appears, and is always present.
+    points (not UTF-16 units or bytes), half-open: ``text[start:end]`` is
+    the passage in Python, ``end`` exclusive. Both are ``None`` when the
+    input was a URL: the page is not returned, so there is nothing to index,
+    and ``text`` carries the passage instead.
+
+    ``text`` is the passage as it appears in the text. It is ``None`` on a
+    citation's ``position``, whose row already carries the ``statement``.
     """
 
     start: int | None = None
     end: int | None = None
-    text: str = ""
+    text: str | None = None
 
 
 class ClaimLocation(_Lax):
-    """Where the submitted text makes one returned claim.
+    """Where the submitted text makes one claim.
 
-    ``claim`` is exactly as in ``ExtractedClaims.claim`` /
-    ``identified_claims``. ``positions`` lists every place the text makes
-    it, in text order: at least one, at most 10.
+    ``claim`` is exactly as in the claim list it belongs to
+    (``ExtractedClaims.claim`` / ``identified_claims``, or a review's
+    ``more_claims``). ``positions`` lists every place the text makes it, in
+    text order, at most 10. It is ``None`` only when that claim could not be
+    placed; on ``/extract`` every returned claim is placed.
     """
 
     claim: str = ""
-    positions: list[ClaimPosition] = Field(default_factory=list)
+    positions: list[Position] | None = None
 
 
 #: The ``ExtractedClaims.status`` values this release knows about:
@@ -1144,16 +1150,18 @@ class ReviewClaim(_Lax):
     once a deep check was planned for the claim.
 
     ``positions`` lists every place the draft makes the claim, in text
-    order, at most 10. ``start`` / ``end`` index the ``text`` you sent in
-    Unicode code points (``text[start:end]`` in Python; ``end`` exclusive),
-    the same coordinates as a citation's ``position``. ``None`` when the
-    draft was a URL, when the claims could not be located, or once a
-    zero-retention draft is gone (and from servers that predate the field).
+    order, at most 10 (see ``Position``). ``start`` / ``end`` index the
+    ``text`` you sent in Unicode code points (``text[start:end]`` in Python;
+    ``end`` exclusive), the same coordinates as a citation's ``position``.
+    For a URL draft, ``start`` and ``end`` are ``None`` and ``text`` carries
+    the passage. ``positions`` is ``None`` when the claims could not be
+    located, or once a zero-retention draft is gone (and from servers that
+    predate the field).
     """
 
     index: int = 0
     claim: str | None = None
-    positions: list[ClaimPosition] | None = None
+    positions: list[Position] | None = None
     result: ReviewResult | None = None
     assessment: ReviewAssessment = Field(default_factory=ReviewAssessment)
     escalation: Escalation | None = None
@@ -1201,14 +1209,6 @@ class ReviewFailure(_Lax):
     claim: str | None = None
     stage: str = ""
     failure: FailureBlock | None = None
-
-
-class ReviewCitationPosition(_Lax):
-    """Where a citation's ``statement`` sits in the text as sent: ``start`` and
-    ``end`` in Unicode code points, link syntax included."""
-
-    start: int = 0
-    end: int = 0
 
 
 class ReviewCitationResult(_Lax):
@@ -1300,7 +1300,8 @@ class ReviewCitation(_Lax):
     ``reference`` is the citation as the draft writes it; ``statement`` the
     draft's sentence it is attached to, with link syntax reduced to its
     words; ``quotes`` the words the draft quotes from this source.
-    ``position`` locates ``statement`` in the text as sent. ``result`` is
+    ``position`` locates ``statement`` in the text as sent (its ``text`` is
+    ``None``: the row carries the ``statement``). ``result`` is
     ``None`` until the check has ended, and on a failed row with nothing
     established.
     """
@@ -1311,7 +1312,7 @@ class ReviewCitation(_Lax):
     doi: str | None = None
     statement: str | None = None
     quotes: list[str] = Field(default_factory=list)
-    position: ReviewCitationPosition | None = None
+    position: Position | None = None
     result: ReviewCitationResult | None = None
     check: ReviewCitationCheck = Field(default_factory=ReviewCitationCheck)
 
@@ -1333,7 +1334,7 @@ class ReviewCitationIssue(_Lax):
     doi: str | None = None
     statement: str | None = None
     quotes: list[str] = Field(default_factory=list)
-    position: ReviewCitationPosition | None = None
+    position: Position | None = None
     finding: str = ""
     source: str | None = None
     snippet: str | None = None
@@ -1354,7 +1355,7 @@ class ReviewMoreCitation(_Lax):
     cited_url: str | None = None
     doi: str | None = None
     sentence: str | None = None
-    position: ReviewCitationPosition | None = None
+    position: Position | None = None
 
 
 class ReviewCitationFailure(_Lax):
@@ -1466,11 +1467,10 @@ class ReviewEnvelope(_Lax):
     #: Claims found past ``max_assessments``, in the draft's order: found but
     #: not checked. ``None`` until the draft is read, ``[]`` when there are none.
     more_claims: list[str] | None = None
-    #: Where the draft makes each ``more_claims`` claim: one entry per string,
-    #: same order, each a list of positions like ``ReviewClaim.positions``.
-    #: ``None`` until the draft is read, for a URL, or when the claims could
-    #: not be located (and from servers that predate the field).
-    more_claim_positions: list[list[ClaimPosition] | None] | None = None
+    #: Where the draft makes each ``more_claims`` claim: one ``ClaimLocation``
+    #: (``claim``, ``positions``) per string, same order, the shape
+    #: ``extract(locate=True)`` returns. ``None`` until the draft is read.
+    more_claim_locations: list[ClaimLocation] | None = None
     #: Citations found past the ones checked (up to 100): found but not
     #: checked. ``None`` until the draft is read, ``[]`` when there are none.
     more_citations: list[ReviewMoreCitation] | None = None
@@ -1507,7 +1507,6 @@ __all__ = [
     "CitecheckStarted",
     "CitecheckSummary",
     "ClaimLocation",
-    "ClaimPosition",
     "DebateSide",
     "EntityRef",
     "Escalation",
@@ -1519,6 +1518,7 @@ __all__ = [
     "FailureClass",
     "LibraryItem",
     "LibraryList",
+    "Position",
     "RelatedVerifications",
     "ReviewAssessment",
     "ReviewAssessmentCounts",
@@ -1528,7 +1528,6 @@ __all__ = [
     "ReviewCitationDifference",
     "ReviewCitationFailure",
     "ReviewCitationIssue",
-    "ReviewCitationPosition",
     "ReviewCitationRecord",
     "ReviewCitationResult",
     "ReviewClaim",
