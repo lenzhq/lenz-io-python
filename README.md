@@ -178,6 +178,11 @@ reviewer's note, not a checked source; `snippet` is the passage from the page.
 `more_claims` and `more_citations` list what the draft holds past
 `max_assessments` and `max_citations`: found, not checked, to send in a later
 request. Leave `max_citations` out (or `0`) and no citation is checked.
+Only claims traced directly back to the draft are checked. Each claim row's
+`positions` says where the draft makes it (`start`/`end` are code-point
+offsets into `text`, so `text[start:end]` is the passage), and
+`more_claim_positions` does the same for `more_claims`, one entry per string;
+both are `None` for a URL draft or when the claims could not be located.
 
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as

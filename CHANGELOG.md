@@ -115,6 +115,21 @@ parses, with the new keys at their defaults.
 - **`lenz extract --locate / --no-locate`**: unset by default (the server
   decides). The pretty output prints each claim's passages, with their
   `start`-`end` span when there is one.
+- **`/review` checks only the claims traced directly back to the draft**, as
+  `extract(locate=True)` does: a claim found nowhere in the draft, or found
+  with a different figure, is left out.
+- **`ReviewClaim.positions`** (`list[ClaimPosition] | None`): every place the
+  draft makes the claim, in text order, at most 10. `start`/`end` index the
+  `text` as sent in Unicode code points (`text[start:end]`, `end`
+  exclusive), the same coordinates as a citation's `position`. `None` when
+  the draft was a URL, when the claims could not be located, or once a
+  zero-retention draft is gone.
+- **`more_claim_positions`** on both review views
+  (`list[list[ClaimPosition] | None] | None`): one entry per `more_claims`
+  string, same order. `None` until the draft is read, for a URL, or when the
+  claims could not be located. A body from an older server without either
+  key parses as `None`. `lenz review` prints a claim's first position as
+  `· at start-end` when there is one.
 
 ### Deprecated
 

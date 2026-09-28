@@ -1142,10 +1142,18 @@ class ReviewClaim(_Lax):
     ``result`` is ``None`` until the quick check completes, and on a failed
     one. ``escalation`` is ``None`` until then too. ``verification`` is set
     once a deep check was planned for the claim.
+
+    ``positions`` lists every place the draft makes the claim, in text
+    order, at most 10. ``start`` / ``end`` index the ``text`` you sent in
+    Unicode code points (``text[start:end]`` in Python; ``end`` exclusive),
+    the same coordinates as a citation's ``position``. ``None`` when the
+    draft was a URL, when the claims could not be located, or once a
+    zero-retention draft is gone (and from servers that predate the field).
     """
 
     index: int = 0
     claim: str | None = None
+    positions: list[ClaimPosition] | None = None
     result: ReviewResult | None = None
     assessment: ReviewAssessment = Field(default_factory=ReviewAssessment)
     escalation: Escalation | None = None
@@ -1458,6 +1466,11 @@ class ReviewEnvelope(_Lax):
     #: Claims found past ``max_assessments``, in the draft's order: found but
     #: not checked. ``None`` until the draft is read, ``[]`` when there are none.
     more_claims: list[str] | None = None
+    #: Where the draft makes each ``more_claims`` claim: one entry per string,
+    #: same order, each a list of positions like ``ReviewClaim.positions``.
+    #: ``None`` until the draft is read, for a URL, or when the claims could
+    #: not be located (and from servers that predate the field).
+    more_claim_positions: list[list[ClaimPosition] | None] | None = None
     #: Citations found past the ones checked (up to 100): found but not
     #: checked. ``None`` until the draft is read, ``[]`` when there are none.
     more_citations: list[ReviewMoreCitation] | None = None

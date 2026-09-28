@@ -371,8 +371,17 @@ def _print_link(out: Output, url: str) -> None:
     out.console.print(Text("  " + url, style="blue"), soft_wrap=True)
 
 
+def _position_suffix(c: ReviewClaim) -> str:
+    """`` · at 2-49``: where the draft first makes the claim, when the server
+    located it (never for a URL draft or an older server)."""
+    first = c.positions[0] if c.positions else None
+    if first is None or first.start is None or first.end is None:
+        return ""
+    return f" [dim]· at {first.start}-{first.end}[/dim]"
+
+
 def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
-    out.console.print(f"[bold]\\[{c.index + 1}/{n}][/bold] {escape(c.claim or '')}")
+    out.console.print(f"[bold]\\[{c.index + 1}/{n}][/bold] {escape(c.claim or '')}{_position_suffix(c)}")
     a, v = c.assessment, c.verification
     if a.status == "failed":
         hint = (a.failure.hint if a.failure else None) or a.hint or a.error_code or "failed"

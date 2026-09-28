@@ -283,6 +283,12 @@ def test_full_render_lists_every_claim_with_its_final_verdict():
     assert "has not been verified itself" in text
 
 
+def test_full_render_shows_where_the_draft_first_makes_each_claim():
+    text = _render("review_completed_located.json")
+    assert "[1/4] The EU AI Act entered into force in March 2024. · at 2-49\n" in text
+    assert " · at " not in _render("review_completed.json")
+
+
 def test_issues_render_shows_quick_issues_and_failures():
     text = _render("review_incomplete.json", issues_only=True)
     assert "incomplete" in text
