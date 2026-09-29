@@ -8,14 +8,16 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Changed
 
-- **Review issues: `suggested_rewrite` also from the quick check** (an API
-  change; the SDK code is unchanged). An issue's `suggested_rewrite` comes
-  from the claim's deep check when it has one; otherwise, when the review
-  asked for suggested edits (`suggest_edits=True`), from the quick check, for
-  a claim found `False` or `Mostly False` with high confidence. Likewise
-  `suggested_edits` now also appears on claim rows that stayed on the quick
-  verdict. The issue's `source` (`assessment` | `verification`) says which
-  check it came from.
+- **Review: `suggested_rewrite` also from the quick check.** An issue's
+  `suggested_rewrite` comes from the claim's deep check when it has one;
+  otherwise, when the review asked for suggested edits (`suggest_edits=True`),
+  from the quick check, for a claim found `False` or `Mostly False` with high
+  confidence. Likewise `suggested_edits` now also appears on claim rows that
+  stayed on the quick verdict. The issue's `source` (`assessment` |
+  `verification`) says which check it came from. The quick check's rewrite is
+  also on each claim row as `ReviewAssessment.suggested_rewrite` (new;
+  `None` when not asked, when there is none, and from a server that predates
+  it).
 - **`suggested_rewrite` on a verification answers the same question the
   claim answers** (an API change; the SDK code is unchanged). It may replace
   the claim's subject when the subject is the wrong part ("Venus is the

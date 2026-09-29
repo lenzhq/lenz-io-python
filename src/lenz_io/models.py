@@ -1110,6 +1110,12 @@ class ReviewAssessment(_Lax):
     error_code: str | None = None
     identified_claims: list[str] = Field(default_factory=list)
     hint: str | None = None
+    #: With ``suggest_edits=True``: the claim with its wrong part corrected,
+    #: from the quick check's reasoning, when it found the claim "False" or
+    #: "Mostly False" with high confidence. ``None`` otherwise, and from
+    #: servers that predate the field. Not itself verified: review it, or
+    #: run it through ``verify``, before using it.
+    suggested_rewrite: str | None = None
     failure: FailureBlock | None = None
 
 

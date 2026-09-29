@@ -1083,3 +1083,13 @@ class TestSuggestedEdits:
         # From a server that predates the field, or a review that did not ask.
         assert ReviewClaim.model_validate({}).suggested_edits is None
         assert ReviewIssue.model_validate({}).suggested_edits is None
+
+    def test_the_quick_checks_rewrite_on_the_assessment(self):
+        from lenz_io.models import ReviewAssessment
+
+        body = _load("review_completed_suggested_edits.json")
+        body["claims"][0]["assessment"]["suggested_rewrite"] = "Mercury is the closest planet to the Sun."
+        review = ReviewFull.model_validate(body)
+        assert review.claims[0].assessment.suggested_rewrite == "Mercury is the closest planet to the Sun."
+        # From a server that predates the field, or a review that did not ask.
+        assert ReviewAssessment.model_validate({"status": "completed"}).suggested_rewrite is None

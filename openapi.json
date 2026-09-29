@@ -3140,7 +3140,7 @@
                 "type": "null"
               }
             ],
-            "description": "For each claim whose deep check suggests a rewrite, the smallest edits to the draft that make it say what the rewrite says, written in the draft's language (claims[].suggested_edits). No extra credits. The review completes once they are settled. Default false. Guide: https://lenz.io/docs/citations",
+            "description": "For each claim with a suggested rewrite, from its deep check or, when it has none, from its quick check (found False or Mostly False with high confidence), the smallest edits to the draft that make it say what the rewrite says, written in the draft's language (claims[].suggested_edits). No extra credits. The review completes once they are settled. Default false. Guide: https://lenz.io/docs/citations",
             "title": "Suggest Edits"
           }
         },
@@ -3330,6 +3330,18 @@
               }
             ],
             "title": "Hint"
+          },
+          "suggested_rewrite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With `escalate.suggest_edits`: the claim with its wrong part corrected, from the quick check's reasoning, when it found the claim False or Mostly False with high confidence. Not itself verified. `null` otherwise.",
+            "title": "Suggested Rewrite"
           },
           "failure": {
             "anyOf": [
@@ -4083,7 +4095,7 @@
                 "type": "null"
               }
             ],
-            "description": "Asked with `escalate.suggest_edits`. `null` when not asked, when the claim got no completed deep check with a suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
+            "description": "Asked with `escalate.suggest_edits`. They follow the row's suggested rewrite: its completed deep check's, else its quick check's (see the issue's `source`). `null` when not asked, when the claim has no suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
           }
         },
         "required": [
@@ -4618,7 +4630,7 @@
                 "type": "null"
               }
             ],
-            "description": "The deep check's rewrite; null on a quick-only row. A suggestion, not itself verified.",
+            "description": "The rewrite the row's edits come from: its completed deep check's, else (with `escalate.suggest_edits`) its quick check's; `source` says which. A suggestion, not itself verified.",
             "title": "Suggested Rewrite"
           },
           "failure": {
@@ -4640,7 +4652,7 @@
                 "type": "null"
               }
             ],
-            "description": "A copy of its claim row's `suggested_edits`. Asked with `escalate.suggest_edits`. `null` when not asked, when the claim got no completed deep check with a suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
+            "description": "A copy of its claim row's `suggested_edits`. Asked with `escalate.suggest_edits`. They follow the row's suggested rewrite: its completed deep check's, else its quick check's (see the issue's `source`). `null` when not asked, when the claim has no suggested rewrite, when the draft's passage is not in a supported language or could not be placed, or once a zero-retention draft is gone. Guide: https://lenz.io/docs/citations#suggested-edits"
           }
         },
         "required": [
