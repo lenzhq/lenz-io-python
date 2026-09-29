@@ -555,6 +555,45 @@ class TestAssess:
         assert c.candidate_claims == []
         assert c.identified_claims == []
         assert c.hint is None
+        assert c.suggested_rewrite is None
+
+    # ── suggest_rewrite ──
+
+    @pytest.mark.parametrize(
+        ("kwargs", "base"),
+        [({"claim": "A."}, {"text": "A."}), ({"claims": ["A.", "B."]}, {"claims": ["A.", "B."]})],
+    )
+    def test_suggest_rewrite_is_sent_only_when_asked(self, client, kwargs, base):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(**kwargs)
+            assert json.loads(route.calls.last.request.content) == base
+            client.assess(**kwargs, suggest_rewrite=False)
+            assert json.loads(route.calls.last.request.content) == base
+            client.assess(**kwargs, suggest_rewrite=True)
+            assert json.loads(route.calls.last.request.content) == {**base, "suggest_rewrite": True}
+
+    def test_suggested_rewrite_parses_on_the_row_and_defaults_to_none(self, client):
+        rows = [
+            {
+                "claim": "Venus is the closest planet to the Sun.",
+                "verdict": "False",
+                "confidence": "high",
+                "suggested_rewrite": "Mercury is the closest planet to the Sun.",
+            },
+            {
+                "claim": "Water boils at 100 °C at sea level.",
+                "verdict": "True",
+                "confidence": "high",
+                "suggested_rewrite": None,
+            },
+            # A response replayed from before the API added the key.
+            {"claim": "x", "verdict": "Mixed", "confidence": "medium"},
+        ]
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/assess").respond(200, json={"claims": rows, "error": None})
+            out = client.assess(claims=[row["claim"] for row in rows], suggest_rewrite=True)
+        assert [c.suggested_rewrite for c in out.claims] == ["Mercury is the closest planet to the Sun.", None, None]
 
     # ── list form: assess(claims=[...]) ──
 

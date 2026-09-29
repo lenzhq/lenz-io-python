@@ -8,6 +8,22 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Changed
 
+- **Review: `suggested_rewrite` also from the quick check.** An issue's
+  `suggested_rewrite` comes from the claim's deep check when it has one;
+  otherwise, when the review asked for suggested edits (`suggest_edits=True`),
+  from the quick check, for a claim found `False` or `Mostly False` with high
+  confidence. Likewise `suggested_edits` now also appears on claim rows that
+  stayed on the quick verdict. The issue's `source` (`assessment` |
+  `verification`) says which check it came from. The quick check's rewrite is
+  also on each claim row as `ReviewAssessment.suggested_rewrite` (new;
+  `None` when not asked, when there is none, and from a server that predates
+  it).
+- **`suggested_rewrite` on a verification answers the same question the
+  claim answers** (an API change; the SDK code is unchanged). It may replace
+  the claim's subject when the subject is the wrong part ("Venus is the
+  closest planet" becomes "Mercury is the closest planet"), negates the claim
+  when the evidence establishes it is false but names no right answer, and
+  stays `None` when the evidence only finds no support.
 - **`partly_supported` is no longer a citation issue** (an API change; the SDK
   code is unchanged). The row stays in `citations` with `is_issue` false, and
   is left out of `citation_issues` and `summary.citation_issues`, so on its own
@@ -30,6 +46,16 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- **`assess(..., suggest_rewrite=True)`**, and `AssessClaim.suggested_rewrite`
+  on every row: the claim with its wrong part corrected, when the check found
+  it `False` or `Mostly False` with high confidence; `None` when not asked,
+  outside that, or when there is no correction to write. Both forms (`claim`
+  and `claims=[...]`), per row, no extra credit. It is written from the quick
+  check's reasoning and is not itself verified: review it, or run it through
+  `verify`, before using it. Leave it out and the request, and its idempotency
+  key's body, are exactly as before; a row without the key parses with it at
+  `None`. Needs a server that knows the option: an older one refuses it with
+  a 422.
 - **`review(..., suggest_edits=True)`**: for each claim whose deep check
   suggests a rewrite, the smallest edits to the draft that make it say what
   the rewrite says, in the draft's own language, as
