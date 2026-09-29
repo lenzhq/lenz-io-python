@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.18.0] - 2026-09-30
+
 ### Changed
 
 - **Review: `suggested_rewrite` also from the quick check.** An issue's
@@ -70,7 +72,6 @@ All notable changes to this SDK are documented here. Format follows
   the language the results are written in (ISO 639-1, e.g. `de`). Default
   English.
 
-## [2.18.0] - 2026-09-27
 
 `review` can check a draft's citations, and `citecheck` runs that check on
 its own, on a draft or on statement-source pairs: does each linked source (a
