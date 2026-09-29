@@ -1513,6 +1513,17 @@
             ],
             "title": "Dissent"
           },
+          "suggested_rewrite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suggested Rewrite"
+          },
           "error_code": {
             "anyOf": [
               {
