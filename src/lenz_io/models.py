@@ -276,7 +276,12 @@ class Verification(_Lax):
     #: ``client.verify(...)``. ``None`` for a True verdict, when the findings
     #: establish no correction, and on verifications that predate the field
     #: (or a server that does not send it). On every verification, single or
-    #: listed (``VerificationListItem`` carries it too); not on ``assess`` rows.
+    #: listed (``VerificationListItem`` carries it too). It answers the same
+    #: question the claim answers: it may replace the claim's subject when the
+    #: subject is the wrong part, negates the claim when the findings establish
+    #: it is false but name no right answer, and is ``None`` when the findings
+    #: only find no support. ``assess`` rows carry their own
+    #: (``AssessClaim.suggested_rewrite``, with ``suggest_rewrite=True``).
     suggested_rewrite: str | None = None
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
@@ -476,6 +481,14 @@ class AssessClaim(_Lax):
     # neither key.
     rationale: str | None = None
     dissent: str | None = None
+    # The claim with its wrong part corrected, when the request set
+    # ``suggest_rewrite=True`` and the check found the claim "False" or
+    # "Mostly False" with high confidence. ``None`` when not requested,
+    # outside that, when there was no correction to write, and on a response
+    # replayed from before the API added the key. Written from the quick
+    # check's reasoning and not itself verified: review it, or run it through
+    # ``verify``, before using it.
+    suggested_rewrite: str | None = None
     # Only on ``verdict == "Error"`` rows: 'no_claim' | 'framing_failed' |
     # 'upstream_unavailable' | 'timeout'.
     #
@@ -1163,8 +1176,9 @@ class SuggestedEdit(_Lax):
 
 
 class SuggestedEdits(_Lax):
-    """The smallest edits to the draft that make it say what the claim's deep
-    check ``suggested_rewrite`` says, in the draft's own language
+    """The smallest edits to the draft that make it say what the claim's
+    ``suggested_rewrite`` says (the deep check's, or the quick check's on a
+    claim that stayed on the quick verdict), in the draft's own language
     (``review(..., suggest_edits=True)``).
 
     ``status`` is ``"pending"`` while they are computed (``edits`` is
@@ -1203,7 +1217,7 @@ class ReviewClaim(_Lax):
     verification: ReviewVerification | None = None
     #: The claim's suggested edits to the draft (``review(...,
     #: suggest_edits=True)``). ``None`` when not asked, when the claim got no
-    #: completed deep check with a suggested rewrite, when its passage is not in a
+    #: suggested rewrite from a completed deep check or its quick check, when its passage is not in a
     #: supported language or could not be placed, once a zero-retention draft
     #: is gone, and from servers that predate the field.
     suggested_edits: SuggestedEdits | None = None
@@ -1234,10 +1248,13 @@ class ReviewIssue(_Lax):
     escalation: Escalation | None = None
     key_finding: str | None = None
     rationale: str | None = None
-    #: The claim rewritten so the deep check's findings support it; ``None``
-    #: on a quick-only issue and when the deep check suggested none. It is a
-    #: suggestion and has not been verified itself: review it, or run it
-    #: through ``verify``, before you use it.
+    #: The claim rewritten so the findings support it: the deep check's when
+    #: the claim has one, otherwise, when the review asked for suggested
+    #: edits, the quick check's (for a claim found "False" or "Mostly False"
+    #: with high confidence); ``source`` says which check it came from.
+    #: ``None`` when neither suggested one. It is a suggestion and has not
+    #: been verified itself: review it, or run it through ``verify``, before
+    #: you use it.
     suggested_rewrite: str | None = None
     failure: FailureBlock | None = None
     #: A copy of its claim row's ``suggested_edits``.

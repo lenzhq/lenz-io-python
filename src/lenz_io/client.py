@@ -646,6 +646,7 @@ class Lenz:
         text: str = "",
         claims: list[str] | None = None,
         language: str = "",
+        suggest_rewrite: bool = False,
         timeout: float | None = None,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -694,6 +695,14 @@ class Lenz:
         Empty string omits the field from the request body — preserves
         byte-identical behavior for existing English callers.
 
+        ``suggest_rewrite=True`` also writes ``suggested_rewrite`` on each
+        row: the claim with its wrong part corrected, for a claim the check
+        found ``"False"`` or ``"Mostly False"`` with high confidence (``None``
+        otherwise, or when there is no correction to write). Both forms, per
+        row, no extra credit. It is written from the quick check's reasoning
+        and is not itself verified: review it, or run it through ``verify``,
+        before using it. ``False`` sends nothing.
+
         ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
         the client default for this one request. Both forms otherwise use
         ``ASSESS_TIMEOUT`` (45s), or your client timeout when you configured a
@@ -722,8 +731,20 @@ class Lenz:
         if claims is not None:
             if claim or text:
                 raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
-            return self._assess(claims=claims, language=language, timeout=timeout, idempotency_key=key)
-        return self._assess(text=claim or text, language=language, timeout=timeout, idempotency_key=key)
+            return self._assess(
+                claims=claims,
+                language=language,
+                suggest_rewrite=suggest_rewrite,
+                timeout=timeout,
+                idempotency_key=key,
+            )
+        return self._assess(
+            text=claim or text,
+            language=language,
+            suggest_rewrite=suggest_rewrite,
+            timeout=timeout,
+            idempotency_key=key,
+        )
 
     def select(self, task_id: str, *, claims: list[str] | None = None, texts: list[str] | None = None) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
@@ -965,12 +986,13 @@ class Lenz:
         the ones found past N are listed in ``more_citations``. ``None`` or
         ``0`` checks no citation and sends nothing.
 
-        ``suggest_edits=True`` also returns, for each claim whose deep check
-        suggests a rewrite, the smallest edits to the draft that make it say
-        what the rewrite says, in the draft's own language
+        ``suggest_edits=True`` also returns, for each claim with a suggested
+        rewrite (from its deep check, or from its quick check when the claim
+        stayed on the quick verdict), the smallest edits to the draft that
+        make it say what the rewrite says, in the draft's own language
         (``ReviewClaim.suggested_edits``, copied on its issue). They cost no
-        credits beyond the deep check, and the review completes once they are
-        settled. ``False`` sends nothing.
+        extra credits, and the review completes once they are settled.
+        ``False`` sends nothing.
 
         Credits: 1 per claim assessed, plus 10 (5 at ``depth="low"``) per
         deep check. ``credits.charged`` on the review says what it cost.
@@ -1561,6 +1583,7 @@ class Lenz:
         text: str = "",
         claims: list[str] | None = None,
         language: str = "",
+        suggest_rewrite: bool = False,
         timeout: float | None = None,
         idempotency_key: str | None = None,
     ) -> AssessResponse:
@@ -1576,6 +1599,10 @@ class Lenz:
             payload = {"text": text}
         if language:
             payload["language"] = language
+        # Sent only when asked, so a request without the option (and its
+        # idempotency body) is exactly what it was before.
+        if suggest_rewrite:
+            payload["suggest_rewrite"] = True
         if timeout is None:
             timeout = self._timeout_at_least(ASSESS_TIMEOUT)
         headers = {}

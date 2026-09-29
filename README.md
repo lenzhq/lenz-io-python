@@ -143,8 +143,9 @@ client.review_and_wait(
 `source` says whether that verdict comes from a deep check (`verification`,
 with `key_finding`, `url` and `verification_id`) or from the quick check alone
 (`assessment`, with the reviewers' `rationale`; `escalation.disposition` says
-why it was not deep-checked). `suggested_rewrite` comes from a deep check, so
-an issue that stayed on the quick verdict has none. It is not verified itself:
+why it was not deep-checked). `suggested_rewrite` comes from the deep check;
+an issue that stayed on the quick verdict has one only when the review asked
+for suggested edits (`suggest_edits=True`). It is not verified itself:
 review it, or run it through `verify`, before you use it. `claims` lists every
 claim with both checks; `failures` lists the ones whose work failed. The
 top-level types are importable from `lenz_io`; the nested ones (`ReviewAssessment`,
@@ -189,10 +190,11 @@ and `text` still carries the passage. `more_claim_locations` does the same for
 order, `None` until the draft is read. A citation's `position` is the same
 `Position`, with `text` `None` (the row carries the `statement`).
 
-**Suggested edits.** `suggest_edits=True` also returns, for each claim whose
-deep check suggests a rewrite, the smallest edits to the draft that make it
-say what the rewrite says, in the draft's own language. They cost no credits
-beyond the deep check, and the review completes once they are settled. Each
+**Suggested edits.** `suggest_edits=True` also returns, for each claim with a
+suggested rewrite (from its deep check, or from its quick check when it stayed
+on the quick verdict), the smallest edits to the draft that make it say what
+the rewrite says, in the draft's own language. They cost no extra credits, and
+the review completes once they are settled. Each
 claim row (and its issue) carries `suggested_edits`: `status` `"pending"` or
 `"completed"`, and `edits`, each a span of the `text` you sent (`start`/`end`
 in code points, `text` the exact slice) and its `replacement`. `edits == []`
@@ -334,6 +336,18 @@ set, is the reasoning of the reviewer farthest from it. Both are reviewers'
 notes, not checked sources; for sourced evidence, call `verify`. Read them as
 optional: either can be `None`.
 
+**Suggested rewrite.** `suggest_rewrite=True` also writes, on each row the
+check found `False` or `Mostly False` with high confidence, the claim with its
+wrong part corrected (`suggested_rewrite`, else `None`), at no extra credit.
+It is not itself verified: review it, or run it through `verify`, before
+using it.
+
+```python
+row = client.assess(claim="Venus is the closest planet to the Sun.", suggest_rewrite=True).claims[0]
+if row.suggested_rewrite:
+    print(row.suggested_rewrite)  # e.g. "Mercury is the closest planet to the Sun."
+```
+
 `assess` and `verify` share a result cache server-side: if a claim
 already has a deep verification, `assess` returns it via
 `verification_url` and you can skip the escalation.
@@ -471,8 +485,8 @@ if v.suggested_rewrite is not None:
   verifications that predate the field.
 - On every verification, single or listed: `verifications.get`,
   `verifications.list`, `library.list`, `verify_and_wait`, `wait`, a completed
-  `get_status`, and the `result` of a `verification.completed` webhook. Not on
-  `assess` rows.
+  `get_status`, and the `result` of a `verification.completed` webhook.
+  `assess` rows carry their own with `suggest_rewrite=True`.
 
 ### The warranty (`coverage`)
 
