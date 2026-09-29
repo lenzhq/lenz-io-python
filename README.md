@@ -168,8 +168,10 @@ for c in review.citation_issues:  # most serious first
 ```
 
 `finding` is one of `doi_not_found`, `page_not_found`, `contradicted`,
-`quote_not_in_source`, `not_in_source`, `partly_supported` or
-`metadata_mismatch`, most serious first. `citations` lists every checked
+`quote_not_in_source`, `not_in_source` or `metadata_mismatch`, most serious
+first. `partly_supported` (the source backs part of the statement) is reported
+in `citations` with its snippet, but it is not an issue: `is_issue` is false
+and it is not in `citation_issues`. `citations` lists every checked
 citation with its `check`; a row that could not be checked says why in
 `check.unchecked_reason` and what to do in `check.hint`, and
 `citation_failures` lists the ones that failed on our side. A citation issue

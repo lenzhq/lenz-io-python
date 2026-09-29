@@ -8,6 +8,11 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Changed
 
+- **`partly_supported` is no longer a citation issue** (an API change; the SDK
+  code is unchanged). The row stays in `citations` with `is_issue` false, and
+  is left out of `citation_issues` and `summary.citation_issues`, so on its own
+  it no longer makes `outcome` `issues_found`.
+
 - **`lenz review FILE` checks the draft's sources by default**: the first 20,
   at 1 credit per checked citation, stated in `--help` and in the run's
   opening line ("Checking claims and up to 20 citations…").
