@@ -350,7 +350,9 @@ if row.suggested_rewrite:
 
 `assess` and `verify` share a result cache server-side: if a claim
 already has a deep verification, `assess` returns it via
-`verification_url` and you can skip the escalation.
+`verification_url` and you can skip the escalation. An answer served from
+that cache (a claim checked in the last hour) is free, so a tool that
+resends the same request is not charged twice.
 
 ## How verification works
 
@@ -668,11 +670,14 @@ low_depth_left = u.credits.remaining // low  # 1014
 ```
 
 **You are charged for the depth you requested, not the one you were served.**
-A `low` request answered from a cached `standard` verdict still costs 5. The
-`depth` echoed on the completed verification is what the verdict was *produced*
-with, so it can read `standard` on a `low` request — the echo describes the
-evidence behind the answer, the charge follows the request. A batch may mix
-depths and is billed per item.
+The `depth` echoed on the completed verification is what the verdict was
+*produced* with, so it can read `standard` on a `low` request — the echo
+describes the evidence behind the answer, the charge follows the request. A
+batch may mix depths and is billed per item.
+
+**A verdict served from the last hour's cache is free**, on `verify`,
+`assess` and `review` alike. The one exception is a `verify` that issues your
+business plan a new warranty certificate, charged at the depth you requested.
 
 ## Errors
 
