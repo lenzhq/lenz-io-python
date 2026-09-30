@@ -8,6 +8,13 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Changed
 
+- **A verdict served from the server's cache is free** (an API change; the
+  SDK code is unchanged). A `verify`, `assess` or `review` claim that gets back
+  a verdict checked in the last hour is no longer charged, so a tool that
+  resends the same request pays once. A citation judged from the server's
+  judgment cache is refunded like an unchecked one. The exception is a
+  `verify` that issues a business plan a new warranty certificate, still
+  charged at the requested depth.
 - **`assess` waits up to 100s** (`ASSESS_TIMEOUT`, was 45s; the deprecated
   alias `ASSESS_LIST_TIMEOUT` follows it). The API now gives a long text up to
   90s to be assessed instead of refusing it early, and the SDK waits 10s longer
