@@ -873,12 +873,12 @@ class Usage(_Lax):
     #: under its capability instead of a new top-level entry — ``costs`` stays
     #: a list of capability names, safe to iterate.
     #:
-    #: You are charged for the depth you **requested**, not the one served: a
-    #: ``low`` request answered from a cached ``standard`` verdict still costs
-    #: the ``low`` price. The ``depth`` echoed on a completed verification is
-    #: what the verdict was PRODUCED with, so it can read ``standard`` on a
-    #: ``low`` request — the echo describes the evidence, the charge follows
-    #: the request.
+    #: You are charged for the depth you **requested**, not the one served; a
+    #: verdict served from the last hour's cache is free (except a ``verify``
+    #: that issues a new warranty certificate). The ``depth`` echoed on a
+    #: completed verification is what the verdict was PRODUCED with, so it can
+    #: read ``standard`` on a ``low`` request — the echo describes the
+    #: evidence, the charge follows the request.
     cost_options: dict[str, dict[str, dict[str, int]]] = Field(default_factory=dict)
     #: DEPRECATED — removed 2026-11-29. Derive from :attr:`credits` and
     #: :attr:`costs` instead::
