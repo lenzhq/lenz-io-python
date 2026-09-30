@@ -382,8 +382,8 @@ your own claims. Use webhooks for production async flows.
 
 ## What you get on the client
 
-- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 90s by default (a timeout is retried like any transport error); `timeout=` overrides it for that call.
-- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~10s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~10-25s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 45s).
+- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
+- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~10s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~10-25s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
@@ -737,7 +737,7 @@ add a `LenzQuotaExceededError` handler.
 
 ## Resuming a verification
 
-If a `verify_and_wait` call exceeds its `timeout` (default 120s) or your
+If a `verify_and_wait` call exceeds its `timeout` (default 300s) or your
 process dies mid-poll, the pipeline keeps running. The exception carries the
 `task_id`:
 

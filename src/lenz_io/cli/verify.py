@@ -84,7 +84,7 @@ def verify(
     ctx: typer.Context,
     claim: str = typer.Argument(None, help="Claim to verify ('-' or pipe = stdin)."),
     resume: str = typer.Option(None, "--resume", metavar="ID", help="Re-attach to a task_id or verification_id."),
-    timeout: float = typer.Option(180.0, "--timeout", help="Max seconds to wait."),
+    timeout: float = typer.Option(300.0, "--timeout", help="Max seconds to wait."),
     pick: str = typer.Option(
         None, "--claim", metavar="N|N,M|all", help="Pre-pick claim(s) on a multi-claim input: '2', '1,3', or 'all'."
     ),

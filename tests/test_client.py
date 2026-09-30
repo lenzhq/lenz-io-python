@@ -691,7 +691,7 @@ class TestAssess:
             route = r.post("/assess").respond(200, json={"claims": [], "error": None})
             client.assess(**kwargs)
         timeout = route.calls.last.request.extensions["timeout"]
-        assert timeout["read"] == ASSESS_TIMEOUT == 45.0
+        assert timeout["read"] == ASSESS_TIMEOUT == 100.0
         assert timeout["connect"] == ASSESS_TIMEOUT
 
     def test_a_longer_client_timeout_is_never_shortened(self):
@@ -700,8 +700,8 @@ class TestAssess:
         with the Node SDK, which has always taken the max."""
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/assess").respond(200, json={"claims": [], "error": None})
-            Lenz(api_key="lenz_test_abc123", timeout=90.0).assess(claims=["A."])
-        assert route.calls.last.request.extensions["timeout"]["read"] == 90.0
+            Lenz(api_key="lenz_test_abc123", timeout=120.0).assess(claims=["A."])
+        assert route.calls.last.request.extensions["timeout"]["read"] == 120.0
 
     def test_assess_sends_a_random_idempotency_key_by_default(self, client):
         """A retry after a network drop must replay, not re-charge.
@@ -776,7 +776,7 @@ _EXTRACT_BODY = {"status": "ready", "claim": "A.", "identified_claims": []}
 
 
 class TestExtractTimeout:
-    """``extract`` waits ``EXTRACT_TIMEOUT`` (90s), not the 30s client default.
+    """``extract`` waits ``EXTRACT_TIMEOUT`` (150s), not the 30s client default.
 
     Extraction runs in one synchronous request, and a long input can take
     longer than 30s. On a client timeout the SDK re-sends the call, which
@@ -788,14 +788,14 @@ class TestExtractTimeout:
             route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
             client.extract(text="A document.")
         timeout = route.calls.last.request.extensions["timeout"]
-        assert timeout["read"] == EXTRACT_TIMEOUT == 90.0
+        assert timeout["read"] == EXTRACT_TIMEOUT == 150.0
         assert timeout["connect"] == EXTRACT_TIMEOUT
 
     def test_a_longer_client_timeout_is_never_shortened(self):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(200, json=_EXTRACT_BODY)
-            Lenz(api_key="lenz_test_abc123", timeout=120.0).extract(text="A document.")
-        assert route.calls.last.request.extensions["timeout"]["read"] == 120.0
+            Lenz(api_key="lenz_test_abc123", timeout=200.0).extract(text="A document.")
+        assert route.calls.last.request.extensions["timeout"]["read"] == 200.0
 
     def test_explicit_timeout_overrides_the_default_for_that_call_only(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -805,6 +805,66 @@ class TestExtractTimeout:
             # The next call is back on the extract default — nothing leaked.
             client.extract(text="A document.")
             assert route.calls.last.request.extensions["timeout"]["read"] == EXTRACT_TIMEOUT
+
+
+_AUTO_KEY_CALLS = [
+    ("/extract", lambda c, **kw: c.extract(text="A document.", **kw), _EXTRACT_BODY),
+    (
+        "/verify/tsk_001/select",
+        lambda c, **kw: c.select("tsk_001", claims=["A."], **kw),
+        {"batch_id": "bat_1", "items": [{"task_id": "tsk_002", "claim_text": "A."}]},
+    ),
+    ("/verify", lambda c, **kw: c.verify(claim="A.", **kw), {"task_id": "t", "claim_text": "A."}),
+]
+
+
+class TestAutoIdempotencyKeys:
+    """``extract``, ``select`` and ``verify`` send a random ``Idempotency-Key``
+    per call when the caller passes none, reused across that call's own
+    retries, so a retried request replays the first answer instead of running
+    twice. Never derived from the body: the same text sent again later is a
+    new request."""
+
+    @pytest.mark.parametrize(("path", "call", "body"), _AUTO_KEY_CALLS)
+    def test_a_random_key_per_call(self, client, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path).respond(200, json=body)
+            call(client)
+            first = route.calls.last.request.headers["Idempotency-Key"]
+            call(client)
+            second = route.calls.last.request.headers["Idempotency-Key"]
+        assert re.match(r"^[0-9a-f]{32}$", first), first
+        assert first != second, "the same body sent again is a new request, not a replay"
+
+    @pytest.mark.parametrize(("path", "call", "body"), _AUTO_KEY_CALLS)
+    def test_one_key_across_the_retry_ladder(self, client, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path)
+            route.side_effect = [
+                httpx.Response(500, json={"detail": "boom"}),
+                httpx.Response(200, json=body),
+            ]
+            call(client)
+        assert len(route.calls) == 2
+        assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+
+    @pytest.mark.parametrize(("path", "call", "body"), _AUTO_KEY_CALLS)
+    def test_the_key_can_be_pinned_or_disabled(self, client, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path).respond(200, json=body)
+            call(client, idempotency_key="pinned-1")
+            assert route.calls.last.request.headers["Idempotency-Key"] == "pinned-1"
+            call(client, idempotency=False)
+            assert "Idempotency-Key" not in route.calls.last.request.headers
+
+
+class TestWaitDefaults:
+    """The polling helpers wait 300s by default; a timeout still leaves the
+    task resumable."""
+
+    @pytest.mark.parametrize("name", ["wait", "verify_and_wait", "verify_batch_and_wait"])
+    def test_default_timeout_is_300s(self, name):
+        assert inspect.signature(getattr(Lenz, name)).parameters["timeout"].default == 300.0
 
 
 _FLOORED_CALLS = [

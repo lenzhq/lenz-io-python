@@ -59,10 +59,12 @@ Design decisions:
   a context manager for clean shutdown, or call ``close()`` explicitly.
 * Exponential backoff on transient errors (5xx, 429). 3 retry attempts
   by default. ``Retry-After`` honored on 429s.
-* ``Idempotency-Key`` auto-generated for ``verify_and_wait`` so a network
-  drop during submit doesn't spawn duplicate tasks. Customer can override
-  with explicit ``idempotency_key=...``. ``ask.send`` takes the same
-  argument but never generates one — see its docstring.
+* ``Idempotency-Key`` auto-generated per call for ``verify``,
+  ``verify_and_wait``, ``select``, ``assess`` and ``extract`` (random, reused
+  across that call's own retries) so a network drop doesn't run the request
+  twice. Customer can override with explicit ``idempotency_key=...`` or opt
+  out with ``idempotency=False``. ``ask.send`` takes the same argument but
+  never generates one — see its docstring.
 * ``X-Lenz-API-Version`` header pinned at SDK release date so the server
   can route old clients to v1 handlers when v2 ships.
 * ``X-Request-ID`` is captured from every response onto the typed error
@@ -132,21 +134,30 @@ DEFAULT_TIMEOUT = 30.0
 # ``assess`` runs framing and then a 3-model panel inside one synchronous
 # request, and the server divides a single budget between them — so BOTH
 # forms get the same room, not just the list one. Typical calls answer in
-# 10-25s; this is the ceiling the server sizes its own budget against.
+# 10-25s, but a long text can take up to the server's 90s budget. The SDK
+# waits 10s longer than that, so the server always answers (or refuses)
+# before the client gives up.
 #
 # Applies to ``assess(claim=...)`` as well as ``assess(claims=[...])`` since
 # 2.12.0. Before that the single form used the 30s client default, and a call
 # whose framing was slow could time out client-side AFTER the server had
 # charged it — and a retry with no idempotency key charged again.
-ASSESS_TIMEOUT = 45.0
+ASSESS_TIMEOUT = 100.0
 #: Deprecated alias for :data:`ASSESS_TIMEOUT`, kept for callers that imported
 #: it. Same value; removed no earlier than 3.0.
 ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
 # ``extract`` reads the whole input and enumerates its claims inside one
-# synchronous request. Most calls answer in 3-17s, but the slowest take 30-60s,
-# past the 30s client default, and a client timeout makes the SDK re-send the
-# call, which runs the same extraction again. 90s leaves room above them.
-EXTRACT_TIMEOUT = 90.0
+# synchronous request. Most calls answer in seconds, but a long input can take
+# well over a minute, past the 30s client default. A client timeout makes the
+# SDK re-send the call; the per-call idempotency key makes that re-send replay
+# the first answer rather than run the extraction again. 150s leaves room
+# above the slowest.
+EXTRACT_TIMEOUT = 150.0
+# Default ``timeout`` for the helpers that poll a verification to its end
+# (``wait``, ``verify_and_wait``, ``verify_batch_and_wait``). A check usually
+# finishes in 60-90s; a slow one under load can take several minutes. A
+# timeout never loses the task: it stays resumable by ``task_id``.
+WAIT_TIMEOUT = 300.0
 DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
@@ -467,6 +478,19 @@ class _LibraryNamespace:
         return LibraryList.model_validate(body)
 
 
+def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
+    """The ``Idempotency-Key`` for one call: the caller's own, else a random
+    one generated once per call (so every retry of that call carries it), else
+    none when the caller opted out.
+
+    Never derived from the request body: the same body sent again later is a
+    new request, and a body-derived key would replay the first answer.
+    """
+    if idempotency_key is not None:
+        return idempotency_key
+    return uuid.uuid4().hex if idempotency else None
+
+
 class Lenz:
     """Top-level client.
 
@@ -533,6 +557,8 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        idempotency: bool = True,
+        idempotency_key: str | None = None,
         **kwargs: Any,
     ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
@@ -553,9 +579,23 @@ class Lenz:
         quota cost. The completed ``Verification.depth`` echoes the depth the
         verdict was actually produced with, which can be ``'standard'`` for a
         ``'low'`` request served from cache.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
+        retry after a network drop returns the task the first attempt started
+        instead of starting — and paying for — a second one. The key is random
+        per call and reused across this SDK's own retries; pin your own with
+        ``idempotency_key=`` to make a retry from a different process replay
+        too, or pass ``idempotency=False`` to send none. Never derived from
+        the claim: the same claim sent again later is a new verification.
         """
         return self._verify_submit(
-            claim=claim, text=text, language=language, visibility=visibility, depth=depth, **kwargs
+            claim=claim,
+            text=text,
+            language=language,
+            visibility=visibility,
+            depth=depth,
+            idempotency_key=_call_key(idempotency_key, idempotency),
+            **kwargs,
         )
 
     def verify_batch(
@@ -600,6 +640,8 @@ class Lenz:
         focus: str = "",
         locate: bool | None = None,
         timeout: float | None = None,
+        idempotency: bool = True,
+        idempotency_key: str | None = None,
     ) -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/account/day (shared across your API keys).
@@ -634,10 +676,24 @@ class Lenz:
 
         ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
         the client default for this one request. Otherwise ``extract`` uses
-        ``EXTRACT_TIMEOUT`` (90s), or your client timeout when you configured
-        a longer one: a long input can take more than 30s to extract.
+        ``EXTRACT_TIMEOUT`` (150s), or your client timeout when you configured
+        a longer one: a long input can take more than a minute to extract.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
+        SDK's own retry after a timeout or network drop replays the first
+        answer instead of running the extraction — and using a unit of the
+        daily cap — again. The key is random per call and reused across its
+        retries; pin your own with ``idempotency_key=``, or pass
+        ``idempotency=False`` to send none. Never derived from the text.
         """
-        return self._extract(text=text, language=language, focus=focus, locate=locate, timeout=timeout)
+        return self._extract(
+            text=text,
+            language=language,
+            focus=focus,
+            locate=locate,
+            timeout=timeout,
+            idempotency_key=_call_key(idempotency_key, idempotency),
+        )
 
     def assess(
         self,
@@ -705,9 +761,9 @@ class Lenz:
 
         ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
         the client default for this one request. Both forms otherwise use
-        ``ASSESS_TIMEOUT`` (45s), or your client timeout when you configured a
+        ``ASSESS_TIMEOUT`` (100s), or your client timeout when you configured a
         longer one — the server runs framing and a 3-model panel inside one
-        request and 30s does not leave margin for a slow framing call.
+        request, and a long text can use the server's whole 90s budget.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
         retry after a network drop replays the first response instead of
@@ -725,9 +781,7 @@ class Lenz:
         single-string input read as N claims (up to 20) costs N; ``Error``
         rows are free.
         """
-        key = idempotency_key
-        if key is None and idempotency:
-            key = uuid.uuid4().hex
+        key = _call_key(idempotency_key, idempotency)
         if claims is not None:
             if claim or text:
                 raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
@@ -746,7 +800,15 @@ class Lenz:
             idempotency_key=key,
         )
 
-    def select(self, task_id: str, *, claims: list[str] | None = None, texts: list[str] | None = None) -> BatchAccepted:
+    def select(
+        self,
+        task_id: str,
+        *,
+        claims: list[str] | None = None,
+        texts: list[str] | None = None,
+        idempotency: bool = True,
+        idempotency_key: str | None = None,
+    ) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
 
         Pass ``claims=`` — the exact wording of the claim(s) you're choosing
@@ -759,11 +821,17 @@ class Lenz:
         Selection is by text, not index. Every claim must match one that was
         offered in the prior interrupt — the server rejects anything else with
         a 422. To resolve a single claim, pass a one-element list.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
+        retry after a network drop returns the tasks the first attempt started
+        instead of starting a second set. Random per call and reused across
+        this SDK's own retries; pin your own with ``idempotency_key=``, or pass
+        ``idempotency=False`` to send none.
         """
         chosen = claims or texts
         if not chosen:
             raise ValueError("select requires a non-empty claims=[...]")
-        return self._select(task_id, texts=chosen)
+        return self._select(task_id, texts=chosen, idempotency_key=_call_key(idempotency_key, idempotency))
 
     def get_status(self, task_id: str) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics.
@@ -786,7 +854,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
-        timeout: float = 120.0,
+        timeout: float = WAIT_TIMEOUT,
         idempotency: bool = True,
         idempotency_key: str | None = None,
         on_progress: Callable[[str, Progress], None] | None = None,
@@ -816,13 +884,12 @@ class Lenz:
                 on_progress=lambda tid, p: print(f"{p.step} {p.index}/{p.total}"),
             )
 
-        Equivalent to ``wait(verify(claim, ...))`` — the idempotency-key
-        handling (auto-generate / pin / disable) lives here because
-        ``verify`` itself never generates one.
+        Equivalent to ``wait(verify(claim, ...))``, with the same
+        idempotency-key handling (auto-generate / pin / disable).
+
+        ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s).
         """
-        key = idempotency_key
-        if key is None and idempotency:
-            key = uuid.uuid4().hex
+        key = _call_key(idempotency_key, idempotency)
         accepted = self._verify_submit(
             claim=claim,
             text=text,
@@ -840,7 +907,7 @@ class Lenz:
         self,
         task: str | TaskAccepted,
         *,
-        timeout: float = 120.0,
+        timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
     ) -> Verification:
         """Block until an already-submitted task terminates, then return its
@@ -851,8 +918,9 @@ class Lenz:
         reads naturally. Raises ``ValueError`` for an empty id,
         ``LenzNeedsInputError`` / ``LenzPipelineError`` on terminal
         non-success, ``LenzGoneError`` if its account's retention period has
-        removed the verification, and ``LenzTimeoutError`` if ``timeout`` elapses (the task
-        may still finish server-side — resume via ``get_status``).
+        removed the verification, and ``LenzTimeoutError`` if ``timeout``
+        (default ``WAIT_TIMEOUT``, 300s) elapses (the task may still finish
+        server-side — resume via ``get_status``).
         """
         task_id = task if isinstance(task, str) else task.task_id
         if not task_id:
@@ -879,7 +947,7 @@ class Lenz:
         visibility: str = "",
         depth: str = "",
         idempotency_key: str | None = None,
-        timeout: float = 180.0,
+        timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
     ) -> list[BatchItemResult]:
         """Submit a batch and poll every item to a terminal state.
@@ -892,6 +960,10 @@ class Lenz:
 
         ``on_progress(task_id, progress)`` fires per still-running item per
         round; the ``task_id`` is what tells you which claim moved.
+
+        ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s); items still running
+        then come back with ``status="timeout"`` and stay resumable by
+        ``task_id``.
         """
         accepted = self._verify_batch(
             claims=claims,
@@ -1560,6 +1632,7 @@ class Lenz:
         focus: str = "",
         locate: bool | None = None,
         timeout: float | None = None,
+        idempotency_key: str | None = None,
     ) -> ExtractedClaims:
         payload: dict[str, Any] = {"text": text}
         if language:
@@ -1574,7 +1647,10 @@ class Lenz:
             payload["locate"] = locate
         if timeout is None:
             timeout = self._timeout_at_least(EXTRACT_TIMEOUT)
-        body = self._request("POST", "/extract", json=payload, timeout=timeout)
+        headers = {}
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
         return ExtractedClaims.model_validate(body)
 
     def _assess(
@@ -1611,8 +1687,11 @@ class Lenz:
         body = self._request("POST", "/assess", json=payload, timeout=timeout, headers=headers)
         return AssessResponse.model_validate(body)
 
-    def _select(self, task_id: str, *, texts: list[str]) -> BatchAccepted:
-        body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts})
+    def _select(self, task_id: str, *, texts: list[str], idempotency_key: str | None = None) -> BatchAccepted:
+        headers = {}
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
+        body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts}, headers=headers)
         return BatchAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:
