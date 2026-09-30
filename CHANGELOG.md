@@ -6,6 +6,30 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **`assess` waits up to 100s** (`ASSESS_TIMEOUT`, was 45s; the deprecated
+  alias `ASSESS_LIST_TIMEOUT` follows it). The API now gives a long text up to
+  90s to be assessed instead of refusing it early, and the SDK waits 10s longer
+  than the server works. A longer client timeout you configured is still kept.
+- **`extract` waits up to 150s** (`EXTRACT_TIMEOUT`, was 90s), for long inputs.
+- **The polling helpers wait longer by default**: `wait` and
+  `verify_and_wait` 300s (was 120s), `verify_batch_and_wait` 300s (was 180s),
+  and `lenz verify --timeout` 300s (was 180s). A timeout behaves as before:
+  `LenzTimeoutError` (or a `status="timeout"` row) carrying the `task_id` to
+  resume from.
+
+### Added
+
+- **Automatic idempotency keys on `extract`, `select` and `verify`.** Each call
+  sends a random `Idempotency-Key`, generated once and reused across that
+  call's own retries, so a retry after a timeout or network drop gets the first
+  attempt's answer (or task) instead of running the request again. Like
+  `assess`, each method takes `idempotency_key=` to pin your own and
+  `idempotency=False` to send none. The key is never derived from the request
+  body, so the same text sent again later is still a new request. `ask.send`
+  is unchanged and generates no key.
+
 ## [2.18.0] - 2026-09-30
 
 ### Changed

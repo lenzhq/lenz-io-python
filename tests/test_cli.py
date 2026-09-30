@@ -2469,3 +2469,11 @@ def test_the_batch_poll_sleeps_the_hint(monkeypatch):
     verify_mod._poll_all(fake, out, [("t1", "A claim.")], 60.0, statuses, on_update=None)
     assert slept == [6.0]
     assert statuses["t1"].status == "completed"
+
+
+def test_verify_timeout_defaults_to_300s():
+    import inspect
+
+    from lenz_io.cli.verify import verify
+
+    assert inspect.signature(verify).parameters["timeout"].default.default == 300.0
