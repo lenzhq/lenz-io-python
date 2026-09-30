@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.19.0] - 2026-09-30
+
 ### Changed
 
 - **`assess` waits up to 100s** (`ASSESS_TIMEOUT`, was 45s; the deprecated
