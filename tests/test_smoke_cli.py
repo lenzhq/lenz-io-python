@@ -12,9 +12,9 @@ suite; run on demand / in the release workflow:
 
 Skipped if no key is set. Token-minimizing, mirroring the SDK smoke:
   - ``verify`` runs the quickstart claim at ``--depth low``, the cheap run
-    (~15s). The API's verdict cache lasts an hour, so a hit (for example
+    (~60s). The API's verdict cache lasts an hour, so a hit (for example
     from the SDK smoke just before) is a bonus, never assumed.
-  - ``assess`` reuses the same claim (sync, ~10s).
+  - ``assess`` reuses the same claim (sync, ~15s).
   - ``extract`` is free (no credit charge).
   - ``--version`` needs no API call at all.
   - No live ``ask`` (it would burn a fresh exchange) — its thin CLI layer is

@@ -12,7 +12,7 @@ on a verification.
 
 The demo claim is cached for an hour after anyone verifies it, so the
 verify call can come back in seconds; otherwise it runs the full pipeline
-(~60-90s) like your own claims. Use webhooks for production async flows.
+(~90s) like your own claims. Use webhooks for production async flows.
 """
 
 from __future__ import annotations

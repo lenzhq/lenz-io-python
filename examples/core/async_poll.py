@@ -5,7 +5,7 @@ Run:
     python examples/core/async_poll.py
 
 `verify()` returns immediately with a task_id; the pipeline runs async
-(~60-90s for a cold claim). `wait()` blocks on that task until it lands —
+(~90s for a cold claim). `wait()` blocks on that task until it lands —
 the polling counterpart to a webhook. Use this in scripts, notebooks, and
 request/response handlers where blocking is fine; use webhooks for
 production async flows.

@@ -5,7 +5,7 @@ Official Python SDK for the [Lenz Fact Checking API for AI Product Teams](https:
 **Six API calls: one research-depth ladder, one call that runs it on a whole draft, and the citation check on its own.**
 
 - `extract` — pull verifiable claims out of any text, optionally narrowed with a `focus`. Free, 1000 calls/account/day (shared across your API keys).
-- `assess` — fast 3-model panel verdict in ~10s. Sync, paid.
+- `assess` — fast 3-model panel verdict in ~15s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
 - `ask` — follow-up questions grounded on a verification. Sync, paid.
@@ -359,7 +359,7 @@ resends the same request is not charged twice.
 Framing → Research → Debate (2 models, 2 rounds) → Panel Review
 (3 reviewers running the same checks, 2 more when they disagree) → Conclusion. ~90 seconds wall-clock
 per claim. `assess` runs a leaner 3-model panel against the same
-framing for the ~10s pass.
+framing for the ~15s pass.
 
 ## Quickstart demo
 
@@ -377,7 +377,7 @@ for source in v.sources[:3]:
 ```
 
 The demo claim is cached for an hour after anyone verifies it, so it can
-come back in seconds; otherwise it runs the full pipeline (~60-90s) like
+come back in seconds; otherwise it runs the full pipeline (~90s) like
 your own claims. Use webhooks for production async flows.
 
 > **Get your webhook secret here →** [lenz.io/api-credentials](https://lenz.io/api-credentials)
@@ -385,7 +385,7 @@ your own claims. Use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
-- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~10s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~10-25s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
+- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
@@ -398,7 +398,7 @@ your own claims. Use webhooks for production async flows.
 
 ## Polling without webhooks
 
-`verify()` returns immediately with a `task_id`; the pipeline runs async (~60-90s
+`verify()` returns immediately with a `task_id`; the pipeline runs async (~90s
 for a cold claim). You don't need webhooks to get the result — poll for it.
 
 The one-liner is `verify_and_wait()`. If you already hold a `task_id` (or want to

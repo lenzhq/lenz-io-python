@@ -23,7 +23,7 @@ Shape (four-primitive ladder + the supporting reads):
     # Marquee verbs — top-level (the four-primitive ladder)
     out = client.extract(text="...")                       # find claims in a document
     r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
-    r = client.assess(claim="...")                         # ...or a single claim, ~10s
+    r = client.assess(claim="...")                         # ...or a single claim, ~15s
     v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
     reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
     review = client.review_and_wait(text=draft)            # the whole ladder on a draft, 2-4 min
@@ -134,7 +134,7 @@ DEFAULT_TIMEOUT = 30.0
 # ``assess`` runs framing and then a 3-model panel inside one synchronous
 # request, and the server divides a single budget between them — so BOTH
 # forms get the same room, not just the list one. Typical calls answer in
-# 10-25s, but a long text can take up to the server's 90s budget. The SDK
+# ~15s, but a long text can take up to the server's 90s budget. The SDK
 # waits 10s longer than that, so the server always answers (or refuses)
 # before the client gives up.
 #
@@ -155,7 +155,7 @@ ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
 EXTRACT_TIMEOUT = 150.0
 # Default ``timeout`` for the helpers that poll a verification to its end
 # (``wait``, ``verify_and_wait``, ``verify_batch_and_wait``). A check usually
-# finishes in 60-90s; a slow one under load can take several minutes. A
+# finishes in ~90s; a slow one under load can take several minutes. A
 # timeout never loses the task: it stays resumable by ``task_id``.
 WAIT_TIMEOUT = 300.0
 DEFAULT_MAX_RETRIES = 3
@@ -707,7 +707,7 @@ class Lenz:
         idempotency: bool = True,
         idempotency_key: str | None = None,
     ) -> AssessResponse:
-        """Fast verdict via a 3-model frontier panel. Sync, typically 10-25s.
+        """Fast verdict via a 3-model frontier panel. Sync, typically ~15s.
 
         Two input forms, one response shape:
 
@@ -715,7 +715,7 @@ class Lenz:
           each is verdicted separately (up to 20). ``text=`` is accepted as an
           alias (``claim`` wins if both are given).
         * ``claims``: a list of up to 20 statements, assessed in one call
-          (one parallel wave, ~10-25s). Exactly one ``AssessClaim`` comes
+          (one parallel wave, ~15s). Exactly one ``AssessClaim`` comes
           back per item, in the order sent. This is the step after
           ``extract`` in the ladder::
 
