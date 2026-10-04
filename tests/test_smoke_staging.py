@@ -8,7 +8,7 @@ These exercise the SDK against the live API across the four primitives:
   1. ``extract`` — free, parses identified_claims
   2. ``assess`` — fast 3-model verdict, returns flat claim entries
   3. ``verify_and_wait`` — the quickstart claim at ``depth="low"``, the
-     cheap run (~15s); a cache hit is a bonus, never assumed
+     cheap run (~60s); a cache hit is a bonus, never assumed
   4. ``ask.history`` — read-only follow-up surface (no exchange burned)
 
 Plus webhook signature roundtrip + ``/me/usage`` shape.
@@ -50,7 +50,7 @@ def test_quickstart_claim_verifies_at_low_depth(smoke_client):
     """The README quickstart claim through a real ``/verify`` run.
 
     The API's verdict cache lasts an hour, so this is usually a fresh
-    pipeline run: ``depth="low"`` keeps it cheap and short (~15s). The
+    pipeline run: ``depth="low"`` keeps it cheap and short (~60s). The
     150s budget covers a slow run; a cache hit inside the hour is a bonus.
     """
     v = smoke_client.verify_and_wait(claim="Sharks don't get cancer", depth="low", timeout=150)
@@ -58,7 +58,7 @@ def test_quickstart_claim_verifies_at_low_depth(smoke_client):
 
 
 def test_assess_returns_typed_claims(smoke_client):
-    """``/assess`` is sync, ~10s. Returns one entry per identified claim."""
+    """``/assess`` is sync, ~15s. Returns one entry per identified claim."""
     out = smoke_client.assess(text="Sharks don't get cancer")
     assert out.claims, "assess returned zero claims"
     first = out.claims[0]

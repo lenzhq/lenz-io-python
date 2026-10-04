@@ -74,11 +74,11 @@ def assess(
         if len(items) > 1:
             # Several positionals → the list form: one row per claim, in
             # order, from a single call.
-            with out.working(f"Assessing {len(items)} claims… (~20s)"):
+            with out.working(f"Assessing {len(items)} claims… (~15s)"):
                 result = client.assess(claims=items)
         else:
             payload = read_text_arg(items[0] if items else None)
-            with out.working("Assessing… (~10s)"):
+            with out.working("Assessing… (~15s)"):
                 result = client.assess(claim=payload)
         render_assess(out, result)
 
