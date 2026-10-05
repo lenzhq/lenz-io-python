@@ -8,6 +8,7 @@ Ctrl-C resume handle, ``--resume`` expiry fallback, and the lazy-import guard.
 from __future__ import annotations
 
 import json
+import re
 import stat
 
 import pytest
@@ -786,7 +787,11 @@ def test_render_verification_full():
     text = _render(render_verification, _verification())
     assert "False" in text  # verdict
     assert "Nope." in text  # executive summary
-    assert "https://a.test" in text  # a source url
+    # Exact match against the extracted URL tokens, not a substring check —
+    # "https://a.test" is also a substring of "https://a.test.evil.example",
+    # which a plain `in` would miss distinguishing (CodeQL
+    # py/incomplete-url-substring-sanitization).
+    assert "https://a.test" in re.findall(r"https://\S+", text)  # a source url
     assert "verification_id: v-1" in text
     assert "lenz ask v-1" in text  # follow-up hint
 

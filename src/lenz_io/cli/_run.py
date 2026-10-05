@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Callable
+from collections.abc import Callable
 
 from lenz_io import Lenz
 

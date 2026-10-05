@@ -32,7 +32,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Any, Union
+from typing import Any
 
 import typer
 from rich.markup import escape
@@ -504,9 +504,7 @@ def _sources(n: int) -> str:
 
 
 #: A body that carries citation rows: a review (either view) or a citation check.
-#: ``Union``, not ``|``: this alias is evaluated at import, and Python 3.9 has
-#: no ``|`` between classes.
-CitedBody = Union[ReviewFull, ReviewIssues, Citecheck]
+CitedBody = ReviewFull | ReviewIssues | Citecheck
 
 
 #: Why a source could not be checked, when the server sent no hint.

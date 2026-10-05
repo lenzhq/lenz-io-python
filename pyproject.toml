@@ -9,7 +9,7 @@ description = "Official Python SDK for the Lenz Fact Checking API for AI Product
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Lenz", email = "support@lenz.io" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 keywords = ["lenz", "fact-check", "llm", "hallucination", "verification", "api", "sdk", "ai"]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -17,7 +17,6 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
@@ -34,11 +33,6 @@ dependencies = [
   # unknown Field kwarg is swallowed into json_schema_extra with a warning of
   # its own and the deprecation never fires, which is worse than the bump.
   "pydantic>=2.7",
-  # PEP 604 `int | None` unions are Python 3.10+ at runtime, but
-  # `from __future__ import annotations` only defers evaluation —
-  # Pydantic v2 still resolves them eagerly for schema generation.
-  # The backport patches 3.9 to parse the new syntax. No-op on 3.10+.
-  "eval_type_backport>=0.2; python_version < '3.10'",
 ]
 
 [project.optional-dependencies]
@@ -98,7 +92,7 @@ include = ["src/lenz_io/**", "README.md", "LICENSE", "CHANGELOG.md"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py39"
+target-version = "py310"
 
 [tool.ruff.format]
 quote-style = "double"
@@ -107,9 +101,11 @@ quote-style = "double"
 select = ["E", "F", "I", "B", "UP", "RUF"]
 
 [tool.mypy]
-# mypy uses 3.10 as the typing baseline (built-in generics, PEP 604).
-# Runtime still supports 3.9 (`from __future__ import annotations` in
-# every module) and CI tests on 3.9-3.12 — see ci.yml matrix.
+# mypy uses 3.10 as the typing baseline (built-in generics, PEP 604),
+# which is also the runtime floor since `requires-python` dropped 3.9
+# (2026-10: 3.9 patched anyio/pytest/requests/urllib3 do not exist on
+# PyPI, so there is no vulnerability-free resolution below 3.10). CI
+# tests on 3.10-3.12 — see ci.yml matrix.
 python_version = "3.10"
 strict = true
 ignore_missing_imports = true
