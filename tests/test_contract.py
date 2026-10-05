@@ -152,6 +152,9 @@ def _load(name: str) -> dict:
         # The list form: one row per item, Error rows in position with their
         # cause and hint. Same fixture as the Node SDK.
         ("assess_claims_list.json", AssessResponse),
+        # A long text: the checked rows, and the claims past them in
+        # `more_claims`. Same fixture as the Node SDK.
+        ("assess_more_claims.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
         # The `processing` body. Under the server's `exclude_unset` a
@@ -599,6 +602,20 @@ def test_assess_rows_carry_the_reviewers_notes():
     assert compound.rationale and compound.dissent
     for row in (no_claim, timed_out):
         assert row.rationale is None and row.dissent is None
+
+
+def test_assess_lists_the_claims_past_the_ones_checked():
+    """A single text that makes more claims than one call checks: the
+    checked rows, then the rest under ``more_claims``, ready to send back as
+    ``claims``. A response without the key (the list form before it, an
+    older server) reads ``[]``."""
+    parsed = AssessResponse.model_validate(_load("assess_more_claims.json"))
+    assert len(parsed.claims) == 2
+    assert parsed.more_claims == [
+        "Kaleva Energy's Kuopio plant opened in 1967.",
+        "Kaleva Energy's Lahti plant employed 249 people at the end of 2025.",
+    ]
+    assert AssessResponse.model_validate(_load("assess_single_claim.json")).more_claims == []
 
 
 def test_assess_rows_without_the_notes_still_parse():

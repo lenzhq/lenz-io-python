@@ -189,6 +189,16 @@ def render_assess(out: Output, result: AssessResponse) -> None:
             out.console.print(f"    [dim]{c.hint}[/dim]")
         vid = _verification_id_from_url(getattr(c, "verification_url", ""))
         _ask_hint(out, vid, indent="    ")
+    # A long text: the claims found past the ones checked. Model-written
+    # text, so printed without markup.
+    more = result.more_claims or []
+    if more:
+        out.console.print(
+            f"\n[dim]Not checked ({len(more)} more claim{'s' if len(more) != 1 else ''} found; "
+            "pass them to `lenz assess`, 20 a call):[/dim]"
+        )
+        for other in more:
+            out.console.print(f"  • {other}", markup=False, highlight=False)
 
 
 def _verdict_header(out: Output, v: Verification) -> None:

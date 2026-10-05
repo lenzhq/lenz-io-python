@@ -20,13 +20,14 @@ The primitives, call by call:
     out = client.extract(text=llm_output)
     claims = out.identified_claims or [out.claim]
 
-    # 2. /assess — one call over the claims (up to 20), one row per claim, same order (paid)
-    quick = client.assess(claims=claims).claims
+    # 2. /assess — 20 claims a call (extract finds up to 100), one row per claim, same order (paid)
+    quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
     # a row with verdict == "Error" got no verdict: see its error_code and hint;
     # a compound item lists the claims it did not assess in identified_claims
 
     # 3. /verify — escalate the low-confidence rows to the full pipeline (~90s, paid)
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+    # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
+    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
     results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
     # 4. /ask — follow-up questions grounded on a verification

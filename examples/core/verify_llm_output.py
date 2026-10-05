@@ -33,12 +33,13 @@ def main() -> None:
     claims = out.identified_claims or [out.claim]
     print(f"Extracted {len(claims)} claims.\n")
 
-    # Step 2: assess — one call over the extracted claims, one row per claim,
-    # same order. A row with verdict "Error" got no verdict: ``error_code``
-    # says why (``upstream_unavailable`` is worth a retry) and ``hint`` says
-    # what to send next. A compound item is assessed on its main claim and
-    # lists the rest in ``identified_claims``.
-    quick = client.assess(claims=claims).claims
+    # Step 2: assess — one call per 20 extracted claims (extract finds up to
+    # 100; one assess call takes 20), one row per claim, same order. A row
+    # with verdict "Error" got no verdict: ``error_code`` says why
+    # (``upstream_unavailable`` is worth a retry) and ``hint`` says what to
+    # send next. A compound item is assessed on its main claim and lists the
+    # rest in ``identified_claims``.
+    quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
     print(f"Assessed {len(quick)} claims:\n")
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
@@ -52,7 +53,8 @@ def main() -> None:
     # ``assess`` and ``verify`` share a result cache server-side, so a
     # claim that already has a deep verification surfaces immediately
     # via ``verification_url`` and you can skip the escalation.
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+    # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
+    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
     print(f"Escalating {len(doubtful)} low-confidence claims to full verification:\n")
     results = client.verify_batch_and_wait(claims=doubtful, timeout=180) if doubtful else []
     for r in results:
