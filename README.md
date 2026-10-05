@@ -307,7 +307,8 @@ for c in quick:
         print("  ", c.rationale)
 
 # 3. verify — escalate the low-confidence rows to the full panel + citations
-doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+# verify_batch_and_wait takes up to 20 claims a call: the first 20 here
+doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
 results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 for r in results:
     if r.verification:

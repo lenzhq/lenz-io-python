@@ -194,7 +194,8 @@ def render_assess(out: Output, result: AssessResponse) -> None:
     more = result.more_claims or []
     if more:
         out.console.print(
-            f"\n[dim]Not checked ({len(more)} more claims found; pass them to `lenz assess`, 20 a call):[/dim]"
+            f"\n[dim]Not checked ({len(more)} more claim{'s' if len(more) != 1 else ''} found; "
+            "pass them to `lenz assess`, 20 a call):[/dim]"
         )
         for other in more:
             out.console.print(f"  • {other}", markup=False, highlight=False)

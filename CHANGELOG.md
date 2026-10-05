@@ -20,6 +20,12 @@ All notable changes to this SDK are documented here. Format follows
   extract → assess example now sends them to `assess` 20 a call: a list of
   more than 20 is refused with a 422.
 
+### Docs
+
+- `openapi.json` resynced from the API: besides `more_claims`, it picks up
+  the copy that changed since the last sync (a cached answer is free; extract
+  finds up to 100 claims).
+
 ## [2.19.0] - 2026-09-30
 
 ### Changed

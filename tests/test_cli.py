@@ -707,7 +707,7 @@ def test_render_assess_lists_the_claims_it_did_not_check():
             more_claims=["The plant opened in [bold]1967[/bold]."],
         ),
     )
-    assert "Not checked (1 more claims found" in out
+    assert "Not checked (1 more claim found" in out
     assert "The plant opened in [bold]1967[/bold]." in out  # model text, no markup
 
 

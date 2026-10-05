@@ -53,7 +53,8 @@ def main() -> None:
     # ``assess`` and ``verify`` share a result cache server-side, so a
     # claim that already has a deep verification surfaces immediately
     # via ``verification_url`` and you can skip the escalation.
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"]
+    # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
+    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
     print(f"Escalating {len(doubtful)} low-confidence claims to full verification:\n")
     results = client.verify_batch_and_wait(claims=doubtful, timeout=180) if doubtful else []
     for r in results:
