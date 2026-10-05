@@ -198,7 +198,7 @@ def _poll(
                 # Sub-claims inherit the parent submission's depth server-side
                 # (/select reads it off the task meta), so nothing to send here.
                 items = client.select(task_id, claims=texts).items
-                picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts)]
+                picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts, strict=True)]
                 # detach, or >1 claim → batch path; exactly one → keep the
                 # single-verdict flow (nicer than a 1-row table).
                 if detach or len(picks) > 1:

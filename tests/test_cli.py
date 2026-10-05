@@ -8,7 +8,9 @@ Ctrl-C resume handle, ``--resume`` expiry fallback, and the lazy-import guard.
 from __future__ import annotations
 
 import json
+import re
 import stat
+from urllib.parse import urlparse
 
 import pytest
 from typer.testing import CliRunner
@@ -786,7 +788,11 @@ def test_render_verification_full():
     text = _render(render_verification, _verification())
     assert "False" in text  # verdict
     assert "Nope." in text  # executive summary
-    assert "https://a.test" in text  # a source url
+    # Compare the parsed host, not a substring: "https://a.test" is also a
+    # substring of "https://a.test.evil.example" (CodeQL
+    # py/incomplete-url-substring-sanitization).
+    hosts = {urlparse(u).hostname for u in re.findall(r"https://\S+", text)}
+    assert "a.test" in hosts  # a source url
     assert "verification_id: v-1" in text
     assert "lenz ask v-1" in text  # follow-up hint
 

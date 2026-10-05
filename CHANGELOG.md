@@ -19,6 +19,12 @@ All notable changes to this SDK are documented here. Format follows
 - **`extract` finds up to 100 claims** (an API change; was 20). The README's
   extract → assess example now sends them to `assess` 20 a call: a list of
   more than 20 is refused with a 422.
+- **Dropped Python 3.9** (EOL 2025-10-07): `requires-python` is now `>=3.10`.
+  No patched release of `anyio` (a critical CVE), `pytest`, `requests` or
+  `urllib3` exists for 3.9, so there was no vulnerability-free dependency
+  set below 3.10. `uv.lock` now resolves each to a single current version
+  (`anyio` 4.15.1, `pytest` 9.1.1, `requests` 2.34.2, `urllib3` 2.8.0) with
+  no Python-version split.
 
 ### Docs
 

@@ -10,6 +10,12 @@ on:
     tags:
       - "v*"
 
+# Least privilege, overridden per job below only where more is needed:
+# `publish` adds `id-token: write` for PyPI's OIDC trusted-publisher flow,
+# `notify` needs nothing (it only posts to a Discord webhook).
+permissions:
+  contents: read
+
 jobs:
   smoke:
     name: staging smoke
@@ -47,7 +53,10 @@ jobs:
       name: pypi
       url: https://pypi.org/project/lenz-io/
     permissions:
-      id-token: write
+      # Job-level permissions replace the workflow default entirely, so
+      # `contents: read` has to be restated here for `actions/checkout`.
+      contents: read
+      id-token: write # PyPI's OIDC trusted-publisher exchange.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -66,6 +75,8 @@ jobs:
     # exactly on a successful PyPI publish.
     needs: publish
     runs-on: ubuntu-latest
+    # No checkout, no repo access — this job only posts to a Discord webhook.
+    permissions: {}
     steps:
       - name: Post to Discord #key-system-events
         env:

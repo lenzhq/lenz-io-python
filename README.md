@@ -921,7 +921,7 @@ An OAuth access token for the Lenz API works wherever the API key goes: pass it 
 
 ## Compatibility
 
-- Python 3.9, 3.10, 3.11, 3.12
+- Python 3.10, 3.11, 3.12
 - Works in CI/CD (no interactive prompts, no global state)
 - Mockable for tests: every HTTP call goes through `httpx`; use `respx` or
   inject your own `httpx.Client` via `Lenz(..., http_client=...)`
