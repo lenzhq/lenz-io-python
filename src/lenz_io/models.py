@@ -517,7 +517,10 @@ class AssessResponse(_Lax):
     """Output of ``POST /assess``.
 
     Single form (``assess(claim=...)``): ``claims`` is one entry per claim
-    found in the input — up to 20, at 1 credit each. ``error`` is set when
+    found in the input — up to 20, at 1 credit each. A text that makes more
+    claims than one call checks gets its most check-worthy 20 checked and the
+    rest listed in ``more_claims``, unchecked and free: send them back with
+    ``assess(claims=...)``, 20 a call, to check them. ``error`` is set when
     the input holds no checkable claim.
 
     List form (``assess(claims=[...])``): exactly one entry per item sent,
@@ -537,6 +540,9 @@ class AssessResponse(_Lax):
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
+    # Single form: the claims found past the ones checked, most check-worthy
+    # first; ``[]`` otherwise, on the list form, and from older servers.
+    more_claims: list[str] = Field(default_factory=list)
 
 
 class TaskAccepted(_Lax):

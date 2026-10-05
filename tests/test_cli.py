@@ -697,6 +697,27 @@ def test_render_assess_prints_the_reviewers_notes():
     assert out.count("One reviewer disagreed:") == 1
 
 
+def test_render_assess_lists_the_claims_it_did_not_check():
+    from lenz_io.cli.render import render_assess
+
+    out = _render(
+        render_assess,
+        AssessResponse(
+            claims=[AssessClaim(claim="The plant employed 210 people.", verdict="True", confidence="high")],
+            more_claims=["The plant opened in [bold]1967[/bold]."],
+        ),
+    )
+    assert "Not checked (1 more claim found" in out
+    assert "The plant opened in [bold]1967[/bold]." in out  # model text, no markup
+
+
+def test_render_assess_without_more_claims_prints_no_section():
+    from lenz_io.cli.render import render_assess
+
+    out = _render(render_assess, AssessResponse(claims=[AssessClaim(claim="x", verdict="True", confidence="high")]))
+    assert "Not checked" not in out
+
+
 def test_render_assess_no_claims():
     """Genuine non-claim → a clean 'No claim found.'.
     The raw server `error` is NOT leaked into pretty output (it stays in --json)."""
