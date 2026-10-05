@@ -20,8 +20,8 @@ The primitives, call by call:
     out = client.extract(text=llm_output)
     claims = out.identified_claims or [out.claim]
 
-    # 2. /assess — one call over the claims (up to 20), one row per claim, same order (paid)
-    quick = client.assess(claims=claims).claims
+    # 2. /assess — 20 claims a call (extract finds up to 100), one row per claim, same order (paid)
+    quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
     # a row with verdict == "Error" got no verdict: see its error_code and hint;
     # a compound item lists the claims it did not assess in identified_claims
 

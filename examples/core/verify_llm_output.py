@@ -33,12 +33,13 @@ def main() -> None:
     claims = out.identified_claims or [out.claim]
     print(f"Extracted {len(claims)} claims.\n")
 
-    # Step 2: assess — one call over the extracted claims, one row per claim,
-    # same order. A row with verdict "Error" got no verdict: ``error_code``
-    # says why (``upstream_unavailable`` is worth a retry) and ``hint`` says
-    # what to send next. A compound item is assessed on its main claim and
-    # lists the rest in ``identified_claims``.
-    quick = client.assess(claims=claims).claims
+    # Step 2: assess — one call per 20 extracted claims (extract finds up to
+    # 100; one assess call takes 20), one row per claim, same order. A row
+    # with verdict "Error" got no verdict: ``error_code`` says why
+    # (``upstream_unavailable`` is worth a retry) and ``hint`` says what to
+    # send next. A compound item is assessed on its main claim and lists the
+    # rest in ``identified_claims``.
+    quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
     print(f"Assessed {len(quick)} claims:\n")
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")

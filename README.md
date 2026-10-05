@@ -299,8 +299,8 @@ client = Lenz(api_key="lenz_...")
 out = client.extract(text=llm_output)
 claims = out.identified_claims or [out.claim]
 
-# 2. assess — ONE call over the extracted claims (up to 20), one row per claim, same order
-quick = client.assess(claims=claims).claims
+# 2. assess — one call per 20 claims (extract finds up to 100), one row per claim, same order
+quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
 for c in quick:
     print(c.verdict, c.confidence, c.claim)
     if c.rationale:
@@ -328,7 +328,9 @@ and a one-sentence `hint` on what to send next; it is not charged. A
 compound item is assessed on its main claim and lists the other claims it
 found in `identified_claims` (also with a `hint`) — send those as their own
 items to check the rest. `assess(claim="...")` takes one text and answers
-with a row per claim found in it, up to 20, at 1 credit each.
+with a row per claim found in it, up to 20, at 1 credit each; a text that
+makes more claims gets its 20 most check-worthy checked and the rest in
+`more_claims`, unchecked and free — send them back as `claims`, 20 a call.
 
 Each verdict row also carries two optional notes. `rationale` is the
 reasoning of a reviewer who agrees with the panel's verdict; `dissent`, when
@@ -385,7 +387,7 @@ your own claims. Use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
-- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
+- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. A single text past 20 claims lists the rest in `more_claims` (`[]` otherwise). The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.

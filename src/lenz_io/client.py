@@ -721,7 +721,8 @@ class Lenz:
 
               out = client.extract(text=llm_output)
               claims = out.identified_claims or [out.claim]
-              quick = client.assess(claims=claims).claims   # one row per claim
+              quick = [row for i in range(0, len(claims), 20)  # 20 a call
+                       for row in client.assess(claims=claims[i : i + 20]).claims]
 
           The two forms are mutually exclusive — passing ``claims`` together
           with a non-empty ``claim`` / ``text`` raises ``ValueError``.

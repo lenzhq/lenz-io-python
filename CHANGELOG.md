@@ -6,6 +6,20 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- **`AssessResponse.more_claims`**: `assess(claim=...)` on a text that makes
+  more than 20 claims checks the 20 most check-worthy and lists the rest here,
+  unchecked and free, most check-worthy first. Send them back with
+  `assess(claims=...)`, 20 a call. `[]` on the list form, on a text with 20
+  claims or fewer, and from older servers.
+
+### Changed
+
+- **`extract` finds up to 100 claims** (an API change; was 20). The README's
+  extract → assess example now sends them to `assess` 20 a call: a list of
+  more than 20 is refused with a 422.
+
 ## [2.19.0] - 2026-09-30
 
 ### Changed

@@ -1,0 +1,37 @@
+{
+  "claims": [
+    {
+      "claim": "Kaleva Energy's Tampere plant employed 210 people at the end of 2025.",
+      "language": "en",
+      "verdict": "True",
+      "confidence": "high",
+      "verification_url": null,
+      "rationale": "Water boils at 100 °C at sea level at standard atmospheric pressure, which is the definition the claim uses.",
+      "dissent": null,
+      "error_code": null,
+      "candidate_claims": [],
+      "identified_claims": [],
+      "hint": null,
+      "suggested_rewrite": null
+    },
+    {
+      "claim": "Kaleva Energy's Vaasa plant has a generating capacity of 23 megawatts.",
+      "language": "en",
+      "verdict": "True",
+      "confidence": "high",
+      "verification_url": null,
+      "rationale": "Water boils at 100 °C at sea level at standard atmospheric pressure, which is the definition the claim uses.",
+      "dissent": null,
+      "error_code": null,
+      "candidate_claims": [],
+      "identified_claims": [],
+      "hint": null,
+      "suggested_rewrite": null
+    }
+  ],
+  "error": null,
+  "more_claims": [
+    "Kaleva Energy's Kuopio plant opened in 1967.",
+    "Kaleva Energy's Lahti plant employed 249 people at the end of 2025."
+  ]
+}
