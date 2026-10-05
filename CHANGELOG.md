@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [2.20.0] - 2026-10-05
+
 ### Added
 
 - **`AssessResponse.more_claims`**: `assess(claim=...)` on a text that makes
