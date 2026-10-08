@@ -1,0 +1,13 @@
+{
+  "status": 410,
+  "body": {
+    "detail": "This check is no longer available: its account removes content after a set period.",
+    "code": "purged",
+    "purged_at": "2026-10-01T09:07:00.123456Z"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

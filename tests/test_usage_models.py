@@ -118,13 +118,13 @@ def test_capability_blocks_are_projections_of_the_one_pool():
 def test_reading_the_credits_alias_warns_and_returns_bonus():
     cap = UsageCapacity.model_validate(POOL_PAYLOAD["verify"])
     assert cap.bonus == 20
-    with pytest.deprecated_call(match="2026-11-29"):
+    with pytest.deprecated_call(match="is deprecated;"):
         assert cap.credits == 20
 
 
 def test_dumping_keeps_the_alias_and_does_not_warn():
     """Serialization must stay warning-free — a `--json` dump of usage is not
-    a deprecated read, and the key stays on the wire until 2026-11-29."""
+    a deprecated read, and the key stays on the wire for existing callers."""
     cap = UsageCapacity.model_validate(POOL_PAYLOAD["verify"])
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
@@ -144,7 +144,7 @@ def test_old_server_sending_only_credits_still_fills_bonus():
 
 
 def test_server_after_the_alias_removal_still_fills_credits():
-    """After 2026-11-29 the server drops `credits`; the alias keeps reading."""
+    """A response without `credits` (a computed block) still reads the alias."""
     cap = UsageCapacity.model_validate(
         {"quota_used": 13, "quota_total": 520, "quota_remaining": 507, "bonus": 20, "remaining": 507}
     )
@@ -173,13 +173,13 @@ def test_pre_pool_server_leaves_the_balance_empty_not_wrong():
 def test_reading_the_bonus_alias_warns_and_returns_extra():
     c = UsageCredits.model_validate(POOL_PAYLOAD["credits"])
     assert c.extra == 200
-    with pytest.deprecated_call(match="2026-11-29"):
+    with pytest.deprecated_call(match="is deprecated;"):
         assert c.bonus == 200
 
 
 def test_dumping_the_pool_keeps_bonus_and_does_not_warn():
     """A `--json` dump is not a deprecated read, and the key stays on the wire
-    until 2026-11-29."""
+    for existing callers."""
     c = UsageCredits.model_validate(POOL_PAYLOAD["credits"])
     with warnings.catch_warnings():
         warnings.simplefilter("error", DeprecationWarning)
@@ -193,7 +193,7 @@ def test_a_server_sending_only_bonus_still_fills_extra():
 
 
 def test_a_server_sending_only_extra_still_fills_bonus():
-    """After 2026-11-29 the server sends only `extra`; `bonus` keeps reading."""
+    """The newer response shape sends only `extra`; `bonus` keeps reading."""
     c = UsageCredits.model_validate({"total": 300, "used": 0, "remaining": 300, "extra": 200})
     assert c.extra == 200
     with pytest.deprecated_call():

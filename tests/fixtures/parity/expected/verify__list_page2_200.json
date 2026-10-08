@@ -1,0 +1,48 @@
+{
+  "dump": {
+    "items": [
+      {
+        "claim": "The Earth is round.",
+        "confidence": "high",
+        "created_at": "2026-10-01T09:07:00.123456+00:00",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 9,
+        "modified_at": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "68ca4aaf"
+      }
+    ],
+    "page": 2,
+    "page_size": 2,
+    "total": 3
+  },
+  "dump_unset": {
+    "items": [
+      {
+        "claim": "The Earth is round.",
+        "confidence": "high",
+        "created_at": "2026-10-01T09:07:00.123456+00:00",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 9,
+        "modified_at": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "68ca4aaf"
+      }
+    ],
+    "page": 2,
+    "page_size": 2,
+    "total": 3
+  },
+  "render_json": null,
+  "repr": "VerificationList(items=[VerificationListItem(verification_id='68ca4aaf', claim='The Earth is round.', domain='Science', entities=[], verdict='True', confidence='high', lenz_score=9, key_finding='The Earth is approximately spherical in shape.', executive_summary='The claim is verified.', suggested_rewrite=None, created_at='2026-10-01T09:07:00.123456+00:00', modified_at=None, language='en')], total=3, page=2, page_size=2)"
+}

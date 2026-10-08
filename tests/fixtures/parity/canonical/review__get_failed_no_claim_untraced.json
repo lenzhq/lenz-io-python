@@ -1,0 +1,70 @@
+{
+  "status": 200,
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "full",
+    "status": "failed",
+    "outcome": "unchecked",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 20,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 0,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_found": null,
+      "claims_selected": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": null,
+      "input_truncated": false,
+      "assessments": null,
+      "verifications": null,
+      "issues": 0,
+      "citations_found": null,
+      "citations_selected": null,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 0
+    },
+    "poll_after_seconds": null,
+    "issues": [],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [],
+    "citations": [],
+    "failure": {
+      "code": "no_checkable_claim",
+      "detail": "No claim in the input could be checked against public evidence.",
+      "hint": "None of the claims found in the text could be traced back to it. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "failure_class": "invalid_input",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#invalid-input"
+    },
+    "more_claims": null,
+    "more_claim_locations": null,
+    "more_citations": null
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

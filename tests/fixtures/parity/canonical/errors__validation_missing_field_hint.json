@@ -1,0 +1,29 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "text: Field required",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Field required",
+        "type": "missing"
+      }
+    ],
+    "hint": "Required field 'text' is missing. Unrecognised fields: content, bogus.",
+    "docs_url": "https://lenz.io/docs/errors#validation",
+    "unrecognized_fields": [
+      "content",
+      "bogus"
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

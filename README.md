@@ -221,7 +221,7 @@ edited = "".join(chars)
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
 they are in and each deep check as it lands; without it the helper is silent.
 It raises `ReviewFailed` when the review fails (`error_code` and `hint` say
-why) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
+why; `review.failure.code` is the cause in the newer spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
 keeps running, and the error carries its `review_id` and the last body read.
 To submit without waiting, `client.review(draft)` returns a `review_id`;
 read it with `client.get_review(review_id)`, or only the issues with
@@ -297,7 +297,7 @@ client = Lenz(api_key="lenz_...")
 # 1. extract — pull verifiable claims out of any text (free)
 #    add focus="..." to narrow it to the claims you care about
 out = client.extract(text=llm_output)
-claims = out.identified_claims or [out.claim]
+claims = [c.claim for c in out.claims]
 
 # 2. assess — one call per 20 claims (extract finds up to 100), one row per claim, same order
 quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
@@ -308,7 +308,7 @@ for c in quick:
 
 # 3. verify — escalate the low-confidence rows to the full panel + citations
 # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
+doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
 results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 for r in results:
     if r.verification:
@@ -322,13 +322,13 @@ print(reply.content)
 
 `assess(claims=[...])` takes up to 20 claims per call and always answers
 with exactly one row per claim, in the order sent. A row that could not be
-given a verdict comes back in position with `verdict == "Error"`, an
-`error_code` (`no_claim` / `framing_failed` / `upstream_unavailable` /
-`timeout` — an open set; the last two are the ones worth resending as-is)
-and a one-sentence `hint` on what to send next; it is not charged. A
-compound item is assessed on its main claim and lists the other claims it
-found in `identified_claims` (also with a `hint`) — send those as their own
-items to check the rest. `assess(claim="...")` takes one text and answers
+given a verdict comes back in position with `status == "failed"` and a
+`failure` block: `failure.code` (`no_checkable_claim` / `framing_failed` /
+`upstream_unavailable` / `timeout` — an open set; the last two are the ones
+worth resending as-is) and `failure.hint`, one sentence on what to send next;
+it is not charged. A compound item is assessed on its main claim and lists the
+other claims it found in `more_claims` — send those as their own items to
+check the rest. `assess(claim="...")` takes one text and answers
 with a row per claim found in it, up to 20, at 1 credit each; a text that
 makes more claims gets its 20 most check-worthy checked and the rest in
 `more_claims`, unchecked and free — send them back as `claims`, 20 a call.
@@ -387,8 +387,8 @@ your own claims. Use webhooks for production async flows.
 
 ## What you get on the client
 
-- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (`out.locations`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
-- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict are `"Error"` rows with an `error_code` and a `hint`, in position and free. A single text past 20 claims lists the rest in `more_claims` (`[]` otherwise). The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
+- **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (each `out.claims[i].positions`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
+- **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict have `status == "failed"` and a `failure` block (`failure.code`, `failure.hint`), in position and free. A single text past 20 claims lists the rest in `more_claims` (`[]` otherwise). The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
@@ -426,9 +426,9 @@ results = client.verify_batch_and_wait(
 )
 for r in results:
     if r.status == "completed":
-        print(r.claim_text, "→", r.verification.verdict)
+        print(r.claim, "→", r.verification.verdict)
     else:
-        print(r.claim_text, "→", r.status)  # needs_input | failed | timeout
+        print(r.claim, "→", r.status)  # needs_input | failed | timeout
 ```
 
 A `failed` item with `status_detail is None` is a verification its account's
@@ -470,6 +470,31 @@ Every claim-shaped response shares these fields at top level:
 | `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"` \| `"Error"`. |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
+
+### Field names: both response shapes
+
+The API is adding a newer, dated response shape that gives each field one
+name across every endpoint. This SDK still asks for the original shape, and
+its models read either one. The newer names are attributes already; the
+older ones keep working, with the meaning they always had:
+
+| Read this | Instead of (deprecated, still works) |
+|---|---|
+| `ExtractedClaims.claims` (each `.claim`, `.positions`) | `claim`, `identified_claims`, `locations` |
+| `AssessClaim.status` (`"completed"` / `"failed"`) and `.failure` | `verdict == "Error"`, `error_code`, `hint` |
+| `AssessClaim.more_claims`, `ReviewAssessment.more_claims` | `identified_claims` |
+| `AssessResponse.status` and `.failure` | `error`, `error_code` |
+| `TaskStatus.failure` (`code`, `detail`, `hint`, `failure_class`, `retryable`, `docs_url`) | `error`, `failure_reason` and the flat fields |
+| `TaskAccepted.claim`, `BatchItemResult.claim`, `CandidateClaim.claim` | `claim_text`, `text` |
+| `Verification.completed_at` | `modified_at` |
+| `ReviewSummary.claim_limit_exceeded`, `citation_limit_exceeded` | `claim_limit_reached`, `citation_limit_reached` |
+| `FailureBlock.code`, `.detail` | `failure_reason` |
+| `Usage.credits` and `Usage.costs` | the `verify` / `ask` / `assess` blocks, `quota_resets_at` |
+
+"Nothing checkable" is `no_checkable_claim` in the newer names; the older
+fields keep their own spelling (`not_a_claim`, `no_claim`). The newer names
+are read-only properties, so an original-shape response parses, dumps and
+compares exactly as before.
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -644,13 +669,13 @@ them.
 
 `credits.extra` is the non-expiring part of the balance. Its old name,
 `credits.bonus`, is deprecated: the same number, it emits a
-`DeprecationWarning` when read and goes away on 2026-11-29.
+`DeprecationWarning` when read and is kept for existing code.
 
 Per-capability `bonus` is that capability's share of `credits.extra`, so 200
 extra credits read as `assess.bonus == 200` and `verify.bonus == 20`. The old
 `capability.credits` field is a deprecated alias of `bonus` (it never meant
-the pool); reading it emits a `DeprecationWarning` and it goes away on
-2026-11-29.
+the pool); reading it emits a `DeprecationWarning` and it is kept for
+existing code.
 
 ### Depth pricing
 
@@ -815,7 +840,7 @@ At most 300 characters. A longer focus is rejected with a 422 rather than
 truncated, so you never get a subset you did not ask for.
 
 When the document has claims but none fall within your focus, `status` is
-`"no_match"` and `identified_claims` is empty. The unfocused list is never
+`"no_match"` and `claims` is empty. The unfocused list is never
 substituted — widen the focus and call again.
 
 ```python
@@ -838,27 +863,24 @@ to your text, and to learn where the text makes each one:
 
 ```python
 out = client.extract(text=draft, locate=True)
-for loc in out.locations or []:
-    for pos in loc.positions or []:
-        print(loc.claim, "->", pos.text)
+for c in out.claims:
+    for pos in c.positions or []:
+        print(c.claim, "->", pos.text)
         if pos.start is not None:
             assert draft[pos.start : pos.end] == pos.text
 ```
 
 A claim found nowhere in the text, or found with a different figure, is left
-out; if that leaves no claim, `status` is `"not_a_claim"`. `locations` has one
-`ClaimLocation` per returned claim, in the order of `identified_claims` (one
-entry for a single `claim`), each with its `positions` (every place the text
-makes it, in text order, at least one and at most 10). Each is a `Position`:
+out; if that leaves no claim, `status` is `"not_a_claim"`. Each entry of
+`claims` has its `positions` (every place the text makes it, in text order,
+at least one and at most 10). Each is a `Position`:
 `start` and `end` index the text you sent in Unicode code points, so
 `text[start:end]` works natively; `end` is exclusive. Both are `None` when the
 input was a URL, since the page is not returned; `pos.text` carries the
 passage.
 
-`locations` is `[]` when every claim was left out (`status` is then
-`"not_a_claim"`), and `None` when `locate` was not set, when the extraction
-found no claims, or
-when the claims could not be located — the list is then returned unfiltered.
+`positions` is `None` when `locate` was not set, or when the claims could not
+be located — the list is then returned unfiltered.
 Locating adds a few seconds. `locate` defaults to off; leave it `None` to use
 the server default, or pass `False` to turn it off explicitly.
 

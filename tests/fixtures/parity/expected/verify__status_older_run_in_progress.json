@@ -1,0 +1,63 @@
+{
+  "dump": {
+    "candidates": [],
+    "claims": [],
+    "docs_url": "",
+    "error": "",
+    "failure_class": "",
+    "failure_detail": "",
+    "failure_reason": "",
+    "hint": "",
+    "progress": {
+      "elapsed_seconds": 1,
+      "index": 2,
+      "poll_after_seconds": 5,
+      "step": "research",
+      "total": 5
+    },
+    "reason": "",
+    "result": null,
+    "retryable": null,
+    "similar_claims": [],
+    "status": "processing",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "dump_unset": {
+    "progress": {
+      "elapsed_seconds": 1,
+      "index": 2,
+      "poll_after_seconds": 5,
+      "step": "research",
+      "total": 5
+    },
+    "status": "processing",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "render": "processing  — Gathering evidence (2/5)\n",
+  "render_json": "{\n  \"status\": \"processing\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"research\",\n    \"index\": 2,\n    \"total\": 5,\n    \"elapsed_seconds\": 1,\n    \"poll_after_seconds\": 5\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"\",\n  \"failure_reason\": \"\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"\",\n  \"retryable\": null,\n  \"docs_url\": \"\"\n}\n",
+  "repr": "TaskStatus(status='processing', task_id='7cff18da2d979d6370e54a160be121ad', reason='', hint='', progress=Progress(step='research', index=2, total=5, elapsed_seconds=1, poll_after_seconds=5), result=None, claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
+  "wait": {
+    "cause": "unknown",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors",
+    "failure_class": "",
+    "failure_reason": "",
+    "fix": "Retry with a different claim, or check status.error for the diagnostic.",
+    "friendly_text": "Pipeline failed: unknown\n  Fix: Retry with a different claim, or check status.error for the diagnostic.",
+    "hint": "",
+    "message": "Pipeline failed: unknown",
+    "payload_json": {
+      "error": {
+        "code": "pipeline_failed",
+        "fix": "Retry with a different claim, or check status.error for the diagnostic.",
+        "message": "Pipeline failed: unknown",
+        "status": 0
+      }
+    },
+    "request_id": "",
+    "retryable": null,
+    "status_code": 0,
+    "task_id": "t",
+    "type": "LenzPipelineError"
+  }
+}

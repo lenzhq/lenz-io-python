@@ -1,0 +1,61 @@
+{
+  "dump": {
+    "candidates": [],
+    "claims": [],
+    "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+    "error": "Pipeline stopped at: research_empty",
+    "failure_class": "insufficient_evidence",
+    "failure_detail": "",
+    "failure_reason": "research_empty",
+    "hint": "",
+    "progress": {
+      "elapsed_seconds": null,
+      "index": null,
+      "poll_after_seconds": null,
+      "step": "",
+      "total": null
+    },
+    "reason": "",
+    "result": null,
+    "retryable": false,
+    "similar_claims": [],
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "dump_unset": {
+    "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+    "error": "Pipeline stopped at: research_empty",
+    "failure_class": "insufficient_evidence",
+    "failure_reason": "research_empty",
+    "retryable": false,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "render": "failed  — Pipeline stopped at: research_empty\n",
+  "render_json": "{\n  \"status\": \"failed\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"\",\n    \"index\": null,\n    \"total\": null,\n    \"elapsed_seconds\": null,\n    \"poll_after_seconds\": null\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"Pipeline stopped at: research_empty\",\n  \"failure_reason\": \"research_empty\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"insufficient_evidence\",\n  \"retryable\": false,\n  \"docs_url\": \"https://lenz.io/docs/errors#insufficient-evidence\"\n}\n",
+  "repr": "TaskStatus(status='failed', task_id='7cff18da2d979d6370e54a160be121ad', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=None, claims=[], candidates=[], similar_claims=[], error='Pipeline stopped at: research_empty', failure_reason='research_empty', failure_detail='', failure_class='insufficient_evidence', retryable=False, docs_url='https://lenz.io/docs/errors#insufficient-evidence')",
+  "wait": {
+    "cause": "Pipeline stopped at: research_empty",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors",
+    "failure_class": "insufficient_evidence",
+    "failure_reason": "research_empty",
+    "fix": "Retry with a different claim, or check status.error for the diagnostic.",
+    "friendly_text": "Pipeline failed: Pipeline stopped at: research_empty\n  Fix: Retry with a different claim, or check status.error for the diagnostic.",
+    "hint": "",
+    "message": "Pipeline failed: Pipeline stopped at: research_empty",
+    "payload_json": {
+      "error": {
+        "code": "pipeline_failed",
+        "fix": "Retry with a different claim, or check status.error for the diagnostic.",
+        "message": "Pipeline failed: Pipeline stopped at: research_empty",
+        "status": 0
+      }
+    },
+    "request_id": "",
+    "retryable": false,
+    "status_code": 0,
+    "task_id": "t",
+    "type": "LenzPipelineError"
+  }
+}

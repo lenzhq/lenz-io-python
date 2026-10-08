@@ -1,0 +1,27 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [],
+    "locations": null,
+    "original_input": "What a lovely day.",
+    "presumed_intent": "",
+    "status": "not_a_claim"
+  },
+  "dump_unset": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [],
+    "locations": null,
+    "original_input": "What a lovely day.",
+    "presumed_intent": "",
+    "status": "not_a_claim"
+  },
+  "render": "No verifiable claim found in that text.\n",
+  "render_json": "{\n  \"status\": \"not_a_claim\",\n  \"claim\": \"\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"\",\n  \"key_entities\": [],\n  \"presumed_intent\": \"\",\n  \"original_input\": \"What a lovely day.\",\n  \"locations\": null\n}\n",
+  "repr": "ExtractedClaims(status='not_a_claim', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='What a lovely day.', locations=None)"
+}

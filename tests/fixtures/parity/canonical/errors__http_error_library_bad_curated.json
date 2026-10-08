@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Invalid curated list(s). Allowed: trivia",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "query",
+          "curated"
+        ],
+        "msg": "Invalid curated list(s). Allowed: trivia",
+        "type": "validation_error"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

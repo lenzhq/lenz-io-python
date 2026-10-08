@@ -1,0 +1,11 @@
+{
+  "status": 404,
+  "body": {
+    "detail": "Verification not found."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

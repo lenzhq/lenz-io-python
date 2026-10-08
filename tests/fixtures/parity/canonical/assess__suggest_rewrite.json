@@ -1,0 +1,41 @@
+{
+  "status": 200,
+  "body": {
+    "status": "ok",
+    "claims": [
+      {
+        "claim": "Venus is the closest planet to the Sun.",
+        "language": "en",
+        "status": "completed",
+        "verdict": "False",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "Mercury, not Venus, is the closest planet to the Sun.",
+        "dissent": null,
+        "suggested_rewrite": "Mercury is the closest planet to the Sun.",
+        "more_claims": [],
+        "failure": null
+      },
+      {
+        "claim": "Mercury is the closest planet to the Sun.",
+        "language": "en",
+        "status": "completed",
+        "verdict": "True",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "Mercury is the innermost planet.",
+        "dissent": null,
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "more_claims": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

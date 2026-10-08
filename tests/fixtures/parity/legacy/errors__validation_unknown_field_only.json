@@ -1,0 +1,26 @@
+{
+  "status": 422,
+  "body": {
+    "detail": [
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Field required"
+      }
+    ],
+    "hint": "Required field 'claim' is missing. Unrecognised fields: statement.",
+    "doc_url": "https://lenz.io/docs/errors#validation",
+    "unrecognized_fields": [
+      "statement"
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

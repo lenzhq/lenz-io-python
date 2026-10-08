@@ -393,8 +393,8 @@ def _emit_needs_input(out: Output, task_id: str, st: TaskStatus) -> None:
             "hint": st.hint,
             "task_id": task_id,
             "claims": [c.model_dump(mode="json") for c in st.claims],
-            # Deprecated compatibility keys, always empty; removal is planned
-            # for 2026-11-29 with the ``TaskStatus`` fields they mirrored.
+            # Deprecated compatibility keys, always empty; kept, like the
+            # ``TaskStatus`` fields they mirror.
             "candidates": [],
             "similar": [],
         }

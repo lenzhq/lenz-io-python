@@ -1,0 +1,70 @@
+{
+  "status": 200,
+  "body": {
+    "claims": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "language": "en",
+        "verdict": "True",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
+      },
+      {
+        "claim": "hello there",
+        "language": "en",
+        "verdict": "Error",
+        "confidence": "low",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": "no_claim",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims."
+      },
+      {
+        "claim": "vendor is down",
+        "language": "en",
+        "verdict": "Error",
+        "confidence": "low",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": "upstream_unavailable",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "A model provider was unavailable for this item. Retry it; nothing was charged."
+      },
+      {
+        "claim": "cannot frame",
+        "language": "en",
+        "verdict": "Error",
+        "confidence": "low",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": "framing_failed",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged."
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

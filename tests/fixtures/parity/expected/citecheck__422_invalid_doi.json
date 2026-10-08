@@ -1,0 +1,33 @@
+{
+  "error": {
+    "cause": "payload.pairs.0.doi: Send the DOI alone, like 10.1038/nature12373.",
+    "code": "invalid_doi",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0,
+          "doi"
+        ],
+        "msg": "Send the DOI alone, like 10.1038/nature12373."
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.pairs.0.doi: Send the DOI alone, like 10.1038/nature12373.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.pairs.0.doi: Send the DOI alone, like 10.1038/nature12373.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.pairs.0.doi: Send the DOI alone, like 10.1038/nature12373.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

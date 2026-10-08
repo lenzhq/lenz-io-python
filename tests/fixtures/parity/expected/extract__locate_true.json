@@ -1,0 +1,93 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claim": "Alpha rose 5% in 2024.",
+    "domain": "Economics",
+    "identified_claims": [
+      "Alpha rose 5% in 2024.",
+      "Beta fell 3% last year."
+    ],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": [
+          {
+            "end": 22,
+            "start": 0,
+            "text": "Alpha rose 5% in 2024."
+          }
+        ]
+      },
+      {
+        "claim": "Beta fell 3% last year.",
+        "positions": [
+          {
+            "end": 46,
+            "start": 23,
+            "text": "Beta fell 3% last year."
+          }
+        ]
+      }
+    ],
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
+  "dump_unset": {
+    "candidate_claims": [],
+    "claim": "Alpha rose 5% in 2024.",
+    "domain": "Economics",
+    "identified_claims": [
+      "Alpha rose 5% in 2024.",
+      "Beta fell 3% last year."
+    ],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": [
+          {
+            "end": 22,
+            "start": 0,
+            "text": "Alpha rose 5% in 2024."
+          }
+        ]
+      },
+      {
+        "claim": "Beta fell 3% last year.",
+        "positions": [
+          {
+            "end": 46,
+            "start": 23,
+            "text": "Beta fell 3% last year."
+          }
+        ]
+      }
+    ],
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
+  "render": "2 claims found:\n  1. Alpha rose 5% in 2024.\n     at 0-22: \"Alpha rose 5% in 2024.\"\n  2. Beta fell 3% last year.\n     at 23-46: \"Beta fell 3% last year.\"\n",
+  "render_json": "{\n  \"status\": \"ready\",\n  \"claim\": \"Alpha rose 5% in 2024.\",\n  \"identified_claims\": [\n    \"Alpha rose 5% in 2024.\",\n    \"Beta fell 3% last year.\"\n  ],\n  \"candidate_claims\": [],\n  \"domain\": \"Economics\",\n  \"key_entities\": [\n    {\n      \"name\": \"Alpha\",\n      \"type\": \"organization\"\n    },\n    {\n      \"name\": \"Beta\",\n      \"type\": \"organization\"\n    }\n  ],\n  \"presumed_intent\": \"Verify reported figures\",\n  \"original_input\": \"Alpha rose 5% in 2024. Beta fell 3% last year.\",\n  \"locations\": [\n    {\n      \"claim\": \"Alpha rose 5% in 2024.\",\n      \"positions\": [\n        {\n          \"start\": 0,\n          \"end\": 22,\n          \"text\": \"Alpha rose 5% in 2024.\"\n        }\n      ]\n    },\n    {\n      \"claim\": \"Beta fell 3% last year.\",\n      \"positions\": [\n        {\n          \"start\": 23,\n          \"end\": 46,\n          \"text\": \"Beta fell 3% last year.\"\n        }\n      ]\n    }\n  ]\n}\n",
+  "repr": "ExtractedClaims(status='ready', claim='Alpha rose 5% in 2024.', identified_claims=['Alpha rose 5% in 2024.', 'Beta fell 3% last year.'], candidate_claims=[], domain='Economics', key_entities=[ExtractedEntity(name='Alpha', type='organization'), ExtractedEntity(name='Beta', type='organization')], presumed_intent='Verify reported figures', original_input='Alpha rose 5% in 2024. Beta fell 3% last year.', locations=[ClaimLocation(claim='Alpha rose 5% in 2024.', positions=[Position(start=0, end=22, text='Alpha rose 5% in 2024.')]), ClaimLocation(claim='Beta fell 3% last year.', positions=[Position(start=23, end=46, text='Beta fell 3% last year.')])])"
+}

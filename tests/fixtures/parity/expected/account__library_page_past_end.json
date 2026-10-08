@@ -1,0 +1,16 @@
+{
+  "dump": {
+    "items": [],
+    "page": 2,
+    "page_size": 20,
+    "total": 1
+  },
+  "dump_unset": {
+    "items": [],
+    "page": 2,
+    "page_size": 20,
+    "total": 1
+  },
+  "render_json": null,
+  "repr": "LibraryList(items=[], total=1, page=2, page_size=20)"
+}

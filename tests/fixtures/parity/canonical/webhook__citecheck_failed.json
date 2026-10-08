@@ -1,0 +1,47 @@
+{
+  "status": 200,
+  "body": {
+    "event": "citecheck.failed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "citecheck_id": "8eb49302",
+    "status": "failed",
+    "citecheck": {
+      "citecheck_id": "8eb49302",
+      "status": "failed",
+      "outcome": "unchecked",
+      "created_at": "2026-10-01T09:07:00.123456Z",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "language": "en",
+      "poll_after_seconds": null,
+      "policy": {
+        "max_citations": 20
+      },
+      "summary": {
+        "citations_found": null,
+        "citations_selected": null,
+        "citation_limit": 20,
+        "citation_limit_exceeded": null,
+        "citation_checks": null,
+        "citation_issues": 0
+      },
+      "credits": {
+        "charged": 0
+      },
+      "citations": [],
+      "citation_issues": [],
+      "citation_failures": [],
+      "failure": {
+        "code": "no_citations",
+        "detail": "The text holds no citation to check.",
+        "hint": "The text has no citation to check: no link, DOI or numbered reference with one.",
+        "failure_class": "invalid_input",
+        "retryable": false,
+        "docs_url": "https://lenz.io/docs/errors#invalid-input"
+      },
+      "more_citations": null
+    },
+    "attempt": 1,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
+}

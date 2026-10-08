@@ -1,0 +1,24 @@
+{
+  "dump": {
+    "batch_id": "7ea9cdbd4064e3cf",
+    "items": [
+      {
+        "claim_text": "First claim.",
+        "task_id": "7cff18da2d979d6370e54a160be121ad"
+      }
+    ],
+    "partial": true
+  },
+  "dump_unset": {
+    "batch_id": "7ea9cdbd4064e3cf",
+    "items": [
+      {
+        "claim_text": "First claim.",
+        "task_id": "7cff18da2d979d6370e54a160be121ad"
+      }
+    ],
+    "partial": true
+  },
+  "render_json": null,
+  "repr": "BatchAccepted(batch_id='7ea9cdbd4064e3cf', items=[TaskAccepted(task_id='7cff18da2d979d6370e54a160be121ad', claim_text='First claim.')], partial=True)"
+}

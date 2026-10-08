@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "A check with this Idempotency-Key is still being created. Retry shortly.",
+    "code": "idempotency_conflict",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "A check with this Idempotency-Key is still being created. Retry shortly.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "A check with this Idempotency-Key is still being created. Retry shortly.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "A check with this Idempotency-Key is still being created. Retry shortly.",
+        "status": 409
+      }
+    },
+    "request_id": "",
+    "status_code": 409,
+    "type": "LenzError"
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "status": "completed",
+          "support": "partly_supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.gov/report-2024",
+        "result": {
+          "finding": "partly_supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Unemployment fell to 4.1% in 2024."
+      },
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.org/statement",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.org/statement",
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.org/statement",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "The agency said so in a statement."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 2
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 2
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 2,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 2,
+      "citation_limit_reached": false,
+      "citations_found": 2,
+      "citations_selected": 2
+    }
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "status": "completed",
+          "support": "partly_supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.gov/report-2024",
+        "result": {
+          "finding": "partly_supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Unemployment fell to 4.1% in 2024."
+      },
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.org/statement",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.org/statement",
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.org/statement",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "The agency said so in a statement."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 2
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 2
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 2,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 2,
+      "citation_limit_reached": false,
+      "citations_found": 2,
+      "citations_selected": 2
+    }
+  },
+  "exit_code": 0,
+  "render": "Citation check 8eb49302: clean — 2 credits charged\n\n2 sources cited in your draft\n2 checked.\n\nNo issues.\n",
+  "render_json": null,
+  "repr": "Citecheck(citecheck_id='8eb49302', status='completed', outcome='clean', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', poll_after_seconds=None, policy=CitecheckPolicy(max_citations=2), summary=CitecheckSummary(citations_found=2, citations_selected=2, citation_limit=2, citation_limit_reached=False, citation_checks=ReviewCitationCheckCounts(checked=2, unchecked=0, failed=0), citation_issues=0), credits=ReviewCredits(charged=2), citations=[ReviewCitation(index=0, reference='https://example.gov/report-2024', cited_url='https://example.gov/report-2024', doi=None, statement='Unemployment fell to 4.1% in 2024.', quotes=[], position=None, result=ReviewCitationResult(finding='partly_supported', source='support', is_issue=False), check=ReviewCitationCheck(status='completed', page_read='full', page_title='Page at https://example.gov/report-2024', page_published_date=None, page_language='en', source_url='https://example.gov/report-2024', source_version=None, support='partly_supported', snippet='The source says so.', rationale='The page states it.', quote=None, missing_quote=None, doi_registered=None, metadata=None, metadata_differences=[], registered=None, unchecked_reason=None, hint=None, failure=None)), ReviewCitation(index=1, reference='https://example.org/statement', cited_url='https://example.org/statement', doi=None, statement='The agency said so in a statement.', quotes=[], position=None, result=ReviewCitationResult(finding='supported', source='support', is_issue=False), check=ReviewCitationCheck(status='completed', page_read='full', page_title='Page at https://example.org/statement', page_published_date=None, page_language='en', source_url='https://example.org/statement', source_version=None, support='supported', snippet='The source says so.', rationale='The page states it.', quote=None, missing_quote=None, doi_registered=None, metadata=None, metadata_differences=[], registered=None, unchecked_reason=None, hint=None, failure=None))], citation_issues=[], citation_failures=[], more_citations=[], failure=None, language='en')"
+}

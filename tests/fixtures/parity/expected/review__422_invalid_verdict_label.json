@@ -1,0 +1,32 @@
+{
+  "error": {
+    "cause": "payload.escalate.verdicts: Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True.",
+    "code": "invalid_verdict_label",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "verdicts"
+        ],
+        "msg": "Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True."
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.escalate.verdicts: Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.escalate.verdicts: Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.escalate.verdicts: Unknown verdict label 'Misleading'; use one of: False, Mostly False, Mixed, Mostly True, True.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

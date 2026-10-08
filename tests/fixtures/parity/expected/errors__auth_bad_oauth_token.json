@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "The access token is invalid, expired or revoked.",
+    "code": "invalid_token",
+    "doc_url": "https://lenz.io/docs/auth",
+    "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+    "friendly_text": "The access token is invalid, expired or revoked.\n  Fix: Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+    "message": "The access token is invalid, expired or revoked.",
+    "payload_json": {
+      "error": {
+        "code": "unauthorized",
+        "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+        "message": "The access token is invalid, expired or revoked.",
+        "status": 401
+      }
+    },
+    "request_id": "",
+    "status_code": 401,
+    "type": "LenzAuthError"
+  }
+}

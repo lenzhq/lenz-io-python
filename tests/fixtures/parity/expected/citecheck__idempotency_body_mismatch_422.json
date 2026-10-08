@@ -1,0 +1,29 @@
+{
+  "error": {
+    "cause": "Idempotency-Key reused with a different request body.",
+    "code": "idempotency_body_mismatch",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "header"
+        ],
+        "msg": "Idempotency-Key reused with a different request body."
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Idempotency-Key reused with a different request body.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Idempotency-Key reused with a different request body.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Idempotency-Key reused with a different request body.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "status": 200,
+  "body": {
+    "plan": "free",
+    "plan_label": "Free",
+    "quota_resets_at": "2026-10-01T14:07:00+00:00",
+    "credits": {
+      "total": 350,
+      "used": 0,
+      "remaining": 350,
+      "extra": 250,
+      "bonus": 250,
+      "resets_at": "2026-10-01T14:07:00+00:00"
+    },
+    "costs": {
+      "verify": 10,
+      "assess": 1,
+      "ask": 1,
+      "citation": 1,
+      "extract": 0
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "standard": 10,
+          "low": 5
+        }
+      }
+    },
+    "verify": {
+      "quota_used": 0,
+      "quota_total": 35,
+      "quota_remaining": 35,
+      "bonus": 25,
+      "credits": 25,
+      "remaining": 35
+    },
+    "ask": {
+      "quota_used": 0,
+      "quota_total": 350,
+      "quota_remaining": 350,
+      "bonus": 250,
+      "credits": 250,
+      "remaining": 350
+    },
+    "assess": {
+      "quota_used": 0,
+      "quota_total": 350,
+      "quota_remaining": 350,
+      "bonus": 250,
+      "credits": 250,
+      "remaining": 350
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "error": {
+    "cause": "[{'type': 'list_type', 'loc': ['body', 'payload', 'claims'], 'msg': 'Input should be a valid list'}]",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "claims"
+        ],
+        "msg": "Input should be a valid list",
+        "type": "list_type"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "[{'type': 'list_type', 'loc': ['body', 'payload', 'claims'], 'msg': 'Input should be a valid list'}]\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "[{'type': 'list_type', 'loc': ['body', 'payload', 'claims'], 'msg': 'Input should be a valid list'}]",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "[{'type': 'list_type', 'loc': ['body', 'payload', 'claims'], 'msg': 'Input should be a valid list'}]",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

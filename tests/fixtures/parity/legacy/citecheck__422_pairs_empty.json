@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.pairs: Value error, pairs: 1 to 20 items",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs"
+        ],
+        "msg": "Value error, pairs: 1 to 20 items"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

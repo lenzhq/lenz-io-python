@@ -1,0 +1,28 @@
+{
+  "error": {
+    "cause": "No remaining credits for citation checks.",
+    "code": "no_credits",
+    "cost": 1,
+    "credit_balance": 100,
+    "doc_url": "https://lenz.io/docs/billing",
+    "fix": "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
+    "friendly_text": "No remaining credits for citation checks.\n  Fix: Top up or upgrade at https://lenz.io/plans, or wait for the period reset. See https://lenz.io/plans?wall=6b86b273-ff34-4ce1-8d6b-804eff5a3f57",
+    "message": "No remaining credits for citation checks.",
+    "payload_json": {
+      "error": {
+        "code": "no_credits",
+        "fix": "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
+        "message": "No remaining credits for citation checks.",
+        "status": 402,
+        "upgrade_url": "https://lenz.io/plans?wall=6b86b273-ff34-4ce1-8d6b-804eff5a3f57"
+      }
+    },
+    "remaining": 100,
+    "request_id": "",
+    "requested": null,
+    "resets_at": "2026-10-01T14:07:00+00:00",
+    "status_code": 402,
+    "type": "LenzQuotaExceededError",
+    "upgrade_url": "https://lenz.io/plans?wall=6b86b273-ff34-4ce1-8d6b-804eff5a3f57"
+  }
+}

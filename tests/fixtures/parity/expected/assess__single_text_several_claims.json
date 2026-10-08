@@ -1,0 +1,103 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "The Moon is made of cheese.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "False",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "The Pacific is the deepest ocean.",
+        "confidence": "medium",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly True",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "error_code": "",
+    "more_claims": []
+  },
+  "dump_unset": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "The Moon is made of cheese.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "False",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "The Pacific is the deepest ocean.",
+        "confidence": "medium",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly True",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "render": "True (high) — Water boils at 100 C at sea level.\nFalse (high) — The Moon is made of cheese.\nMostly True (medium) — The Pacific is the deepest ocean.\n",
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Water boils at 100 C at sea level.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    },\n    {\n      \"claim\": \"The Moon is made of cheese.\",\n      \"language\": \"en\",\n      \"verdict\": \"False\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    },\n    {\n      \"claim\": \"The Pacific is the deepest ocean.\",\n      \"language\": \"en\",\n      \"verdict\": \"Mostly True\",\n      \"confidence\": \"medium\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[AssessClaim(claim='Water boils at 100 C at sea level.', language='en', verdict='True', confidence='high', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None), AssessClaim(claim='The Moon is made of cheese.', language='en', verdict='False', confidence='high', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None), AssessClaim(claim='The Pacific is the deepest ocean.', language='en', verdict='Mostly True', confidence='medium', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None)], error=None, error_code='', candidate_claims=[], more_claims=[])"
+}

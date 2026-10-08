@@ -1,0 +1,25 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload: Value error, max_citations goes with text: every pair is checked",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload"
+        ],
+        "msg": "Value error, max_citations goes with text: every pair is checked",
+        "type": "value_error",
+        "ctx": {
+          "error": "max_citations goes with text: every pair is checked"
+        }
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

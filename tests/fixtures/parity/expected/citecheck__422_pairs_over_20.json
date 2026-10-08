@@ -1,0 +1,31 @@
+{
+  "error": {
+    "cause": "payload.pairs: Value error, pairs: 1 to 20 items",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs"
+        ],
+        "msg": "Value error, pairs: 1 to 20 items"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.pairs: Value error, pairs: 1 to 20 items\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.pairs: Value error, pairs: 1 to 20 items",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.pairs: Value error, pairs: 1 to 20 items",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

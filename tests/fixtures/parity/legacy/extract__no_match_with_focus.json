@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "status": "no_match",
+    "claim": "",
+    "identified_claims": [],
+    "candidate_claims": [],
+    "domain": "",
+    "key_entities": [],
+    "presumed_intent": "",
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "locations": null
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

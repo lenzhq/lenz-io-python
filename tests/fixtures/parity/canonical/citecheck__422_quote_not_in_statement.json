@@ -1,0 +1,24 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "pairs[0]: Each quote must be words of its statement.",
+    "code": "quote_not_in_statement",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0
+        ],
+        "msg": "Each quote must be words of its statement.",
+        "type": "quote_not_in_statement"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

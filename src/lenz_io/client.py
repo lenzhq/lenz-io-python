@@ -201,13 +201,30 @@ def _batch_item_body(item: Any) -> Any:
 
     An item without ``claim`` is forwarded verbatim, so every existing caller
     keeps a byte-identical request body. An item with ``claim`` is sent as
-    ``text`` — the wire key the server has always accepted.
+    ``text`` — the wire key the server has always accepted. An empty
+    ``webhook_url`` is left out, as on the batch itself: it has always meant
+    the key's default, and leaving it out keeps that meaning on every API
+    version.
     """
+    if isinstance(item, dict) and item.get("webhook_url") == "":
+        item = {k: v for k, v in item.items() if k != "webhook_url"}
     if "claim" not in item:
         return item
     body = {k: v for k, v in item.items() if k != "claim"}
     body["text"] = item["claim"] or item.get("text", "")
     return body
+
+
+def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
+    """``/extract``'s answer. A newer-shape body (``claims``, no
+    ``identified_claims``) that located every claim away answers ``claims:
+    []``; the original field for that was ``locations=[]``, which only the
+    request (``locate=True``) can tell apart from "nothing found"."""
+    out = ExtractedClaims.model_validate(body)
+    newer = isinstance(body, dict) and "claims" in body and "identified_claims" not in body
+    if newer and locate and not body["claims"] and out.status == "not_a_claim" and out.locations is None:
+        out.locations = []
+    return out
 
 
 #: An async job the poll loop waits on: a review or a citation check.
@@ -659,18 +676,18 @@ class Lenz:
         one an unfocused call would have returned too, verbatim.
 
         When the text has claims but none fall within the focus, ``status``
-        is ``"no_match"`` and ``identified_claims`` is empty — the unfocused
+        is ``"no_match"`` and ``claims`` is empty — the unfocused
         list is never substituted. Widen the focus and call again. A focused
         call costs the same single unit of the daily cap.
 
         ``locate`` (optional): with ``True``, only the claims that could be
-        traced directly back to the text are returned, and ``locations``
-        says where the text makes each one (``start``/``end`` index the
+        traced directly back to the text are returned, and each claim's
+        ``positions`` says where the text makes it (``start``/``end`` index the
         ``text`` you sent, in code points, so ``text[start:end]`` is the
         passage). A claim found nowhere in the text, or found with a
         different figure, is left out; if that leaves no claim, ``status``
         is ``"not_a_claim"``. Locating adds a few seconds. If the claims
-        cannot be located, ``locations`` is ``None`` and the list is returned
+        cannot be located, ``positions`` is ``None`` and the list is returned
         unfiltered. Leave it ``None`` to use the server default (currently
         off); an explicit ``False`` is sent as such.
 
@@ -720,7 +737,7 @@ class Lenz:
           ``extract`` in the ladder::
 
               out = client.extract(text=llm_output)
-              claims = out.identified_claims or [out.claim]
+              claims = [c.claim for c in out.claims]
               quick = [row for i in range(0, len(claims), 20)  # 20 a call
                        for row in client.assess(claims=claims[i : i + 20]).claims]
 
@@ -733,14 +750,16 @@ class Lenz:
         ``verification_url`` pointing at the deep ``Verification`` when
         /assess found a matching stored claim.
 
-        A row with ``verdict == "Error"`` could not be given a verdict. It
-        stays in position, is not charged, and says why: ``error_code`` is
-        ``no_claim`` / ``framing_failed`` / ``upstream_unavailable`` /
-        ``timeout`` (an open set; the last two are worth resending as-is), and
-        ``hint`` is one sentence on what to send next. A compound list item is assessed on its main
-        claim; the other claims found in it are listed on that row in
-        ``identified_claims`` (with a ``hint``) — send them as their own
-        items to check the rest. ``hint`` is ``None`` on a plain verdict row.
+        A row with ``status == "failed"`` could not be given a verdict (its
+        ``verdict`` reads ``"Error"``). It stays in position, is not charged,
+        and says why: ``failure.code`` is ``no_checkable_claim`` /
+        ``framing_failed`` / ``upstream_unavailable`` / ``timeout`` (an open
+        set; the last two are worth resending as-is), and ``failure.hint`` is
+        one sentence on what to send next. A compound list item is assessed on
+        its main claim; the other claims found in it are listed on that row in
+        ``more_claims`` — send them as their own items to check the rest.
+        (The deprecated ``error_code``, ``hint`` and ``identified_claims`` keep
+        their original meaning.)
 
         Use ``confidence`` to decide when to escalate: ``"low"`` rows are
         worth re-running through ``verify_batch_and_wait`` for the deep
@@ -1564,8 +1583,12 @@ class Lenz:
         payload: dict[str, Any] = {
             "text": claim or text,
             "source_url": source_url,
-            "webhook_url": webhook_url,
         }
+        # Omit-when-empty: no ``webhook_url`` means the key's default webhook.
+        # An empty string is never sent, so a request keeps that meaning on
+        # every API version (a newer one reads ``""`` as "no webhook").
+        if webhook_url:
+            payload["webhook_url"] = webhook_url
         # Omit-when-empty so existing English callers keep byte-identical
         # request bodies (no extra "language": "" key).
         if language:
@@ -1598,7 +1621,10 @@ class Lenz:
         # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
         # (revised SDK plan decision 1C — no Pydantic coercion, keep the
         # runtime contract a plain dict).
-        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims], "webhook_url": webhook_url}
+        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims]}
+        # Omit-when-empty, as on ``verify``: no ``webhook_url`` means the key's default.
+        if webhook_url:
+            payload["webhook_url"] = webhook_url
         if language:
             payload["language"] = language
         if visibility:
@@ -1652,7 +1678,7 @@ class Lenz:
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
-        return ExtractedClaims.model_validate(body)
+        return _extracted(body, locate=locate)
 
     def _assess(
         self,

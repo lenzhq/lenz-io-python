@@ -1,0 +1,72 @@
+{
+  "status": 200,
+  "body": {
+    "citecheck_id": "8eb49302",
+    "status": "queued",
+    "outcome": null,
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": null,
+    "language": "en",
+    "poll_after_seconds": 10,
+    "policy": {
+      "max_citations": 1
+    },
+    "summary": {
+      "citations_found": 1,
+      "citations_selected": 1,
+      "citation_limit": 1,
+      "citation_limit_reached": false,
+      "citation_checks": {
+        "checked": 0,
+        "unchecked": 0,
+        "failed": 0
+      },
+      "citation_issues": 0
+    },
+    "credits": {
+      "charged": 0
+    },
+    "citations": [
+      {
+        "index": 0,
+        "reference": "https://example.gov/report-2024",
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "statement": "Unemployment fell to 4.1% in 2024.",
+        "quotes": [],
+        "position": null,
+        "result": null,
+        "check": {
+          "status": "pending",
+          "page_read": null,
+          "page_title": null,
+          "page_published_date": null,
+          "page_language": null,
+          "source_url": null,
+          "source_version": null,
+          "support": null,
+          "snippet": null,
+          "rationale": null,
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      }
+    ],
+    "citation_issues": [],
+    "citation_failures": [],
+    "failure": null,
+    "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

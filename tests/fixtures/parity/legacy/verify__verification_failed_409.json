@@ -1,0 +1,19 @@
+{
+  "status": 409,
+  "body": {
+    "detail": "This check failed and has no result.",
+    "code": "verification_failed",
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "hint": "Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+    "failure_reason": "research_empty",
+    "failure_class": "insufficient_evidence",
+    "retryable": false,
+    "docs_url": "https://lenz.io/docs/errors#insufficient-evidence"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

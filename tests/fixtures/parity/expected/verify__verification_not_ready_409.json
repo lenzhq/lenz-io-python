@@ -1,0 +1,24 @@
+{
+  "error": {
+    "cause": "This check is still running.",
+    "code": "verification_not_ready",
+    "doc_url": "https://lenz.io/docs/verify",
+    "fix": "Poll GET /verify/status/7cff18da2d979d6370e54a160be121ad until it completes, then read its result.",
+    "friendly_text": "This check is still running.\n  Fix: Poll GET /verify/status/7cff18da2d979d6370e54a160be121ad until it completes, then read its result.",
+    "hint": "Poll GET /verify/status/7cff18da2d979d6370e54a160be121ad until it completes, then read its result.",
+    "message": "This check is still running.",
+    "payload_json": {
+      "error": {
+        "code": "not_ready",
+        "fix": "Poll GET /verify/status/7cff18da2d979d6370e54a160be121ad until it completes, then read its result.",
+        "message": "This check is still running.",
+        "status": 409
+      }
+    },
+    "request_id": "",
+    "status": "processing",
+    "status_code": 409,
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "LenzVerificationNotReadyError"
+  }
+}

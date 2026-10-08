@@ -1,0 +1,24 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.pairs.0.doi: Send the DOI alone, like 10.1038/nature12373.",
+    "code": "invalid_doi",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0,
+          "doi"
+        ],
+        "msg": "Send the DOI alone, like 10.1038/nature12373."
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

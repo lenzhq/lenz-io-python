@@ -1,0 +1,110 @@
+{
+  "status": 200,
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "full",
+    "status": "assessing",
+    "outcome": null,
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 20,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 0,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_selected": 2,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 0,
+        "failed": 0
+      },
+      "verifications": null,
+      "issues": 0,
+      "citations_found": null,
+      "citations_selected": null,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 2
+    },
+    "poll_after_seconds": 10,
+    "issues": [],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [
+      {
+        "index": 0,
+        "claim": "The EU AI Act took effect in March 2024.",
+        "positions": null,
+        "result": null,
+        "assessment": {
+          "status": "running",
+          "verdict": null,
+          "confidence": null,
+          "rationale": null,
+          "dissent": null,
+          "verification_url": null,
+          "error_code": null,
+          "identified_claims": [],
+          "hint": null,
+          "suggested_rewrite": null,
+          "failure": null
+        },
+        "escalation": null,
+        "verification": null,
+        "suggested_edits": null
+      },
+      {
+        "index": 1,
+        "claim": "Water boils at 100 C at sea level.",
+        "positions": null,
+        "result": null,
+        "assessment": {
+          "status": "running",
+          "verdict": null,
+          "confidence": null,
+          "rationale": null,
+          "dissent": null,
+          "verification_url": null,
+          "error_code": null,
+          "identified_claims": [],
+          "hint": null,
+          "suggested_rewrite": null,
+          "failure": null
+        },
+        "escalation": null,
+        "verification": null,
+        "suggested_edits": null
+      }
+    ],
+    "citations": [],
+    "failure": null,
+    "more_claims": [],
+    "more_claim_locations": [],
+    "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

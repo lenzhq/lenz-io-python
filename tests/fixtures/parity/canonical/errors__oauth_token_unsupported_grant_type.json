@@ -1,0 +1,11 @@
+{
+  "status": 400,
+  "body": {
+    "error": "unsupported_grant_type"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

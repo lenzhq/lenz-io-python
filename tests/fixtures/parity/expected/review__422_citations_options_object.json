@@ -1,0 +1,31 @@
+{
+  "error": {
+    "cause": "payload.citations: Extra inputs are not permitted",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "citations"
+        ],
+        "msg": "Extra inputs are not permitted"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.citations: Extra inputs are not permitted\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.citations: Extra inputs are not permitted",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.citations: Extra inputs are not permitted",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

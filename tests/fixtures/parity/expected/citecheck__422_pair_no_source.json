@@ -1,0 +1,32 @@
+{
+  "error": {
+    "cause": "payload.pairs.0: Value error, send exactly one of url and doi",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0
+        ],
+        "msg": "Value error, send exactly one of url and doi"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.pairs.0: Value error, send exactly one of url and doi\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.pairs.0: Value error, send exactly one of url and doi",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.pairs.0: Value error, send exactly one of url and doi",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

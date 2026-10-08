@@ -18,16 +18,16 @@ The primitives, call by call:
 
     # 1. /extract — pull verifiable claims out of text (free, 1000/day)
     out = client.extract(text=llm_output)
-    claims = out.identified_claims or [out.claim]
+    claims = [c.claim for c in out.claims]
 
     # 2. /assess — 20 claims a call (extract finds up to 100), one row per claim, same order (paid)
     quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
-    # a row with verdict == "Error" got no verdict: see its error_code and hint;
-    # a compound item lists the claims it did not assess in identified_claims
+    # a row with status == "failed" got no verdict: see its failure.code and failure.hint;
+    # a compound item lists the claims it did not assess in more_claims
 
     # 3. /verify — escalate the low-confidence rows to the full pipeline (~90s, paid)
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
+    doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
     results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
     # 4. /ask — follow-up questions grounded on a verification
@@ -74,6 +74,7 @@ from .models import (
     AssessClaim,
     Assessment,
     AssessResponse,
+    AssessStatus,
     Audit,
     BatchAccepted,
     BatchItemResult,
@@ -89,6 +90,7 @@ from .models import (
     EntityRef,
     Escalation,
     EscalationPolicy,
+    ExtractedClaim,
     ExtractedClaims,
     ExtractedEntity,
     ExtractStatus,
@@ -144,6 +146,7 @@ __all__ = [
     "AskReply",
     "AssessClaim",
     "AssessResponse",
+    "AssessStatus",
     "Assessment",
     "Audit",
     "BatchAccepted",
@@ -166,6 +169,7 @@ __all__ = [
     "Escalation",
     "EscalationPolicy",
     "ExtractStatus",
+    "ExtractedClaim",
     "ExtractedClaims",
     "ExtractedEntity",
     "FailureBlock",

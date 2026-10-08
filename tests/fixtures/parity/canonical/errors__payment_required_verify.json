@@ -1,0 +1,19 @@
+{
+  "status": 402,
+  "body": {
+    "detail": "No remaining claim checks.",
+    "code": "no_credits",
+    "docs_url": "https://lenz.io/docs/errors#quota",
+    "upgrade_url": "https://lenz.io/plans?wall=6b86b273-ff34-4ce1-8d6b-804eff5a3f57",
+    "wall_id": "6b86b273-ff34-4ce1-8d6b-804eff5a3f57",
+    "remaining": 0,
+    "resets_at": "2026-10-01T14:07:00+00:00",
+    "credits_remaining": 0,
+    "cost": 10
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

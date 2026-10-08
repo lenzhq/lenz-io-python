@@ -1,0 +1,21 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "language: Unsupported language 'xx'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact.",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "language"
+        ],
+        "msg": "language: Unsupported language 'xx'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact."
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

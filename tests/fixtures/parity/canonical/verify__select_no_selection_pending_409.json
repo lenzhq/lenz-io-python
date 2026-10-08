@@ -1,0 +1,12 @@
+{
+  "status": 409,
+  "body": {
+    "detail": "This task has no pending claim selection.",
+    "code": "no_selection_pending"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

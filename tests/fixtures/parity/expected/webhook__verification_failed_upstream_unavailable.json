@@ -1,0 +1,15 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
+    "error": "framing_failed",
+    "event": "verification.failed",
+    "failure_class": "upstream_unavailable",
+    "retryable": true,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "VerificationFailed",
+    "verification_id": null
+  }
+}

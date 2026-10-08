@@ -1,0 +1,259 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 13
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "claim_index": 1,
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "failure_reason": "upstream_unavailable",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The EU AI Act took effect in March 2024.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": null,
+        "suggested_rewrite": "Fixed: The EU AI Act took effect in March 2024.",
+        "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
+        "verdict": "False",
+        "verification_id": "68ca4aaf",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
+        "verified_claim": null
+      },
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 2,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+          "failure_class": "insufficient_evidence",
+          "failure_reason": "research_empty",
+          "hint": null,
+          "retryable": false
+        },
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "failed",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 3,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 4,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 1,
+        "planned": 2
+      }
+    },
+    "view": "issues"
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 13
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "claim_index": 1,
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "failure_reason": "upstream_unavailable",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The EU AI Act took effect in March 2024.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": null,
+        "suggested_rewrite": "Fixed: The EU AI Act took effect in March 2024.",
+        "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
+        "verdict": "False",
+        "verification_id": "68ca4aaf",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
+        "verified_claim": null
+      },
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 2,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+          "failure_class": "insufficient_evidence",
+          "failure_reason": "research_empty",
+          "hint": null,
+          "retryable": false
+        },
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "failed",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 3,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 4,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 1,
+        "planned": 2
+      }
+    },
+    "view": "issues"
+  },
+  "exit_code": 2,
+  "render": "Review d6b2bd72: incomplete — 4 claims: 2 issues, 1 failed, 1 not checked · 1 of 2 deep-checked · 13 credits charged\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_issues": "Review d6b2bd72: incomplete — 4 claims: 2 issues, 1 failed, 1 not checked · 1 of 2 deep-checked · 13 credits charged\n\n[1/4] The EU AI Act took effect in March 2024.\n  False (high) · deep check\n  Finding for The EU AI Act took effect in March 2024.\n  Suggested rewrite: Fixed: The EU AI Act took effect in March 2024.\n  https://lenz.io/c/the-earth-is-round-68ca4aaf\n\n[3/4] The Eiffel Tower is in Berlin.\n  False (high) · quick check\n  Deep check failed: research_empty\n\n[2/4] Water boils at 100 C at sea level.\n  Assessment failed: A model provider was unavailable for this item. Retry it; nothing was charged.\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_json": null,
+  "repr": "ReviewFull(review_id='d6b2bd72', view='issues', status='completed', outcome='incomplete', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', language='en', policy=EscalationPolicy(verdicts=['False', 'Mostly False', 'Mixed'], confidence=['low'], max_assessments=20, max_verifications=5, depth='standard', max_citations=0, suggest_edits=False), summary=ReviewSummary(claims_selected=4, claim_limit=20, claim_limit_reached=False, input_truncated=False, assessments=ReviewAssessmentCounts(completed=3, failed=1), verifications=ReviewVerificationCounts(planned=2, completed=1, failed=1), issues=2, citations_found=None, citations_selected=None, citation_limit=None, citation_limit_reached=None, citation_checks=None, citation_issues=0, citations_skipped=None), credits=ReviewCredits(charged=13), poll_after_seconds=None, issues=[ReviewIssue(claim_index=0, claim='The EU AI Act took effect in March 2024.', verified_claim=None, verdict='False', confidence='high', source='verification', verification_id='68ca4aaf', verification_status='completed', verification_url='https://lenz.io/api/v1/verifications/68ca4aaf', url='https://lenz.io/c/the-earth-is-round-68ca4aaf', escalation=Escalation(matched_rules=['verdict'], disposition='planned'), key_finding='Finding for The EU AI Act took effect in March 2024.', rationale=None, suggested_rewrite='Fixed: The EU AI Act took effect in March 2024.', failure=None, suggested_edits=None), ReviewIssue(claim_index=2, claim='The Eiffel Tower is in Berlin.', verified_claim=None, verdict='False', confidence='high', source='assessment', verification_id=None, verification_status='failed', verification_url=None, url=None, escalation=Escalation(matched_rules=['verdict'], disposition='planned'), key_finding=None, rationale=None, suggested_rewrite=None, failure=FailureBlock(failure_reason='research_empty', failure_class='insufficient_evidence', retryable=False, hint=None, docs_url='https://lenz.io/docs/errors#insufficient-evidence'), suggested_edits=None)], failures=[ReviewFailure(claim_index=1, claim='Water boils at 100 C at sea level.', stage='assessment', failure=FailureBlock(failure_reason='upstream_unavailable', failure_class='upstream_unavailable', retryable=True, hint='A model provider was unavailable for this item. Retry it; nothing was charged.', docs_url='https://lenz.io/docs/errors#upstream-unavailable'))], citation_issues=[], citation_failures=[], more_claims=[], more_claim_locations=[], more_citations=[], failure=None, claims=[], citations=[])"
+}

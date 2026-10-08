@@ -1,0 +1,13 @@
+{
+  "status": 401,
+  "body": {
+    "error": "invalid_client",
+    "error_description": "Client authentication failed."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "WWW-Authenticate": "Basic realm=\"lenz\"",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

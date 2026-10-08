@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "focus must be at most 300 characters of plain text.",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "focus"
+        ],
+        "msg": "focus must be at most 300 characters of plain text.",
+        "type": "validation_error"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

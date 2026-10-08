@@ -1,0 +1,30 @@
+{
+  "error": {
+    "cause": "payload: Value error, max_citations goes with text: every pair is checked",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload"
+        ],
+        "msg": "Value error, max_citations goes with text: every pair is checked"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload: Value error, max_citations goes with text: every pair is checked\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload: Value error, max_citations goes with text: every pair is checked",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload: Value error, max_citations goes with text: every pair is checked",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

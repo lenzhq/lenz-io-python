@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "body": {
+    "attempt": 1,
+    "batch_id": null,
+    "coverage": null,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
+    "error": null,
+    "event": "webhook.test",
+    "needs_input": null,
+    "result": null,
+    "status": "test",
+    "task_id": "test_7cff18da2d979d63",
+    "verification_id": null
+  },
+  "headers": {}
+}

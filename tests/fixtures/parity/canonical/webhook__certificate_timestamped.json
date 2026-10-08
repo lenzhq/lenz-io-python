@@ -1,0 +1,24 @@
+{
+  "status": 200,
+  "body": {
+    "event": "certificate.timestamped",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "verification_id": "68ca4aaf",
+    "status": "completed",
+    "coverage": {
+      "status": "covered",
+      "reasons": [],
+      "certificate_id": "95b0f3dd008b46846b6dd6b15099e2b3",
+      "certificate_url": "https://lenz.io/certificate/95b0f3dd008b46846b6dd6b15099e2b3",
+      "as_of": "2026-09-03T10:00:00+00:00",
+      "currency": "EUR",
+      "cap": 10000,
+      "aggregate": 500000,
+      "terms_version": "v1"
+    },
+    "attempt": 1,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
+}

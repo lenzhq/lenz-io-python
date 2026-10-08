@@ -1,0 +1,56 @@
+{
+  "status": 200,
+  "body": {
+    "claims": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "language": "en",
+        "verdict": "True",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
+      },
+      {
+        "claim": "The Moon is made of cheese.",
+        "language": "en",
+        "verdict": "False",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
+      },
+      {
+        "claim": "The Pacific is the deepest ocean.",
+        "language": "en",
+        "verdict": "Mostly True",
+        "confidence": "medium",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Idempotency-Key reused with a different request body.",
+    "code": "idempotency_body_mismatch"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

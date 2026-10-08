@@ -1,0 +1,13 @@
+{
+  "status": 409,
+  "body": {
+    "detail": "A check with this Idempotency-Key is still being created. Retry shortly.",
+    "code": "idempotency_conflict",
+    "citecheck_id": null
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

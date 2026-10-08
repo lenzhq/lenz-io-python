@@ -1,0 +1,17 @@
+{
+  "status": 429,
+  "body": {
+    "detail": "Daily /extract limit of 1000 reached for this account. The allowance is shared by every key on the account and by extractions run from the Lenz website.",
+    "code": "extract_daily_limit",
+    "limit": 1000,
+    "retry_after": 900,
+    "docs_url": "https://lenz.io/docs/errors#rate-limits",
+    "upgrade_url": "https://lenz.io/plans"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "900",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

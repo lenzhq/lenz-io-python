@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Message too long (max 500 characters).",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Message too long (max 500 characters).\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Message too long (max 500 characters).",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Message too long (max 500 characters).",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

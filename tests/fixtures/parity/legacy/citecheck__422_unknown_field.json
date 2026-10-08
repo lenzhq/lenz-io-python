@@ -1,0 +1,24 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.pairs.0.extra: Extra inputs are not permitted",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0,
+          "extra"
+        ],
+        "msg": "Extra inputs are not permitted"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

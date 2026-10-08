@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Message cannot be empty."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

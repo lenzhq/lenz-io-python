@@ -1,0 +1,34 @@
+{
+  "error": {
+    "cause": "[{'type': 'missing', 'loc': ['body', 'payload', 'claims', 1, 'text'], 'msg': 'Field required'}]",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "claims",
+          1,
+          "text"
+        ],
+        "msg": "Field required",
+        "type": "missing"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "[{'type': 'missing', 'loc': ['body', 'payload', 'claims', 1, 'text'], 'msg': 'Field required'}]\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "[{'type': 'missing', 'loc': ['body', 'payload', 'claims', 1, 'text'], 'msg': 'Field required'}]",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "[{'type': 'missing', 'loc': ['body', 'payload', 'claims', 1, 'text'], 'msg': 'Field required'}]",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

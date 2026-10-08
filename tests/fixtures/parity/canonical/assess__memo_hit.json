@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "body": {
+    "status": "ok",
+    "claims": [
+      {
+        "claim": "The Danube flows through Vienna.",
+        "language": "en",
+        "status": "completed",
+        "verdict": "True",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "The river runs through the city.",
+        "dissent": null,
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "more_claims": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

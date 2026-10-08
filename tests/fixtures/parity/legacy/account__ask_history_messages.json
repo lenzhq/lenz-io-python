@@ -1,0 +1,25 @@
+{
+  "status": 200,
+  "body": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello",
+        "created_at": "2026-10-01T09:07:00.123456+00:00"
+      },
+      {
+        "role": "expert",
+        "content": "Hi there!",
+        "created_at": "2026-10-01T09:14:00.123456+00:00"
+      }
+    ],
+    "exchanges_used": 0,
+    "exchange_limit": 100,
+    "can_send": true
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

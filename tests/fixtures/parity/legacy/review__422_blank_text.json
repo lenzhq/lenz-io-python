@@ -1,0 +1,21 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "text: send the draft, or one public http(s) URL.",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "text"
+        ],
+        "msg": "text: send the draft, or one public http(s) URL."
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

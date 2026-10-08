@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Batch size exceeds maximum of 20.",
+    "code": "too_many_items",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "claims"
+        ],
+        "msg": "Batch size exceeds maximum of 20.",
+        "type": "too_many_items"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

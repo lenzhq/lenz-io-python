@@ -1,0 +1,166 @@
+{
+  "status": 200,
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "full",
+    "status": "verifying",
+    "outcome": null,
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": null,
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 20,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 20,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_found": 1,
+      "claims_selected": 1,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 1,
+        "failed": 0
+      },
+      "verifications": {
+        "planned": 0,
+        "completed": 0,
+        "failed": 0
+      },
+      "issues": 0,
+      "citations_found": 2,
+      "citations_selected": 2,
+      "citation_limit": 20,
+      "citation_limit_exceeded": false,
+      "citation_checks": {
+        "checked": 0,
+        "unchecked": 0,
+        "failed": 0
+      },
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 1
+    },
+    "poll_after_seconds": 15,
+    "issues": [],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [
+      {
+        "index": 0,
+        "claim": "The EU AI Act took effect in March 2024.",
+        "positions": null,
+        "result": {
+          "verdict": "True",
+          "confidence": "high",
+          "source": "assessment",
+          "is_issue": false
+        },
+        "assessment": {
+          "status": "completed",
+          "verdict": "True",
+          "confidence": "high",
+          "verification_url": null,
+          "rationale": null,
+          "dissent": null,
+          "suggested_rewrite": null,
+          "more_claims": [],
+          "failure": null
+        },
+        "escalation": {
+          "matched_rules": [],
+          "disposition": "not_selected"
+        },
+        "verification": null,
+        "suggested_edits": null
+      }
+    ],
+    "citations": [
+      {
+        "index": 0,
+        "reference": "a report from the ministry",
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "statement": null,
+        "quotes": [],
+        "position": null,
+        "result": null,
+        "check": {
+          "status": "pending",
+          "page_read": null,
+          "page_title": null,
+          "page_published_date": null,
+          "page_language": null,
+          "source_url": null,
+          "source_version": null,
+          "support": null,
+          "snippet": null,
+          "rationale": null,
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      },
+      {
+        "index": 1,
+        "reference": "a statement",
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "statement": null,
+        "quotes": [],
+        "position": null,
+        "result": null,
+        "check": {
+          "status": "pending",
+          "page_read": null,
+          "page_title": null,
+          "page_published_date": null,
+          "page_language": null,
+          "source_url": null,
+          "source_version": null,
+          "support": null,
+          "snippet": null,
+          "rationale": null,
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "more_claim_locations": [],
+    "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

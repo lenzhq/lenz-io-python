@@ -1,0 +1,25 @@
+{
+  "error": {
+    "cause": "This account has used its extractions for today. The daily allowance is shared with the Lenz API. It resets at 00:00 UTC.",
+    "code": "extract_daily_limit",
+    "doc_url": "https://lenz.io/docs/rate-limits",
+    "fix": "Wait Retry-After seconds and retry.",
+    "friendly_text": "This account has used its extractions for today. The daily allowance is shared with the Lenz API. It resets at 00:00 UTC.\n  Fix: Wait Retry-After seconds and retry.",
+    "limit": 1000,
+    "message": "This account has used its extractions for today. The daily allowance is shared with the Lenz API. It resets at 00:00 UTC.",
+    "payload_json": {
+      "error": {
+        "code": "rate_limited",
+        "fix": "Wait Retry-After seconds and retry.",
+        "message": "This account has used its extractions for today. The daily allowance is shared with the Lenz API. It resets at 00:00 UTC.",
+        "status": 429
+      }
+    },
+    "request_id": "",
+    "reset_in_seconds": 777,
+    "retry_after": 777,
+    "status_code": 429,
+    "type": "LenzRateLimitError",
+    "upgrade_url": "https://lenz.io/plans"
+  }
+}

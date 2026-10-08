@@ -1,0 +1,15 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "delivered_at": "",
+    "event": "review.completed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "review": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "ReviewEvent",
+    "verification_id": null
+  }
+}

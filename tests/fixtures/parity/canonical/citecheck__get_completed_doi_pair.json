@@ -1,0 +1,76 @@
+{
+  "status": 200,
+  "body": {
+    "citecheck_id": "8eb49302",
+    "status": "completed",
+    "outcome": "clean",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "language": "en",
+    "poll_after_seconds": null,
+    "policy": {
+      "max_citations": 1
+    },
+    "summary": {
+      "citations_found": 1,
+      "citations_selected": 1,
+      "citation_limit": 1,
+      "citation_limit_exceeded": false,
+      "citation_checks": {
+        "checked": 1,
+        "unchecked": 0,
+        "failed": 0
+      },
+      "citation_issues": 0
+    },
+    "credits": {
+      "charged": 1
+    },
+    "citations": [
+      {
+        "index": 0,
+        "reference": "10.1038/nature12373",
+        "cited_url": "https://doi.org/10.1038/nature12373",
+        "doi": "10.1038/nature12373",
+        "statement": "Diamond sensors measure heat in cells.",
+        "quotes": [],
+        "position": null,
+        "result": {
+          "finding": "supported",
+          "source": "support",
+          "is_issue": false
+        },
+        "check": {
+          "status": "completed",
+          "page_read": "full",
+          "page_title": "Page at None",
+          "page_published_date": null,
+          "page_language": "en",
+          "source_url": null,
+          "source_version": null,
+          "support": "supported",
+          "snippet": "The source says so.",
+          "rationale": "The page states it.",
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      }
+    ],
+    "citation_issues": [],
+    "citation_failures": [],
+    "failure": null,
+    "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

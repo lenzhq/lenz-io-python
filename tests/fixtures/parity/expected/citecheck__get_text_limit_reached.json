@@ -1,0 +1,176 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": {
+          "end": 110,
+          "start": 0,
+          "text": null
+        },
+        "quotes": [],
+        "reference": "a report from the ministry",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [
+      {
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": {
+          "end": 178,
+          "start": 111,
+          "text": null
+        },
+        "reference": "a statement",
+        "sentence": "The agency said so in a statement."
+      }
+    ],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 1
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 1,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 1,
+      "citation_limit_reached": true,
+      "citations_found": 2,
+      "citations_selected": 1
+    }
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": {
+          "end": 110,
+          "start": 0,
+          "text": null
+        },
+        "quotes": [],
+        "reference": "a report from the ministry",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [
+      {
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": {
+          "end": 178,
+          "start": 111,
+          "text": null
+        },
+        "reference": "a statement",
+        "sentence": "The agency said so in a statement."
+      }
+    ],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 1
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 1,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 1,
+      "citation_limit_reached": true,
+      "citations_found": 2,
+      "citations_selected": 1
+    }
+  },
+  "exit_code": 0,
+  "render": "Citation check 8eb49302: clean — 1 credit charged\n\n2 sources cited in your draft\n1 checked.\n1 more was not checked: one check covers 1.\n\nNo issues.\n\n1 more citation was found but not checked.\n",
+  "render_json": null,
+  "repr": "Citecheck(citecheck_id='8eb49302', status='completed', outcome='clean', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', poll_after_seconds=None, policy=CitecheckPolicy(max_citations=1), summary=CitecheckSummary(citations_found=2, citations_selected=1, citation_limit=1, citation_limit_reached=True, citation_checks=ReviewCitationCheckCounts(checked=1, unchecked=0, failed=0), citation_issues=0), credits=ReviewCredits(charged=1), citations=[ReviewCitation(index=0, reference='a report from the ministry', cited_url='https://example.gov/report-2024', doi=None, statement='Unemployment fell to 4.1% in 2024, according to a report from the ministry.', quotes=[], position=Position(start=0, end=110, text=None), result=ReviewCitationResult(finding='supported', source='support', is_issue=False), check=ReviewCitationCheck(status='completed', page_read='full', page_title='Page at https://example.gov/report-2024', page_published_date=None, page_language='en', source_url='https://example.gov/report-2024', source_version=None, support='supported', snippet='The source says so.', rationale='The page states it.', quote=None, missing_quote=None, doi_registered=None, metadata=None, metadata_differences=[], registered=None, unchecked_reason=None, hint=None, failure=None))], citation_issues=[], citation_failures=[], more_citations=[ReviewMoreCitation(index=1, reference='a statement', cited_url='https://example.org/statement', doi=None, sentence='The agency said so in a statement.', position=Position(start=111, end=178, text=None))], failure=None, language='en')"
+}

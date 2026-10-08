@@ -1,0 +1,27 @@
+{
+  "status": 200,
+  "body": {
+    "event": "verification.needs_input",
+    "verification_id": null,
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "batch_id": null,
+    "status": "needs_input",
+    "result": null,
+    "needs_input": {
+      "reason": "multi_claim",
+      "claims": [
+        {
+          "text": "The Eiffel Tower is in Berlin.",
+          "domain": ""
+        }
+      ],
+      "hint": null
+    },
+    "error": null,
+    "coverage": null,
+    "review_id": null,
+    "attempt": 1,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
+}

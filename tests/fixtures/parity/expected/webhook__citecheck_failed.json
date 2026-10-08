@@ -1,0 +1,48 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "citecheck": {
+      "citation_failures": [],
+      "citation_issues": [],
+      "citations": [],
+      "citecheck_id": "8eb49302",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "created_at": "2026-10-01T09:07:00.123456Z",
+      "credits": {
+        "charged": 0
+      },
+      "failure": {
+        "docs_url": "https://lenz.io/docs/errors#invalid-input",
+        "failure_class": "invalid_input",
+        "failure_reason": "no_citations",
+        "hint": "The text has no citation to check: no link, DOI or numbered reference with one.",
+        "retryable": false
+      },
+      "language": "en",
+      "more_citations": null,
+      "outcome": "unchecked",
+      "policy": {
+        "max_citations": 20
+      },
+      "poll_after_seconds": null,
+      "status": "failed",
+      "summary": {
+        "citation_checks": null,
+        "citation_issues": 0,
+        "citation_limit": 20,
+        "citation_limit_reached": null,
+        "citations_found": null,
+        "citations_selected": null
+      }
+    },
+    "citecheck_id": "8eb49302",
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
+    "event": "citecheck.failed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "CitecheckEvent",
+    "verification_id": null
+  }
+}

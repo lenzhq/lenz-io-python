@@ -1,0 +1,12 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "claims[1] is 2001 characters; each claim may be at most 2000. Send a document to /extract first, then assess its claims.",
+    "code": "item_too_long"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

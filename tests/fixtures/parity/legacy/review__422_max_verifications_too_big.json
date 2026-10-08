@@ -1,0 +1,23 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.escalate.max_verifications: Input should be less than or equal to 20",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "max_verifications"
+        ],
+        "msg": "Input should be less than or equal to 20"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

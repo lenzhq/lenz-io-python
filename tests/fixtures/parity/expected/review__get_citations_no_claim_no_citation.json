@@ -1,0 +1,127 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 0
+    },
+    "failure": {
+      "docs_url": "https://lenz.io/docs/errors#invalid-input",
+      "failure_class": "invalid_input",
+      "failure_reason": "no_claim",
+      "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "retryable": false
+    },
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": null,
+    "more_claim_locations": null,
+    "more_claims": null,
+    "outcome": "unchecked",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 20,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "failed",
+    "summary": {
+      "assessments": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": 20,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": null,
+      "claims_selected": null,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": null
+    },
+    "view": "full"
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 0
+    },
+    "failure": {
+      "docs_url": "https://lenz.io/docs/errors#invalid-input",
+      "failure_class": "invalid_input",
+      "failure_reason": "no_claim",
+      "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "retryable": false
+    },
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": null,
+    "more_claim_locations": null,
+    "more_claims": null,
+    "outcome": "unchecked",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 20,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "failed",
+    "summary": {
+      "assessments": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": 20,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": null,
+      "claims_selected": null,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": null
+    },
+    "view": "full"
+  },
+  "exit_code": 2,
+  "render": "Review d6b2bd72: unchecked — no claims checked · 0 credits charged\nFailed: No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run\nthe text through /extract to enumerate its claims.\n",
+  "render_issues": "Review d6b2bd72: unchecked — no claims checked · 0 credits charged\nFailed: No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run\nthe text through /extract to enumerate its claims.\n",
+  "render_json": null,
+  "repr": "ReviewFull(review_id='d6b2bd72', view='full', status='failed', outcome='unchecked', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', language='en', policy=EscalationPolicy(verdicts=['False', 'Mostly False', 'Mixed'], confidence=['low'], max_assessments=20, max_verifications=5, depth='standard', max_citations=20, suggest_edits=False), summary=ReviewSummary(claims_selected=None, claim_limit=20, claim_limit_reached=None, input_truncated=False, assessments=None, verifications=None, issues=0, citations_found=None, citations_selected=None, citation_limit=20, citation_limit_reached=None, citation_checks=None, citation_issues=0, citations_skipped=None), credits=ReviewCredits(charged=0), poll_after_seconds=None, issues=[], failures=[], citation_issues=[], citation_failures=[], more_claims=None, more_claim_locations=None, more_citations=None, failure=FailureBlock(failure_reason='no_claim', failure_class='invalid_input', retryable=False, hint='No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.', docs_url='https://lenz.io/docs/errors#invalid-input'), claims=[], citations=[])"
+}

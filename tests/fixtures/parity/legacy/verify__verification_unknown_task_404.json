@@ -1,0 +1,12 @@
+{
+  "status": 404,
+  "body": {
+    "detail": "Not found.",
+    "hint": "Unknown id. If this is a task_id, poll GET /verify/status/dddddddddddddddddddddddddddddddd for its status."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

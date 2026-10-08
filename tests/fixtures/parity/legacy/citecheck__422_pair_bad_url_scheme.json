@@ -1,0 +1,24 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.pairs.0.url: Value error, url: an http or https link",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0,
+          "url"
+        ],
+        "msg": "Value error, url: an http or https link"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

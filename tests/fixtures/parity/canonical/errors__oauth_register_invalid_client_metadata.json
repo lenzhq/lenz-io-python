@@ -1,0 +1,12 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid_client_metadata",
+    "error_description": "token_endpoint_auth_method must be none: Lenz registers public clients that use PKCE."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

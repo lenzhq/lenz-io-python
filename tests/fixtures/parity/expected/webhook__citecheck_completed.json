@@ -1,0 +1,135 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "citecheck": {
+      "citation_failures": [],
+      "citation_issues": [
+        {
+          "citation_index": 0,
+          "cited_url": "https://example.gov/report-2024",
+          "doi": null,
+          "failure": null,
+          "finding": "contradicted",
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_title": "Page at https://example.gov/report-2024",
+          "position": null,
+          "quotes": [],
+          "rationale": "The page states it.",
+          "reference": "https://example.gov/report-2024",
+          "snippet": "The source says so.",
+          "source": "support",
+          "statement": "Unemployment fell to 4.1% in 2024."
+        }
+      ],
+      "citations": [
+        {
+          "check": {
+            "doi_registered": null,
+            "failure": null,
+            "hint": null,
+            "metadata": null,
+            "metadata_differences": [],
+            "missing_quote": null,
+            "page_language": "en",
+            "page_published_date": null,
+            "page_read": "full",
+            "page_title": "Page at https://example.gov/report-2024",
+            "quote": null,
+            "rationale": "The page states it.",
+            "registered": null,
+            "snippet": "The source says so.",
+            "source_url": "https://example.gov/report-2024",
+            "source_version": null,
+            "status": "completed",
+            "support": "contradicted",
+            "unchecked_reason": null
+          },
+          "cited_url": "https://example.gov/report-2024",
+          "doi": null,
+          "index": 0,
+          "position": null,
+          "quotes": [],
+          "reference": "https://example.gov/report-2024",
+          "result": {
+            "finding": "contradicted",
+            "is_issue": true,
+            "source": "support"
+          },
+          "statement": "Unemployment fell to 4.1% in 2024."
+        },
+        {
+          "check": {
+            "doi_registered": null,
+            "failure": null,
+            "hint": null,
+            "metadata": null,
+            "metadata_differences": [],
+            "missing_quote": null,
+            "page_language": "en",
+            "page_published_date": null,
+            "page_read": "full",
+            "page_title": "Page at https://example.org/statement",
+            "quote": null,
+            "rationale": "The page states it.",
+            "registered": null,
+            "snippet": "The source says so.",
+            "source_url": "https://example.org/statement",
+            "source_version": null,
+            "status": "completed",
+            "support": "supported",
+            "unchecked_reason": null
+          },
+          "cited_url": "https://example.org/statement",
+          "doi": null,
+          "index": 1,
+          "position": null,
+          "quotes": [],
+          "reference": "https://example.org/statement",
+          "result": {
+            "finding": "supported",
+            "is_issue": false,
+            "source": "support"
+          },
+          "statement": "The agency said so in a statement."
+        }
+      ],
+      "citecheck_id": "8eb49302",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "created_at": "2026-10-01T09:07:00.123456Z",
+      "credits": {
+        "charged": 2
+      },
+      "failure": null,
+      "language": "en",
+      "more_citations": [],
+      "outcome": "issues_found",
+      "policy": {
+        "max_citations": 2
+      },
+      "poll_after_seconds": null,
+      "status": "completed",
+      "summary": {
+        "citation_checks": {
+          "checked": 2,
+          "failed": 0,
+          "unchecked": 0
+        },
+        "citation_issues": 1,
+        "citation_limit": 2,
+        "citation_limit_reached": false,
+        "citations_found": 2,
+        "citations_selected": 2
+      }
+    },
+    "citecheck_id": "8eb49302",
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
+    "event": "citecheck.completed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "status": "completed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "CitecheckEvent",
+    "verification_id": null
+  }
+}

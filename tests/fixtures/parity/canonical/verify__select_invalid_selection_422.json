@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Selected text was not one of the offered claims: 'The Moon is made of cheese.'",
+    "code": "invalid_selection",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "claims"
+        ],
+        "msg": "Selected text was not one of the offered claims: 'The Moon is made of cheese.'",
+        "type": "invalid_selection"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

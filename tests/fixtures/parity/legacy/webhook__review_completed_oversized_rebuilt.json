@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "body": {
+    "event": "review.completed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "review_id": "d6b2bd72",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "status": "completed"
+  },
+  "headers": {}
+}

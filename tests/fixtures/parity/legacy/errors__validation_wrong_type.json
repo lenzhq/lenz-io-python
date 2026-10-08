@@ -1,0 +1,21 @@
+{
+  "status": 422,
+  "body": {
+    "detail": [
+      {
+        "type": "string_type",
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Input should be a valid string"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

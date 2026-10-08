@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "Citation check not found.",
+    "code": "not_found",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "Citation check not found.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "Citation check not found.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "Citation check not found.",
+        "status": 404
+      }
+    },
+    "request_id": "",
+    "status_code": 404,
+    "type": "LenzError"
+  }
+}

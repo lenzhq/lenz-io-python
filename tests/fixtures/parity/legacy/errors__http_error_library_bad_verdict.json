@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Invalid verdict label(s). Allowed: False, Mostly False, Mixed, Mostly True, True"
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at None",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": null,
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://doi.org/10.1038/nature12373",
+        "doi": "10.1038/nature12373",
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "10.1038/nature12373",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Diamond sensors measure heat in cells."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 1
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 1,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 1,
+      "citation_limit_reached": false,
+      "citations_found": 1,
+      "citations_selected": 1
+    }
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": "en",
+          "page_published_date": null,
+          "page_read": "full",
+          "page_title": "Page at None",
+          "quote": null,
+          "rationale": "The page states it.",
+          "registered": null,
+          "snippet": "The source says so.",
+          "source_url": null,
+          "source_version": null,
+          "status": "completed",
+          "support": "supported",
+          "unchecked_reason": null
+        },
+        "cited_url": "https://doi.org/10.1038/nature12373",
+        "doi": "10.1038/nature12373",
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "10.1038/nature12373",
+        "result": {
+          "finding": "supported",
+          "is_issue": false,
+          "source": "support"
+        },
+        "statement": "Diamond sensors measure heat in cells."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": "clean",
+    "policy": {
+      "max_citations": 1
+    },
+    "poll_after_seconds": null,
+    "status": "completed",
+    "summary": {
+      "citation_checks": {
+        "checked": 1,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 1,
+      "citation_limit_reached": false,
+      "citations_found": 1,
+      "citations_selected": 1
+    }
+  },
+  "exit_code": 0,
+  "render": "Citation check 8eb49302: clean — 1 credit charged\n\n1 source cited in your draft\n1 checked.\n\nNo issues.\n",
+  "render_json": null,
+  "repr": "Citecheck(citecheck_id='8eb49302', status='completed', outcome='clean', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', poll_after_seconds=None, policy=CitecheckPolicy(max_citations=1), summary=CitecheckSummary(citations_found=1, citations_selected=1, citation_limit=1, citation_limit_reached=False, citation_checks=ReviewCitationCheckCounts(checked=1, unchecked=0, failed=0), citation_issues=0), credits=ReviewCredits(charged=1), citations=[ReviewCitation(index=0, reference='10.1038/nature12373', cited_url='https://doi.org/10.1038/nature12373', doi='10.1038/nature12373', statement='Diamond sensors measure heat in cells.', quotes=[], position=None, result=ReviewCitationResult(finding='supported', source='support', is_issue=False), check=ReviewCitationCheck(status='completed', page_read='full', page_title='Page at None', page_published_date=None, page_language='en', source_url=None, source_version=None, support='supported', snippet='The source says so.', rationale='The page states it.', quote=None, missing_quote=None, doi_registered=None, metadata=None, metadata_differences=[], registered=None, unchecked_reason=None, hint=None, failure=None))], citation_issues=[], citation_failures=[], more_citations=[], failure=None, language='en')"
+}

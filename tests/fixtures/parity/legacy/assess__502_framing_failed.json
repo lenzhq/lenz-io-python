@@ -1,0 +1,13 @@
+{
+  "status": 502,
+  "body": {
+    "detail": "Framing failed",
+    "code": "framing_failed",
+    "error": "framing_failed"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

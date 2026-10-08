@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "focus must be at most 300 characters of plain text.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "focus must be at most 300 characters of plain text.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "focus must be at most 300 characters of plain text.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "focus must be at most 300 characters of plain text.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

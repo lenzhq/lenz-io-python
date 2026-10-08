@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "claims is required.",
+    "code": "blank_input",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "claims"
+        ],
+        "msg": "claims is required.",
+        "type": "blank_input"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

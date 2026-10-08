@@ -1,0 +1,26 @@
+{
+  "error": {
+    "cause": "This check failed and has no result.",
+    "code": "verification_failed",
+    "doc_url": "https://lenz.io/docs/errors#invalid-input",
+    "failure_class": "invalid_input",
+    "failure_reason": "not_a_claim",
+    "fix": "Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+    "friendly_text": "This check failed and has no result.\n  Fix: Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+    "hint": "Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+    "message": "This check failed and has no result.",
+    "payload_json": {
+      "error": {
+        "code": "pipeline_failed",
+        "fix": "Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+        "message": "This check failed and has no result.",
+        "status": 409
+      }
+    },
+    "request_id": "",
+    "retryable": false,
+    "status_code": 409,
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "LenzPipelineError"
+  }
+}

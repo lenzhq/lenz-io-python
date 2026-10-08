@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "Invalid curated list(s). Allowed: trivia"
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

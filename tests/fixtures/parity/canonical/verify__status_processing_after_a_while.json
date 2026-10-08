@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "status": "processing",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "progress": {
+      "step": "adjudication",
+      "index": 4,
+      "total": 5,
+      "elapsed_seconds": 1,
+      "poll_after_seconds": 5
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

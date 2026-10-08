@@ -1,0 +1,68 @@
+{
+  "citecheck_default": {
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel."
+  },
+  "citecheck_pairs": {
+    "language": "fr",
+    "pairs": [
+      {
+        "statement": "The tower is in Paris.",
+        "url": "https://example.org/eiffel"
+      }
+    ]
+  },
+  "citecheck_webhook_empty": {
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "webhook_url": ""
+  },
+  "citecheck_webhook_url": {
+    "max_citations": 4,
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "webhook_url": "https://hooks.example.test/x"
+  },
+  "review_default": {
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "visibility": "private"
+  },
+  "review_options": {
+    "escalate": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "low",
+      "max_assessments": 5,
+      "max_citations": 3,
+      "max_verifications": 2,
+      "suggest_edits": true,
+      "verdicts": [
+        "False"
+      ]
+    },
+    "language": "de",
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "visibility": "unlisted"
+  },
+  "review_webhook_empty": {
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "visibility": "private",
+    "webhook_url": ""
+  },
+  "review_webhook_url": {
+    "text": "The Eiffel Tower is in Berlin. See https://example.org/eiffel.",
+    "visibility": "private",
+    "webhook_url": "https://hooks.example.test/x"
+  },
+  "verify_batch_webhook_url": {
+    "claims": [
+      {
+        "text": "The Earth is round."
+      }
+    ],
+    "webhook_url": "https://hooks.example.test/x"
+  },
+  "verify_webhook_url": {
+    "source_url": "",
+    "text": "The Earth is round.",
+    "webhook_url": "https://hooks.example.test/x"
+  }
+}

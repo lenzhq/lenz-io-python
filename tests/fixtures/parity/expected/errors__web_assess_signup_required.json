@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "Sign up to check this — it’s free.",
+    "code": "signup_required",
+    "doc_url": "https://lenz.io/docs/auth",
+    "fix": "This key doesn't have access to that resource.",
+    "friendly_text": "Sign up to check this — it’s free.\n  Fix: This key doesn't have access to that resource.",
+    "message": "Sign up to check this — it’s free.",
+    "payload_json": {
+      "error": {
+        "code": "unauthorized",
+        "fix": "This key doesn't have access to that resource.",
+        "message": "Sign up to check this — it’s free.",
+        "status": 403
+      }
+    },
+    "request_id": "",
+    "status_code": 403,
+    "type": "LenzAuthError"
+  }
+}

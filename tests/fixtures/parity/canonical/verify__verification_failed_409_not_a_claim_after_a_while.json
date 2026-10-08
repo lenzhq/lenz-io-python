@@ -1,0 +1,23 @@
+{
+  "status": 409,
+  "body": {
+    "detail": "This check failed and has no result.",
+    "code": "verification_failed",
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.",
+    "failure": {
+      "code": "no_checkable_claim",
+      "detail": "No claim in the input could be checked against public evidence.",
+      "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "failure_class": "invalid_input",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#invalid-input"
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

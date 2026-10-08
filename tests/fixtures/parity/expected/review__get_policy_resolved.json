@@ -1,0 +1,187 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "error_code": null,
+          "failure": null,
+          "hint": null,
+          "identified_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 0,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "clean",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "low",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 2,
+      "suggest_edits": false,
+      "verdicts": [
+        "False"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 1,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 1,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "error_code": null,
+          "failure": null,
+          "hint": null,
+          "identified_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 0,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "2026-10-01T10:07:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "clean",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "low",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 2,
+      "suggest_edits": false,
+      "verdicts": [
+        "False"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 1,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 1,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "exit_code": 0,
+  "render": "Review d6b2bd72: clean — 1 claim: 1 true or mostly true · 1 credit charged\n\n[1/1] The EU AI Act took effect in March 2024.\n  True (high) · quick check\n",
+  "render_issues": "Review d6b2bd72: clean — 1 claim: 1 true or mostly true · 1 credit charged\n\nNo issues.\n",
+  "render_json": null,
+  "repr": "ReviewFull(review_id='d6b2bd72', view='full', status='completed', outcome='clean', created_at='2026-10-01T09:07:00.123456Z', completed_at='2026-10-01T10:07:00.123456Z', language='en', policy=EscalationPolicy(verdicts=['False'], confidence=['low'], max_assessments=20, max_verifications=2, depth='low', max_citations=0, suggest_edits=False), summary=ReviewSummary(claims_selected=1, claim_limit=20, claim_limit_reached=False, input_truncated=False, assessments=ReviewAssessmentCounts(completed=1, failed=0), verifications=ReviewVerificationCounts(planned=0, completed=0, failed=0), issues=0, citations_found=None, citations_selected=None, citation_limit=None, citation_limit_reached=None, citation_checks=None, citation_issues=0, citations_skipped=None), credits=ReviewCredits(charged=1), poll_after_seconds=None, issues=[], failures=[], citation_issues=[], citation_failures=[], more_claims=[], more_claim_locations=[], more_citations=[], failure=None, claims=[ReviewClaim(index=0, claim='The EU AI Act took effect in March 2024.', positions=None, result=ReviewResult(verdict='True', confidence='high', source='assessment', is_issue=False), assessment=ReviewAssessment(status='completed', verdict='True', confidence='high', rationale=None, dissent=None, verification_url=None, error_code=None, identified_claims=[], hint=None, suggested_rewrite=None, failure=None), escalation=Escalation(matched_rules=[], disposition='not_selected'), verification=None, suggested_edits=None)], citations=[])"
+}

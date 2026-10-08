@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "The access token does not allow this call.",
+    "code": "insufficient_scope",
+    "doc_url": "https://lenz.io/docs/auth",
+    "fix": "This key doesn't have access to that resource.",
+    "friendly_text": "The access token does not allow this call.\n  Fix: This key doesn't have access to that resource.",
+    "message": "The access token does not allow this call.",
+    "payload_json": {
+      "error": {
+        "code": "unauthorized",
+        "fix": "This key doesn't have access to that resource.",
+        "message": "The access token does not allow this call.",
+        "status": 403
+      }
+    },
+    "request_id": "",
+    "status_code": 403,
+    "type": "LenzAuthError"
+  }
+}

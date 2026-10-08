@@ -1,0 +1,66 @@
+{
+  "status": 200,
+  "body": {
+    "plan": "pro",
+    "plan_label": "Pro",
+    "quota_resets_at": "2026-10-01T14:07:00.123456+00:00",
+    "credits": {
+      "total": 6000,
+      "used": 0,
+      "remaining": 6000,
+      "extra": 1000,
+      "bonus": 1000,
+      "resets_at": "2026-10-01T14:07:00.123456+00:00"
+    },
+    "costs": {
+      "verify": 10,
+      "assess": 1,
+      "ask": 1,
+      "citation": 1,
+      "extract": 0
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "standard": 10,
+          "low": 5
+        }
+      }
+    },
+    "verify": {
+      "quota_used": 0,
+      "quota_total": 600,
+      "quota_remaining": 600,
+      "bonus": 100,
+      "credits": 100,
+      "remaining": 600
+    },
+    "ask": {
+      "quota_used": 0,
+      "quota_total": 6000,
+      "quota_remaining": 6000,
+      "bonus": 1000,
+      "credits": 1000,
+      "remaining": 6000
+    },
+    "assess": {
+      "quota_used": 0,
+      "quota_total": 6000,
+      "quota_remaining": 6000,
+      "bonus": 1000,
+      "credits": 1000,
+      "remaining": 6000
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

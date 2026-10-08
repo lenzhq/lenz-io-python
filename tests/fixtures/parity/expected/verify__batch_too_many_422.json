@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Batch size exceeds maximum of 20.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Batch size exceeds maximum of 20.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Batch size exceeds maximum of 20.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Batch size exceeds maximum of 20.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

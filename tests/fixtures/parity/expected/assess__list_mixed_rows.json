@@ -1,0 +1,131 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "hello there",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "vendor is down",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "upstream_unavailable",
+        "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "cannot frame",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "framing_failed",
+        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "error_code": "",
+    "more_claims": []
+  },
+  "dump_unset": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "hello there",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "vendor is down",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "upstream_unavailable",
+        "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "cannot frame",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "framing_failed",
+        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "render": "True (high) — Water boils at 100 C at sea level.\nError (no_claim) — hello there\n    The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\nError (upstream_unavailable) — vendor is down\n    A model provider was unavailable for this item. Retry it; nothing was charged.\nError (framing_failed) — cannot frame\n    This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; \nnothing was charged.\n",
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Water boils at 100 C at sea level.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    },\n    {\n      \"claim\": \"hello there\",\n      \"language\": \"en\",\n      \"verdict\": \"Error\",\n      \"confidence\": \"low\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": \"no_claim\",\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": \"The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\"\n    },\n    {\n      \"claim\": \"vendor is down\",\n      \"language\": \"en\",\n      \"verdict\": \"Error\",\n      \"confidence\": \"low\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": \"upstream_unavailable\",\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": \"A model provider was unavailable for this item. Retry it; nothing was charged.\"\n    },\n    {\n      \"claim\": \"cannot frame\",\n      \"language\": \"en\",\n      \"verdict\": \"Error\",\n      \"confidence\": \"low\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": \"framing_failed\",\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": \"This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.\"\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[AssessClaim(claim='Water boils at 100 C at sea level.', language='en', verdict='True', confidence='high', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None), AssessClaim(claim='hello there', language='en', verdict='Error', confidence='low', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code='no_claim', candidate_claims=[], identified_claims=[], hint='The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.'), AssessClaim(claim='vendor is down', language='en', verdict='Error', confidence='low', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code='upstream_unavailable', candidate_claims=[], identified_claims=[], hint='A model provider was unavailable for this item. Retry it; nothing was charged.'), AssessClaim(claim='cannot frame', language='en', verdict='Error', confidence='low', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code='framing_failed', candidate_claims=[], identified_claims=[], hint='This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.')], error=None, error_code='', candidate_claims=[], more_claims=[])"
+}

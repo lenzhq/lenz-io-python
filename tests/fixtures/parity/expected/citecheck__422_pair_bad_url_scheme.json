@@ -1,0 +1,33 @@
+{
+  "error": {
+    "cause": "payload.pairs.0.url: Value error, url: an http or https link",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0,
+          "url"
+        ],
+        "msg": "Value error, url: an http or https link"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.pairs.0.url: Value error, url: an http or https link\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.pairs.0.url: Value error, url: an http or https link",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.pairs.0.url: Value error, url: an http or https link",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

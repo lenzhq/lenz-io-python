@@ -1,0 +1,19 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claims": [],
+    "error": "No verifiable claim detected",
+    "error_code": "no_claim",
+    "more_claims": []
+  },
+  "dump_unset": {
+    "candidate_claims": [],
+    "claims": [],
+    "error": "No verifiable claim detected",
+    "error_code": "no_claim",
+    "more_claims": []
+  },
+  "render": "No claim found.\n",
+  "render_json": "{\n  \"claims\": [],\n  \"error\": \"No verifiable claim detected\",\n  \"error_code\": \"no_claim\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[], error='No verifiable claim detected', error_code='no_claim', candidate_claims=[], more_claims=[])"
+}

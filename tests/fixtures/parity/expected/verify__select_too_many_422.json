@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Cannot select more than 20 claims.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Cannot select more than 20 claims.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Cannot select more than 20 claims.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Cannot select more than 20 claims.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

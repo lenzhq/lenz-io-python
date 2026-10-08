@@ -1,0 +1,23 @@
+{
+  "status": 422,
+  "body": {
+    "detail": "payload.escalate.max_assessments: Input should be greater than or equal to 0",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "max_assessments"
+        ],
+        "msg": "Input should be greater than or equal to 0"
+      }
+    ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

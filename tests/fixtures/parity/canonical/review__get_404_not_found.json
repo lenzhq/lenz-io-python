@@ -1,0 +1,12 @@
+{
+  "status": 404,
+  "body": {
+    "detail": "Review not found.",
+    "code": "not_found"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}
