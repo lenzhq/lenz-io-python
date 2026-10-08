@@ -212,9 +212,9 @@ class ReviewEvent(WebhookEvent):
 
     Deduplicate on ``event_id``: it is the same on every delivery attempt of
     one event, while ``attempt`` counts up. ``task_id`` (deprecated)
-    identifies the delivery and cannot be polled on ``/verify/status``; a
-    payload that does not carry it reads ``event_id`` there. The deep checks a
-    review runs send no ``verification.*`` events of their own.
+    identifies the delivery and cannot be polled on ``/verify/status``; it is
+    ``""`` on a payload that does not carry it (the newer shape). The deep
+    checks a review runs send no ``verification.*`` events of their own.
     """
 
     event_id: str = ""
@@ -231,8 +231,8 @@ class CitecheckEvent(WebhookEvent):
     returns), or ``None`` if it could not be parsed (``raw["citecheck"]``
     still has it). Deduplicate on ``event_id``: it is the same on every
     delivery attempt of one event. ``task_id`` (deprecated) identifies the
-    delivery and cannot be polled on ``/verify/status``; a payload that does
-    not carry it reads ``event_id`` there.
+    delivery and cannot be polled on ``/verify/status``; it is ``""`` on a
+    payload that does not carry it (the newer shape).
     """
 
     event_id: str = ""
@@ -340,7 +340,6 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             review = ReviewFull.model_validate(review_body) if isinstance(review_body, dict) else None
         except ValueError:
             review = None
-        common["task_id"] = task_id or event_id
         return ReviewEvent(
             **common,
             review_id=str(payload.get("review_id") or _dict(review_body).get("review_id") or ""),
@@ -352,7 +351,6 @@ def _build_event(payload: dict[str, Any]) -> WebhookEvent:
             check = Citecheck.model_validate(check_body) if isinstance(check_body, dict) else None
         except ValueError:
             check = None
-        common["task_id"] = task_id or event_id
         return CitecheckEvent(
             **common,
             citecheck_id=str(payload.get("citecheck_id") or _dict(check_body).get("citecheck_id") or ""),

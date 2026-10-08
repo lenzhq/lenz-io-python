@@ -32,7 +32,9 @@ on upgrade.
     `claim_limit_exceeded` and `citation_limit_exceeded`;
     `CitecheckSummary.citation_limit_exceeded`.
   - Webhooks: `event_id` on every event, `VerificationFailed.failure`,
-    `VerificationNeedsInput.reason` and `.claims`. `parse_webhook` and
+    `VerificationNeedsInput.reason` and `.claims`. A review or citation-check
+    event in the newer shape carries no `task_id` (it reads `""`; deduplicate
+    on `event_id`, as before). `parse_webhook` and
     `LenzWebhooks.parse` read the newer envelope too (`event`, `event_id`,
     the work's id, `status`, and the polled body under `verification` /
     `review` / `citecheck`).

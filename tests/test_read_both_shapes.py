@@ -297,10 +297,10 @@ def test_completed_webhook_result_from_both_shapes():
 
 
 @pytest.mark.parametrize("name", ["webhook__review_completed.json", "webhook__citecheck_completed.json"])
-def test_review_webhook_without_task_id_reads_event_id(name):
+def test_review_webhook_without_task_id(name):
     canonical = parse_webhook(load("canonical", name)["body"])
     assert isinstance(canonical, (ReviewEvent, CitecheckEvent))
-    assert canonical.task_id == canonical.event_id != ""
+    assert canonical.task_id == "" and canonical.event_id != ""
 
 
 # ── errors ──

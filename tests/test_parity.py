@@ -34,6 +34,12 @@ EXPECTED = FIXTURES / "expected"
 #
 # Each gap is allowed only where the two recorded responses themselves differ
 # in the value it comes from: a rule never excuses a difference the SDK made.
+# The categories are the ones the Node SDK allows, so the two behave alike:
+# the server's sentences (error / failure text), the codes and field errors it
+# sends on a 422, `chain_id`, the review / citation-check webhook `task_id`,
+# and a row hint the newer shape does not carry. The single entries in
+# ``KNOWN_GAPS`` below fall in those categories too, plus two where the two
+# recordings simply hold different ids.
 
 #: An exception's text fields: built from the body's ``detail``.
 _MESSAGE_PATHS = ("message", "cause", "friendly_text", "payload_json.error.message")
@@ -74,7 +80,7 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
     if path == "dump.chain_id" and "chain_id" in lb and "chain_id" not in cb:
         return "`chain_id` is not in the newer shape"
     if path == "event.task_id" and "task_id" in lb and "task_id" not in cb:
-        return "review/citecheck webhooks drop `task_id`; the event reads `event_id` there"
+        return "review/citecheck webhooks drop `task_id` (never pollable); dedupe on `event_id`"
     if path.startswith("event.result.") and name.startswith("webhook__verification_completed"):
         return "`result` is the dict as sent; the newer shape's carries `completed_at`"
     return KNOWN_GAPS.get((name, path))
