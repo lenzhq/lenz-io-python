@@ -1,0 +1,128 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": null,
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "credits": {
+      "charged": 12
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The Eiffel Tower is in Berlin.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": {
+          "edits": [
+            {
+              "end": 29,
+              "position": 0,
+              "replacement": "Paris",
+              "start": 23,
+              "text": "Berlin"
+            }
+          ],
+          "status": "completed"
+        },
+        "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
+        "url": "https://lenz.io/c/the-earth-is-round-7c83247c",
+        "verdict": "False",
+        "verification_id": "7c83247c",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/7c83247c",
+        "verified_claim": null
+      },
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 1,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": {
+          "edits": null,
+          "status": "pending"
+        },
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "processing",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": null,
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": true,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": 15,
+    "review_id": "d6b2bd72",
+    "status": "verifying",
+    "summary": {
+      "assessments": {
+        "completed": 2,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 0,
+        "planned": 2
+      }
+    },
+    "view": "issues"
+  },
+  "exit_code": 2,
+  "render": "Review d6b2bd72: verifying — 2 claims: 2 issues · 1 of 2 deep-checked · 12 credits charged\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_issues": "Review d6b2bd72: verifying — 2 claims: 2 issues · 1 of 2 deep-checked · 12 credits charged\n\n[1/2] The Eiffel Tower is in Berlin.\n  False (high) · deep check\n  Finding for The Eiffel Tower is in Berlin.\n  Suggested rewrite: Fixed: The Eiffel Tower is in Berlin.\n  https://lenz.io/c/the-earth-is-round-7c83247c\n\n[2/2] The EU AI Act took effect in March 2024.\n  False (high) · quick check\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_json": null
+}

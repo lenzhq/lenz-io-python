@@ -1,0 +1,40 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "hi",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "hello",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "error_code": "",
+    "more_claims": []
+  },
+  "render": "Error (no_claim) — hi\n    The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\nError (no_claim) — hello\n    The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\n",
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"hi\",\n      \"language\": \"en\",\n      \"verdict\": \"Error\",\n      \"confidence\": \"low\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": \"no_claim\",\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": \"The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\"\n    },\n    {\n      \"claim\": \"hello\",\n      \"language\": \"en\",\n      \"verdict\": \"Error\",\n      \"confidence\": \"low\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": \"no_claim\",\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": \"The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.\"\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n"
+}

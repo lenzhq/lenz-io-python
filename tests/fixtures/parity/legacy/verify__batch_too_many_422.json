@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Batch size exceeds maximum of 20."
+  }
+}

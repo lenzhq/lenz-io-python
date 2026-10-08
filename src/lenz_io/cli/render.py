@@ -109,15 +109,12 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
     if out.json_mode:
         out.emit_json(_model_json(result))
         return
-    # The server splits a claim set across two fields: the primary claim lands
-    # in ``claim`` and any extras in ``identified_claims``. Neither alone is the
-    # full list — the primary is usually NOT echoed into ``identified_claims`` —
-    # so render the union so the primary is never dropped (and the count is
-    # right). Single-claim input → just ``claim``.
-    primary = (getattr(result, "claim", "") or "").strip()
-    claims = [primary] if primary else []
-    for c in result.identified_claims or []:
-        c = (c or "").strip()
+    # ``claims`` is the whole list, from either response shape (the model
+    # builds it from ``claim`` + ``identified_claims`` when that is what the
+    # server sent). Blank and repeated entries are dropped.
+    claims: list[str] = []
+    for item in result.claims:
+        c = (item.claim or "").strip()
         if c and c not in claims:
             claims.append(c)
     if len(claims) > 1:
@@ -151,7 +148,7 @@ def _render_positions(out: Output, result: ExtractedClaims, claim: str, *, inden
     input, where there is nothing to index) and the passage itself. The
     passage is the user's own text, so it prints with ``markup=False``.
     """
-    for loc in result.locations or []:
+    for loc in result.claims:
         if (loc.claim or "").strip() != claim:
             continue
         for pos in loc.positions or []:
@@ -171,9 +168,10 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         return
     for c in claims:
         color = _VERDICT_COLOR.get(c.verdict, "white")
-        # An Error row (list form) names its cause in place of the confidence,
-        # which is meaningless there.
-        detail = c.error_code if c.verdict == "Error" and c.error_code else c.confidence
+        # A failed row (list form) names its cause in place of the confidence,
+        # which is meaningless there. ``error_code`` is the cause in its
+        # original spelling, from either response shape.
+        detail = c.error_code if c.status == "failed" and c.error_code else c.confidence
         out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({detail}) — {c.claim}")
         # The reviewers' notes, as plain text: `markup=False` because the
         # words are a model's, and a stray "[bold]" in them is not ours.
@@ -181,9 +179,9 @@ def render_assess(out: Output, result: AssessResponse) -> None:
             out.console.print(f"    {c.rationale}", markup=False, highlight=False)
         if c.dissent:
             out.console.print(f"    One reviewer disagreed: {c.dissent}", markup=False, highlight=False)
-        if c.identified_claims:
+        if c.more_claims:
             out.console.print("    [dim]also found:[/dim]")
-            for other in c.identified_claims:
+            for other in c.more_claims:
                 out.console.print(f"      • {other}")
         if c.hint:
             out.console.print(f"    [dim]{c.hint}[/dim]")
@@ -395,7 +393,7 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
         if st.claims:
             out.console.print("[dim]claims found:[/dim]")
             for i, claim in enumerate(st.claims, 1):
-                out.console.print(f"  {i}. {claim.text}")
+                out.console.print(f"  {i}. {claim.claim}")
         ref = task_id or "<task_id>"
         # Non-interactive resolution (agents/scripts): `--claim` picks by index
         # and `--detach` returns the spawned task_id(s) without blocking. Drop

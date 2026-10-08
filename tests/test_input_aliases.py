@@ -52,7 +52,8 @@ class TestVerify:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/verify").respond(202, json={"task_id": "tsk_1", "status": "queued"})
             client.verify(CLAIM)
-        assert _body(route) == {"text": CLAIM, "source_url": "", "webhook_url": ""}
+        # No ``webhook_url`` unless one was given: omitted means the key's default.
+        assert _body(route) == {"text": CLAIM, "source_url": ""}
 
 
 class TestVerifyBatch:

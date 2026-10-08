@@ -1,0 +1,31 @@
+{
+  "error": {
+    "cause": "payload.text: Field required",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Field required"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.text: Field required\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.text: Field required",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.text: Field required",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

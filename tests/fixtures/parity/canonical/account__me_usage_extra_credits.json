@@ -1,0 +1,40 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "plan": "free",
+    "plan_label": "Free",
+    "credits": {
+      "total": 350,
+      "used": 0,
+      "remaining": 350,
+      "extra": 250,
+      "resets_at": "2026-10-01T09:07:00+00:00"
+    },
+    "costs": {
+      "verify": 10,
+      "assess": 1,
+      "ask": 1,
+      "citation": 1,
+      "extract": 0
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "standard": 10,
+          "low": 5
+        }
+      }
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false
+  }
+}

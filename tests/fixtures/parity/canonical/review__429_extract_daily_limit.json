@@ -1,0 +1,17 @@
+{
+  "status": 429,
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "60",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Daily /extract limit of 1000 reached for this account. A review of a URL reads the page like /extract and counts as one /extract call.",
+    "code": "extract_daily_limit",
+    "limit": 1000,
+    "retry_after": 60,
+    "docs_url": "https://lenz.io/docs/errors#rate-limits",
+    "upgrade_url": "https://lenz.io/plans"
+  }
+}

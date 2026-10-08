@@ -1,0 +1,11 @@
+{
+  "status": 400,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Ask is only available for completed verifications."
+  }
+}

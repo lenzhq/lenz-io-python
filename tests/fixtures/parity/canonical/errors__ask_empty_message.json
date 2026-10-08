@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Message cannot be empty.",
+    "code": "blank_input",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "message"
+        ],
+        "msg": "Message cannot be empty.",
+        "type": "blank_input"
+      }
+    ]
+  }
+}

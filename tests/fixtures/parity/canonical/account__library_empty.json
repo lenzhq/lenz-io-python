@@ -1,0 +1,14 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "items": [],
+    "total": 0,
+    "page": 1,
+    "page_size": 20
+  }
+}

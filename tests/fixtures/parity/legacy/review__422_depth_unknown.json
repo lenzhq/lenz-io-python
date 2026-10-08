@@ -1,0 +1,23 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "payload.escalate.depth: Input should be 'standard' or 'low'",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "depth"
+        ],
+        "msg": "Input should be 'standard' or 'low'"
+      }
+    ]
+  }
+}

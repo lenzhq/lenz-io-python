@@ -1,0 +1,21 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "status": "no_checkable_claim",
+    "claims": [],
+    "failure": {
+      "code": "no_checkable_claim",
+      "detail": "No claim in the input could be checked against public evidence.",
+      "hint": "The input is a greeting, not a statement that can be checked. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "failure_class": "invalid_input",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#invalid-input"
+    },
+    "more_claims": []
+  }
+}

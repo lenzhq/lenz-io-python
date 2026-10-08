@@ -192,7 +192,9 @@ class LenzValidationError(LenzError):
     """422 — request body failed schema validation.
 
     ``errors`` is a list of per-field error dicts as returned by Ninja:
-    ``[{"loc": [...], "msg": "...", "type": "..."}]``.
+    ``[{"loc": [...], "msg": "...", "type": "..."}]``, read from the body's
+    ``detail`` list (the original response shape) or its ``errors`` list
+    (the newer one, where ``detail`` is a sentence and becomes the message).
     """
 
     errors: list[dict[str, Any]] = []  # noqa: RUF012 — overridden per-instance
@@ -202,7 +204,8 @@ class LenzRateLimitError(LenzError):
     """429 — rate limited.
 
       * ``retry_after``       — seconds until the next allowed call, resolved
-        from the ``Retry-After`` header or the body's ``reset_in_seconds``.
+        from the ``Retry-After`` header or the body's ``reset_in_seconds`` /
+        ``retry_after``.
       * ``limit``             — the cap that was hit, when the server states it.
       * ``reset_in_seconds``  — the body's raw echo of the same wait.
 
@@ -431,6 +434,10 @@ UPSTREAM_503_CODES = ("upstream_unavailable", "capacity")
 # inside a submit would block the caller, most likely into the same answer.
 NO_RETRY_429_CODES = ("review_in_flight",)
 
+# The 429s that refuse a submit while the account's earlier ones run. They
+# stated their wait as ``retry_after_seconds``, never ``reset_in_seconds``.
+_IN_FLIGHT_429_CODES = ("review_in_flight", "citecheck_in_flight")
+
 _STATUS_MAP: dict[int, tuple[type[LenzError], str, str]] = {
     401: (
         LenzAuthError,
@@ -561,18 +568,24 @@ def map_response_to_error(
     if status_code == 409 and isinstance(err, (LenzVerificationNotReadyError, LenzPipelineError)):
         # The generic 4xx advice ("retry; file an issue") is wrong for both:
         # the server's own hint says what to do, with a class default behind it.
+        # A failed run states its cause flat in the original response shape
+        # and in one ``failure`` block in the newer one; read both, flat first.
+        raw_failure = parsed.get("failure")
+        failure: dict[str, Any] = raw_failure if isinstance(raw_failure, dict) else {}
         err.task_id = _opt_str(parsed.get("task_id"))
-        err.hint = _opt_str(parsed.get("hint"))
+        err.hint = _opt_str(parsed.get("hint")) or _opt_str(failure.get("hint"))
         if isinstance(err, LenzVerificationNotReadyError):
             err.status = _opt_str(parsed.get("status"))
             err.fix = err.hint or "Wait for the run with client.wait(task_id), then read its result."
         else:
-            err.failure_reason = _opt_str(parsed.get("failure_reason"))
-            err.failure_class = _opt_str(parsed.get("failure_class"))
+            reason = _opt_str(parsed.get("failure_reason")) or _opt_str(failure.get("code"))
+            # The original spelling of "nothing checkable" on a verification.
+            err.failure_reason = "not_a_claim" if reason == "no_checkable_claim" else reason
+            err.failure_class = _opt_str(parsed.get("failure_class")) or _opt_str(failure.get("failure_class"))
             # Only a real boolean is a retry signal, as in the wait path.
-            retryable = parsed.get("retryable")
+            retryable = parsed.get("retryable", failure.get("retryable"))
             err.retryable = retryable if isinstance(retryable, bool) else None
-            err.doc_url = _opt_str(parsed.get("docs_url")) or err.doc_url
+            err.doc_url = _opt_str(parsed.get("docs_url")) or _opt_str(failure.get("docs_url")) or err.doc_url
             if err.hint:
                 err.fix = err.hint
             elif err.retryable:
@@ -609,6 +622,12 @@ def map_response_to_error(
         # sending null precisely so "unknown" stays distinguishable from
         # "zero". Collapsing that here would throw the distinction away.
         err.remaining = _opt_int(parsed.get("remaining"))
+        if err.remaining is None and "remaining" not in parsed and "requested" not in parsed:
+            # A body without the capability figure (the newer response shape
+            # on some endpoints): the pool divided by this one call's price.
+            pool, price = _opt_int(parsed.get("credits_remaining")), _opt_int(parsed.get("cost"))
+            if pool is not None and price:
+                err.remaining = pool // price
         err.requested = _opt_int(parsed.get("requested"))
         # The pool behind the capability figure above, and this call's price in
         # credits. The body's ``credits_remaining`` lands on ``credit_balance``,
@@ -630,6 +649,10 @@ def map_response_to_error(
     elif isinstance(err, LenzRateLimitError):
         err.limit = _opt_int(parsed.get("limit"))
         err.reset_in_seconds = _opt_int(parsed.get("reset_in_seconds"))
+        if err.reset_in_seconds is None and code not in _IN_FLIGHT_429_CODES:
+            # The newer response shape names every wait ``retry_after``. The
+            # in-flight refusals never carried ``reset_in_seconds``.
+            err.reset_in_seconds = _opt_int(parsed.get("retry_after"))
         rl_upgrade_url = parsed.get("upgrade_url")
         err.upgrade_url = rl_upgrade_url if isinstance(rl_upgrade_url, str) else ""
         # Header first, then the body. `reset_in_seconds` is what the server

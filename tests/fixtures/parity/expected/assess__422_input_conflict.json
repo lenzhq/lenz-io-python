@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Send either `claim` (one text) or `claims` (a list of claims), not both.",
+    "code": "input_conflict",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Send either `claim` (one text) or `claims` (a list of claims), not both.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Send either `claim` (one text) or `claims` (a list of claims), not both.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Send either `claim` (one text) or `claims` (a list of claims), not both.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

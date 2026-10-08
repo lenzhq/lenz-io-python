@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Idempotency-Key reused with a different request body."
+  }
+}

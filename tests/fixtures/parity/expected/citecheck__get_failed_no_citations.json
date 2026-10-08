@@ -1,0 +1,39 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "citecheck_id": "8eb49302",
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "credits": {
+      "charged": 0
+    },
+    "failure": {
+      "docs_url": "https://lenz.io/docs/errors#invalid-input",
+      "failure_class": "invalid_input",
+      "failure_reason": "no_citations",
+      "hint": "The text has no citation to check: no link, DOI or numbered reference with one.",
+      "retryable": false
+    },
+    "language": "en",
+    "more_citations": null,
+    "outcome": "unchecked",
+    "policy": {
+      "max_citations": 20
+    },
+    "poll_after_seconds": null,
+    "status": "failed",
+    "summary": {
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": 20,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null
+    }
+  },
+  "exit_code": 2,
+  "render": "Citation check 8eb49302: unchecked — 0 credits charged\nFailed: The text has no citation to check: no link, DOI or numbered reference with one.\n",
+  "render_json": null
+}

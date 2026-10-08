@@ -1,0 +1,27 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "pairs[0]: Value error, send exactly one of url and doi",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "pairs",
+          0
+        ],
+        "msg": "Value error, send exactly one of url and doi",
+        "type": "value_error",
+        "ctx": {
+          "error": "send exactly one of url and doi"
+        }
+      }
+    ]
+  }
+}

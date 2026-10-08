@@ -1,0 +1,11 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Unsupported language 'xx-nope'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact."
+  }
+}

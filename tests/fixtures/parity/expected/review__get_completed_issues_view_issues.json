@@ -1,0 +1,133 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "credits": {
+      "charged": 13
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "claim_index": 1,
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "failure_reason": "upstream_unavailable",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The EU AI Act took effect in March 2024.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": null,
+        "suggested_rewrite": "Fixed: The EU AI Act took effect in March 2024.",
+        "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+        "verdict": "False",
+        "verification_id": "b4e2e99d",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
+        "verified_claim": null
+      },
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 2,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+          "failure_class": "insufficient_evidence",
+          "failure_reason": "research_empty",
+          "hint": null,
+          "retryable": false
+        },
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "failed",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 3,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 4,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 1,
+        "planned": 2
+      }
+    },
+    "view": "issues"
+  },
+  "exit_code": 2,
+  "render": "Review d6b2bd72: incomplete — 4 claims: 2 issues, 1 failed, 1 not checked · 1 of 2 deep-checked · 13 credits charged\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_issues": "Review d6b2bd72: incomplete — 4 claims: 2 issues, 1 failed, 1 not checked · 1 of 2 deep-checked · 13 credits charged\n\n[1/4] The EU AI Act took effect in March 2024.\n  False (high) · deep check\n  Finding for The EU AI Act took effect in March 2024.\n  Suggested rewrite: Fixed: The EU AI Act took effect in March 2024.\n  https://lenz.io/c/the-earth-is-round-b4e2e99d\n\n[3/4] The Eiffel Tower is in Berlin.\n  False (high) · quick check\n  Deep check failed: research_empty\n\n[2/4] Water boils at 100 C at sea level.\n  Assessment failed: A model provider was unavailable for this item. Retry it; nothing was charged.\n\nA suggested rewrite has not been verified itself: review it, or run it through `lenz verify`, before you use it.\n",
+  "render_json": null
+}

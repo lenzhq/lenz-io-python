@@ -1,0 +1,40 @@
+{
+  "dump": {
+    "items": [
+      {
+        "claim": "The Earth is round.",
+        "confidence": "high",
+        "created_at": "2026-10-01T09:14:00.123456+00:00",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 9,
+        "modified_at": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "68ca4aaf"
+      },
+      {
+        "claim": "The Earth is round.",
+        "confidence": "high",
+        "created_at": "2026-10-01T09:28:00.123456+00:00",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 9,
+        "modified_at": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "7c83247c"
+      }
+    ],
+    "page": 1,
+    "page_size": 20,
+    "total": 2
+  },
+  "render_json": null
+}

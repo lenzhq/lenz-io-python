@@ -1,0 +1,25 @@
+{
+  "error": {
+    "cause": "This account already has 3 reviews running. Retry when one completes.",
+    "code": "review_in_flight",
+    "doc_url": "https://lenz.io/docs/rate-limits",
+    "fix": "Wait Retry-After seconds and retry.",
+    "friendly_text": "This account already has 3 reviews running. Retry when one completes.\n  Fix: Wait Retry-After seconds and retry.",
+    "limit": null,
+    "message": "This account already has 3 reviews running. Retry when one completes.",
+    "payload_json": {
+      "error": {
+        "code": "rate_limited",
+        "fix": "Wait Retry-After seconds and retry.",
+        "message": "This account already has 3 reviews running. Retry when one completes.",
+        "status": 429
+      }
+    },
+    "request_id": "",
+    "reset_in_seconds": null,
+    "retry_after": 60,
+    "status_code": 429,
+    "type": "LenzRateLimitError",
+    "upgrade_url": ""
+  }
+}

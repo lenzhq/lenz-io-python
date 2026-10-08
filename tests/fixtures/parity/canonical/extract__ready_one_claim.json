@@ -1,0 +1,30 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "status": "ready",
+    "claims": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": null
+      }
+    ],
+    "domain": "Economics",
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "presumed_intent": "Verify reported figures",
+    "original_input": "Alpha rose 5% in 2024."
+  }
+}

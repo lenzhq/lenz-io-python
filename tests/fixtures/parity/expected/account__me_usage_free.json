@@ -1,0 +1,62 @@
+{
+  "dump": {
+    "ask": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 100,
+      "quota_total": 100,
+      "quota_used": 0,
+      "remaining": 100
+    },
+    "assess": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 100,
+      "quota_total": 100,
+      "quota_used": 0,
+      "remaining": 100
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "low": 5,
+          "standard": 10
+        }
+      }
+    },
+    "costs": {
+      "ask": 1,
+      "assess": 1,
+      "citation": 1,
+      "extract": 0,
+      "verify": 10
+    },
+    "credits": {
+      "bonus": 0,
+      "extra": 0,
+      "remaining": 100,
+      "resets_at": "2026-10-01T09:07:00+00:00",
+      "total": 100,
+      "used": 0
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false,
+    "plan": "free",
+    "plan_label": "Free",
+    "quota_resets_at": "2026-10-01T09:07:00+00:00",
+    "verify": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 10,
+      "quota_total": 10,
+      "quota_used": 0,
+      "remaining": 10
+    }
+  },
+  "render": "Lenz usage  (Free plan)\n  100 credits left  (≈ 10 verifications · 100 assessments)\n  Verify:   10 left  (0 / 10 quota · 10 credits each · 5 at depth \"low\")\n  Ask:      100 left  (0 / 100 quota · 1 credit each)\n  Assess:   100 left  (0 / 100 quota · 1 credit each)\n  Extract:  0 / 1000 today  (free — no credit charge)\n  Credits reset Oct 1, 2026\n",
+  "render_json": "{\n  \"plan\": \"free\",\n  \"plan_label\": \"Free\",\n  \"quota_resets_at\": \"2026-10-01T09:07:00+00:00\",\n  \"credits\": {\n    \"total\": 100,\n    \"used\": 0,\n    \"remaining\": 100,\n    \"extra\": 0,\n    \"bonus\": 0,\n    \"resets_at\": \"2026-10-01T09:07:00+00:00\"\n  },\n  \"costs\": {\n    \"verify\": 10,\n    \"assess\": 1,\n    \"ask\": 1,\n    \"citation\": 1,\n    \"extract\": 0\n  },\n  \"cost_options\": {\n    \"verify\": {\n      \"depth\": {\n        \"standard\": 10,\n        \"low\": 5\n      }\n    }\n  },\n  \"verify\": {\n    \"quota_used\": 0,\n    \"quota_total\": 10,\n    \"quota_remaining\": 10,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 10\n  },\n  \"ask\": {\n    \"quota_used\": 0,\n    \"quota_total\": 100,\n    \"quota_remaining\": 100,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 100\n  },\n  \"assess\": {\n    \"quota_used\": 0,\n    \"quota_total\": 100,\n    \"quota_remaining\": 100,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 100\n  },\n  \"extract\": {\n    \"calls_today\": 0,\n    \"daily_limit\": 1000,\n    \"unlimited\": false\n  },\n  \"has_webhook_secret\": false\n}\n"
+}

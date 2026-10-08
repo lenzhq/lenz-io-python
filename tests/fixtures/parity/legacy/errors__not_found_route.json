@@ -1,0 +1,11 @@
+{
+  "status": 404,
+  "headers": {
+    "Content-Type": "text/html; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "<non-json>": "<django 404 page>"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "status": 429,
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "60",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "This account already has 3 citation checks running. Wait for one to finish.",
+    "code": "citecheck_in_flight",
+    "retry_after": 60
+  }
+}

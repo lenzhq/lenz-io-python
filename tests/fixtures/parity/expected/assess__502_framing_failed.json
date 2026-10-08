@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Framing failed",
+    "code": "framing_failed",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "Framing failed\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "Framing failed",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "Framing failed",
+        "status": 502
+      }
+    },
+    "request_id": "",
+    "retry_after": null,
+    "status_code": 502,
+    "type": "LenzAPIError"
+  }
+}

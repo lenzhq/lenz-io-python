@@ -1,0 +1,31 @@
+{
+  "error": {
+    "cause": "payload.text: Input should be a valid string",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Input should be a valid string"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.text: Input should be a valid string\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.text: Input should be a valid string",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.text: Input should be a valid string",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

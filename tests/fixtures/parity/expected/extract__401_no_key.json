@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "Unauthorized",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/auth",
+    "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+    "friendly_text": "Unauthorized\n  Fix: Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+    "message": "Unauthorized",
+    "payload_json": {
+      "error": {
+        "code": "unauthorized",
+        "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+        "message": "Unauthorized",
+        "status": 401
+      }
+    },
+    "request_id": "",
+    "status_code": 401,
+    "type": "LenzAuthError"
+  }
+}

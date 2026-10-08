@@ -1,0 +1,26 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "visibility: Input should be 'private' or 'unlisted'",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "visibility"
+        ],
+        "msg": "Input should be 'private' or 'unlisted'",
+        "type": "literal_error",
+        "ctx": {
+          "expected": "'private' or 'unlisted'"
+        }
+      }
+    ]
+  }
+}

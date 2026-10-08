@@ -1,0 +1,35 @@
+{
+  "error": {
+    "cause": "[{'type': 'literal_error', 'loc': ['body', 'payload', 'depth'], 'msg': \"Input should be 'standard' or 'low'\", 'ctx': {'expected': \"'standard' or 'low'\"}}]",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "ctx": {
+          "expected": "'standard' or 'low'"
+        },
+        "loc": [
+          "body",
+          "payload",
+          "depth"
+        ],
+        "msg": "Input should be 'standard' or 'low'",
+        "type": "literal_error"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "[{'type': 'literal_error', 'loc': ['body', 'payload', 'depth'], 'msg': \"Input should be 'standard' or 'low'\", 'ctx': {'expected': \"'standard' or 'low'\"}}]\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "[{'type': 'literal_error', 'loc': ['body', 'payload', 'depth'], 'msg': \"Input should be 'standard' or 'low'\", 'ctx': {'expected': \"'standard' or 'low'\"}}]",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "[{'type': 'literal_error', 'loc': ['body', 'payload', 'depth'], 'msg': \"Input should be 'standard' or 'low'\", 'ctx': {'expected': \"'standard' or 'low'\"}}]",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

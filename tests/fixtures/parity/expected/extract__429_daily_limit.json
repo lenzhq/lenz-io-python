@@ -1,0 +1,25 @@
+{
+  "error": {
+    "cause": "Daily /extract limit of 1000 reached for this account. The allowance is shared by every key on the account and by extractions run from the Lenz website.",
+    "code": "extract_daily_limit",
+    "doc_url": "https://lenz.io/docs/rate-limits",
+    "fix": "Wait Retry-After seconds and retry.",
+    "friendly_text": "Daily /extract limit of 1000 reached for this account. The allowance is shared by every key on the account and by extractions run from the Lenz website.\n  Fix: Wait Retry-After seconds and retry.",
+    "limit": 1000,
+    "message": "Daily /extract limit of 1000 reached for this account. The allowance is shared by every key on the account and by extractions run from the Lenz website.",
+    "payload_json": {
+      "error": {
+        "code": "rate_limited",
+        "fix": "Wait Retry-After seconds and retry.",
+        "message": "Daily /extract limit of 1000 reached for this account. The allowance is shared by every key on the account and by extractions run from the Lenz website.",
+        "status": 429
+      }
+    },
+    "request_id": "",
+    "reset_in_seconds": 3600,
+    "retry_after": 3600,
+    "status_code": 429,
+    "type": "LenzRateLimitError",
+    "upgrade_url": "https://lenz.io/plans"
+  }
+}

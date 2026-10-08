@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "This report is private.",
+    "code": "private_claim",
+    "doc_url": "https://lenz.io/docs/auth",
+    "fix": "This key doesn't have access to that resource.",
+    "friendly_text": "This report is private.\n  Fix: This key doesn't have access to that resource.",
+    "message": "This report is private.",
+    "payload_json": {
+      "error": {
+        "code": "unauthorized",
+        "fix": "This key doesn't have access to that resource.",
+        "message": "This report is private.",
+        "status": 403
+      }
+    },
+    "request_id": "",
+    "status_code": 403,
+    "type": "LenzAuthError"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": [],
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "Verify reported figures",
+    "status": "not_a_claim"
+  },
+  "render": "No verifiable claim found in that text.\n",
+  "render_json": "{\n  \"status\": \"not_a_claim\",\n  \"claim\": \"\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"\",\n  \"key_entities\": [\n    {\n      \"name\": \"Alpha\",\n      \"type\": \"organization\"\n    },\n    {\n      \"name\": \"Beta\",\n      \"type\": \"organization\"\n    }\n  ],\n  \"presumed_intent\": \"Verify reported figures\",\n  \"original_input\": \"Alpha rose 5% in 2024. Beta fell 3% last year.\",\n  \"locations\": []\n}\n"
+}

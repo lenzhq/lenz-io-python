@@ -1,0 +1,27 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "claims: Input should be a valid list",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "claims"
+        ],
+        "msg": "Input should be a valid list",
+        "type": "list_type"
+      }
+    ],
+    "unrecognized_fields": [
+      "bogus_field",
+      "another"
+    ]
+  }
+}

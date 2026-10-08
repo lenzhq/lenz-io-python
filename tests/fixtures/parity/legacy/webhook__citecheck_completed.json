@@ -1,0 +1,134 @@
+{
+  "status": 200,
+  "headers": {},
+  "body": {
+    "event": "citecheck.completed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "citecheck_id": "98c0e7d5",
+    "task_id": "13610f0b64b63e006dc66364e0e82c85",
+    "status": "completed",
+    "citecheck": {
+      "citecheck_id": "98c0e7d5",
+      "status": "completed",
+      "outcome": "issues_found",
+      "created_at": "2026-10-01T09:28:00.123456Z",
+      "completed_at": "2026-10-01T09:35:00.123456Z",
+      "language": "en",
+      "poll_after_seconds": null,
+      "policy": {
+        "max_citations": 2
+      },
+      "summary": {
+        "citations_found": 2,
+        "citations_selected": 2,
+        "citation_limit": 2,
+        "citation_limit_reached": false,
+        "citation_checks": {
+          "checked": 2,
+          "unchecked": 0,
+          "failed": 0
+        },
+        "citation_issues": 1
+      },
+      "credits": {
+        "charged": 2
+      },
+      "citations": [
+        {
+          "index": 0,
+          "reference": "https://example.gov/report-2024",
+          "cited_url": "https://example.gov/report-2024",
+          "doi": null,
+          "statement": "Unemployment fell to 4.1% in 2024.",
+          "quotes": [],
+          "position": null,
+          "result": {
+            "finding": "contradicted",
+            "source": "support",
+            "is_issue": true
+          },
+          "check": {
+            "status": "completed",
+            "page_read": "full",
+            "page_title": "Page at https://example.gov/report-2024",
+            "page_published_date": null,
+            "page_language": "en",
+            "source_url": "https://example.gov/report-2024",
+            "source_version": null,
+            "support": "contradicted",
+            "snippet": "The source says so.",
+            "rationale": "The page states it.",
+            "quote": null,
+            "doi_registered": null,
+            "metadata": null,
+            "metadata_differences": [],
+            "registered": null,
+            "unchecked_reason": null,
+            "hint": null,
+            "failure": null,
+            "missing_quote": null
+          }
+        },
+        {
+          "index": 1,
+          "reference": "https://example.org/statement",
+          "cited_url": "https://example.org/statement",
+          "doi": null,
+          "statement": "The agency said so in a statement.",
+          "quotes": [],
+          "position": null,
+          "result": {
+            "finding": "supported",
+            "source": "support",
+            "is_issue": false
+          },
+          "check": {
+            "status": "completed",
+            "page_read": "full",
+            "page_title": "Page at https://example.org/statement",
+            "page_published_date": null,
+            "page_language": "en",
+            "source_url": "https://example.org/statement",
+            "source_version": null,
+            "support": "supported",
+            "snippet": "The source says so.",
+            "rationale": "The page states it.",
+            "quote": null,
+            "doi_registered": null,
+            "metadata": null,
+            "metadata_differences": [],
+            "registered": null,
+            "unchecked_reason": null,
+            "hint": null,
+            "failure": null,
+            "missing_quote": null
+          }
+        }
+      ],
+      "citation_issues": [
+        {
+          "citation_index": 0,
+          "reference": "https://example.gov/report-2024",
+          "cited_url": "https://example.gov/report-2024",
+          "doi": null,
+          "statement": "Unemployment fell to 4.1% in 2024.",
+          "quotes": [],
+          "position": null,
+          "finding": "contradicted",
+          "source": "support",
+          "snippet": "The source says so.",
+          "rationale": "The page states it.",
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_title": "Page at https://example.gov/report-2024",
+          "failure": null
+        }
+      ],
+      "citation_failures": [],
+      "failure": null,
+      "more_citations": []
+    },
+    "attempt": 1,
+    "delivered_at": "2026-10-01T09:42:00.123456+00:00"
+  }
+}

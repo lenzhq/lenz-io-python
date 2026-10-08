@@ -1,0 +1,12 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "claims[1] is blank.",
+    "code": "blank_item"
+  }
+}

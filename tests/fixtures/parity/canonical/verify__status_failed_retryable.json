@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "failure": {
+      "code": "adjudication_failed",
+      "detail": "The check stopped while the reviewers scored the evidence.",
+      "hint": null,
+      "failure_class": "upstream_unavailable",
+      "retryable": true,
+      "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+    }
+  }
+}

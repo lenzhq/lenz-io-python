@@ -1,0 +1,13 @@
+{
+  "status": 502,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Extraction failed",
+    "code": "extraction_failed",
+    "error": "extraction_failed"
+  }
+}

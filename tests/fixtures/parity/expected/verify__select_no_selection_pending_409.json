@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "This task has no pending claim selection.",
+    "code": "no_selection_pending",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "This task has no pending claim selection.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "This task has no pending claim selection.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "This task has no pending claim selection.",
+        "status": 409
+      }
+    },
+    "request_id": "",
+    "status_code": 409,
+    "type": "LenzError"
+  }
+}

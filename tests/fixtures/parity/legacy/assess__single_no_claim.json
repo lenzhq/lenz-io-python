@@ -1,0 +1,15 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "claims": [],
+    "error": "No verifiable claim detected",
+    "error_code": "no_claim",
+    "candidate_claims": [],
+    "more_claims": []
+  }
+}

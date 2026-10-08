@@ -1,0 +1,28 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "claims": [
+      {
+        "claim": "The registry reported 4,200 filings in 2024.",
+        "language": "en",
+        "verdict": "True",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "The registry lists 4,200 filings for 2024 and has not revised the figure.",
+        "dissent": "The registry figure is provisional, so the 2024 total cannot yet be confirmed.",
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  }
+}

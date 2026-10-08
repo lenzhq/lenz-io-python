@@ -1,0 +1,25 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "claims[1].claim: Field required",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "claims",
+          1,
+          "text"
+        ],
+        "msg": "Field required",
+        "type": "missing"
+      }
+    ]
+  }
+}

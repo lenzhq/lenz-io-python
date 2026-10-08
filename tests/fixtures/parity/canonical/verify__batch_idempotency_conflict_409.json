@@ -1,0 +1,13 @@
+{
+  "status": 409,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "A request with this Idempotency-Key is already in progress.",
+    "code": "idempotency_conflict",
+    "task_id": "7cff18d"
+  }
+}

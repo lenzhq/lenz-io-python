@@ -1,0 +1,74 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "delivered_at": "2026-10-01T09:42:00.123456+00:00",
+    "event": "review.failed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "review": {
+      "citation_failures": [],
+      "citation_issues": [],
+      "citations": [],
+      "claims": [],
+      "completed_at": "2026-10-01T09:35:00.123456Z",
+      "created_at": "2026-10-01T09:28:00.123456Z",
+      "credits": {
+        "charged": 0
+      },
+      "failure": {
+        "docs_url": "https://lenz.io/docs/errors#invalid-input",
+        "failure_class": "invalid_input",
+        "failure_reason": "no_claim",
+        "hint": "No factual statement that can be checked against evidence was found in the input. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "retryable": false
+      },
+      "failures": [],
+      "issues": [],
+      "language": "en",
+      "more_citations": null,
+      "more_claim_locations": null,
+      "more_claims": null,
+      "outcome": "unchecked",
+      "policy": {
+        "confidence": [
+          "low"
+        ],
+        "depth": "standard",
+        "max_assessments": 20,
+        "max_citations": 0,
+        "max_verifications": 5,
+        "suggest_edits": false,
+        "verdicts": [
+          "False",
+          "Mostly False",
+          "Mixed"
+        ]
+      },
+      "poll_after_seconds": null,
+      "review_id": "8cb2f001",
+      "status": "failed",
+      "summary": {
+        "assessments": null,
+        "citation_checks": null,
+        "citation_issues": 0,
+        "citation_limit": null,
+        "citation_limit_reached": null,
+        "citations_found": null,
+        "citations_selected": null,
+        "citations_skipped": null,
+        "claim_limit": 20,
+        "claim_limit_reached": null,
+        "claims_selected": null,
+        "input_truncated": false,
+        "issues": 0,
+        "verifications": null
+      },
+      "view": "full"
+    },
+    "review_id": "8cb2f001",
+    "status": "failed",
+    "task_id": "13610f0b64b63e006dc66364e0e82c85",
+    "type": "ReviewEvent",
+    "verification_id": null
+  }
+}

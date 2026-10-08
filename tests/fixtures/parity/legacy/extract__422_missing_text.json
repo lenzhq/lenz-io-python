@@ -1,0 +1,21 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": [
+      {
+        "type": "missing",
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Field required"
+      }
+    ]
+  }
+}

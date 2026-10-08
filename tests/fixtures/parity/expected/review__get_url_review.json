@@ -1,0 +1,104 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "error_code": null,
+          "failure": null,
+          "hint": null,
+          "identified_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 0,
+        "positions": [
+          {
+            "end": null,
+            "start": null,
+            "text": "The EU AI Act took effect in March 2024."
+          }
+        ],
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "clean",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "d6b2bd72",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 1,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 1,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "exit_code": 0,
+  "render": "Review d6b2bd72: clean — 1 claim: 1 true or mostly true · 1 credit charged\n\n[1/1] The EU AI Act took effect in March 2024.\n  True (high) · quick check\n",
+  "render_issues": "Review d6b2bd72: clean — 1 claim: 1 true or mostly true · 1 credit charged\n\nNo issues.\n",
+  "render_json": null
+}

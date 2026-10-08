@@ -1,0 +1,43 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Primary claim.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest.",
+        "identified_claims": [
+          "Second claim.",
+          "Third claim."
+        ],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "A plain claim.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "error_code": "",
+    "more_claims": []
+  },
+  "render": "Mostly False (high) — Primary claim.\n    also found:\n      • Second claim.\n      • Third claim.\n    Assessed the main claim only. Send identified_claims as their own items to check the rest.\nMostly False (high) — A plain claim.\n",
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Primary claim.\",\n      \"language\": \"en\",\n      \"verdict\": \"Mostly False\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [\n        \"Second claim.\",\n        \"Third claim.\"\n      ],\n      \"hint\": \"Assessed the main claim only. Send identified_claims as their own items to check the rest.\"\n    },\n    {\n      \"claim\": \"A plain claim.\",\n      \"language\": \"en\",\n      \"verdict\": \"Mostly False\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n"
+}

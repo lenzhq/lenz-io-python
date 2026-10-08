@@ -198,7 +198,7 @@ def _poll(
                 # Sub-claims inherit the parent submission's depth server-side
                 # (/select reads it off the task meta), so nothing to send here.
                 items = client.select(task_id, claims=texts).items
-                picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts, strict=True)]
+                picks = [(it.task_id, it.claim or txt) for it, txt in zip(items, texts, strict=True)]
                 # detach, or >1 claim → batch path; exactly one → keep the
                 # single-verdict flow (nicer than a 1-row table).
                 if detach or len(picks) > 1:
@@ -256,7 +256,7 @@ def _resolve_multi_claim(out: Output, task_id: str, st: TaskStatus, selection: l
     Otherwise json mode emits the needs_input object and exits 3 (never hangs on
     a prompt that can't happen); a TTY shows the checkbox picker.
     """
-    options = [c.text for c in st.claims]
+    options = [c.claim for c in st.claims]
     if selection is not None:
         return [options[i] for i in _selection_to_indices(selection, len(options))]
     if out.json_mode:

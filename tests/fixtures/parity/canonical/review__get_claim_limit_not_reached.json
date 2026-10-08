@@ -1,0 +1,127 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "full",
+    "status": "completed",
+    "outcome": "clean",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 3,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 0,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_found": 2,
+      "claims_selected": 2,
+      "claim_limit": 3,
+      "claim_limit_exceeded": false,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 2,
+        "failed": 0
+      },
+      "verifications": {
+        "planned": 0,
+        "completed": 0,
+        "failed": 0
+      },
+      "issues": 0,
+      "citations_found": null,
+      "citations_selected": null,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 2
+    },
+    "poll_after_seconds": null,
+    "issues": [],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [
+      {
+        "index": 0,
+        "claim": "The EU AI Act took effect in March 2024.",
+        "positions": null,
+        "result": {
+          "verdict": "True",
+          "confidence": "high",
+          "source": "assessment",
+          "is_issue": false
+        },
+        "assessment": {
+          "status": "completed",
+          "verdict": "True",
+          "confidence": "high",
+          "verification_url": null,
+          "rationale": null,
+          "dissent": null,
+          "suggested_rewrite": null,
+          "more_claims": [],
+          "failure": null
+        },
+        "escalation": {
+          "matched_rules": [],
+          "disposition": "not_selected"
+        },
+        "verification": null,
+        "suggested_edits": null
+      },
+      {
+        "index": 1,
+        "claim": "Water boils at 100 C at sea level.",
+        "positions": null,
+        "result": {
+          "verdict": "True",
+          "confidence": "high",
+          "source": "assessment",
+          "is_issue": false
+        },
+        "assessment": {
+          "status": "completed",
+          "verdict": "True",
+          "confidence": "high",
+          "verification_url": null,
+          "rationale": null,
+          "dissent": null,
+          "suggested_rewrite": null,
+          "more_claims": [],
+          "failure": null
+        },
+        "escalation": {
+          "matched_rules": [],
+          "disposition": "not_selected"
+        },
+        "verification": null,
+        "suggested_edits": null
+      }
+    ],
+    "citations": [],
+    "failure": null,
+    "more_claims": [],
+    "more_claim_locations": [],
+    "more_citations": []
+  }
+}

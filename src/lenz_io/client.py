@@ -201,8 +201,13 @@ def _batch_item_body(item: Any) -> Any:
 
     An item without ``claim`` is forwarded verbatim, so every existing caller
     keeps a byte-identical request body. An item with ``claim`` is sent as
-    ``text`` — the wire key the server has always accepted.
+    ``text`` — the wire key the server has always accepted. An empty
+    ``webhook_url`` is left out, as on the batch itself: it has always meant
+    the key's default, and leaving it out keeps that meaning on every API
+    version.
     """
+    if isinstance(item, dict) and item.get("webhook_url") == "":
+        item = {k: v for k, v in item.items() if k != "webhook_url"}
     if "claim" not in item:
         return item
     body = {k: v for k, v in item.items() if k != "claim"}
@@ -659,18 +664,18 @@ class Lenz:
         one an unfocused call would have returned too, verbatim.
 
         When the text has claims but none fall within the focus, ``status``
-        is ``"no_match"`` and ``identified_claims`` is empty — the unfocused
+        is ``"no_match"`` and ``claims`` is empty — the unfocused
         list is never substituted. Widen the focus and call again. A focused
         call costs the same single unit of the daily cap.
 
         ``locate`` (optional): with ``True``, only the claims that could be
-        traced directly back to the text are returned, and ``locations``
-        says where the text makes each one (``start``/``end`` index the
+        traced directly back to the text are returned, and each claim's
+        ``positions`` says where the text makes it (``start``/``end`` index the
         ``text`` you sent, in code points, so ``text[start:end]`` is the
         passage). A claim found nowhere in the text, or found with a
         different figure, is left out; if that leaves no claim, ``status``
         is ``"not_a_claim"``. Locating adds a few seconds. If the claims
-        cannot be located, ``locations`` is ``None`` and the list is returned
+        cannot be located, ``positions`` is ``None`` and the list is returned
         unfiltered. Leave it ``None`` to use the server default (currently
         off); an explicit ``False`` is sent as such.
 
@@ -720,7 +725,7 @@ class Lenz:
           ``extract`` in the ladder::
 
               out = client.extract(text=llm_output)
-              claims = out.identified_claims or [out.claim]
+              claims = [c.claim for c in out.claims]
               quick = [row for i in range(0, len(claims), 20)  # 20 a call
                        for row in client.assess(claims=claims[i : i + 20]).claims]
 
@@ -733,14 +738,16 @@ class Lenz:
         ``verification_url`` pointing at the deep ``Verification`` when
         /assess found a matching stored claim.
 
-        A row with ``verdict == "Error"`` could not be given a verdict. It
-        stays in position, is not charged, and says why: ``error_code`` is
-        ``no_claim`` / ``framing_failed`` / ``upstream_unavailable`` /
-        ``timeout`` (an open set; the last two are worth resending as-is), and
-        ``hint`` is one sentence on what to send next. A compound list item is assessed on its main
-        claim; the other claims found in it are listed on that row in
-        ``identified_claims`` (with a ``hint``) — send them as their own
-        items to check the rest. ``hint`` is ``None`` on a plain verdict row.
+        A row with ``status == "failed"`` could not be given a verdict (its
+        ``verdict`` reads ``"Error"``). It stays in position, is not charged,
+        and says why: ``failure.code`` is ``no_checkable_claim`` /
+        ``framing_failed`` / ``upstream_unavailable`` / ``timeout`` (an open
+        set; the last two are worth resending as-is), and ``failure.hint`` is
+        one sentence on what to send next. A compound list item is assessed on
+        its main claim; the other claims found in it are listed on that row in
+        ``more_claims`` — send them as their own items to check the rest.
+        (The deprecated ``error_code``, ``hint`` and ``identified_claims`` keep
+        their original meaning.)
 
         Use ``confidence`` to decide when to escalate: ``"low"`` rows are
         worth re-running through ``verify_batch_and_wait`` for the deep
@@ -978,19 +985,21 @@ class Lenz:
         terminal, timed_out, gone = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
+        # Built with ``claim_text`` so ``model_dump()`` keeps the keys it has
+        # always had; ``BatchItemResult.claim`` reads the same string.
         for it in accepted.items:  # preserve input order
             status = terminal.get(it.task_id)
             if it.task_id in gone:
                 # Removed by the account's retention period (410): terminal,
                 # with no status to carry.
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="failed"))
             elif not it.task_id or it.task_id in timed_out or status is None:
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="timeout"))
             elif status.status == "completed" and status.result is not None:
                 results.append(
                     BatchItemResult(
                         task_id=it.task_id,
-                        claim_text=it.claim_text,
+                        claim_text=it.claim,
                         status="completed",
                         verification=status.result,
                         status_detail=status,
@@ -998,14 +1007,12 @@ class Lenz:
                 )
             elif status.status == "needs_input":
                 results.append(
-                    BatchItemResult(
-                        task_id=it.task_id, claim_text=it.claim_text, status="needs_input", status_detail=status
-                    )
+                    BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="needs_input", status_detail=status)
                 )
             else:
                 # failed, or completed-without-result (treated as failed).
                 results.append(
-                    BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed", status_detail=status)
+                    BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="failed", status_detail=status)
                 )
         return results
 
@@ -1521,6 +1528,8 @@ class Lenz:
             )
         # failed. Server sends the diagnostic under ``error``; fall back to the
         # legacy fields for resilience.
+        # ``failure.detail`` is the sentence in the newer response shape;
+        # ``error`` carries the original one (and is filled from the block).
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
         if status.retryable:
             fix = "Transient provider outage — retry the same request after a short wait."
@@ -1564,8 +1573,12 @@ class Lenz:
         payload: dict[str, Any] = {
             "text": claim or text,
             "source_url": source_url,
-            "webhook_url": webhook_url,
         }
+        # Omit-when-empty: no ``webhook_url`` means the key's default webhook.
+        # An empty string is never sent, so a request keeps that meaning on
+        # every API version (a newer one reads ``""`` as "no webhook").
+        if webhook_url:
+            payload["webhook_url"] = webhook_url
         # Omit-when-empty so existing English callers keep byte-identical
         # request bodies (no extra "language": "" key).
         if language:
@@ -1598,7 +1611,10 @@ class Lenz:
         # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
         # (revised SDK plan decision 1C — no Pydantic coercion, keep the
         # runtime contract a plain dict).
-        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims], "webhook_url": webhook_url}
+        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims]}
+        # Omit-when-empty, as on ``verify``: no ``webhook_url`` means the key's default.
+        if webhook_url:
+            payload["webhook_url"] = webhook_url
         if language:
             payload["language"] = language
         if visibility:

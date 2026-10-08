@@ -1,0 +1,13 @@
+{
+  "status": 409,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "A review with this Idempotency-Key is still being created. Retry shortly.",
+    "code": "idempotency_conflict",
+    "review_id": "d6b2bd72"
+  }
+}

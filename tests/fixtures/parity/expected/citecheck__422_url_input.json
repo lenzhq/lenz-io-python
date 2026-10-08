@@ -1,0 +1,30 @@
+{
+  "error": {
+    "cause": "Send the page's text, with its links, to check the sources it cites.",
+    "code": "url_input",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "text"
+        ],
+        "msg": "Send the page's text, with its links, to check the sources it cites."
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Send the page's text, with its links, to check the sources it cites.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Send the page's text, with its links, to check the sources it cites.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Send the page's text, with its links, to check the sources it cites.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

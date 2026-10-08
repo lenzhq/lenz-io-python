@@ -1,0 +1,103 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "delivered_at": "2026-10-01T09:28:00.123456+00:00",
+    "event": "verification.completed",
+    "result": {
+      "audit": {
+        "adjudication_summary": "Both reviewers found it false.",
+        "assessments": [
+          {
+            "focus_area": "Evidence",
+            "panelist_name": "Reviewer A",
+            "reasoning": "Both sources place the tower in Paris.",
+            "score": 1.0,
+            "warnings": [
+              "Example Travel is a travel blog."
+            ]
+          },
+          {
+            "focus_area": "Evidence",
+            "panelist_name": "Reviewer B",
+            "reasoning": "The encyclopedia entry is unambiguous.",
+            "score": 2.0,
+            "warnings": []
+          }
+        ],
+        "debate_con": {
+          "argument": "Every source places it in Paris.",
+          "rebuttal": "The pro case cites no source.",
+          "role": "con"
+        },
+        "debate_pro": {
+          "argument": "Some guides place it in Berlin.",
+          "rebuttal": "None of them are reliable.",
+          "role": "pro"
+        },
+        "panel_agreement": "unanimous"
+      },
+      "claim": "The Eiffel Tower is in Berlin.",
+      "confidence": "high",
+      "coverage": {
+        "aggregate": 500000,
+        "as_of": null,
+        "cap": 10000,
+        "certificate_id": null,
+        "certificate_url": null,
+        "currency": "EUR",
+        "reasons": [
+          "plan"
+        ],
+        "status": "uncovered",
+        "terms_version": "v1"
+      },
+      "created_at": "2026-10-01T09:21:00.123456+00:00",
+      "depth": "standard",
+      "domain": "Geography",
+      "entities": [
+        {
+          "name": "Eiffel Tower",
+          "qid": null
+        },
+        {
+          "name": "Berlin",
+          "qid": null
+        }
+      ],
+      "executive_summary": "The Eiffel Tower stands in Paris, France, not in Berlin.",
+      "key_finding": "The Eiffel Tower is in Paris.",
+      "language": "en",
+      "lenz_score": 1,
+      "modified_at": null,
+      "presumed_intent": "Check where a landmark is.",
+      "sources": [
+        {
+          "date": "2025-01-15",
+          "snippet": "The Eiffel Tower is a wrought-iron lattice tower on the Champ de Mars in Paris, France.",
+          "source_name": "Example Encyclopedia",
+          "title": "Eiffel Tower",
+          "url": "https://example.org/eiffel-tower"
+        },
+        {
+          "date": "",
+          "snippet": "Most visitors climb the tower on their first day in Paris.",
+          "source_name": "Example Travel",
+          "title": "Visiting Paris",
+          "url": "https://example.com/visit-paris"
+        }
+      ],
+      "suggested_rewrite": "The Eiffel Tower is in Paris.",
+      "verdict": "False",
+      "verification_id": "68ca4aaf",
+      "visibility": "private",
+      "warnings": [
+        "Only two sources were found."
+      ]
+    },
+    "status": "completed",
+    "task_id": "0b92b443eb69b9c71434fdc64f2ca8be",
+    "type": "VerificationCompleted",
+    "verification_id": "68ca4aaf"
+  }
+}

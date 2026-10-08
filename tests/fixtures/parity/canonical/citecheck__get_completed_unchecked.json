@@ -1,0 +1,111 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "citecheck_id": "8eb49302",
+    "status": "completed",
+    "outcome": "unchecked",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "language": "en",
+    "poll_after_seconds": null,
+    "policy": {
+      "max_citations": 2
+    },
+    "summary": {
+      "citations_found": 2,
+      "citations_selected": 2,
+      "citation_limit": 2,
+      "citation_limit_exceeded": false,
+      "citation_checks": {
+        "checked": 0,
+        "unchecked": 2,
+        "failed": 0
+      },
+      "citation_issues": 0
+    },
+    "credits": {
+      "charged": 0
+    },
+    "citations": [
+      {
+        "index": 0,
+        "reference": "https://example.gov/report-2024",
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "statement": "Unemployment fell to 4.1% in 2024.",
+        "quotes": [],
+        "position": null,
+        "result": {
+          "finding": "unchecked",
+          "source": null,
+          "is_issue": false
+        },
+        "check": {
+          "status": "completed",
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "page_published_date": null,
+          "page_language": "en",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "support": "unchecked",
+          "snippet": null,
+          "rationale": "The page states it.",
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": "no_text",
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      },
+      {
+        "index": 1,
+        "reference": "https://example.org/statement",
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "statement": "The agency said so in a statement.",
+        "quotes": [],
+        "position": null,
+        "result": {
+          "finding": "unchecked",
+          "source": null,
+          "is_issue": false
+        },
+        "check": {
+          "status": "completed",
+          "page_read": "full",
+          "page_title": "Page at https://example.org/statement",
+          "page_published_date": null,
+          "page_language": "en",
+          "source_url": "https://example.org/statement",
+          "source_version": null,
+          "support": "unchecked",
+          "snippet": null,
+          "rationale": "The page states it.",
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": "no_text",
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      }
+    ],
+    "citation_issues": [],
+    "citation_failures": [],
+    "failure": null,
+    "more_citations": []
+  }
+}

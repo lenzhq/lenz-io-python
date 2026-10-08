@@ -1,0 +1,95 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "verification_id": "68ca4aaf",
+    "claim": "The Earth is round.",
+    "visibility": "private",
+    "depth": "standard",
+    "domain": "Science",
+    "entities": [
+      {
+        "name": "Earth",
+        "qid": null
+      }
+    ],
+    "presumed_intent": "Verify a basic scientific fact",
+    "verdict": "True",
+    "confidence": "high",
+    "lenz_score": 9,
+    "key_finding": "The Earth is approximately spherical in shape.",
+    "executive_summary": "The claim is verified.",
+    "warnings": [
+      "Relies on limited sources"
+    ],
+    "suggested_rewrite": null,
+    "created_at": "2026-10-01T09:14:00.123456+00:00",
+    "completed_at": "2026-10-01T09:14:00.123456+00:00",
+    "sources": [
+      {
+        "source_name": "NASA",
+        "title": "The shape of the Earth",
+        "url": "https://nasa.example/shape",
+        "snippet": "Satellite imagery shows an oblate spheroid.",
+        "date": "2025-01-15"
+      },
+      {
+        "source_name": "ESA",
+        "title": "Earth from space",
+        "url": "https://esa.example/earth",
+        "snippet": "Orbital measurements confirm the curvature.",
+        "date": "2025-01-16"
+      }
+    ],
+    "audit": {
+      "adjudication_summary": "Both reviewers agreed.",
+      "assessments": [
+        {
+          "panelist_name": "Reviewer A",
+          "focus_area": "Claim Precision & Quantitative Accuracy",
+          "score": 9.0,
+          "reasoning": "Precision analysis reasoning.",
+          "warnings": []
+        },
+        {
+          "panelist_name": "Reviewer B",
+          "focus_area": "Sources",
+          "score": 9.0,
+          "reasoning": "Source audit reasoning.",
+          "warnings": [
+            "weak source A"
+          ]
+        }
+      ],
+      "debate_pro": {
+        "role": "Advocate",
+        "argument": "Satellite imagery and geodesy agree.",
+        "rebuttal": "Flat-Earth objections do not hold."
+      },
+      "debate_con": {
+        "role": "Skeptic",
+        "argument": "The Earth is not a perfect sphere.",
+        "rebuttal": "Oblate, but round for the claim."
+      },
+      "panel_agreement": "unanimous"
+    },
+    "language": "en",
+    "coverage": {
+      "status": "uncovered",
+      "reasons": [
+        "plan"
+      ],
+      "certificate_id": null,
+      "certificate_url": null,
+      "as_of": null,
+      "currency": "EUR",
+      "cap": 10000,
+      "aggregate": 500000,
+      "terms_version": "v1"
+    }
+  }
+}

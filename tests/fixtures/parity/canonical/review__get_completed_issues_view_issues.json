@@ -1,0 +1,136 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "issues",
+    "status": "completed",
+    "outcome": "incomplete",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 20,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 0,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_found": 4,
+      "claims_selected": 4,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 3,
+        "failed": 1
+      },
+      "verifications": {
+        "planned": 2,
+        "completed": 1,
+        "failed": 1
+      },
+      "issues": 2,
+      "citations_found": null,
+      "citations_selected": null,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 13
+    },
+    "poll_after_seconds": null,
+    "issues": [
+      {
+        "claim_index": 0,
+        "claim": "The EU AI Act took effect in March 2024.",
+        "verified_claim": null,
+        "verdict": "False",
+        "confidence": "high",
+        "source": "verification",
+        "verification_id": "b4e2e99d",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
+        "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+        "escalation": {
+          "matched_rules": [
+            "verdict"
+          ],
+          "disposition": "planned"
+        },
+        "key_finding": "Finding for The EU AI Act took effect in March 2024.",
+        "rationale": null,
+        "suggested_rewrite": "Fixed: The EU AI Act took effect in March 2024.",
+        "failure": null,
+        "suggested_edits": null
+      },
+      {
+        "claim_index": 2,
+        "claim": "The Eiffel Tower is in Berlin.",
+        "verified_claim": null,
+        "verdict": "False",
+        "confidence": "high",
+        "source": "assessment",
+        "verification_id": null,
+        "verification_status": "failed",
+        "verification_url": null,
+        "url": null,
+        "escalation": {
+          "matched_rules": [
+            "verdict"
+          ],
+          "disposition": "planned"
+        },
+        "key_finding": null,
+        "rationale": null,
+        "suggested_rewrite": null,
+        "failure": {
+          "code": "research_empty",
+          "detail": "No sources about the claim were found.",
+          "hint": null,
+          "failure_class": "insufficient_evidence",
+          "retryable": false,
+          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence"
+        },
+        "suggested_edits": null
+      }
+    ],
+    "failures": [
+      {
+        "claim_index": 1,
+        "claim": "Water boils at 100 C at sea level.",
+        "stage": "assessment",
+        "failure": {
+          "code": "upstream_unavailable",
+          "detail": "A service the check depends on was unavailable.",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "failure_class": "upstream_unavailable",
+          "retryable": true,
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+        }
+      }
+    ],
+    "citation_issues": [],
+    "citation_failures": [],
+    "failure": null,
+    "more_claims": [],
+    "more_claim_locations": [],
+    "more_citations": []
+  }
+}

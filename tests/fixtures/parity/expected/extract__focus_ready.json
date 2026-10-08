@@ -1,0 +1,24 @@
+{
+  "dump": {
+    "candidate_claims": [],
+    "claim": "Beta fell 3% last year.",
+    "domain": "Economics",
+    "identified_claims": [],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": null,
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
+  "render": "Claim: Beta fell 3% last year.\n\nVerify it: lenz verify \"Beta fell 3% last year.\"\n",
+  "render_json": "{\n  \"status\": \"ready\",\n  \"claim\": \"Beta fell 3% last year.\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"Economics\",\n  \"key_entities\": [\n    {\n      \"name\": \"Alpha\",\n      \"type\": \"organization\"\n    },\n    {\n      \"name\": \"Beta\",\n      \"type\": \"organization\"\n    }\n  ],\n  \"presumed_intent\": \"Verify reported figures\",\n  \"original_input\": \"Alpha rose 5% in 2024. Beta fell 3% last year.\",\n  \"locations\": null\n}\n"
+}

@@ -1,0 +1,32 @@
+{
+  "error": {
+    "cause": "payload.escalate.max_citations: Input should be less than or equal to 20",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "max_citations"
+        ],
+        "msg": "Input should be less than or equal to 20"
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "payload.escalate.max_citations: Input should be less than or equal to 20\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "payload.escalate.max_citations: Input should be less than or equal to 20",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "payload.escalate.max_citations: Input should be less than or equal to 20",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

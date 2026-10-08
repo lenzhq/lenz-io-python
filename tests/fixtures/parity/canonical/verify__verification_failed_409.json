@@ -1,0 +1,23 @@
+{
+  "status": 409,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "This check failed and has no result.",
+    "code": "verification_failed",
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "hint": "Resubmit to POST /verify if retryable is true. GET /verify/status/7cff18da2d979d6370e54a160be121ad has the full failure.",
+    "failure": {
+      "code": "research_empty",
+      "detail": "No sources about the claim were found.",
+      "hint": null,
+      "failure_class": "insufficient_evidence",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#insufficient-evidence"
+    }
+  }
+}

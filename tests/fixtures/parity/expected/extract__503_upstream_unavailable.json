@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Our model providers are temporarily unavailable. Please retry shortly.",
+    "code": "upstream_unavailable",
+    "doc_url": "https://lenz.io/docs/errors#unavailable",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "Our model providers are temporarily unavailable. Please retry shortly.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "Our model providers are temporarily unavailable. Please retry shortly.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "Our model providers are temporarily unavailable. Please retry shortly.",
+        "status": 503
+      }
+    },
+    "request_id": "",
+    "retry_after": 90,
+    "status_code": 503,
+    "type": "LenzUpstreamUnavailableError"
+  }
+}

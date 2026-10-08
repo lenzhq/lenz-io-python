@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "headers": {},
+  "body": {
+    "event": "verification.failed",
+    "verification_id": null,
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "batch_id": null,
+    "status": "failed",
+    "result": null,
+    "needs_input": null,
+    "coverage": null,
+    "error": "research_insufficient",
+    "failure_class": "insufficient_evidence",
+    "retryable": false,
+    "attempt": 1,
+    "delivered_at": "2026-10-01T09:14:00.123456+00:00"
+  }
+}

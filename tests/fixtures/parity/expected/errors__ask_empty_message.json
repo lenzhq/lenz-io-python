@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Message cannot be empty.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Message cannot be empty.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Message cannot be empty.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Message cannot be empty.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

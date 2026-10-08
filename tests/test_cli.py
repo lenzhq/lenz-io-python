@@ -940,7 +940,7 @@ def test_usage_json_success(monkeypatch):
     assert payload["verify"]["bonus"] == 20
     assert payload["assess"]["remaining"] == 5070
     assert payload["extract"]["calls_today"] == 4
-    # The deprecated alias is still emitted (server sends it until 2026-11-29)
+    # The deprecated alias is still emitted (the server keeps sending it to existing callers)
     # and dumping it must not warn — see tests/test_usage_models.py.
     assert payload["verify"]["credits"] == 20
 

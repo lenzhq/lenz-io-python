@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "claims is required and must be non-empty.",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "claims"
+        ],
+        "msg": "claims is required and must be non-empty.",
+        "type": "validation_error"
+      }
+    ]
+  }
+}

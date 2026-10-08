@@ -1,0 +1,369 @@
+"""The new attributes read the same from either response shape, and the old
+ones keep their meaning. ``test_parity.py`` holds the old attributes to the
+previous release's output; this file checks the new ones."""
+
+from __future__ import annotations
+
+import json
+import warnings
+
+import pytest
+import respx
+from parity_observe import load
+
+from lenz_io import Lenz
+from lenz_io.client import DEFAULT_BASE_URL
+from lenz_io.errors import LenzPipelineError, LenzRateLimitError, LenzValidationError, map_response_to_error
+from lenz_io.models import (
+    AssessClaim,
+    AssessResponse,
+    BatchAccepted,
+    ExtractedClaims,
+    FailureBlock,
+    ReviewFull,
+    TaskAccepted,
+    TaskStatus,
+    Usage,
+    Verification,
+    VerificationList,
+)
+from lenz_io.webhooks import (
+    CitecheckEvent,
+    ReviewEvent,
+    VerificationCompleted,
+    VerificationFailed,
+    VerificationNeedsInput,
+    parse_webhook,
+)
+
+pytestmark = pytest.mark.filterwarnings("error::DeprecationWarning")
+
+
+def _both(name: str) -> tuple[dict, dict]:
+    return load("legacy", name)["body"], load("canonical", name)["body"]
+
+
+# ── /extract ──
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "extract__ready_one_claim.json",
+        "extract__ready_several_claims.json",
+        "extract__locate_true.json",
+        "extract__locate_some_dropped.json",
+        "extract__url_input_located.json",
+        "extract__no_match_with_focus.json",
+        "extract__not_a_claim.json",
+    ],
+)
+def test_extract_claims_reads_the_same_from_both_shapes(name):
+    legacy, canonical = (ExtractedClaims.model_validate(b) for b in _both(name))
+    assert [c.model_dump() for c in legacy.claims] == [c.model_dump() for c in canonical.claims]
+    assert legacy.status == canonical.status  # "not_a_claim" from either spelling
+
+
+def test_extract_one_claim_is_a_list_of_one():
+    legacy, canonical = (ExtractedClaims.model_validate(b) for b in _both("extract__ready_one_claim.json"))
+    assert [c.claim for c in legacy.claims] == [c.claim for c in canonical.claims] == ["Alpha rose 5% in 2024."]
+    assert canonical.identified_claims == [] and canonical.claim == "Alpha rose 5% in 2024."
+
+
+def test_extract_claims_union_keeps_the_primary_from_an_older_server():
+    out = ExtractedClaims.model_validate({"status": "ready", "claim": "A.", "identified_claims": ["B.", "C."]})
+    assert [c.claim for c in out.claims] == ["A.", "B.", "C."]
+
+
+def test_extract_empty_claims_does_not_fall_back_to_old_fields():
+    out = ExtractedClaims.model_validate({"status": "no_match", "claims": [], "claim": "stale"})
+    assert out.claims == [] and out.claim == "stale"
+
+
+# ── /assess ──
+
+
+def test_assess_failed_rows_from_both_shapes():
+    legacy, canonical = (AssessResponse.model_validate(b) for b in _both("assess__list_mixed_rows.json"))
+    for resp in (legacy, canonical):
+        assert resp.status == "ok"
+        assert [r.status for r in resp.claims] == ["completed", "failed", "failed", "failed"]
+        assert [r.failure.code if r.failure else None for r in resp.claims] == [
+            None,
+            "no_checkable_claim",
+            "upstream_unavailable",
+            "framing_failed",
+        ]
+        assert resp.claims[1].failure.hint.startswith("The input is a greeting.")
+    # the newer shape: no verdict on a failed row, read as the original "Error"/"low"
+    row = canonical.claims[1]
+    assert (row.verdict, row.confidence, row.error_code) == ("Error", "low", "no_claim")
+
+
+def test_assess_single_no_claim_from_both_shapes():
+    legacy, canonical = (AssessResponse.model_validate(b) for b in _both("assess__single_no_claim.json"))
+    for resp in (legacy, canonical):
+        assert resp.status == "no_checkable_claim"
+        assert resp.failure is not None and resp.failure.code == "no_checkable_claim"
+        assert resp.error_code == "no_claim" and resp.error
+
+
+def test_assess_more_claims_on_a_row_from_both_shapes():
+    legacy, canonical = (AssessResponse.model_validate(b) for b in _both("assess__list_compound_item.json"))
+    assert legacy.claims[0].more_claims == canonical.claims[0].more_claims == ["Second claim.", "Third claim."]
+    assert canonical.claims[0].identified_claims == ["Second claim.", "Third claim."]
+
+
+def test_assess_empty_more_claims_does_not_fall_back():
+    row = AssessClaim.model_validate({"claim": "x", "status": "completed", "verdict": "True", "more_claims": []})
+    assert row.more_claims == [] and row.identified_claims == []
+    row = AssessClaim.model_validate(
+        {"claim": "x", "verdict": "True", "more_claims": [], "identified_claims": ["stale"]}
+    )
+    assert row.more_claims == []
+
+
+@pytest.mark.parametrize(
+    ("rows", "status"),
+    [
+        ([{"verdict": "Error", "error_code": "no_claim"}] * 2, "no_checkable_claim"),
+        ([{"verdict": "Error", "error_code": "timeout"}], "error"),
+        ([{"verdict": "Error", "error_code": "timeout"}, {"verdict": "True"}], "ok"),
+    ],
+)
+def test_assess_status_is_computed_for_the_original_shape(rows, status):
+    assert AssessResponse.model_validate({"claims": rows, "error": None}).status == status
+
+
+# ── /verify ──
+
+
+def test_receipt_claim_from_both_shapes():
+    legacy, canonical = (BatchAccepted.model_validate(b) for b in _both("verify__batch_202.json"))
+    assert (
+        [i.claim for i in legacy.items] == [i.claim for i in canonical.items] == [i.claim_text for i in canonical.items]
+    )
+    assert TaskAccepted.model_validate({"task_id": "t"}).claim == ""
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "verify__status_failed.json",
+        "verify__status_failed_retryable.json",
+        "verify__status_not_a_claim.json",
+        "verify__status_cancelled_after_a_while.json",
+    ],
+)
+def test_failed_status_failure_block_from_both_shapes(name):
+    legacy, canonical = (TaskStatus.model_validate(b) for b in _both(name))
+    for st in (legacy, canonical):
+        assert st.failure is not None
+        assert st.failure.code == _both(name)[1]["failure"]["code"]
+        assert st.failure.failure_class == canonical.failure_class
+        assert st.failure.retryable is canonical.retryable
+        assert st.failure.detail
+    assert canonical.failure_reason == legacy.failure_reason
+    assert canonical.error == canonical.failure.detail
+
+
+def test_needs_input_options_from_both_shapes():
+    legacy, canonical = (TaskStatus.model_validate(b) for b in _both("verify__status_needs_input.json"))
+    assert [c.claim for c in legacy.claims] == [c.claim for c in canonical.claims]
+    assert [c.text for c in canonical.claims] == [c.claim for c in canonical.claims]
+
+
+def test_completed_at_and_the_original_modified_at_rule():
+    late, early = "2026-10-01T23:55:00+00:00", "2026-10-02T00:03:00+00:00"
+    crossed = Verification.model_validate({"created_at": late, "completed_at": early})
+    assert crossed.modified_at == early
+    same_day = Verification.model_validate({"created_at": "2026-10-01T08:00:00Z", "completed_at": "2026-10-01T20:00Z"})
+    assert same_day.modified_at is None and same_day.completed_at == "2026-10-01T20:00Z"
+    # a UTC calendar day, whatever offset the strings carry
+    offset = Verification.model_validate(
+        {"created_at": "2026-10-01T22:00:00+00:00", "completed_at": "2026-10-02T01:00:00+02:00"}
+    )
+    assert offset.modified_at is None
+    legacy = Verification.model_validate({"created_at": late, "modified_at": early})
+    assert legacy.completed_at == early
+    assert Verification.model_validate({"created_at": late, "modified_at": None}).completed_at is None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "verify__verification_200_modified_at_crosses_midnight_by_minutes.json",
+        "verify__verification_200_modified_at_same_day_hours_apart.json",
+        "verify__list_200_modified_at_crosses_midnight_by_minutes.json",
+    ],
+)
+def test_modified_at_from_both_shapes(name):
+    cls = VerificationList if "list" in name else Verification
+    legacy, canonical = (cls.model_validate(b) for b in _both(name))
+    pick = (lambda m: m.items[0]) if cls is VerificationList else (lambda m: m)
+    assert pick(legacy).modified_at == pick(canonical).modified_at
+
+
+# ── /me/usage ──
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["account__me_usage_pro_extra.json", "account__me_usage_free_partly_spent.json", "account__me_usage_free.json"],
+)
+def test_usage_blocks_are_computed_from_the_pool(name):
+    legacy, canonical = (Usage.model_validate(b) for b in _both(name))
+    for cap in ("verify", "ask", "assess"):
+        assert getattr(legacy, cap).model_dump() == getattr(canonical, cap).model_dump()
+    assert canonical.quota_resets_at == canonical.credits.resets_at
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        assert canonical.credits.bonus == legacy.credits.bonus
+
+
+# ── /review ──
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "review__get_more_claims.json",
+        "review__get_claim_limit_reached_exact.json",
+        "review__get_citations_limit_reached.json",
+        "review__get_completed_issues_full.json",
+        "review__get_assessment_rows_full_fields.json",
+    ],
+)
+def test_review_new_names_from_both_shapes(name):
+    legacy, canonical = (ReviewFull.model_validate(b) for b in _both(name))
+    assert legacy.summary.claim_limit_exceeded == canonical.summary.claim_limit_exceeded
+    assert legacy.summary.citation_limit_exceeded == canonical.summary.citation_limit_exceeded
+    for a, b in zip(legacy.claims, canonical.claims, strict=True):
+        assert a.assessment.more_claims == b.assessment.more_claims
+        if a.assessment.failure is not None:
+            assert a.assessment.failure.code == b.assessment.failure.code
+
+
+def test_review_failure_code_reads_the_new_spelling():
+    legacy, canonical = (ReviewFull.model_validate(b) for b in _both("review__get_failed_no_claim.json"))
+    assert legacy.failure.code == canonical.failure.code == "no_checkable_claim"
+    assert canonical.failure.failure_reason == "no_claim"
+    assert FailureBlock.model_validate({"failure_reason": "not_a_claim"}).code == "no_checkable_claim"
+
+
+# ── dumps show what was sent ──
+
+
+def test_model_dump_shows_the_newer_shape_as_sent():
+    canonical = load("canonical", "assess__list_mixed_rows.json")["body"]
+    assert AssessResponse.model_validate(canonical).model_dump(mode="json") == canonical
+    canonical = load("canonical", "verify__batch_202.json")["body"]
+    assert BatchAccepted.model_validate(canonical).model_dump(mode="json") == canonical
+
+
+# ── webhooks ──
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "webhook__verification_failed_not_a_claim.json",
+        "webhook__verification_failed_upstream_unavailable.json",
+    ],
+)
+def test_failed_webhook_from_both_shapes(name):
+    legacy, canonical = (parse_webhook(b) for b in _both(name))
+    assert isinstance(legacy, VerificationFailed) and isinstance(canonical, VerificationFailed)
+    assert legacy.error == canonical.error
+    assert legacy.failure.code == canonical.failure.code
+    assert (legacy.failure_class, legacy.retryable) == (canonical.failure_class, canonical.retryable)
+    assert canonical.event_id
+
+
+def test_needs_input_webhook_from_both_shapes():
+    legacy, canonical = (parse_webhook(b) for b in _both("webhook__verification_needs_input_multi_claim.json"))
+    assert isinstance(canonical, VerificationNeedsInput)
+    assert legacy.needs_input == canonical.needs_input
+    assert [c.claim for c in legacy.claims] == [c.claim for c in canonical.claims]
+    assert legacy.reason == canonical.reason == "multi_claim"
+
+
+def test_completed_webhook_result_from_both_shapes():
+    name = "webhook__verification_completed_modified_at_crosses_midnight_by_minutes.json"
+    legacy, canonical = (parse_webhook(b) for b in _both(name))
+    assert isinstance(canonical, VerificationCompleted)
+    assert legacy.verification_id == canonical.verification_id
+    assert legacy.result["modified_at"] == canonical.result["modified_at"]
+
+
+@pytest.mark.parametrize("name", ["webhook__review_completed.json", "webhook__citecheck_completed.json"])
+def test_review_webhook_without_task_id_reads_event_id(name):
+    canonical = parse_webhook(load("canonical", name)["body"])
+    assert isinstance(canonical, (ReviewEvent, CitecheckEvent))
+    assert canonical.task_id == canonical.event_id != ""
+
+
+# ── errors ──
+
+
+def test_409_failed_run_reads_the_failure_block():
+    _, canonical = _both("verify__verification_failed_409.json")
+    err = map_response_to_error(409, json.dumps(canonical).encode())
+    assert isinstance(err, LenzPipelineError)
+    assert (err.failure_reason, err.failure_class, err.retryable) == (
+        "research_empty",
+        "insufficient_evidence",
+        False,
+    )
+    _, canonical = _both("verify__verification_failed_409_not_a_claim_after_a_while.json")
+    assert map_response_to_error(409, json.dumps(canonical).encode()).failure_reason == "not_a_claim"
+
+
+def test_validation_errors_from_both_shapes():
+    legacy, canonical = _both("errors__validation_wrong_type.json")
+    for body in (legacy, canonical):
+        err = map_response_to_error(422, json.dumps(body).encode())
+        assert isinstance(err, LenzValidationError)
+        assert [e["msg"] for e in err.errors] == ["Input should be a valid string"]
+
+
+def test_rate_limit_wait_from_both_shapes():
+    for body in _both("errors__rate_limited_extract.json"):
+        err = map_response_to_error(429, json.dumps(body).encode())
+        assert isinstance(err, LenzRateLimitError)
+        assert (err.retry_after, err.reset_in_seconds) == (900, 900)
+    err = map_response_to_error(429, json.dumps({"code": "review_in_flight", "retry_after": 0}).encode())
+    assert (err.retry_after, err.reset_in_seconds) == (0, None)
+
+
+def test_quota_remaining_is_derived_when_absent():
+    legacy, canonical = _both("citecheck__402_no_credits.json")
+    assert map_response_to_error(402, json.dumps(canonical).encode()).remaining == 100
+    assert map_response_to_error(402, json.dumps(legacy).encode()).remaining == 100
+
+
+# ── requests ──
+
+
+def _sent(call) -> dict:
+    with respx.mock(base_url=DEFAULT_BASE_URL, assert_all_called=False) as mock:
+        verify = mock.post("/verify").respond(202, json={"task_id": "t"})
+        batch = mock.post("/verify/batch").respond(202, json={"batch_id": "b", "items": []})
+        client = Lenz(api_key="lenz_" + "0" * 32)
+        call(client)
+        route = verify if verify.called else batch
+        return json.loads(route.calls.last.request.content)
+
+
+@pytest.mark.parametrize("webhook_url", [None, ""])
+def test_verify_never_sends_an_empty_webhook_url(webhook_url):
+    kwargs = {} if webhook_url is None else {"webhook_url": webhook_url}
+    assert "webhook_url" not in _sent(lambda c: c._verify_submit(claim="x", **kwargs))
+    assert "webhook_url" not in _sent(lambda c: c.verify_batch(claims=[{"claim": "x"}], **kwargs))
+    item = _sent(lambda c: c.verify_batch(claims=[{"claim": "x", "webhook_url": ""}]))["claims"][0]
+    assert "webhook_url" not in item
+
+
+def test_verify_sends_a_webhook_url_that_was_set():
+    body = _sent(lambda c: c.verify("x", webhook_url="https://hooks.example.test/x"))
+    assert body["webhook_url"] == "https://hooks.example.test/x"

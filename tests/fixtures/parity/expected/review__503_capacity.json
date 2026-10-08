@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Lenz is at capacity right now — please resubmit after the stated wait. Nothing was charged.",
+    "code": "capacity",
+    "doc_url": "https://lenz.io/docs/errors#unavailable",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "Lenz is at capacity right now — please resubmit after the stated wait. Nothing was charged.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "Lenz is at capacity right now — please resubmit after the stated wait. Nothing was charged.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "Lenz is at capacity right now — please resubmit after the stated wait. Nothing was charged.",
+        "status": 503
+      }
+    },
+    "request_id": "",
+    "retry_after": 90,
+    "status_code": 503,
+    "type": "LenzUpstreamUnavailableError"
+  }
+}

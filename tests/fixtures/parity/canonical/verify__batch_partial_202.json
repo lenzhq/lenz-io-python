@@ -1,0 +1,18 @@
+{
+  "status": 202,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "batch_id": "7ea9cdbd4064e3cf",
+    "items": [
+      {
+        "task_id": "0b92b443eb69b9c71434fdc64f2ca8be",
+        "claim": "First claim."
+      }
+    ],
+    "partial": true
+  }
+}

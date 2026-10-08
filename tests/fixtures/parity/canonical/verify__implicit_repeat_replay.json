@@ -1,0 +1,12 @@
+{
+  "status": 202,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "status": "queued"
+  }
+}

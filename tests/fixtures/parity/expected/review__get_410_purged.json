@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "This review is no longer available: its account removes content after a set period.",
+    "code": "purged",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Its account's retention period removed it. A certificate issued for it is still available.",
+    "friendly_text": "This review is no longer available: its account removes content after a set period.\n  Fix: Its account's retention period removed it. A certificate issued for it is still available.",
+    "message": "This review is no longer available: its account removes content after a set period.",
+    "payload_json": {
+      "error": {
+        "code": "gone",
+        "fix": "Its account's retention period removed it. A certificate issued for it is still available.",
+        "message": "This review is no longer available: its account removes content after a set period.",
+        "status": 410
+      }
+    },
+    "purged_at": "2026-10-01T09:07:00.123456Z",
+    "request_id": "",
+    "status_code": 410,
+    "type": "LenzGoneError"
+  }
+}

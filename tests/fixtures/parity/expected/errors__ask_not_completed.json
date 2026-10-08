@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "Ask is only available for completed verifications.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "Ask is only available for completed verifications.\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "Ask is only available for completed verifications.",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "Ask is only available for completed verifications.",
+        "status": 400
+      }
+    },
+    "request_id": "",
+    "status_code": 400,
+    "type": "LenzError"
+  }
+}

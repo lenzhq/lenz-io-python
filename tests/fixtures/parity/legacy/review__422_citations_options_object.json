@@ -1,0 +1,22 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "payload.citations: Extra inputs are not permitted",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "citations"
+        ],
+        "msg": "Extra inputs are not permitted"
+      }
+    ]
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "dump": {
+    "ask": {
+      "bonus": 1000,
+      "credits": 1000,
+      "quota_remaining": 6000,
+      "quota_total": 6000,
+      "quota_used": 0,
+      "remaining": 6000
+    },
+    "assess": {
+      "bonus": 1000,
+      "credits": 1000,
+      "quota_remaining": 6000,
+      "quota_total": 6000,
+      "quota_used": 0,
+      "remaining": 6000
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "low": 5,
+          "standard": 10
+        }
+      }
+    },
+    "costs": {
+      "ask": 1,
+      "assess": 1,
+      "citation": 1,
+      "extract": 0,
+      "verify": 10
+    },
+    "credits": {
+      "bonus": 1000,
+      "extra": 1000,
+      "remaining": 6000,
+      "resets_at": "2026-10-01T09:07:00.123456+00:00",
+      "total": 6000,
+      "used": 0
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false,
+    "plan": "pro",
+    "plan_label": "Pro",
+    "quota_resets_at": "2026-10-01T09:07:00.123456+00:00",
+    "verify": {
+      "bonus": 100,
+      "credits": 100,
+      "quota_remaining": 600,
+      "quota_total": 600,
+      "quota_used": 0,
+      "remaining": 600
+    }
+  },
+  "render": "Lenz usage  (Pro plan)\n  6000 credits left  (≈ 600 verifications · 6000 assessments)\n  Verify:   600 left  (0 / 600 quota + 100 extra · 10 credits each · 5 at depth \"low\")\n  Ask:      6000 left  (0 / 6000 quota + 1000 extra · 1 credit each)\n  Assess:   6000 left  (0 / 6000 quota + 1000 extra · 1 credit each)\n  Extract:  0 / 1000 today  (free — no credit charge)\n  Credits reset Oct 1, 2026\n",
+  "render_json": "{\n  \"plan\": \"pro\",\n  \"plan_label\": \"Pro\",\n  \"quota_resets_at\": \"2026-10-01T09:07:00.123456+00:00\",\n  \"credits\": {\n    \"total\": 6000,\n    \"used\": 0,\n    \"remaining\": 6000,\n    \"extra\": 1000,\n    \"bonus\": 1000,\n    \"resets_at\": \"2026-10-01T09:07:00.123456+00:00\"\n  },\n  \"costs\": {\n    \"verify\": 10,\n    \"assess\": 1,\n    \"ask\": 1,\n    \"citation\": 1,\n    \"extract\": 0\n  },\n  \"cost_options\": {\n    \"verify\": {\n      \"depth\": {\n        \"standard\": 10,\n        \"low\": 5\n      }\n    }\n  },\n  \"verify\": {\n    \"quota_used\": 0,\n    \"quota_total\": 600,\n    \"quota_remaining\": 600,\n    \"bonus\": 100,\n    \"credits\": 100,\n    \"remaining\": 600\n  },\n  \"ask\": {\n    \"quota_used\": 0,\n    \"quota_total\": 6000,\n    \"quota_remaining\": 6000,\n    \"bonus\": 1000,\n    \"credits\": 1000,\n    \"remaining\": 6000\n  },\n  \"assess\": {\n    \"quota_used\": 0,\n    \"quota_total\": 6000,\n    \"quota_remaining\": 6000,\n    \"bonus\": 1000,\n    \"credits\": 1000,\n    \"remaining\": 6000\n  },\n  \"extract\": {\n    \"calls_today\": 0,\n    \"daily_limit\": 1000,\n    \"unlimited\": false\n  },\n  \"has_webhook_secret\": false\n}\n"
+}

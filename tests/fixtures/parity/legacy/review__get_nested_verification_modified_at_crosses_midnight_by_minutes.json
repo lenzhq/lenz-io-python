@@ -1,0 +1,151 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "review_id": "d6b2bd72",
+    "view": "full",
+    "status": "completed",
+    "outcome": "issues_found",
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 20,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 0,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_selected": 1,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 1,
+        "failed": 0
+      },
+      "verifications": {
+        "planned": 1,
+        "completed": 1,
+        "failed": 0
+      },
+      "issues": 1,
+      "citations_found": null,
+      "citations_selected": null,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
+    "credits": {
+      "charged": 11
+    },
+    "poll_after_seconds": null,
+    "issues": [
+      {
+        "claim_index": 0,
+        "claim": "The Eiffel Tower is in Berlin.",
+        "verified_claim": null,
+        "verdict": "False",
+        "confidence": "high",
+        "source": "verification",
+        "verification_id": "b4e2e99d",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
+        "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+        "escalation": {
+          "matched_rules": [
+            "verdict"
+          ],
+          "disposition": "planned"
+        },
+        "key_finding": "Finding for The Eiffel Tower is in Berlin.",
+        "rationale": null,
+        "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
+        "failure": null,
+        "suggested_edits": null
+      }
+    ],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [
+      {
+        "index": 0,
+        "claim": "The Eiffel Tower is in Berlin.",
+        "positions": null,
+        "result": {
+          "verdict": "False",
+          "confidence": "high",
+          "source": "verification",
+          "is_issue": true
+        },
+        "assessment": {
+          "status": "completed",
+          "verdict": "False",
+          "confidence": "high",
+          "rationale": null,
+          "dissent": null,
+          "verification_url": null,
+          "error_code": null,
+          "identified_claims": [],
+          "hint": null,
+          "suggested_rewrite": null,
+          "failure": null
+        },
+        "escalation": {
+          "matched_rules": [
+            "verdict"
+          ],
+          "disposition": "planned"
+        },
+        "verification": {
+          "status": "completed",
+          "content_status": "available",
+          "task_id": "7df4009bc27aab64ce5d5a01fbafe599",
+          "verification_id": "b4e2e99d",
+          "claim": "The Eiffel Tower is in Berlin.",
+          "language": "en",
+          "visibility": "private",
+          "depth": "standard",
+          "domain": "",
+          "entities": [],
+          "verdict": "False",
+          "confidence": "high",
+          "lenz_score": 2,
+          "key_finding": "Finding for The Eiffel Tower is in Berlin.",
+          "executive_summary": "Summary for The Eiffel Tower is in Berlin.",
+          "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
+          "warnings": [
+            "w1"
+          ],
+          "created_at": "2026-10-01T23:55:00.123456+00:00",
+          "modified_at": "2026-10-02T00:03:00.123456+00:00",
+          "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
+          "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+          "failure": null
+        },
+        "suggested_edits": null
+      }
+    ],
+    "citations": [],
+    "failure": null,
+    "more_claims": [],
+    "more_claim_locations": [],
+    "more_citations": []
+  }
+}

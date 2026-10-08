@@ -1,0 +1,44 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "status": "ok",
+    "claims": [
+      {
+        "claim": "Primary claim.",
+        "language": "en",
+        "status": "completed",
+        "verdict": "Mostly False",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "more_claims": [
+          "Second claim.",
+          "Third claim."
+        ],
+        "failure": null
+      },
+      {
+        "claim": "A plain claim.",
+        "language": "en",
+        "status": "completed",
+        "verdict": "Mostly False",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "failure": null
+      }
+    ],
+    "failure": null,
+    "more_claims": []
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "error": {
+    "cause": "Unsupported language 'xx-not-a-language'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "Unsupported language 'xx-not-a-language'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "Unsupported language 'xx-not-a-language'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "Unsupported language 'xx-not-a-language'. Supported: en, es, de, fr, it, pt, nl, sv, da, no, fi, bg. To ask for another language, contact us at https://lenz.io/contact.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

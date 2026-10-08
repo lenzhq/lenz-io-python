@@ -1,0 +1,20 @@
+{
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "failure": {
+      "code": "research_empty",
+      "detail": "No sources about the claim were found.",
+      "hint": null,
+      "failure_class": "insufficient_evidence",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#insufficient-evidence"
+    }
+  }
+}

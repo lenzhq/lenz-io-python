@@ -1,0 +1,30 @@
+{
+  "error": {
+    "cause": "view: use full or issues.",
+    "code": "validation_error",
+    "doc_url": "https://lenz.io/docs/errors/validation",
+    "errors": [
+      {
+        "loc": [
+          "query",
+          "view"
+        ],
+        "msg": "view: use full or issues."
+      }
+    ],
+    "fix": "Check the request body against the OpenAPI spec.",
+    "friendly_text": "view: use full or issues.\n  Fix: Check the request body against the OpenAPI spec.",
+    "message": "view: use full or issues.",
+    "payload_json": {
+      "error": {
+        "code": "invalid_request",
+        "fix": "Check the request body against the OpenAPI spec.",
+        "message": "view: use full or issues.",
+        "status": 422
+      }
+    },
+    "request_id": "",
+    "status_code": 422,
+    "type": "LenzValidationError"
+  }
+}

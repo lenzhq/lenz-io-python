@@ -1,0 +1,13 @@
+{
+  "dump": {
+    "batch_id": "7ea9cdbd4064e3cf",
+    "items": [
+      {
+        "claim_text": "First claim.",
+        "task_id": "0b92b443eb69b9c71434fdc64f2ca8be"
+      }
+    ],
+    "partial": true
+  },
+  "render_json": null
+}

@@ -1,0 +1,23 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "payload.escalate.confidence: Unknown confidence band 'certain'; use low, medium or high.",
+    "code": "invalid_confidence_band",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "escalate",
+          "confidence"
+        ],
+        "msg": "Unknown confidence band 'certain'; use low, medium or high."
+      }
+    ]
+  }
+}

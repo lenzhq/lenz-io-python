@@ -1,0 +1,53 @@
+{
+  "dump": {
+    "audit": {
+      "adjudication_summary": "",
+      "assessments": [],
+      "debate_con": {
+        "argument": "",
+        "rebuttal": "",
+        "role": ""
+      },
+      "debate_pro": {
+        "argument": "",
+        "rebuttal": "",
+        "role": ""
+      },
+      "panel_agreement": "split"
+    },
+    "claim": "The Earth is round.",
+    "confidence": "high",
+    "coverage": {
+      "aggregate": 500000,
+      "as_of": null,
+      "cap": 10000,
+      "certificate_id": null,
+      "certificate_url": null,
+      "currency": "EUR",
+      "reasons": [
+        "plan"
+      ],
+      "status": "uncovered",
+      "terms_version": "v1"
+    },
+    "created_at": "2026-10-01T09:14:00.123456+00:00",
+    "depth": "standard",
+    "domain": "Science",
+    "entities": [],
+    "executive_summary": "The claim is verified.",
+    "key_finding": "The Earth is approximately spherical in shape.",
+    "language": "en",
+    "lenz_score": 9,
+    "modified_at": null,
+    "presumed_intent": "",
+    "sources": [],
+    "suggested_rewrite": null,
+    "verdict": "True",
+    "verification_id": "68ca4aaf",
+    "visibility": "private",
+    "warnings": []
+  },
+  "render": "True  (high)  score 9/10\n\nClaim  The Earth is round.\nScience\n\nThe Earth is approximately spherical in shape.\n\nThe claim is verified.\n\n── Panel ──\nagreement: split\n\nDebate\n  PRO  \n  CON  \n\nverification_id: 68ca4aaf\nchecked Oct 1, 2026\nask follow-ups: lenz ask 68ca4aaf \"<your question>\"\n",
+  "render_concise": "True  (high)  score 9/10\n\nThe Earth is approximately spherical in shape.\n\nThe claim is verified.\n\nverification_id: 68ca4aaf\nask follow-ups: lenz ask 68ca4aaf \"<your question>\"\n",
+  "render_json": "{\n  \"verification_id\": \"68ca4aaf\",\n  \"claim\": \"The Earth is round.\",\n  \"visibility\": \"private\",\n  \"depth\": \"standard\",\n  \"domain\": \"Science\",\n  \"entities\": [],\n  \"presumed_intent\": \"\",\n  \"verdict\": \"True\",\n  \"confidence\": \"high\",\n  \"lenz_score\": 9,\n  \"key_finding\": \"The Earth is approximately spherical in shape.\",\n  \"executive_summary\": \"The claim is verified.\",\n  \"warnings\": [],\n  \"suggested_rewrite\": null,\n  \"sources\": [],\n  \"audit\": {\n    \"adjudication_summary\": \"\",\n    \"assessments\": [],\n    \"debate_pro\": {\n      \"role\": \"\",\n      \"argument\": \"\",\n      \"rebuttal\": \"\"\n    },\n    \"debate_con\": {\n      \"role\": \"\",\n      \"argument\": \"\",\n      \"rebuttal\": \"\"\n    },\n    \"panel_agreement\": \"split\"\n  },\n  \"created_at\": \"2026-10-01T09:14:00.123456+00:00\",\n  \"modified_at\": null,\n  \"language\": \"en\",\n  \"coverage\": {\n    \"status\": \"uncovered\",\n    \"reasons\": [\n      \"plan\"\n    ],\n    \"certificate_id\": null,\n    \"certificate_url\": null,\n    \"as_of\": null,\n    \"currency\": \"EUR\",\n    \"cap\": 10000,\n    \"aggregate\": 500000,\n    \"terms_version\": \"v1\"\n  }\n}\n"
+}

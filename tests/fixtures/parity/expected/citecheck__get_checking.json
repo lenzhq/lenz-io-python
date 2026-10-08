@@ -1,0 +1,100 @@
+{
+  "dump": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": null,
+          "page_published_date": null,
+          "page_read": null,
+          "page_title": null,
+          "quote": null,
+          "rationale": null,
+          "registered": null,
+          "snippet": null,
+          "source_url": null,
+          "source_version": null,
+          "status": "pending",
+          "support": null,
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.gov/report-2024",
+        "result": null,
+        "statement": "Unemployment fell to 4.1% in 2024."
+      },
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": null,
+          "page_published_date": null,
+          "page_read": null,
+          "page_title": null,
+          "quote": null,
+          "rationale": null,
+          "registered": null,
+          "snippet": null,
+          "source_url": null,
+          "source_version": null,
+          "status": "pending",
+          "support": null,
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.org/statement",
+        "result": null,
+        "statement": "The agency said so in a statement."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": null,
+    "created_at": "2026-10-01T09:14:00.123456Z",
+    "credits": {
+      "charged": 0
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": null,
+    "policy": {
+      "max_citations": 2
+    },
+    "poll_after_seconds": 10,
+    "status": "checking",
+    "summary": {
+      "citation_checks": {
+        "checked": 0,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 2,
+      "citation_limit_reached": false,
+      "citations_found": 2,
+      "citations_selected": 2
+    }
+  },
+  "exit_code": 2,
+  "render": "Citation check 8eb49302: checking — 0 credits charged\n\n2 sources cited in your draft\nLenz checks each one: does the source say what your draft says it does.\n",
+  "render_json": null
+}

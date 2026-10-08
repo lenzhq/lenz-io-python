@@ -1,0 +1,12 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "Send either `claim` (one text) or `claims` (a list of claims), not both.",
+    "code": "input_conflict"
+  }
+}

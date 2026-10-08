@@ -1,0 +1,28 @@
+{
+  "status": 422,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "claim: Field required",
+    "code": "validation_error",
+    "errors": [
+      {
+        "loc": [
+          "body",
+          "payload",
+          "text"
+        ],
+        "msg": "Field required",
+        "type": "missing"
+      }
+    ],
+    "hint": "Required field 'claim' is missing. Unrecognised fields: statement.",
+    "docs_url": "https://lenz.io/docs/errors#validation",
+    "unrecognized_fields": [
+      "statement"
+    ]
+  }
+}

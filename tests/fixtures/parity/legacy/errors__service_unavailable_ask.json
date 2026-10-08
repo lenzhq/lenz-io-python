@@ -1,0 +1,15 @@
+{
+  "status": 503,
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "90",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
+  "body": {
+    "detail": "The chat model is unavailable right now. Retry shortly.",
+    "code": "upstream_unavailable",
+    "retry_after": 90,
+    "doc_url": "https://lenz.io/docs/errors#unavailable"
+  }
+}
