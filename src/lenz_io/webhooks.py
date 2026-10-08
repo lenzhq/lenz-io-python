@@ -27,6 +27,7 @@ old deliveries.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import hmac
 import json
@@ -256,6 +257,62 @@ class CitecheckEvent(WebhookEvent):
     citecheck: Citecheck | None = None
 
 
+#: The original ``verification.completed`` ``result``: every key, in order,
+#: with the value it took when the verification left it out. A newer payload
+#: sends only the keys it has.
+_RESULT_DEFAULTS: tuple[tuple[str, Any], ...] = (
+    ("verification_id", ""),
+    ("claim", ""),
+    ("visibility", "private"),
+    ("depth", "standard"),
+    ("domain", ""),
+    ("entities", []),
+    ("presumed_intent", ""),
+    ("verdict", ""),
+    ("confidence", "low"),
+    ("lenz_score", None),
+    ("key_finding", ""),
+    ("executive_summary", ""),
+    ("warnings", []),
+    ("suggested_rewrite", None),
+    ("created_at", ""),
+    ("modified_at", None),
+    ("sources", []),
+    ("audit", None),
+    ("language", "en"),
+    ("coverage", None),
+)
+_AUDIT_DEFAULTS: tuple[tuple[str, Any], ...] = (
+    ("adjudication_summary", ""),
+    ("assessments", []),
+    ("debate_pro", None),
+    ("debate_con", None),
+    ("panel_agreement", ""),
+)
+_SIDE_DEFAULTS: tuple[tuple[str, Any], ...] = (("role", ""), ("argument", ""), ("rebuttal", ""))
+
+
+def _with_defaults(value: Any, defaults: tuple[tuple[str, Any], ...]) -> dict[str, Any]:
+    """``value`` (a dict, else empty) with every key of ``defaults`` in that
+    order, then any key it carries beyond them."""
+    given = value if isinstance(value, dict) else {}
+    out = {key: given.get(key, copy.deepcopy(default)) for key, default in defaults}
+    out.update({k: v for k, v in given.items() if k not in out})
+    return out
+
+
+def _original_result(result: dict[str, Any]) -> dict[str, Any]:
+    """A newer payload's ``result`` with the original's keys and defaults
+    (``modified_at`` computed from ``completed_at``); keys the original did
+    not have (``completed_at``) follow them."""
+    out = _with_defaults(_fill_modified_at(result), _RESULT_DEFAULTS)
+    audit = _with_defaults(out["audit"], _AUDIT_DEFAULTS)
+    audit["debate_pro"] = _with_defaults(audit["debate_pro"], _SIDE_DEFAULTS)
+    audit["debate_con"] = _with_defaults(audit["debate_con"], _SIDE_DEFAULTS)
+    out["audit"] = audit
+    return out
+
+
 def _original_view(payload: dict[str, Any]) -> dict[str, Any]:
     """The original flat ``verification.*`` fields, for a payload in the newer
     envelope (the polled body nested under ``verification``). Any other
@@ -267,7 +324,7 @@ def _original_view(payload: dict[str, Any]) -> dict[str, Any]:
     view.setdefault("task_id", body.get("task_id"))
     result = body.get("result")
     if isinstance(result, dict):
-        view.setdefault("result", _fill_modified_at(result))
+        view.setdefault("result", _original_result(result))
         view.setdefault("verification_id", result.get("verification_id"))
     failure = body.get("failure")
     if isinstance(failure, dict):

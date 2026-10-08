@@ -65,8 +65,8 @@ Design decisions:
   twice. Customer can override with explicit ``idempotency_key=...`` or opt
   out with ``idempotency=False``. ``ask.send`` takes the same argument but
   never generates one — see its docstring.
-* ``X-Lenz-API-Version`` header pinned at SDK release date so the server
-  can route old clients to v1 handlers when v2 ships.
+* ``X-Lenz-API-Version`` header pinned per SDK release (``API_VERSION``), so
+  the server answers every release in the response shape it was built for.
 * ``X-Request-ID`` is captured from every response onto the typed error
   for support escalation.
 """
@@ -125,9 +125,12 @@ from .models import (
 
 logger = logging.getLogger("lenz_io")
 
-# Pin the API version the SDK was built against. The server logs it on
-# every request; when v2 ships, old SDKs keep getting v1 behavior.
-API_VERSION = "2026-05-13"
+# The API version this SDK asks for, sent as ``X-Lenz-API-Version`` on every
+# request: the server answers in that version's response shape, whatever the
+# account. Since 3.0.0 this is the current shape (one name for each field,
+# status and error code). The models still read the original ``2026-05-13``
+# shape as well, and every attribute keeps the meaning it had in 2.x.
+API_VERSION = "2026-10-11"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
 DEFAULT_TIMEOUT = 30.0
@@ -1834,6 +1837,7 @@ class Lenz:
                 response.status_code,
                 response.content,
                 dict(response.headers),
+                endpoint=(method, path),
             )
 
         # Shouldn't reach here, but guard.

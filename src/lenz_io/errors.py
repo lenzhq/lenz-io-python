@@ -20,6 +20,7 @@ Error messages follow the Tier 2 Rust-style format:
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from typing import TYPE_CHECKING, Any
 
@@ -514,17 +515,122 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+# ── The original 422 shapes, read from a newer-shape body ───────────────
+#
+# The API's newer response shape gives every 422 one envelope: ``detail`` is a
+# sentence, ``code`` is set and ``errors`` lists the fields. The original shape
+# differed by endpoint, and a few codes were spelled differently. The
+# exception's attributes keep their original values; ``exc.body`` is the body
+# as sent. Each rule recognises only a newer-shape body, so an original-shape
+# body reads exactly as before.
+
+#: /review and /citecheck (submit and read): one envelope in both shapes,
+#: with the original ``code`` / ``detail`` wording below.
+_REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
+#: The codes a /review 422 renamed (the original said ``validation_error``).
+_REVIEW_RENAMED_422 = ("blank_input", "unsupported_language")
+
+
+def _items(parsed: dict[str, Any]) -> list[dict[str, Any]] | None:
+    errors = parsed.get("errors")
+    if not isinstance(errors, list) or not all(isinstance(i, dict) for i in errors):
+        return None
+    return errors
+
+
+def _payload_loc(item: dict[str, Any]) -> bool:
+    """A field error from request-body validation (``body.payload...``)."""
+    loc = item.get("loc")
+    return isinstance(loc, list) and len(loc) >= 2 and loc[0] == "body" and loc[1] == "payload"
+
+
+def _param_loc(item: dict[str, Any]) -> bool:
+    """A field error from query or path parameter validation."""
+    loc = item.get("loc")
+    return isinstance(loc, list) and len(loc) >= 2 and loc[0] in ("query", "path")
+
+
+def _review_family_original(parsed: dict[str, Any]) -> dict[str, Any]:
+    code, detail, items = parsed.get("code"), parsed.get("detail"), _items(parsed)
+    view = dict(parsed)
+    if code in _REVIEW_RENAMED_422:
+        view["code"] = "validation_error"
+        if code == "unsupported_language" and isinstance(detail, str) and not detail.startswith("language: "):
+            view["detail"] = f"language: {detail}"
+    if items:
+        first = items[0]
+        if _payload_loc(first):
+            # The original named the body parameter: ``payload.text: ...``.
+            loc = ".".join(str(p) for p in first["loc"] if p != "body")
+            view["detail"] = f"{loc}: {first.get('msg')}"
+        out = []
+        for item in items:
+            item = {k: v for k, v in item.items() if k in ("loc", "msg")}
+            if view.get("detail") != detail and item.get("msg") == detail:
+                item["msg"] = view["detail"]
+            out.append(item)
+        view["errors"] = out
+    elif code == "idempotency_body_mismatch" and "errors" not in parsed:
+        view["errors"] = [{"loc": ["header"], "msg": detail}]
+    return view
+
+
+def _original_422(parsed: dict[str, Any], method: str, path: str) -> dict[str, Any]:
+    """``parsed`` as the original response shape read, where the newer body
+    lets that be worked out; else ``parsed`` itself."""
+    if not isinstance(parsed.get("detail"), str):
+        return parsed  # the original shape's list ``detail``, or no detail
+    path = path.split("?", 1)[0]
+    if _REVIEW_FAMILY.match(path):
+        return _review_family_original(parsed)
+    code, items = parsed.get("code"), _items(parsed)
+    if not items:
+        return parsed
+    if (
+        method.upper() == "POST"
+        and path == "/assess"
+        and code == "blank_input"
+        and isinstance(items[0].get("loc"), list)
+        and items[0]["loc"][:2] == ["body", "claims"]
+        and len(items[0]["loc"]) == 3
+    ):
+        # A blank item in ``claims``: the original code was ``blank_item``.
+        return {**parsed, "code": "blank_item"}
+    if code == "validation_error" and all(_payload_loc(i) or _param_loc(i) for i in items):
+        if any(i.get("type") in (None, code) for i in items):
+            return parsed  # the endpoint's own check, not request-schema validation
+        # Request-schema validation: the original ``detail`` was the list of
+        # field errors itself, each ``{type, loc, msg, ...}``.
+        listed = []
+        for item in items:
+            ordered = {k: item[k] for k in ("type", "loc", "msg") if k in item}
+            ordered.update({k: v for k, v in item.items() if k not in ordered})
+            listed.append(ordered)
+        return {**parsed, "detail": listed}
+    return parsed
+
+
 def map_response_to_error(
     status_code: int,
     body: bytes | str | None,
     headers: dict[str, str] | None = None,
+    *,
+    endpoint: tuple[str, str] | None = None,
 ) -> LenzError:
     """Translate an HTTP error response into the right typed exception.
 
     Returns an *instance* (not raised) so callers can decide whether
     to raise, log, or surface. Keep this pure — no I/O.
+
+    ``endpoint`` is the request's ``(method, path)``: with it, a 422 in the
+    API's newer response shape gives the exception the same ``code``,
+    ``message`` and ``errors`` the original shape gave (``exc.body`` is
+    always the body as sent).
     """
-    parsed = _parse_body(body)
+    raw = _parse_body(body)
+    parsed = raw
+    if status_code == 422 and endpoint is not None:
+        parsed = _original_422(raw, *endpoint)
     headers = headers or {}
     request_id = headers.get("X-Request-ID") or headers.get("x-request-id") or ""
 
@@ -560,7 +666,7 @@ def map_response_to_error(
         request_id=request_id,
         status_code=status_code,
         code=code,
-        body=parsed,
+        body=raw,
     )
 
     # Class-specific enrichment from the response body. Each is set on the
@@ -640,6 +746,16 @@ def map_response_to_error(
         # NOT on the same-named deprecated property — that one aliases
         # ``remaining`` and means a different quantity (see the class docstring).
         err.credit_balance = _opt_int(parsed.get("credits_remaining"))
+        if (
+            err.credit_balance is None
+            and err.remaining is not None
+            and "remaining" in parsed
+            and "docs_url" in parsed
+            and "doc_url" not in parsed
+        ):
+            # A newer-shape body leaves the pool out where it equals
+            # ``remaining`` (a citation check costs one credit).
+            err.credit_balance = err.remaining
         err.cost = _opt_int(parsed.get("cost"))
         resets_at = parsed.get("resets_at")
         err.resets_at = resets_at if isinstance(resets_at, str) and resets_at else None

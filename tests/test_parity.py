@@ -63,38 +63,43 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
     lb, cb = legacy["body"], canonical["body"]
     head, _, rest = path.partition(".")
     if head == "error":
-        if rest in _MESSAGE_PATHS and lb.get("detail") != cb.get("detail"):
-            return "the server words `detail` differently (a 422 sends a sentence, not the list)"
-        if rest == "code" and lb.get("code") != cb.get("code"):
-            return "the server sends a different (or a first) `code`"
-        if rest.startswith("errors") and _validation_items(lb) != _validation_items(cb):
-            return "the server's field errors differ"
+        legacy_sentence = isinstance(lb.get("detail"), str)
+        if rest in _MESSAGE_PATHS and legacy_sentence and lb.get("detail") != cb.get("detail"):
+            return "the server words its `detail` sentence differently"
+        if rest in _MESSAGE_PATHS and "detail" not in lb and isinstance(cb.get("detail"), str):
+            return "the newer shape sends a `detail` sentence where the original sent none"
+        if rest == "code" and "code" not in lb and "code" in cb:
+            return "the newer shape names a `code` where the original sent none"
+        if rest.startswith("errors") and not _validation_items(lb) and _validation_items(cb):
+            return "the newer shape lists the field errors where the original listed none"
         if rest in ("hint", "fix", "friendly_text", "payload_json.error.fix") and lb.get("hint") != cb.get("hint"):
             return "the server words the hint differently"
     if head == "wait" or path in ("dump.error", "render"):
         sentence = lb.get("error")
-        if isinstance(sentence, str) and sentence != _failure(cb).get("detail"):
+        if (
+            name.startswith("verify__")
+            and isinstance(sentence, str)
+            and sentence != _failure(cb).get("detail")
+            and "failure" in cb
+        ):
             if path in ("dump.error", "render") or rest in _MESSAGE_PATHS:
                 return "the failed run's sentence: the newer shape's `failure.detail` is worded differently"
     if path in ("dump.hint", "wait.hint") and lb.get("hint", "") != _failure(cb).get("hint", ""):
         return "the newer shape carries a hint the original did not"
-    if path.startswith("wait.payload.") and name.startswith("verify__status_needs_input"):
-        return "LenzNeedsInputError.payload is the status as sent (model_dump)"
+    option_claim = path.startswith("wait.payload.claims[") and path.endswith("].claim")
+    if option_claim and name.startswith("verify__status_needs_input"):
+        return "LenzNeedsInputError.payload is the status dump: an option also carries its newer name `claim`"
     if path == "dump.chain_id" and "chain_id" in lb and "chain_id" not in cb:
         return "`chain_id` is not in the newer shape"
     if path == "event.task_id" and "task_id" in lb and "task_id" not in cb:
         return "review/citecheck webhooks drop `task_id` (never pollable); it reads the review or check id"
-    if path.startswith("event.result.") and name.startswith("webhook__verification_completed"):
-        return "`result` is the dict as sent; the newer shape's carries `completed_at`"
+    if path == "event.result.completed_at" and name.startswith("webhook__verification_completed"):
+        return "`result` also carries the newer `completed_at` beside `modified_at`"
     return KNOWN_GAPS.get((name, path))
 
 
 #: Single gaps no rule covers, each with its reason.
 KNOWN_GAPS: dict[tuple[str, str], str] = {
-    ("assess__list_compound_item.json", "dump.claims[0].hint"): (
-        "the newer shape sends no hint on a completed row with other claims found"
-    ),
-    ("assess__list_compound_item.json", "render"): "the same hint line, printed by the CLI",
     ("review__get_assessment_rows_full_fields.json", "dump.claims[0].assessment.hint"): (
         "the newer shape sends no hint on a completed quick check with other claims found"
     ),

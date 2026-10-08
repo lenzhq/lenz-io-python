@@ -402,7 +402,7 @@ class Verification(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        return _fill_modified_at(data)
+        return _deep_check_failure(_fill_modified_at(data))
 
     @property
     def completed_at(self) -> str | None:
@@ -439,7 +439,7 @@ class VerificationListItem(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        return _fill_modified_at(data)
+        return _deep_check_failure(_fill_modified_at(data))
 
     @property
     def completed_at(self) -> str | None:
@@ -612,6 +612,12 @@ class ExtractedClaims(_Lax):
         return [ExtractedClaim(claim=n, positions=positions.get(n)) for n in names]
 
 
+#: The original shape's ``hint`` on an /assess verdict row that found other
+#: claims in its input, and its ``error`` on an input holding no claim.
+_COMPOUND_HINT = "Assessed the main claim only. Send identified_claims as their own items to check the rest."
+_NO_CLAIM_ERROR = "No verifiable claim detected"
+
+
 class AssessClaim(_Lax):
     """Per-claim entry in an ``AssessResponse.claims`` list.
 
@@ -690,11 +696,17 @@ class AssessClaim(_Lax):
         if out.get("confidence") is None:
             out["confidence"] = "low"
         failure = out.get("failure") if isinstance(out.get("failure"), dict) else {}
+        more = out.get("more_claims") or []
+        if failure:
+            hint = failure.get("hint")
+        else:
+            # A verdict row with other claims found carried this one sentence.
+            hint = _COMPOUND_HINT if more else None
         return _fill(
             out,
             error_code=_old_code(failure.get("code"), "no_claim") if failure else None,
-            hint=failure.get("hint") if failure else None,
-            identified_claims=out.get("more_claims") or [],
+            hint=hint,
+            identified_claims=more,
         )
 
     @property
@@ -778,7 +790,8 @@ class AssessResponse(_Lax):
             return data
         return _fill(
             data,
-            error=failure.get("detail"),
+            # The original shape's one sentence for an input with no claim.
+            error=_NO_CLAIM_ERROR,
             error_code=_old_code(failure.get("code"), "no_claim") or "",
         )
 
@@ -828,6 +841,14 @@ class TaskAccepted(_Lax):
         ``verify`` receipt); ``claim_text`` is its older name."""
         sent = _sent(self, "claim")
         return sent if isinstance(sent, str) else self.claim_text
+
+    @property
+    def chain_id(self) -> str:
+        """An internal correlation id the original response shape sent on a
+        ``verify`` receipt; ``""`` when the response carries none (the current
+        shape never does). It cannot be polled: use ``task_id``."""
+        sent = _sent(self, "chain_id")
+        return sent if isinstance(sent, str) else ""
 
 
 class BatchAccepted(_Lax):
@@ -1143,6 +1164,11 @@ class UsageExtract(_Lax):
     unlimited: bool = False
 
 
+#: The per-capability blocks the original /me/usage carried, with the price
+#: each was projected at when a response publishes none.
+_BLOCK_COSTS = (("verify", 10), ("ask", 1), ("assess", 1))
+
+
 class Usage(_Lax):
     """Returned by ``GET /me/usage`` — the account's balance and what it buys.
 
@@ -1242,20 +1268,21 @@ class Usage(_Lax):
 
         out = _fill(data, quota_resets_at=credits.get("resets_at"))
         if not isinstance(costs, dict):
-            return out
+            costs = {}
         total, remaining = _int(credits.get("total")), _int(credits.get("remaining"))
         extra = _int(credits.get("extra", credits.get("bonus")))
-        for capability in ("verify", "ask", "assess"):
-            cost = _int(costs.get(capability))
-            if cost > 0:
-                quota_total, left = total // cost, remaining // cost
-                out[capability] = {
-                    "quota_used": quota_total - left,
-                    "quota_total": quota_total,
-                    "quota_remaining": left,
-                    "bonus": extra // cost,
-                    "remaining": left,
-                }
+        for capability, default_cost in _BLOCK_COSTS:
+            # At the price the body publishes; a capability it leaves out (or
+            # prices at 0) at the price the blocks always used.
+            cost = _int(costs.get(capability)) or default_cost
+            quota_total, left = total // cost, remaining // cost
+            out[capability] = {
+                "quota_used": max(0, quota_total - left),
+                "quota_total": quota_total,
+                "quota_remaining": left,
+                "bonus": extra // cost,
+                "remaining": left,
+            }
         return out
 
 
@@ -1362,6 +1389,16 @@ class FailureBlock(_Lax):
         """One sentence on what happened; ``None`` from the original shape."""
         sent = _sent(self, "detail")
         return sent if isinstance(sent, str) else None
+
+
+def _deep_check_failure(data: Any) -> Any:
+    """A newer-shape ``failure`` block of a deep check inside a review: its
+    "nothing checkable" was ``not_a_claim`` (a quick check's and the review's
+    own, ``no_claim``, which ``FailureBlock`` reads by default)."""
+    failure = data.get("failure") if isinstance(data, dict) else None
+    if isinstance(failure, dict) and _is_newer(failure, "code", "failure_reason"):
+        return {**data, "failure": _fill(failure, failure_reason=_old_code(failure["code"], "not_a_claim"))}
+    return data
 
 
 class EscalationPolicy(_Lax):
@@ -1596,7 +1633,7 @@ class ReviewVerification(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        return _fill_modified_at(data)
+        return _deep_check_failure(_fill_modified_at(data))
 
     @property
     def completed_at(self) -> str | None:
@@ -1709,6 +1746,12 @@ class ReviewIssue(_Lax):
     #: A copy of its claim row's ``suggested_edits``.
     suggested_edits: SuggestedEdits | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def _read_newer_shape(cls, data: Any) -> Any:
+        # An issue's failure is its deep check's.
+        return _deep_check_failure(data)
+
 
 class ReviewFailure(_Lax):
     """A claim outside the issues whose work failed. ``stage`` is
@@ -1718,6 +1761,13 @@ class ReviewFailure(_Lax):
     claim: str | None = None
     stage: str = ""
     failure: FailureBlock | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _read_newer_shape(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("stage") == "verification":
+            return _deep_check_failure(data)
+        return data
 
 
 class ReviewCitationResult(_Lax):

@@ -6,6 +6,85 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+Major release (3.0.0). Code that reads the SDK's attributes keeps working
+unchanged. Code that reads the raw response dict (`model_dump()`,
+`exc.body`, a webhook event's `raw`, the CLI's `--json` output) sees the
+API's current response shape: read the migration note below.
+
+### Changed
+
+- **The SDK asks for the API's current response shape.** Every request sends
+  `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`; 2.x sent
+  `2026-05-13`). In that shape each field, status and error code has one name
+  across every endpoint.
+- **Every attribute keeps the value it had in 2.x**, computed from the
+  current shape where the server now sends it under another name or not at
+  all. Among them:
+  - A failed `/assess` row still reads `verdict == "Error"` and
+    `confidence == "low"`, with `error_code` and `hint`; a verdict row that
+    found other claims carries its `hint` again. `AssessResponse.error` reads
+    `"No verifiable claim detected"` on an input with no claim.
+  - "Nothing checkable" keeps each field's old spelling: `no_claim` on
+    `/assess` rows, `AssessResponse.error_code`, review rows and the review's
+    own failure; `not_a_claim` on `/extract`, a verification
+    (`TaskStatus.failure_reason`, `LenzPipelineError.failure_reason`, the
+    `verification.failed` webhook's `error`) and a deep check inside a review.
+  - `modified_at` (set only when a verification completed on a later UTC
+    calendar day than it was created), `claim_text` on receipts, `text` on
+    `needs_input` options, `ExtractedClaims.claim` / `identified_claims` /
+    `locations`, `claim_limit_reached` / `citation_limit_reached`.
+  - `Usage.quota_resets_at`, `credits.bonus` and the `verify` / `ask` /
+    `assess` blocks, which the current `/me/usage` leaves out: projected from
+    `credits` and `costs` the way the API projected them.
+  - A `verification.completed` webhook's `result` has every key it had, with
+    the same defaults, plus `completed_at`.
+  - Errors: `reset_in_seconds` and `retry_after` on a 429,
+    `LenzQuotaExceededError.credit_balance` on a citation-check 402, and on a
+    422 the original `code` (`blank_item` for a blank `/assess` item,
+    `validation_error` on `/review` and `/citecheck`), `message` (the list of
+    field errors for a request-schema failure; the parameter path on
+    `/review` and `/citecheck`) and `errors`.
+- A repeated `verify` answered from the first submission is now a 202 (it was
+  a 200) without `chain_id`: `verify` returns the same `TaskAccepted`.
+- `map_response_to_error` takes an optional `endpoint=(method, path)`, which
+  the client passes: a 422's original `code` and wording depend on it.
+
+### What reads differently
+
+The current shape does not carry a few values, so these attributes read the
+server's current values:
+
+- A failed verification's sentence (`TaskStatus.error`, the message of the
+  `LenzPipelineError` that `wait` raises) is the current wording, e.g. "No
+  sources about the claim were found." where 2.x read "Pipeline stopped at:
+  research_empty". `failure_reason`, `failure_class` and `retryable` are
+  unchanged.
+- Some error sentences are worded differently ("claim is required." for
+  "Text is required.").
+- An error's `code` is set on every error, including those where 2.x read
+  `""` (401, 404, 405, 409 and some 422s); a 422 may list `errors` where 2.x
+  listed none; a failed verification may carry a `hint` where 2.x read `""`.
+- `ExtractedClaims.status` reads `ready` when claims came back beside input
+  that held none (2.x: `not_a_claim`).
+- A review's quick-check row whose passage held several claims has no `hint`.
+- `TaskAccepted.chain_id` (an internal id, never pollable) reads `""`.
+
+### Migration
+
+- Code that reads attributes: nothing to do.
+- Code that reads the raw dict: the keys are the current shape's. A model's
+  `model_dump()` holds what the server sent plus the 2.x fields filled in from
+  it; `exc.body` and `event.raw` hold the body as sent (`failure` blocks,
+  `claims` lists, `completed_at`, `more_claims`, `docs_url`, `retry_after`).
+  Read the attributes instead, or stay on 2.21 until you move.
+- `webhook_url` keeps its meaning: on `verify` and `verify_batch` an empty
+  value (the default) means your key's default webhook and is not sent; on
+  `review` and `citecheck`, `None` means your key's default and `""` means no
+  webhook. In the current shape the API reads a missing `webhook_url` as the
+  key's default and `""` as no webhook on every endpoint.
+
+---
+
 Minor release (2.21.0). Existing code keeps working unchanged; nothing to do
 on upgrade.
 
