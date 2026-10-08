@@ -199,6 +199,15 @@ def _user_agent() -> str:
     return f"lenz-io-python/{__version__} (httpx {httpx.__version__})"
 
 
+def _blank_webhook_url(value: Any) -> bool:
+    """An empty or whitespace-only ``webhook_url`` on ``verify`` /
+    ``verify_batch``: it always meant the key's default webhook (the API read
+    it as left out), so it is left out, which keeps that meaning on every API
+    version (the current one reads a blank value as "no webhook"). ``None``
+    is left out too."""
+    return value is None or (isinstance(value, str) and not value.strip())
+
+
 def _batch_item_body(item: Any) -> Any:
     """The wire shape of one batch item.
 
@@ -209,7 +218,7 @@ def _batch_item_body(item: Any) -> Any:
     the key's default, and leaving it out keeps that meaning on every API
     version.
     """
-    if isinstance(item, dict) and item.get("webhook_url") == "":
+    if isinstance(item, dict) and _blank_webhook_url(item.get("webhook_url")):
         item = {k: v for k, v in item.items() if k != "webhook_url"}
     if "claim" not in item:
         return item
@@ -1590,7 +1599,7 @@ class Lenz:
         # Omit-when-empty: no ``webhook_url`` means the key's default webhook.
         # An empty string is never sent, so a request keeps that meaning on
         # every API version (a newer one reads ``""`` as "no webhook").
-        if webhook_url:
+        if not _blank_webhook_url(webhook_url):
             payload["webhook_url"] = webhook_url
         # Omit-when-empty so existing English callers keep byte-identical
         # request bodies (no extra "language": "" key).
@@ -1626,7 +1635,7 @@ class Lenz:
         # runtime contract a plain dict).
         payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims]}
         # Omit-when-empty, as on ``verify``: no ``webhook_url`` means the key's default.
-        if webhook_url:
+        if not _blank_webhook_url(webhook_url):
             payload["webhook_url"] = webhook_url
         if language:
             payload["language"] = language

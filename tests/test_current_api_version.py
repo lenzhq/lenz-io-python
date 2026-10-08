@@ -225,3 +225,19 @@ def test_a_receipt_without_chain_id_reads_it_as_empty() -> None:
     assert current.chain_id == ""
     assert original.chain_id == load("legacy", "verify__submit_202.json")["body"]["chain_id"]
     assert "chain_id" in original.model_dump()
+
+
+@pytest.mark.parametrize("blank", ["", "   ", "\t\n", None])
+def test_a_blank_verify_webhook_url_is_left_out(client: Lenz, blank: Any) -> None:
+    """2.x: the API read a blank ``webhook_url`` on /verify as left out, so
+    the key's default webhook fired. The current shape reads a blank value as
+    "no webhook", so the SDK leaves it out to keep the 2.x meaning."""
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        single = mock.post("/verify").respond(202, json={"task_id": "t" * 32, "status": "queued"})
+        batch = mock.post("/verify/batch").respond(202, json={"batch_id": "b", "items": []})
+        client.verify("The Earth is round.", webhook_url=blank)
+        client.verify_batch(claims=[{"claim": "A.", "webhook_url": blank}], webhook_url=blank)
+    assert "webhook_url" not in _sent(single)
+    body = _sent(batch)
+    assert "webhook_url" not in body
+    assert "webhook_url" not in body["claims"][0]

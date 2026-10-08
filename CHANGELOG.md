@@ -62,15 +62,38 @@ server's current values:
 - Some error sentences are worded differently ("claim is required." for
   "Text is required.").
 - An error's `code` is set on every error, including those where 2.x read
-  `""` (401, 404, 405, 409 and some 422s); a 422 may list `errors` where 2.x
-  listed none; a failed verification may carry a `hint` where 2.x read `""`.
+  `""` (400s such as `malformed_body` and `verification_not_ready` from
+  `ask.send`, 401, 404, 405, 409 and some 422s); a 422 may list `errors`
+  where 2.x listed none; a failed verification may carry a `hint` where 2.x
+  read `""`.
+- `verifications.get` on a run that failed (409 `verification_failed`): the
+  `LenzPipelineError`'s `hint` and `fix`, and the CLI's message, carry the
+  run's own advice where it has one (e.g. "Send one factual claim, ...") where
+  2.x sometimes read "Resubmit to POST /verify if retryable is true. ...".
 - `ExtractedClaims.status` reads `ready` when claims came back beside input
   that held none (2.x: `not_a_claim`).
 - A review's quick-check row whose passage held several claims has no `hint`.
+- Reviews stored before the API's current shape: a quick-check row or a
+  `ReviewFailure` that 2.x read with `failure` `None` may read a failure block,
+  and a deep check's `modified_at` is computed from its completion time
+  (set only when it completed on a later UTC calendar day) rather than read
+  as stored.
+- A `review.*` / `citecheck.*` webhook event's `task_id` reads the review or
+  check id (the payload no longer carries the delivery id; deduplicate on
+  `event_id`).
 - `TaskAccepted.chain_id` (an internal id, never pollable) reads `""`.
 
 ### Migration
 
+- **Webhooks follow the version of the request that submitted the work.** A
+  `verify`, `verify_batch`, `select`, `review` or `citecheck` call made with
+  3.0 gets its webhooks in the current shape (one envelope: `event`,
+  `event_id`, the work's id, `status`, and the polled body under
+  `verification` / `review` / `citecheck`). If the service that RECEIVES your
+  webhooks parses them with lenz-io 2.20 or older, or reads the raw JSON,
+  upgrade it to 2.21 or later (which reads both shapes) before the service
+  that SENDS requests moves to 3.0. Work submitted with 2.x keeps sending
+  the original shape.
 - Code that reads attributes: nothing to do.
 - Code that reads the raw dict: the keys are the current shape's. A model's
   `model_dump()` holds what the server sent plus the 2.x fields filled in from
@@ -78,7 +101,8 @@ server's current values:
   `claims` lists, `completed_at`, `more_claims`, `docs_url`, `retry_after`).
   Read the attributes instead, or stay on 2.21 until you move.
 - `webhook_url` keeps its meaning: on `verify` and `verify_batch` an empty
-  value (the default) means your key's default webhook and is not sent; on
+  or whitespace-only value (the default is `""`) means your key's default
+  webhook and is not sent; on
   `review` and `citecheck`, `None` means your key's default and `""` means no
   webhook. In the current shape the API reads a missing `webhook_url` as the
   key's default and `""` as no webhook on every endpoint.
