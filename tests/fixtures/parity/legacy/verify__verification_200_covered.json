@@ -1,10 +1,5 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "verification_id": "68ca4aaf",
     "claim": "The Earth is round.",
@@ -27,7 +22,7 @@
       "Relies on limited sources"
     ],
     "suggested_rewrite": null,
-    "created_at": "2026-10-01T09:14:00.123456+00:00",
+    "created_at": "2026-10-01T09:07:00.123456+00:00",
     "modified_at": null,
     "sources": [
       {
@@ -81,13 +76,18 @@
     "coverage": {
       "status": "covered",
       "reasons": [],
-      "certificate_id": "def7232d27eda03cf261569aee9948c5",
-      "certificate_url": "https://lenz.io/certificate/def7232d27eda03cf261569aee9948c5",
+      "certificate_id": "95b0f3dd008b46846b6dd6b15099e2b3",
+      "certificate_url": "https://lenz.io/certificate/95b0f3dd008b46846b6dd6b15099e2b3",
       "as_of": "2026-03-10T12:01:30+00:00",
       "currency": "EUR",
       "cap": 10000,
       "aggregate": 500000,
       "terms_version": "v1"
     }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

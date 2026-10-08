@@ -2,7 +2,7 @@
   "event": {
     "attempt": 1,
     "batch_id": null,
-    "delivered_at": "2026-10-01T10:03:00.123456+00:00",
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
     "event": "review.completed",
     "event_id": "evt_09301870aba4e8f6ae33ff60",
     "review": {
@@ -44,7 +44,7 @@
             "claim": "The Eiffel Tower is in Berlin.",
             "confidence": "high",
             "content_status": "available",
-            "created_at": "2026-10-01T09:56:00.123456+00:00",
+            "created_at": "2026-10-01T09:14:00.123456+00:00",
             "depth": "standard",
             "domain": "",
             "entities": [],
@@ -56,11 +56,11 @@
             "modified_at": null,
             "status": "completed",
             "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
-            "task_id": "5ccac77f53ff49328ec134fb29d66542",
-            "url": "https://lenz.io/c/the-earth-is-round-8ceed6f0",
+            "task_id": "0b92b443eb69b9c71434fdc64f2ca8be",
+            "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
             "verdict": "False",
-            "verification_id": "8ceed6f0",
-            "verification_url": "https://lenz.io/api/v1/verifications/8ceed6f0",
+            "verification_id": "68ca4aaf",
+            "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
             "visibility": "private",
             "warnings": [
               "w1"
@@ -68,8 +68,8 @@
           }
         }
       ],
-      "completed_at": "2026-10-01T09:35:00.123456Z",
-      "created_at": "2026-10-01T09:28:00.123456Z",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "created_at": "2026-10-01T09:07:00.123456Z",
       "credits": {
         "charged": 11
       },
@@ -92,11 +92,11 @@
           "source": "verification",
           "suggested_edits": null,
           "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
-          "url": "https://lenz.io/c/the-earth-is-round-8ceed6f0",
+          "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
           "verdict": "False",
-          "verification_id": "8ceed6f0",
+          "verification_id": "68ca4aaf",
           "verification_status": "completed",
-          "verification_url": "https://lenz.io/api/v1/verifications/8ceed6f0",
+          "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
           "verified_claim": null
         }
       ],
@@ -121,7 +121,7 @@
         ]
       },
       "poll_after_seconds": null,
-      "review_id": "8cb2f001",
+      "review_id": "d6b2bd72",
       "status": "completed",
       "summary": {
         "assessments": {
@@ -148,9 +148,9 @@
       },
       "view": "full"
     },
-    "review_id": "8cb2f001",
+    "review_id": "d6b2bd72",
     "status": "completed",
-    "task_id": "13610f0b64b63e006dc66364e0e82c85",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
     "type": "ReviewEvent",
     "verification_id": null
   }

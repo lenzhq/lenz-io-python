@@ -1,10 +1,5 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "status": "failed",
     "task_id": "7cff18da2d979d6370e54a160be121ad",
@@ -16,5 +11,10 @@
       "retryable": false,
       "docs_url": "https://lenz.io/docs/errors#invalid-input"
     }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

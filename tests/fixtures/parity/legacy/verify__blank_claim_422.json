@@ -1,11 +1,11 @@
 {
   "status": 422,
+  "body": {
+    "detail": "Text is required."
+  },
   "headers": {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
     "Vary": "origin"
-  },
-  "body": {
-    "detail": "Text is required."
   }
 }

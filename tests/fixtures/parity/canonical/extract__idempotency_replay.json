@@ -1,10 +1,5 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "status": "ready",
     "claims": [
@@ -30,5 +25,10 @@
     ],
     "presumed_intent": "Verify reported figures",
     "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

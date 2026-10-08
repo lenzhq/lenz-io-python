@@ -1,6 +1,5 @@
 {
   "status": 200,
-  "headers": {},
   "body": {
     "event": "verification.needs_input",
     "verification_id": null,
@@ -25,6 +24,7 @@
     "coverage": null,
     "error": null,
     "attempt": 1,
-    "delivered_at": "2026-10-01T09:14:00.123456+00:00"
-  }
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
 }

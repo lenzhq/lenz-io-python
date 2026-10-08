@@ -4,13 +4,27 @@
     "items": [
       {
         "claim_text": "The Earth is round.",
-        "task_id": "0b92b443eb69b9c71434fdc64f2ca8be"
+        "task_id": "7cff18da2d979d6370e54a160be121ad"
       },
       {
         "claim_text": "Water boils at 100C at sea level.",
-        "task_id": "13610f0b64b63e006dc66364e0e82c85"
+        "task_id": "0b92b443eb69b9c71434fdc64f2ca8be"
       }
     ]
   },
-  "render_json": null
+  "dump_unset": {
+    "batch_id": "7ea9cdbd4064e3cf",
+    "items": [
+      {
+        "claim_text": "The Earth is round.",
+        "task_id": "7cff18da2d979d6370e54a160be121ad"
+      },
+      {
+        "claim_text": "Water boils at 100C at sea level.",
+        "task_id": "0b92b443eb69b9c71434fdc64f2ca8be"
+      }
+    ]
+  },
+  "render_json": null,
+  "repr": "BatchAccepted(batch_id='7ea9cdbd4064e3cf', items=[TaskAccepted(task_id='7cff18da2d979d6370e54a160be121ad', claim_text='The Earth is round.'), TaskAccepted(task_id='0b92b443eb69b9c71434fdc64f2ca8be', claim_text='Water boils at 100C at sea level.')])"
 }

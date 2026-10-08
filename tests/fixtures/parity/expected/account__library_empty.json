@@ -5,5 +5,12 @@
     "page_size": 20,
     "total": 0
   },
-  "render_json": null
+  "dump_unset": {
+    "items": [],
+    "page": 1,
+    "page_size": 20,
+    "total": 0
+  },
+  "render_json": null,
+  "repr": "LibraryList(items=[], total=0, page=1, page_size=20)"
 }

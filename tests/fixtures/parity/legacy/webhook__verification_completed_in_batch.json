@@ -1,11 +1,10 @@
 {
   "status": 200,
-  "headers": {},
   "body": {
     "event": "verification.completed",
     "verification_id": "68ca4aaf",
-    "task_id": "0b92b443eb69b9c71434fdc64f2ca8be",
-    "batch_id": "4ee0c3aa1b671eaa",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "batch_id": "7ea9cdbd4064e3cf",
     "status": "completed",
     "result": {
       "verification_id": "68ca4aaf",
@@ -33,7 +32,7 @@
         "Only two sources were found."
       ],
       "suggested_rewrite": "The Eiffel Tower is in Paris.",
-      "created_at": "2026-10-01T09:28:00.123456+00:00",
+      "created_at": "2026-10-01T09:07:00.123456+00:00",
       "modified_at": null,
       "sources": [
         {
@@ -102,6 +101,7 @@
     "coverage": null,
     "error": null,
     "attempt": 1,
-    "delivered_at": "2026-10-01T09:35:00.123456+00:00"
-  }
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
 }

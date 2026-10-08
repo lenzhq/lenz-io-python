@@ -1,10 +1,5 @@
 {
   "status": 422,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": [
       {
@@ -19,5 +14,10 @@
         "msg": "Field required"
       }
     ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

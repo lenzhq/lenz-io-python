@@ -6,9 +6,9 @@
       "citation_failures": [],
       "citation_issues": [],
       "citations": [],
-      "citecheck_id": "98c0e7d5",
-      "completed_at": "2026-10-01T09:35:00.123456Z",
-      "created_at": "2026-10-01T09:28:00.123456Z",
+      "citecheck_id": "8eb49302",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "created_at": "2026-10-01T09:07:00.123456Z",
       "credits": {
         "charged": 0
       },
@@ -36,12 +36,12 @@
         "citations_selected": null
       }
     },
-    "citecheck_id": "98c0e7d5",
-    "delivered_at": "2026-10-01T09:42:00.123456+00:00",
+    "citecheck_id": "8eb49302",
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
     "event": "citecheck.failed",
     "event_id": "evt_09301870aba4e8f6ae33ff60",
     "status": "failed",
-    "task_id": "13610f0b64b63e006dc66364e0e82c85",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
     "type": "CitecheckEvent",
     "verification_id": null
   }

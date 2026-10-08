@@ -34,15 +34,16 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+from pydantic import ValidationError
+
 from .errors import LenzWebhookSignatureError
 from .models import (
     CandidateClaim,
     Citecheck,
     FailureBlock,
     ReviewFull,
-    _new_code,
+    _fill_modified_at,
     _old_code,
-    _with_completion_times,
 )
 
 SIGNATURE_HEADER = "X-Lenz-Signature"
@@ -95,24 +96,11 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
 
 
 # ── Typed events ─────────────────────────────────────────────────────────
-#
-# Two payload shapes reach the same events. The original one is flat for
-# ``verification.*`` (``result``, ``needs_input``, ``error`` at the top) and
-# nested for ``review.*`` / ``citecheck.*``. The newer one is one envelope for
-# every event: ``event``, ``event_id``, the work's id, ``status``, and the body
-# polling returns under the work's kind (``verification``, ``review``,
-# ``citecheck``). Every attribute below is filled from either shape, and the
-# original attributes keep their original meaning.
 
 
 @dataclass
 class WebhookEvent:
-    """Base class. Use ``isinstance`` to discriminate the union.
-
-    ``event_id`` is the same on every delivery attempt of one event, while
-    ``attempt`` counts up: deduplicate on it. ``""`` when a payload does not
-    carry it (the original ``verification.*`` and ``certificate.*`` shape).
-    """
+    """Base class. Use ``isinstance`` to discriminate the union."""
 
     event: str
     task_id: str
@@ -122,18 +110,19 @@ class WebhookEvent:
     batch_id: str | None = None
     status: str = ""
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
-    # Keyword-only, so positional construction of every event keeps its order.
-    event_id: str = field(default="", kw_only=True)
+
+    @property
+    def event_id(self) -> str:
+        """The same on every delivery attempt of one event: deduplicate on it.
+        ``""`` when the payload carries none (the original ``verification.*``
+        and ``certificate.*`` payloads)."""
+        value = self.raw.get("event_id")
+        return value if isinstance(value, str) else ""
 
 
 @dataclass
 class VerificationCompleted(WebhookEvent):
-    """``event=verification.completed`` — the pipeline produced a verdict.
-
-    ``result`` is the verification as a dict, the same body
-    ``verifications.get`` returns, as sent; from the newer payload shape,
-    which sends ``completed_at``, the deprecated ``modified_at`` is added.
-    """
+    """``event=verification.completed`` — the pipeline produced a verdict."""
 
     result: dict[str, Any] = field(default_factory=dict)
 
@@ -142,22 +131,33 @@ class VerificationCompleted(WebhookEvent):
 class VerificationFailed(WebhookEvent):
     """``event=verification.failed`` — the pipeline terminated without a verdict.
 
-    ``failure`` says why: ``failure.code`` is the cause (an open set),
-    ``failure.detail`` one sentence on what happened, ``failure.failure_class``
-    the closed set (``upstream_unavailable`` | ``insufficient_evidence`` |
-    ``invalid_input`` | ``cancelled`` | ``internal``) and ``failure.retryable``
-    the derived signal (true iff ``upstream_unavailable``).
-
-    The original attributes keep their meaning: ``error`` is the cause code
-    (``not_a_claim`` where ``failure.code`` reads ``no_checkable_claim``),
-    and ``failure_class`` / ``retryable`` repeat the block's. They default when
-    an older server omits them.
+    ``failure_class`` is WHY (closed set — ``upstream_unavailable`` |
+    ``insufficient_evidence`` | ``invalid_input`` | ``cancelled`` |
+    ``internal``); ``retryable`` is the derived signal (true iff
+    ``upstream_unavailable``). Both default when an older server omits them.
     """
 
     error: str = ""
     failure_class: str = ""
     retryable: bool | None = None
-    failure: FailureBlock | None = None
+
+    @property
+    def failure(self) -> FailureBlock | None:
+        """Why the run failed, from either payload shape: ``code`` (the cause,
+        ``no_checkable_claim`` where ``error`` reads ``not_a_claim``),
+        ``detail`` (one sentence, newer payloads only), ``failure_class``,
+        ``retryable``, ``hint`` and ``docs_url``. ``None`` when the payload
+        names no cause."""
+        body = self.raw.get("verification")
+        block = body.get("failure") if isinstance(body, dict) else None
+        if not isinstance(block, dict):
+            if not (self.error or self.failure_class):
+                return None
+            block = {"failure_reason": self.error, "failure_class": self.failure_class, "retryable": self.retryable}
+        try:
+            return FailureBlock.model_validate(block)
+        except ValidationError:
+            return None
 
 
 @dataclass
@@ -168,18 +168,34 @@ class VerificationNeedsInput(WebhookEvent):
     pipeline run produces a ``verification.completed`` (or another
     ``needs_input``) event.
 
-    ``reason`` is why (``multi_claim``), ``claims`` the options to pick from
-    (each with ``claim`` and ``domain``) and ``hint`` one sentence on what was
-    unclear and how to resolve it (``""`` when an older server omits it).
-    ``needs_input`` is the original dict, ``{"reason", "claims", "hint"}``,
-    whose options carry the claim as ``text``: as sent, or built from the
-    newer payload shape.
+    ``hint`` is one sentence on what was unclear and how to resolve it
+    (``needs_input["hint"]`` on the wire); ``""`` when an older server omits
+    it.
     """
 
     needs_input: dict[str, Any] = field(default_factory=dict)
     hint: str = ""
-    reason: str = ""
-    claims: list[CandidateClaim] = field(default_factory=list)
+
+    @property
+    def reason(self) -> str:
+        """Why the run paused (``multi_claim``)."""
+        value = self.needs_input.get("reason") if isinstance(self.needs_input, dict) else None
+        return value if isinstance(value, str) else ""
+
+    @property
+    def claims(self) -> list[CandidateClaim]:
+        """The options to pick from, each with ``claim`` and ``domain``. An
+        option that cannot be read is left out, never raised on."""
+        options = self.needs_input.get("claims") if isinstance(self.needs_input, dict) else None
+        out = []
+        for option in options or []:
+            if not isinstance(option, dict):
+                continue
+            try:
+                out.append(CandidateClaim.model_validate({k: v for k, v in option.items() if v is not None}))
+            except ValidationError:
+                continue
+        return out
 
 
 @dataclass
@@ -211,10 +227,10 @@ class ReviewEvent(WebhookEvent):
     ``review.issues``.
 
     Deduplicate on ``event_id``: it is the same on every delivery attempt of
-    one event, while ``attempt`` counts up. ``task_id`` (deprecated)
-    identifies the delivery and cannot be polled on ``/verify/status``; it is
-    ``""`` on a payload that does not carry it (the newer shape). The deep
-    checks a review runs send no ``verification.*`` events of their own.
+    one event, while ``attempt`` counts up. ``task_id`` identifies the
+    delivery and cannot be polled on ``/verify/status``; the newer payload
+    shape leaves it out (it reads ``""``). The deep checks a
+    review runs send no ``verification.*`` events of their own.
     """
 
     event_id: str = ""
@@ -230,9 +246,9 @@ class CitecheckEvent(WebhookEvent):
     ``citecheck`` is the final check (the same body ``get_citecheck``
     returns), or ``None`` if it could not be parsed (``raw["citecheck"]``
     still has it). Deduplicate on ``event_id``: it is the same on every
-    delivery attempt of one event. ``task_id`` (deprecated) identifies the
-    delivery and cannot be polled on ``/verify/status``; it is ``""`` on a
-    payload that does not carry it (the newer shape).
+    delivery attempt of one event. ``task_id`` identifies the delivery and
+    cannot be polled on ``/verify/status``; the newer payload shape leaves it
+    out (it reads ``""``).
     """
 
     event_id: str = ""
@@ -240,125 +256,152 @@ class CitecheckEvent(WebhookEvent):
     citecheck: Citecheck | None = None
 
 
-def _dict(value: Any) -> dict[str, Any]:
-    return value if isinstance(value, dict) else {}
+def _original_view(payload: dict[str, Any]) -> dict[str, Any]:
+    """The original flat ``verification.*`` fields, for a payload in the newer
+    envelope (the polled body nested under ``verification``). Any other
+    payload is returned as it is."""
+    body = payload.get("verification")
+    if not isinstance(body, dict):
+        return payload
+    view = dict(payload)
+    view.setdefault("task_id", body.get("task_id"))
+    result = body.get("result")
+    if isinstance(result, dict):
+        view.setdefault("result", _fill_modified_at(result))
+        view.setdefault("verification_id", result.get("verification_id"))
+    failure = body.get("failure")
+    if isinstance(failure, dict):
+        view.setdefault("error", _old_code(failure.get("code"), "not_a_claim"))
+        view.setdefault("failure_class", failure.get("failure_class"))
+        view.setdefault("retryable", failure.get("retryable"))
+    if body.get("status") == "needs_input":
+        options = [
+            {"text": o.get("claim", o.get("text")), "domain": o.get("domain", "")}
+            for o in body.get("claims") or []
+            if isinstance(o, dict)
+        ]
+        view.setdefault(
+            "needs_input", {"reason": body.get("reason", ""), "claims": options, "hint": body.get("hint", "")}
+        )
+    view.setdefault("coverage", body.get("coverage") or (result or {}).get("coverage"))
+    return view
 
 
-def _opt_id(*values: Any) -> str | None:
-    for value in values:
-        if value:
-            return str(value)
-    return None
-
-
-def _legacy_needs_input(payload: dict[str, Any], body: dict[str, Any]) -> dict[str, Any]:
-    """The original ``needs_input`` dict: as sent, or built from the newer
-    envelope's polled body (each option carrying the claim as ``text``)."""
-    if isinstance(payload.get("needs_input"), dict):
-        return payload["needs_input"]  # type: ignore[no-any-return]
-    claims = []
-    for option in body.get("claims") or []:
-        if isinstance(option, dict):
-            claims.append({"text": option.get("claim", option.get("text")), "domain": option.get("domain", "")})
-    out: dict[str, Any] = {"reason": body.get("reason", "")}
-    out["claims"] = claims
-    out["hint"] = body.get("hint", "")
-    return out
-
-
-def _build_event(payload: dict[str, Any]) -> WebhookEvent:
+def _build_event(raw: dict[str, Any]) -> WebhookEvent:
     """Discriminate on ``event`` and return the right typed dataclass."""
+    payload = _original_view(raw)
     event = str(payload.get("event") or "")
-    # The newer envelope nests the polled body under the work's kind.
-    body = _dict(payload.get("verification"))
-    result = _dict(payload.get("result")) or _dict(body.get("result"))
-    event_id = str(payload.get("event_id") or "")
-    task_id = str(payload.get("task_id") or body.get("task_id") or "")
+    task_id = str(payload.get("task_id") or "")
     try:
         attempt = int(payload.get("attempt") or 1)
     except (TypeError, ValueError):
         attempt = 1
     delivered_at = str(payload.get("delivered_at") or "")
-    verification_id = _opt_id(payload.get("verification_id"), result.get("verification_id"))
-    batch_id = _opt_id(payload.get("batch_id"), body.get("batch_id"))
-    status = str(payload.get("status") or body.get("status") or "")
-    common: dict[str, Any] = {
-        "event": event,
-        "task_id": task_id,
-        "attempt": attempt,
-        "delivered_at": delivered_at,
-        "verification_id": verification_id,
-        "batch_id": batch_id,
-        "status": status,
-        "raw": payload,
-        "event_id": event_id,
-    }
+    verification_id = str(payload["verification_id"]) if payload.get("verification_id") else None
+    batch_id = str(payload["batch_id"]) if payload.get("batch_id") else None
+    status = str(payload.get("status") or "")
     if event == "verification.completed":
-        if result and "modified_at" not in result:
-            # The newer shape: add the original ``modified_at`` (computed),
-            # leaving an original-shape result exactly as sent.
-            result = _with_completion_times(result)
-        return VerificationCompleted(**common, result=result)
+        return VerificationCompleted(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+            result=payload.get("result") or {},
+        )
     if event == "verification.failed":
-        block = _dict(body.get("failure")) or _dict(payload.get("failure"))
-        failure = FailureBlock.model_validate(block) if block else None
-        legacy_error = payload.get("error")
-        error = legacy_error if isinstance(legacy_error, str) and legacy_error else ""
-        if not error and failure is not None:
-            error = str(_old_code(failure.code, "not_a_claim") or "")
-        failure_class = payload.get("failure_class") or (failure.failure_class if failure else "") or ""
-        retryable = payload.get("retryable")
-        if not isinstance(retryable, bool):
-            retryable = failure.retryable if failure is not None else None
-        if failure is None and (error or failure_class):
-            # The original shape: the block from the flat fields.
-            failure = FailureBlock.model_validate(
-                {"code": _new_code(error), "failure_class": failure_class, "retryable": retryable}
-            )
         return VerificationFailed(
-            **common,
-            error=error,
-            failure_class=str(failure_class),
-            retryable=retryable if isinstance(retryable, bool) else None,
-            failure=failure,
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+            error=str(payload.get("error") or ""),
+            failure_class=str(payload.get("failure_class") or ""),
+            retryable=payload.get("retryable") if isinstance(payload.get("retryable"), bool) else None,
         )
     if event == "verification.needs_input":
-        needs_input = _legacy_needs_input(payload, body)
+        needs_input = payload.get("needs_input") or {}
         return VerificationNeedsInput(
-            **common,
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
             needs_input=needs_input,
-            hint=str(needs_input.get("hint") or ""),
-            reason=str(needs_input.get("reason") or ""),
-            claims=[CandidateClaim.model_validate(c) for c in needs_input.get("claims") or [] if isinstance(c, dict)],
+            hint=str(needs_input.get("hint") or "") if isinstance(needs_input, dict) else "",
         )
     if event == "certificate.timestamped":
-        coverage = _dict(payload.get("coverage")) or _dict(body.get("coverage")) or _dict(result.get("coverage"))
-        return CertificateTimestamped(**common, coverage=coverage)
+        return CertificateTimestamped(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+            coverage=payload.get("coverage") or {},
+        )
     if event in ("review.completed", "review.failed"):
-        review_body = payload.get("review")
+        body = payload.get("review")
         try:
-            review = ReviewFull.model_validate(review_body) if isinstance(review_body, dict) else None
+            review = ReviewFull.model_validate(body) if isinstance(body, dict) else None
         except ValueError:
             review = None
         return ReviewEvent(
-            **common,
-            review_id=str(payload.get("review_id") or _dict(review_body).get("review_id") or ""),
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+            event_id=str(payload.get("event_id") or ""),
+            review_id=str(payload.get("review_id") or ""),
             review=review,
         )
     if event in ("citecheck.completed", "citecheck.failed"):
-        check_body = payload.get("citecheck")
+        body = payload.get("citecheck")
         try:
-            check = Citecheck.model_validate(check_body) if isinstance(check_body, dict) else None
+            check = Citecheck.model_validate(body) if isinstance(body, dict) else None
         except ValueError:
             check = None
         return CitecheckEvent(
-            **common,
-            citecheck_id=str(payload.get("citecheck_id") or _dict(check_body).get("citecheck_id") or ""),
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+            event_id=str(payload.get("event_id") or ""),
+            citecheck_id=str(payload.get("citecheck_id") or ""),
             citecheck=check,
         )
     # Unknown event type — return generic. Future-compatible: ignore events
     # you do not handle rather than failing the delivery.
-    return WebhookEvent(**common)
+    return WebhookEvent(
+        event=event,
+        task_id=task_id,
+        attempt=attempt,
+        delivered_at=delivered_at,
+        verification_id=verification_id,
+        batch_id=batch_id,
+        status=status,
+        raw=raw,
+    )
 
 
 def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:

@@ -21,6 +21,27 @@
     "error_code": "",
     "more_claims": []
   },
+  "dump_unset": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "The Earth orbits the Sun.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
   "render": "True (high) — The Earth orbits the Sun.\n",
-  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"The Earth orbits the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n"
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"The Earth orbits the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": null,\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[AssessClaim(claim='The Earth orbits the Sun.', language='en', verdict='True', confidence='high', verification_url=None, rationale=None, dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None)], error=None, error_code='', candidate_claims=[], more_claims=[])"
 }

@@ -10,6 +10,18 @@
     "presumed_intent": "",
     "status": "no_match"
   },
+  "dump_unset": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [],
+    "locations": null,
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "",
+    "status": "no_match"
+  },
   "render": "No claims matched the focus.\n",
-  "render_json": "{\n  \"status\": \"no_match\",\n  \"claim\": \"\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"\",\n  \"key_entities\": [],\n  \"presumed_intent\": \"\",\n  \"original_input\": \"Alpha rose 5% in 2024. Beta fell 3% last year.\",\n  \"locations\": null\n}\n"
+  "render_json": "{\n  \"status\": \"no_match\",\n  \"claim\": \"\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"\",\n  \"key_entities\": [],\n  \"presumed_intent\": \"\",\n  \"original_input\": \"Alpha rose 5% in 2024. Beta fell 3% last year.\",\n  \"locations\": null\n}\n",
+  "repr": "ExtractedClaims(status='no_match', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='Alpha rose 5% in 2024. Beta fell 3% last year.', locations=None)"
 }

@@ -86,7 +86,95 @@
       "Relies on limited sources"
     ]
   },
+  "dump_unset": {
+    "audit": {
+      "adjudication_summary": "Both reviewers agreed.",
+      "assessments": [
+        {
+          "focus_area": "Claim Precision & Quantitative Accuracy",
+          "panelist_name": "Reviewer A",
+          "reasoning": "Precision analysis reasoning.",
+          "score": 9.0,
+          "warnings": []
+        },
+        {
+          "focus_area": "Sources",
+          "panelist_name": "Reviewer B",
+          "reasoning": "Source audit reasoning.",
+          "score": 9.0,
+          "warnings": [
+            "weak source A"
+          ]
+        }
+      ],
+      "debate_con": {
+        "argument": "The Earth is not a perfect sphere.",
+        "rebuttal": "Oblate, but round for the claim.",
+        "role": "Skeptic"
+      },
+      "debate_pro": {
+        "argument": "Satellite imagery and geodesy agree.",
+        "rebuttal": "Flat-Earth objections do not hold.",
+        "role": "Advocate"
+      },
+      "panel_agreement": "unanimous"
+    },
+    "claim": "The Earth is round.",
+    "confidence": "high",
+    "coverage": {
+      "aggregate": 500000,
+      "as_of": null,
+      "cap": 10000,
+      "certificate_id": null,
+      "certificate_url": null,
+      "currency": "EUR",
+      "reasons": [
+        "plan"
+      ],
+      "status": "uncovered",
+      "terms_version": "v1"
+    },
+    "created_at": "2026-10-01T23:55:00.123456+00:00",
+    "depth": "standard",
+    "domain": "Science",
+    "entities": [
+      {
+        "name": "Earth",
+        "qid": null
+      }
+    ],
+    "executive_summary": "The claim is verified.",
+    "key_finding": "The Earth is approximately spherical in shape.",
+    "language": "en",
+    "lenz_score": 9,
+    "modified_at": "2026-10-02T00:03:00.123456+00:00",
+    "presumed_intent": "Verify a basic scientific fact",
+    "sources": [
+      {
+        "date": "2025-01-15",
+        "snippet": "Satellite imagery shows an oblate spheroid.",
+        "source_name": "NASA",
+        "title": "The shape of the Earth",
+        "url": "https://nasa.example/shape"
+      },
+      {
+        "date": "2025-01-16",
+        "snippet": "Orbital measurements confirm the curvature.",
+        "source_name": "ESA",
+        "title": "Earth from space",
+        "url": "https://esa.example/earth"
+      }
+    ],
+    "suggested_rewrite": null,
+    "verdict": "True",
+    "verification_id": "68ca4aaf",
+    "visibility": "private",
+    "warnings": [
+      "Relies on limited sources"
+    ]
+  },
   "render": "True  (high)  score 9/10\n\nClaim  The Earth is round.\nScience  •  Earth\n\nThe Earth is approximately spherical in shape.\n\nThe claim is verified.\n\nWarnings (1):\n  • Relies on limited sources\n\nSources (2):\n  • The shape of the Earth  (2025-01-15)\n    https://nasa.example/shape\n    Satellite imagery shows an oblate spheroid.\n  • Earth from space  (2025-01-16)\n    https://esa.example/earth\n    Orbital measurements confirm the curvature.\n\n── Panel ──\nagreement: unanimous\n\nReviewer A (Claim Precision & Quantitative Accuracy)  9.0/10\n  Precision analysis reasoning.\n\nReviewer B (Sources)  9.0/10\n  Source audit reasoning.\n  • weak source A\n\nPanel Review\nBoth reviewers agreed.\n\nDebate\n  PRO  Satellite imagery and geodesy agree.\n  rebuttal: Flat-Earth objections do not hold.\n  CON  The Earth is not a perfect sphere.\n  rebuttal: Oblate, but round for the claim.\n\nverification_id: 68ca4aaf\nchecked Oct 1, 2026\nask follow-ups: lenz ask 68ca4aaf \"<your question>\"\n",
   "render_concise": "True  (high)  score 9/10\n\nThe Earth is approximately spherical in shape.\n\nThe claim is verified.\n\nSources (2):\n  • The shape of the Earth\n    https://nasa.example/shape\n  • Earth from space\n    https://esa.example/earth\n\nverification_id: 68ca4aaf\nask follow-ups: lenz ask 68ca4aaf \"<your question>\"\n",
-  "render_json": "{\n  \"verification_id\": \"68ca4aaf\",\n  \"claim\": \"The Earth is round.\",\n  \"visibility\": \"private\",\n  \"depth\": \"standard\",\n  \"domain\": \"Science\",\n  \"entities\": [\n    {\n      \"name\": \"Earth\",\n      \"qid\": null\n    }\n  ],\n  \"presumed_intent\": \"Verify a basic scientific fact\",\n  \"verdict\": \"True\",\n  \"confidence\": \"high\",\n  \"lenz_score\": 9,\n  \"key_finding\": \"The Earth is approximately spherical in shape.\",\n  \"executive_summary\": \"The claim is verified.\",\n  \"warnings\": [\n    \"Relies on limited sources\"\n  ],\n  \"suggested_rewrite\": null,\n  \"sources\": [\n    {\n      \"source_name\": \"NASA\",\n      \"title\": \"The shape of the Earth\",\n      \"url\": \"https://nasa.example/shape\",\n      \"snippet\": \"Satellite imagery shows an oblate spheroid.\",\n      \"date\": \"2025-01-15\"\n    },\n    {\n      \"source_name\": \"ESA\",\n      \"title\": \"Earth from space\",\n      \"url\": \"https://esa.example/earth\",\n      \"snippet\": \"Orbital measurements confirm the curvature.\",\n      \"date\": \"2025-01-16\"\n    }\n  ],\n  \"audit\": {\n    \"adjudication_summary\": \"Both reviewers agreed.\",\n    \"assessments\": [\n      {\n        \"panelist_name\": \"Reviewer A\",\n        \"focus_area\": \"Claim Precision & Quantitative Accuracy\",\n        \"score\": 9.0,\n        \"reasoning\": \"Precision analysis reasoning.\",\n        \"warnings\": []\n      },\n      {\n        \"panelist_name\": \"Reviewer B\",\n        \"focus_area\": \"Sources\",\n        \"score\": 9.0,\n        \"reasoning\": \"Source audit reasoning.\",\n        \"warnings\": [\n          \"weak source A\"\n        ]\n      }\n    ],\n    \"debate_pro\": {\n      \"role\": \"Advocate\",\n      \"argument\": \"Satellite imagery and geodesy agree.\",\n      \"rebuttal\": \"Flat-Earth objections do not hold.\"\n    },\n    \"debate_con\": {\n      \"role\": \"Skeptic\",\n      \"argument\": \"The Earth is not a perfect sphere.\",\n      \"rebuttal\": \"Oblate, but round for the claim.\"\n    },\n    \"panel_agreement\": \"unanimous\"\n  },\n  \"created_at\": \"2026-10-01T23:55:00.123456+00:00\",\n  \"modified_at\": \"2026-10-02T00:03:00.123456+00:00\",\n  \"language\": \"en\",\n  \"coverage\": {\n    \"status\": \"uncovered\",\n    \"reasons\": [\n      \"plan\"\n    ],\n    \"certificate_id\": null,\n    \"certificate_url\": null,\n    \"as_of\": null,\n    \"currency\": \"EUR\",\n    \"cap\": 10000,\n    \"aggregate\": 500000,\n    \"terms_version\": \"v1\"\n  }\n}\n"
+  "render_json": "{\n  \"verification_id\": \"68ca4aaf\",\n  \"claim\": \"The Earth is round.\",\n  \"visibility\": \"private\",\n  \"depth\": \"standard\",\n  \"domain\": \"Science\",\n  \"entities\": [\n    {\n      \"name\": \"Earth\",\n      \"qid\": null\n    }\n  ],\n  \"presumed_intent\": \"Verify a basic scientific fact\",\n  \"verdict\": \"True\",\n  \"confidence\": \"high\",\n  \"lenz_score\": 9,\n  \"key_finding\": \"The Earth is approximately spherical in shape.\",\n  \"executive_summary\": \"The claim is verified.\",\n  \"warnings\": [\n    \"Relies on limited sources\"\n  ],\n  \"suggested_rewrite\": null,\n  \"sources\": [\n    {\n      \"source_name\": \"NASA\",\n      \"title\": \"The shape of the Earth\",\n      \"url\": \"https://nasa.example/shape\",\n      \"snippet\": \"Satellite imagery shows an oblate spheroid.\",\n      \"date\": \"2025-01-15\"\n    },\n    {\n      \"source_name\": \"ESA\",\n      \"title\": \"Earth from space\",\n      \"url\": \"https://esa.example/earth\",\n      \"snippet\": \"Orbital measurements confirm the curvature.\",\n      \"date\": \"2025-01-16\"\n    }\n  ],\n  \"audit\": {\n    \"adjudication_summary\": \"Both reviewers agreed.\",\n    \"assessments\": [\n      {\n        \"panelist_name\": \"Reviewer A\",\n        \"focus_area\": \"Claim Precision & Quantitative Accuracy\",\n        \"score\": 9.0,\n        \"reasoning\": \"Precision analysis reasoning.\",\n        \"warnings\": []\n      },\n      {\n        \"panelist_name\": \"Reviewer B\",\n        \"focus_area\": \"Sources\",\n        \"score\": 9.0,\n        \"reasoning\": \"Source audit reasoning.\",\n        \"warnings\": [\n          \"weak source A\"\n        ]\n      }\n    ],\n    \"debate_pro\": {\n      \"role\": \"Advocate\",\n      \"argument\": \"Satellite imagery and geodesy agree.\",\n      \"rebuttal\": \"Flat-Earth objections do not hold.\"\n    },\n    \"debate_con\": {\n      \"role\": \"Skeptic\",\n      \"argument\": \"The Earth is not a perfect sphere.\",\n      \"rebuttal\": \"Oblate, but round for the claim.\"\n    },\n    \"panel_agreement\": \"unanimous\"\n  },\n  \"created_at\": \"2026-10-01T23:55:00.123456+00:00\",\n  \"modified_at\": \"2026-10-02T00:03:00.123456+00:00\",\n  \"language\": \"en\",\n  \"coverage\": {\n    \"status\": \"uncovered\",\n    \"reasons\": [\n      \"plan\"\n    ],\n    \"certificate_id\": null,\n    \"certificate_url\": null,\n    \"as_of\": null,\n    \"currency\": \"EUR\",\n    \"cap\": 10000,\n    \"aggregate\": 500000,\n    \"terms_version\": \"v1\"\n  }\n}\n",
+  "repr": "Verification(verification_id='68ca4aaf', claim='The Earth is round.', visibility='private', depth='standard', domain='Science', entities=[EntityRef(name='Earth', qid=None)], presumed_intent='Verify a basic scientific fact', verdict='True', confidence='high', lenz_score=9, key_finding='The Earth is approximately spherical in shape.', executive_summary='The claim is verified.', warnings=['Relies on limited sources'], suggested_rewrite=None, sources=[Source(source_name='NASA', title='The shape of the Earth', url='https://nasa.example/shape', snippet='Satellite imagery shows an oblate spheroid.', date='2025-01-15'), Source(source_name='ESA', title='Earth from space', url='https://esa.example/earth', snippet='Orbital measurements confirm the curvature.', date='2025-01-16')], audit=Audit(adjudication_summary='Both reviewers agreed.', assessments=[Assessment(panelist_name='Reviewer A', focus_area='Claim Precision & Quantitative Accuracy', score=9.0, reasoning='Precision analysis reasoning.', warnings=[]), Assessment(panelist_name='Reviewer B', focus_area='Sources', score=9.0, reasoning='Source audit reasoning.', warnings=['weak source A'])], debate_pro=DebateSide(role='Advocate', argument='Satellite imagery and geodesy agree.', rebuttal='Flat-Earth objections do not hold.'), debate_con=DebateSide(role='Skeptic', argument='The Earth is not a perfect sphere.', rebuttal='Oblate, but round for the claim.'), panel_agreement='unanimous'), created_at='2026-10-01T23:55:00.123456+00:00', modified_at='2026-10-02T00:03:00.123456+00:00', language='en', coverage=Coverage(status='uncovered', reasons=['plan'], certificate_id=None, certificate_url=None, as_of=None, currency='EUR', cap=10000, aggregate=500000, terms_version='v1'))"
 }

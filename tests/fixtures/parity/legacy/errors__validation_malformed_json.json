@@ -1,11 +1,11 @@
 {
   "status": 400,
+  "body": {
+    "detail": "Cannot parse request body (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))"
+  },
   "headers": {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Vary": "origin"
-  },
-  "body": {
-    "detail": "Cannot parse request body (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))"
   }
 }

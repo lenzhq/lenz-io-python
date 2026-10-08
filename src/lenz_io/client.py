@@ -215,6 +215,18 @@ def _batch_item_body(item: Any) -> Any:
     return body
 
 
+def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
+    """``/extract``'s answer. A newer-shape body (``claims``, no
+    ``identified_claims``) that located every claim away answers ``claims:
+    []``; the original field for that was ``locations=[]``, which only the
+    request (``locate=True``) can tell apart from "nothing found"."""
+    out = ExtractedClaims.model_validate(body)
+    newer = isinstance(body, dict) and "claims" in body and "identified_claims" not in body
+    if newer and locate and not body["claims"] and out.status == "not_a_claim" and out.locations is None:
+        out.locations = []
+    return out
+
+
 #: An async job the poll loop waits on: a review or a citation check.
 _Job = TypeVar("_Job", ReviewFull, Citecheck)
 
@@ -985,21 +997,19 @@ class Lenz:
         terminal, timed_out, gone = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
-        # Built with ``claim_text`` so ``model_dump()`` keeps the keys it has
-        # always had; ``BatchItemResult.claim`` reads the same string.
         for it in accepted.items:  # preserve input order
             status = terminal.get(it.task_id)
             if it.task_id in gone:
                 # Removed by the account's retention period (410): terminal,
                 # with no status to carry.
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="failed"))
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
             elif not it.task_id or it.task_id in timed_out or status is None:
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="timeout"))
+                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
             elif status.status == "completed" and status.result is not None:
                 results.append(
                     BatchItemResult(
                         task_id=it.task_id,
-                        claim_text=it.claim,
+                        claim_text=it.claim_text,
                         status="completed",
                         verification=status.result,
                         status_detail=status,
@@ -1007,12 +1017,14 @@ class Lenz:
                 )
             elif status.status == "needs_input":
                 results.append(
-                    BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="needs_input", status_detail=status)
+                    BatchItemResult(
+                        task_id=it.task_id, claim_text=it.claim_text, status="needs_input", status_detail=status
+                    )
                 )
             else:
                 # failed, or completed-without-result (treated as failed).
                 results.append(
-                    BatchItemResult(task_id=it.task_id, claim_text=it.claim, status="failed", status_detail=status)
+                    BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed", status_detail=status)
                 )
         return results
 
@@ -1528,8 +1540,6 @@ class Lenz:
             )
         # failed. Server sends the diagnostic under ``error``; fall back to the
         # legacy fields for resilience.
-        # ``failure.detail`` is the sentence in the newer response shape;
-        # ``error`` carries the original one (and is filled from the block).
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
         if status.retryable:
             fix = "Transient provider outage — retry the same request after a short wait."
@@ -1668,7 +1678,7 @@ class Lenz:
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
-        return ExtractedClaims.model_validate(body)
+        return _extracted(body, locate=locate)
 
     def _assess(
         self,

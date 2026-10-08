@@ -1,11 +1,11 @@
 {
   "status": 401,
+  "body": {
+    "detail": "Unauthorized"
+  },
   "headers": {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
     "Vary": "origin"
-  },
-  "body": {
-    "detail": "Unauthorized"
   }
 }

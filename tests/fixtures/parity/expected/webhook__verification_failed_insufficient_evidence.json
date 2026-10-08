@@ -2,7 +2,7 @@
   "event": {
     "attempt": 1,
     "batch_id": null,
-    "delivered_at": "2026-10-01T09:14:00.123456+00:00",
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
     "error": "research_insufficient",
     "event": "verification.failed",
     "failure_class": "insufficient_evidence",

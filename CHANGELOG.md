@@ -14,8 +14,11 @@ on upgrade.
 - **Reads both response shapes.** The API is adding a newer, dated response
   shape that gives each field one name across every endpoint. This release
   still asks for the original shape (it sends the same `X-Lenz-API-Version`
-  as before), and every model now reads either shape. The newer names are
-  attributes now, filled from whichever shape arrives:
+  as before), and every model now reads either shape. A body is read as the
+  newer shape only when it carries something only that shape has; every other
+  body is parsed exactly as before (same fields, values, dump, `repr`,
+  `exclude_unset`, schema and pickle). The newer names are read-only
+  properties, computed from whichever shape arrived, not model fields:
   - `ExtractedClaims.claims`: every claim found, always a list, each an
     `ExtractedClaim` with `claim` and (with `locate=True`) `positions`.
   - `AssessClaim.status` (`"completed"` / `"failed"`), `AssessClaim.failure`
@@ -29,10 +32,13 @@ on upgrade.
     `ReviewVerification`.
   - `FailureBlock.code` and `FailureBlock.detail`;
     `ReviewAssessment.more_claims`; `ReviewSummary.claims_found`,
-    `claim_limit_exceeded` and `citation_limit_exceeded`;
+    `claim_limit_exceeded` (``None`` from the original shape, which says only
+    that the limit was reached: read `more_claims` there) and
+    `citation_limit_exceeded`;
     `CitecheckSummary.citation_limit_exceeded`.
-  - Webhooks: `event_id` on every event, `VerificationFailed.failure`,
-    `VerificationNeedsInput.reason` and `.claims`. A review or citation-check
+  - Webhooks: an `event_id` property on every event,
+    `VerificationFailed.failure`, `VerificationNeedsInput.reason` and
+    `.claims` (properties: `dataclasses.asdict` and `repr` are unchanged). A review or citation-check
     event in the newer shape carries no `task_id` (it reads `""`; deduplicate
     on `event_id`, as before). `parse_webhook` and
     `LenzWebhooks.parse` read the newer envelope too (`event`, `event_id`,
@@ -54,8 +60,8 @@ on upgrade.
   `FailureBlock.failure_reason`; `ReviewAssessment.error_code` / `hint` /
   `identified_claims`; `claim_limit_reached` / `citation_limit_reached`;
   `Usage.quota_resets_at` and the `verify` / `ask` / `assess` blocks (computed
-  from `credits` and `costs` when a response leaves them out). They are marked
-  deprecated in the JSON schema; reading them does not warn. "Nothing
+  from `credits` and `costs` when a response leaves them out). Reading them
+  does not warn, and the JSON schema is unchanged. "Nothing
   checkable" keeps its old spelling in the old fields (`not_a_claim`,
   `no_claim`) and reads `no_checkable_claim` in the new ones;
   `ExtractedClaims.status` keeps `not_a_claim`.
@@ -69,9 +75,20 @@ on upgrade.
   changes now; leaving it out keeps that meaning on later API versions, where
   `""` means "no webhook". `review` and `citecheck` send `webhook_url` exactly as
   before (there `""` means "no webhook").
-- `model_dump()` returns the shape the server sent: attributes filled in from
-  the other shape are left out, so an original-shape response dumps exactly as
-  before.
+- A newer-shape body's `model_dump()` holds what the server sent plus the
+  original fields filled in from it.
+
+### Before the SDK asks for the newer shape
+
+This release only reads the newer shape; it keeps asking for the original
+one. Two things to settle before a release sends the newer date:
+
+- A 422's `code` there is the server's new one (`blank_input` where the
+  original said `blank_item`, `validation_error` where it said nothing), and
+  its `message` is the server's sentence, not the field list.
+- `lenz verify --json` on a `needs_input` run prints each option as the model
+  dumps it: from the newer shape that is `{claim, domain, text}`, not
+  `{text, domain}`.
 
 ### Correction
 
@@ -81,6 +98,9 @@ on upgrade.
   They are deprecated and kept for existing callers; the API keeps sending
   them to integrations built against its original shape. Their deprecation
   warnings no longer name a date.
+- **`TaskStatus.candidates` and `similar_claims` are not removed on
+  2026-11-29** either (2.18.0 said so). They are deprecated, always empty, and
+  kept.
 
 ## [2.20.0] - 2026-10-05
 

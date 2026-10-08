@@ -20,7 +20,7 @@
     "remaining": 0,
     "request_id": "",
     "requested": null,
-    "resets_at": "2026-10-01T09:14:00+00:00",
+    "resets_at": "2026-10-01T14:07:00+00:00",
     "status_code": 402,
     "type": "LenzQuotaExceededError",
     "upgrade_url": "https://lenz.io/plans?wall=6b86b273-ff34-4ce1-8d6b-804eff5a3f57"

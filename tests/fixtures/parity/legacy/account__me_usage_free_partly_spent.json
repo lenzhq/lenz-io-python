@@ -1,21 +1,16 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "plan": "free",
     "plan_label": "Free",
-    "quota_resets_at": "2026-10-01T09:07:00+00:00",
+    "quota_resets_at": "2026-10-01T14:07:00+00:00",
     "credits": {
       "total": 100,
       "used": 17,
       "remaining": 83,
       "extra": 0,
       "bonus": 0,
-      "resets_at": "2026-10-01T09:07:00+00:00"
+      "resets_at": "2026-10-01T14:07:00+00:00"
     },
     "costs": {
       "verify": 10,
@@ -62,5 +57,10 @@
       "unlimited": false
     },
     "has_webhook_secret": false
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

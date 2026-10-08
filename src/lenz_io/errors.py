@@ -569,23 +569,29 @@ def map_response_to_error(
         # The generic 4xx advice ("retry; file an issue") is wrong for both:
         # the server's own hint says what to do, with a class default behind it.
         # A failed run states its cause flat in the original response shape
-        # and in one ``failure`` block in the newer one; read both, flat first.
+        # and in one ``failure`` block in the newer one. The block is read only
+        # for a newer-shape body, and only where the flat key is absent.
         raw_failure = parsed.get("failure")
-        failure: dict[str, Any] = raw_failure if isinstance(raw_failure, dict) else {}
+        newer = isinstance(raw_failure, dict) and "failure_reason" not in parsed
+        failure: dict[str, Any] = raw_failure if newer and isinstance(raw_failure, dict) else {}
+
+        def _read(key: str, block_key: str) -> Any:
+            return parsed[key] if key in parsed else failure.get(block_key)
+
         err.task_id = _opt_str(parsed.get("task_id"))
-        err.hint = _opt_str(parsed.get("hint")) or _opt_str(failure.get("hint"))
+        err.hint = _opt_str(_read("hint", "hint"))
         if isinstance(err, LenzVerificationNotReadyError):
             err.status = _opt_str(parsed.get("status"))
             err.fix = err.hint or "Wait for the run with client.wait(task_id), then read its result."
         else:
-            reason = _opt_str(parsed.get("failure_reason")) or _opt_str(failure.get("code"))
+            reason = _opt_str(_read("failure_reason", "code"))
             # The original spelling of "nothing checkable" on a verification.
-            err.failure_reason = "not_a_claim" if reason == "no_checkable_claim" else reason
-            err.failure_class = _opt_str(parsed.get("failure_class")) or _opt_str(failure.get("failure_class"))
+            err.failure_reason = "not_a_claim" if newer and reason == "no_checkable_claim" else reason
+            err.failure_class = _opt_str(_read("failure_class", "failure_class"))
             # Only a real boolean is a retry signal, as in the wait path.
-            retryable = parsed.get("retryable", failure.get("retryable"))
+            retryable = _read("retryable", "retryable")
             err.retryable = retryable if isinstance(retryable, bool) else None
-            err.doc_url = _opt_str(parsed.get("docs_url")) or _opt_str(failure.get("docs_url")) or err.doc_url
+            err.doc_url = _opt_str(_read("docs_url", "docs_url")) or err.doc_url
             if err.hint:
                 err.fix = err.hint
             elif err.retryable:
@@ -622,9 +628,9 @@ def map_response_to_error(
         # sending null precisely so "unknown" stays distinguishable from
         # "zero". Collapsing that here would throw the distinction away.
         err.remaining = _opt_int(parsed.get("remaining"))
-        if err.remaining is None and "remaining" not in parsed and "requested" not in parsed:
-            # A body without the capability figure (the newer response shape
-            # on some endpoints): the pool divided by this one call's price.
+        if "remaining" not in parsed and "requested" not in parsed and "doc_url" not in parsed and "docs_url" in parsed:
+            # A newer-shape body (``docs_url``) without the capability figure:
+            # the pool divided by this one call's price.
             pool, price = _opt_int(parsed.get("credits_remaining")), _opt_int(parsed.get("cost"))
             if pool is not None and price:
                 err.remaining = pool // price
@@ -649,9 +655,17 @@ def map_response_to_error(
     elif isinstance(err, LenzRateLimitError):
         err.limit = _opt_int(parsed.get("limit"))
         err.reset_in_seconds = _opt_int(parsed.get("reset_in_seconds"))
-        if err.reset_in_seconds is None and code not in _IN_FLIGHT_429_CODES:
-            # The newer response shape names every wait ``retry_after``. The
-            # in-flight refusals never carried ``reset_in_seconds``.
+        if (
+            "reset_in_seconds" not in parsed
+            and "retry_after_seconds" not in parsed
+            and "retry_after" in parsed
+            and "docs_url" in parsed
+            and "doc_url" not in parsed
+            and code not in _IN_FLIGHT_429_CODES
+        ):
+            # A newer-shape body (``docs_url``) names every wait
+            # ``retry_after``. The in-flight refusals never carried
+            # ``reset_in_seconds``.
             err.reset_in_seconds = _opt_int(parsed.get("retry_after"))
         rl_upgrade_url = parsed.get("upgrade_url")
         err.upgrade_url = rl_upgrade_url if isinstance(rl_upgrade_url, str) else ""

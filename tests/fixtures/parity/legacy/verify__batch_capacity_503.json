@@ -1,15 +1,15 @@
 {
   "status": 503,
-  "headers": {
-    "Content-Type": "application/json",
-    "Retry-After": "<retry_after>",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "Lenz is at capacity right now — please resubmit after the stated wait. Nothing was charged.",
     "code": "capacity",
     "retry_after": "<retry_after>",
     "doc_url": "https://lenz.io/docs/errors#unavailable"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "<retry_after>",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

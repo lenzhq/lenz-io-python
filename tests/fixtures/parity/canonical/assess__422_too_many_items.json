@@ -1,10 +1,5 @@
 {
   "status": 422,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "At most 20 claims per call; got 21. Split the list.",
     "code": "too_many_items",
@@ -18,5 +13,10 @@
         "type": "too_many_items"
       }
     ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

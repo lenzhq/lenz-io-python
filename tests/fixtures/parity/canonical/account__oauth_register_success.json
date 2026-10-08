@@ -1,0 +1,25 @@
+{
+  "status": 201,
+  "body": {
+    "client_id": "lzc_0a1db81dbba84d2d473826d8",
+    "client_id_issued_at": "<client_id_issued_at>",
+    "client_name": "n8n",
+    "redirect_uris": [
+      "https://acme.app.n8n.cloud/rest/oauth2-credential/callback"
+    ],
+    "grant_types": [
+      "authorization_code",
+      "refresh_token"
+    ],
+    "response_types": [
+      "code"
+    ],
+    "token_endpoint_auth_method": "none",
+    "scope": "assess verify ask ask:read extract history:read history:write usage:read webhooks:manage"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

@@ -1,13 +1,13 @@
 {
   "status": 403,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "This report is private.",
     "code": "private_claim",
     "error": "private_claim"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

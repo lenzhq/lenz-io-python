@@ -1,6 +1,5 @@
 {
   "status": 200,
-  "headers": {},
   "body": {
     "event": "verification.failed",
     "verification_id": null,
@@ -14,6 +13,7 @@
     "failure_class": "invalid_input",
     "retryable": false,
     "attempt": 1,
-    "delivered_at": "2026-10-01T09:14:00.123456+00:00"
-  }
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
 }

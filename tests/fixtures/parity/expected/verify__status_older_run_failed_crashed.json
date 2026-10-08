@@ -22,8 +22,18 @@
     "status": "failed",
     "task_id": "7cff18da2d979d6370e54a160be121ad"
   },
+  "dump_unset": {
+    "docs_url": "https://lenz.io/docs/errors#internal",
+    "error": "Pipeline failed.",
+    "failure_class": "internal",
+    "failure_reason": "task_error",
+    "retryable": false,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
   "render": "failed  — Pipeline failed.\n",
   "render_json": "{\n  \"status\": \"failed\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"\",\n    \"index\": null,\n    \"total\": null,\n    \"elapsed_seconds\": null,\n    \"poll_after_seconds\": null\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"Pipeline failed.\",\n  \"failure_reason\": \"task_error\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"internal\",\n  \"retryable\": false,\n  \"docs_url\": \"https://lenz.io/docs/errors#internal\"\n}\n",
+  "repr": "TaskStatus(status='failed', task_id='7cff18da2d979d6370e54a160be121ad', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=None, claims=[], candidates=[], similar_claims=[], error='Pipeline failed.', failure_reason='task_error', failure_detail='', failure_class='internal', retryable=False, docs_url='https://lenz.io/docs/errors#internal')",
   "wait": {
     "cause": "Pipeline failed.",
     "code": "",

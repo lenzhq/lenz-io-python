@@ -236,7 +236,9 @@ def test_usage_blocks_are_computed_from_the_pool(name):
 )
 def test_review_new_names_from_both_shapes(name):
     legacy, canonical = (ReviewFull.model_validate(b) for b in _both(name))
-    assert legacy.summary.claim_limit_exceeded == canonical.summary.claim_limit_exceeded
+    # The original shape says only that the claim limit was REACHED.
+    assert legacy.summary.claim_limit_exceeded is None
+    assert canonical.summary.claim_limit_exceeded == bool(canonical.more_claims)
     assert legacy.summary.citation_limit_exceeded == canonical.summary.citation_limit_exceeded
     for a, b in zip(legacy.claims, canonical.claims, strict=True):
         assert a.assessment.more_claims == b.assessment.more_claims
@@ -251,14 +253,47 @@ def test_review_failure_code_reads_the_new_spelling():
     assert FailureBlock.model_validate({"failure_reason": "not_a_claim"}).code == "no_checkable_claim"
 
 
-# ── dumps show what was sent ──
+# ── the original shape is parsed exactly as before ──
 
 
-def test_model_dump_shows_the_newer_shape_as_sent():
+def test_newer_shape_dump_keeps_every_key_sent():
     canonical = load("canonical", "assess__list_mixed_rows.json")["body"]
-    assert AssessResponse.model_validate(canonical).model_dump(mode="json") == canonical
-    canonical = load("canonical", "verify__batch_202.json")["body"]
-    assert BatchAccepted.model_validate(canonical).model_dump(mode="json") == canonical
+    dumped = AssessResponse.model_validate(canonical).model_dump(mode="json")
+    assert set(canonical) <= set(dumped)
+    assert all(set(row) <= set(d) for row, d in zip(canonical["claims"], dumped["claims"], strict=True))
+
+
+def test_explicit_null_retryable_is_kept():
+    st = TaskStatus.model_validate({"status": "failed", "retryable": None, "failure": {"code": "x", "retryable": True}})
+    assert st.retryable is None
+    assert st.failure is not None and st.failure.retryable is True
+
+
+def test_sparse_usage_dumps_every_default():
+    assert set(Usage.model_validate({"plan": "free"}).model_dump()) == set(Usage.model_fields)
+
+
+def test_original_shape_keeps_unset_fields_unset():
+    body = {"claim": "x", "verdict": "True", "confidence": "high"}
+    assert AssessClaim.model_validate(body).model_dump(exclude_unset=True) == body
+    assert AssessResponse.model_validate({"claims": []}).model_dump(exclude_unset=True) == {"claims": []}
+
+
+def test_new_names_are_properties_not_fields():
+    for cls, name in (
+        (AssessClaim, "status"),
+        (AssessClaim, "failure"),
+        (ExtractedClaims, "claims"),
+        (TaskStatus, "failure"),
+        (Verification, "completed_at"),
+        (FailureBlock, "code"),
+    ):
+        assert name not in cls.model_fields
+
+
+def test_model_copy_update_shows_in_the_dump():
+    row = AssessClaim.model_validate({"claim": "x", "verdict": "True"})
+    assert row.model_copy(update={"verdict": "False"}).model_dump()["verdict"] == "False"
 
 
 # ── webhooks ──
@@ -294,6 +329,26 @@ def test_completed_webhook_result_from_both_shapes():
     assert isinstance(canonical, VerificationCompleted)
     assert legacy.verification_id == canonical.verification_id
     assert legacy.result["modified_at"] == canonical.result["modified_at"]
+
+
+def test_needs_input_with_a_null_domain_does_not_raise():
+    event = parse_webhook(
+        {
+            "event": "verification.needs_input",
+            "task_id": "t",
+            "needs_input": {"claims": [{"text": "A", "domain": None}]},
+        }
+    )
+    assert event.needs_input == {"claims": [{"text": "A", "domain": None}]}
+    assert [c.claim for c in event.claims] == ["A"]
+
+
+def test_legacy_webhook_event_still_serialises():
+    import dataclasses
+
+    event = parse_webhook(load("legacy", "webhook__verification_failed_not_a_claim.json")["body"])
+    assert json.loads(json.dumps(dataclasses.asdict(event)))["error"] == "not_a_claim"
+    assert "failure" not in dataclasses.asdict(event)
 
 
 @pytest.mark.parametrize("name", ["webhook__review_completed.json", "webhook__citecheck_completed.json"])
@@ -336,10 +391,20 @@ def test_rate_limit_wait_from_both_shapes():
     assert (err.retry_after, err.reset_in_seconds) == (0, None)
 
 
+def test_error_fields_follow_key_presence():
+    err = map_response_to_error(
+        429, json.dumps({"code": "rate_limited", "reset_in_seconds": None, "retry_after": 30}).encode()
+    )
+    assert err.reset_in_seconds is None
+    body = {"code": "verification_failed", "hint": "", "failure": {"code": "x", "hint": "from the block"}}
+    assert map_response_to_error(409, json.dumps(body).encode()).hint == ""
+
+
 def test_quota_remaining_is_derived_when_absent():
     legacy, canonical = _both("citecheck__402_no_credits.json")
     assert map_response_to_error(402, json.dumps(canonical).encode()).remaining == 100
     assert map_response_to_error(402, json.dumps(legacy).encode()).remaining == 100
+    assert map_response_to_error(402, json.dumps({"credits_remaining": 9, "cost": 1}).encode()).remaining is None
 
 
 # ── requests ──

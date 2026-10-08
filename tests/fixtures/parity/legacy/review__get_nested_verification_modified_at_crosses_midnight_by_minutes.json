@@ -1,17 +1,12 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "review_id": "d6b2bd72",
     "view": "full",
     "status": "completed",
     "outcome": "issues_found",
-    "created_at": "2026-10-01T09:14:00.123456Z",
-    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
     "language": "en",
     "policy": {
       "verdicts": [
@@ -63,10 +58,10 @@
         "verdict": "False",
         "confidence": "high",
         "source": "verification",
-        "verification_id": "b4e2e99d",
+        "verification_id": "68ca4aaf",
         "verification_status": "completed",
-        "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
-        "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+        "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
+        "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
         "escalation": {
           "matched_rules": [
             "verdict"
@@ -116,8 +111,8 @@
         "verification": {
           "status": "completed",
           "content_status": "available",
-          "task_id": "7df4009bc27aab64ce5d5a01fbafe599",
-          "verification_id": "b4e2e99d",
+          "task_id": "7cff18da2d979d6370e54a160be121ad",
+          "verification_id": "68ca4aaf",
           "claim": "The Eiffel Tower is in Berlin.",
           "language": "en",
           "visibility": "private",
@@ -135,8 +130,8 @@
           ],
           "created_at": "2026-10-01T23:55:00.123456+00:00",
           "modified_at": "2026-10-02T00:03:00.123456+00:00",
-          "verification_url": "https://lenz.io/api/v1/verifications/b4e2e99d",
-          "url": "https://lenz.io/c/the-earth-is-round-b4e2e99d",
+          "verification_url": "https://lenz.io/api/v1/verifications/68ca4aaf",
+          "url": "https://lenz.io/c/the-earth-is-round-68ca4aaf",
           "failure": null
         },
         "suggested_edits": null
@@ -147,5 +142,10 @@
     "more_claims": [],
     "more_claim_locations": [],
     "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

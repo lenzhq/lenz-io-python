@@ -1,0 +1,43 @@
+{
+  "status": 200,
+  "body": {
+    "name": "Lenz Public API",
+    "version": "v1",
+    "docs_url": "https://lenz.io/api/v1/docs/",
+    "openapi_url": "https://lenz.io/api/v1/openapi.json",
+    "quickstart_url": "https://lenz.io/docs/quickstart",
+    "developer_portal_url": "https://lenz.io/developers",
+    "endpoints": {
+      "extract": "https://lenz.io/api/v1/extract",
+      "assess": "https://lenz.io/api/v1/assess",
+      "verify": "https://lenz.io/api/v1/verify",
+      "ask": "https://lenz.io/api/v1/ask/{verification_id}",
+      "verify_status": "https://lenz.io/api/v1/verify/status/{task_id}",
+      "verifications": "https://lenz.io/api/v1/verifications/{verification_id}",
+      "library": "https://lenz.io/api/v1/library",
+      "usage": "https://lenz.io/api/v1/me/usage"
+    },
+    "sdks": {
+      "python": {
+        "repository": "https://github.com/lenzhq/lenz-io-python",
+        "package": "https://pypi.org/project/lenz-io/",
+        "install": "pip install lenz-io"
+      },
+      "node": {
+        "repository": "https://github.com/lenzhq/lenz-io-node",
+        "package": "https://www.npmjs.com/package/lenz-io",
+        "install": "npm install lenz-io"
+      }
+    },
+    "mcp": {
+      "url": "https://lenz.io/mcp",
+      "transport": "streamable-http",
+      "repository": "https://github.com/lenzhq/lenz-mcp"
+    }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

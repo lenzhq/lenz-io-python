@@ -35,7 +35,7 @@
       "bonus": 0,
       "extra": 0,
       "remaining": 5000,
-      "resets_at": "2026-10-01T09:07:00.123456+00:00",
+      "resets_at": "2026-10-01T14:07:00.123456+00:00",
       "total": 5000,
       "used": 0
     },
@@ -47,7 +47,65 @@
     "has_webhook_secret": false,
     "plan": "pro",
     "plan_label": "Pro",
-    "quota_resets_at": "2026-10-01T09:07:00.123456+00:00",
+    "quota_resets_at": "2026-10-01T14:07:00.123456+00:00",
+    "verify": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 500,
+      "quota_total": 500,
+      "quota_used": 0,
+      "remaining": 500
+    }
+  },
+  "dump_unset": {
+    "ask": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 5000,
+      "quota_total": 5000,
+      "quota_used": 0,
+      "remaining": 5000
+    },
+    "assess": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 5000,
+      "quota_total": 5000,
+      "quota_used": 0,
+      "remaining": 5000
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "low": 5,
+          "standard": 10
+        }
+      }
+    },
+    "costs": {
+      "ask": 1,
+      "assess": 1,
+      "citation": 1,
+      "extract": 0,
+      "verify": 10
+    },
+    "credits": {
+      "bonus": 0,
+      "extra": 0,
+      "remaining": 5000,
+      "resets_at": "2026-10-01T14:07:00.123456+00:00",
+      "total": 5000,
+      "used": 0
+    },
+    "extract": {
+      "calls_today": 0,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false,
+    "plan": "pro",
+    "plan_label": "Pro",
+    "quota_resets_at": "2026-10-01T14:07:00.123456+00:00",
     "verify": {
       "bonus": 0,
       "credits": 0,
@@ -58,5 +116,6 @@
     }
   },
   "render": "Lenz usage  (Pro plan)\n  5000 credits left  (≈ 500 verifications · 5000 assessments)\n  Verify:   500 left  (0 / 500 quota · 10 credits each · 5 at depth \"low\")\n  Ask:      5000 left  (0 / 5000 quota · 1 credit each)\n  Assess:   5000 left  (0 / 5000 quota · 1 credit each)\n  Extract:  0 / 1000 today  (free — no credit charge)\n  Credits reset Oct 1, 2026\n",
-  "render_json": "{\n  \"plan\": \"pro\",\n  \"plan_label\": \"Pro\",\n  \"quota_resets_at\": \"2026-10-01T09:07:00.123456+00:00\",\n  \"credits\": {\n    \"total\": 5000,\n    \"used\": 0,\n    \"remaining\": 5000,\n    \"extra\": 0,\n    \"bonus\": 0,\n    \"resets_at\": \"2026-10-01T09:07:00.123456+00:00\"\n  },\n  \"costs\": {\n    \"verify\": 10,\n    \"assess\": 1,\n    \"ask\": 1,\n    \"citation\": 1,\n    \"extract\": 0\n  },\n  \"cost_options\": {\n    \"verify\": {\n      \"depth\": {\n        \"standard\": 10,\n        \"low\": 5\n      }\n    }\n  },\n  \"verify\": {\n    \"quota_used\": 0,\n    \"quota_total\": 500,\n    \"quota_remaining\": 500,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 500\n  },\n  \"ask\": {\n    \"quota_used\": 0,\n    \"quota_total\": 5000,\n    \"quota_remaining\": 5000,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 5000\n  },\n  \"assess\": {\n    \"quota_used\": 0,\n    \"quota_total\": 5000,\n    \"quota_remaining\": 5000,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 5000\n  },\n  \"extract\": {\n    \"calls_today\": 0,\n    \"daily_limit\": 1000,\n    \"unlimited\": false\n  },\n  \"has_webhook_secret\": false\n}\n"
+  "render_json": "{\n  \"plan\": \"pro\",\n  \"plan_label\": \"Pro\",\n  \"quota_resets_at\": \"2026-10-01T14:07:00.123456+00:00\",\n  \"credits\": {\n    \"total\": 5000,\n    \"used\": 0,\n    \"remaining\": 5000,\n    \"extra\": 0,\n    \"bonus\": 0,\n    \"resets_at\": \"2026-10-01T14:07:00.123456+00:00\"\n  },\n  \"costs\": {\n    \"verify\": 10,\n    \"assess\": 1,\n    \"ask\": 1,\n    \"citation\": 1,\n    \"extract\": 0\n  },\n  \"cost_options\": {\n    \"verify\": {\n      \"depth\": {\n        \"standard\": 10,\n        \"low\": 5\n      }\n    }\n  },\n  \"verify\": {\n    \"quota_used\": 0,\n    \"quota_total\": 500,\n    \"quota_remaining\": 500,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 500\n  },\n  \"ask\": {\n    \"quota_used\": 0,\n    \"quota_total\": 5000,\n    \"quota_remaining\": 5000,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 5000\n  },\n  \"assess\": {\n    \"quota_used\": 0,\n    \"quota_total\": 5000,\n    \"quota_remaining\": 5000,\n    \"bonus\": 0,\n    \"credits\": 0,\n    \"remaining\": 5000\n  },\n  \"extract\": {\n    \"calls_today\": 0,\n    \"daily_limit\": 1000,\n    \"unlimited\": false\n  },\n  \"has_webhook_secret\": false\n}\n",
+  "repr": "Usage(plan='pro', plan_label='Pro', quota_resets_at='2026-10-01T14:07:00.123456+00:00', credits=UsageCredits(total=5000, used=0, remaining=5000, extra=0, bonus=0, resets_at='2026-10-01T14:07:00.123456+00:00'), costs={'verify': 10, 'assess': 1, 'ask': 1, 'citation': 1, 'extract': 0}, cost_options={'verify': {'depth': {'standard': 10, 'low': 5}}}, verify=UsageCapacity(quota_used=0, quota_total=500, quota_remaining=500, bonus=0, credits=0, remaining=500), ask=UsageCapacity(quota_used=0, quota_total=5000, quota_remaining=5000, bonus=0, credits=0, remaining=5000), assess=UsageCapacity(quota_used=0, quota_total=5000, quota_remaining=5000, bonus=0, credits=0, remaining=5000), extract=UsageExtract(calls_today=0, daily_limit=1000, unlimited=False), has_webhook_secret=False)"
 }

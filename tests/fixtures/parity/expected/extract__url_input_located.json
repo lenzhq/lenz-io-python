@@ -30,6 +30,38 @@
     "presumed_intent": "Verify reported figures",
     "status": "ready"
   },
+  "dump_unset": {
+    "candidate_claims": [],
+    "claim": "Alpha rose 5% in 2024.",
+    "domain": "Economics",
+    "identified_claims": [],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": [
+          {
+            "end": null,
+            "start": null,
+            "text": "Alpha rose 5% in 2024."
+          }
+        ]
+      }
+    ],
+    "original_input": "https://example.com/an-article",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
   "render": "Claim: Alpha rose 5% in 2024.\n  at \"Alpha rose 5% in 2024.\"\n\nVerify it: lenz verify \"Alpha rose 5% in 2024.\"\n",
-  "render_json": "{\n  \"status\": \"ready\",\n  \"claim\": \"Alpha rose 5% in 2024.\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"Economics\",\n  \"key_entities\": [\n    {\n      \"name\": \"Alpha\",\n      \"type\": \"organization\"\n    },\n    {\n      \"name\": \"Beta\",\n      \"type\": \"organization\"\n    }\n  ],\n  \"presumed_intent\": \"Verify reported figures\",\n  \"original_input\": \"https://example.com/an-article\",\n  \"locations\": [\n    {\n      \"claim\": \"Alpha rose 5% in 2024.\",\n      \"positions\": [\n        {\n          \"start\": null,\n          \"end\": null,\n          \"text\": \"Alpha rose 5% in 2024.\"\n        }\n      ]\n    }\n  ]\n}\n"
+  "render_json": "{\n  \"status\": \"ready\",\n  \"claim\": \"Alpha rose 5% in 2024.\",\n  \"identified_claims\": [],\n  \"candidate_claims\": [],\n  \"domain\": \"Economics\",\n  \"key_entities\": [\n    {\n      \"name\": \"Alpha\",\n      \"type\": \"organization\"\n    },\n    {\n      \"name\": \"Beta\",\n      \"type\": \"organization\"\n    }\n  ],\n  \"presumed_intent\": \"Verify reported figures\",\n  \"original_input\": \"https://example.com/an-article\",\n  \"locations\": [\n    {\n      \"claim\": \"Alpha rose 5% in 2024.\",\n      \"positions\": [\n        {\n          \"start\": null,\n          \"end\": null,\n          \"text\": \"Alpha rose 5% in 2024.\"\n        }\n      ]\n    }\n  ]\n}\n",
+  "repr": "ExtractedClaims(status='ready', claim='Alpha rose 5% in 2024.', identified_claims=[], candidate_claims=[], domain='Economics', key_entities=[ExtractedEntity(name='Alpha', type='organization'), ExtractedEntity(name='Beta', type='organization')], presumed_intent='Verify reported figures', original_input='https://example.com/an-article', locations=[ClaimLocation(claim='Alpha rose 5% in 2024.', positions=[Position(start=None, end=None, text='Alpha rose 5% in 2024.')])])"
 }

@@ -1,0 +1,12 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid_grant",
+    "error_description": "The authorization is invalid or has expired."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

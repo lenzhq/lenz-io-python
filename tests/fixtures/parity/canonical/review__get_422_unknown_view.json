@@ -1,10 +1,5 @@
 {
   "status": 422,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "view: use full or issues.",
     "code": "validation_error",
@@ -18,5 +13,10 @@
         "type": "validation_error"
       }
     ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

@@ -1,0 +1,9 @@
+{
+  "status": 200,
+  "body": {},
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

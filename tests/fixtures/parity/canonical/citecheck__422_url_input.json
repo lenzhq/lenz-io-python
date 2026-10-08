@@ -1,10 +1,5 @@
 {
   "status": 422,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "Send the page's text, with its links, to check the sources it cites.",
     "code": "url_input",
@@ -18,5 +13,10 @@
         "type": "url_input"
       }
     ]
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

@@ -37,7 +37,71 @@
     ],
     "citecheck_id": "8eb49302",
     "completed_at": null,
-    "created_at": "2026-10-01T09:14:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "credits": {
+      "charged": 0
+    },
+    "failure": null,
+    "language": "en",
+    "more_citations": [],
+    "outcome": null,
+    "policy": {
+      "max_citations": 1
+    },
+    "poll_after_seconds": 10,
+    "status": "queued",
+    "summary": {
+      "citation_checks": {
+        "checked": 0,
+        "failed": 0,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 1,
+      "citation_limit_reached": false,
+      "citations_found": 1,
+      "citations_selected": 1
+    }
+  },
+  "dump_unset": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": null,
+          "hint": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": null,
+          "page_published_date": null,
+          "page_read": null,
+          "page_title": null,
+          "quote": null,
+          "rationale": null,
+          "registered": null,
+          "snippet": null,
+          "source_url": null,
+          "source_version": null,
+          "status": "pending",
+          "support": null,
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "https://example.gov/report-2024",
+        "result": null,
+        "statement": "Unemployment fell to 4.1% in 2024."
+      }
+    ],
+    "citecheck_id": "8eb49302",
+    "completed_at": null,
+    "created_at": "2026-10-01T09:07:00.123456Z",
     "credits": {
       "charged": 0
     },
@@ -65,5 +129,6 @@
   },
   "exit_code": 2,
   "render": "Citation check 8eb49302: queued — 0 credits charged\n\n1 source cited in your draft\nLenz checks each one: does the source say what your draft says it does.\n",
-  "render_json": null
+  "render_json": null,
+  "repr": "Citecheck(citecheck_id='8eb49302', status='queued', outcome=None, created_at='2026-10-01T09:07:00.123456Z', completed_at=None, poll_after_seconds=10, policy=CitecheckPolicy(max_citations=1), summary=CitecheckSummary(citations_found=1, citations_selected=1, citation_limit=1, citation_limit_reached=False, citation_checks=ReviewCitationCheckCounts(checked=0, unchecked=0, failed=0), citation_issues=0), credits=ReviewCredits(charged=0), citations=[ReviewCitation(index=0, reference='https://example.gov/report-2024', cited_url='https://example.gov/report-2024', doi=None, statement='Unemployment fell to 4.1% in 2024.', quotes=[], position=None, result=None, check=ReviewCitationCheck(status='pending', page_read=None, page_title=None, page_published_date=None, page_language=None, source_url=None, source_version=None, support=None, snippet=None, rationale=None, quote=None, missing_quote=None, doi_registered=None, metadata=None, metadata_differences=[], registered=None, unchecked_reason=None, hint=None, failure=None))], citation_issues=[], citation_failures=[], more_citations=[], failure=None, language='en')"
 }

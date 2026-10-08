@@ -1,0 +1,21 @@
+{
+  "error": {
+    "cause": "HTTP 400",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/errors",
+    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+    "friendly_text": "HTTP 400\n  Fix: Retry; if the error persists, file an issue with the Request ID.",
+    "message": "HTTP 400",
+    "payload_json": {
+      "error": {
+        "code": "api_error",
+        "fix": "Retry; if the error persists, file an issue with the Request ID.",
+        "message": "HTTP 400",
+        "status": 400
+      }
+    },
+    "request_id": "",
+    "status_code": 400,
+    "type": "LenzError"
+  }
+}

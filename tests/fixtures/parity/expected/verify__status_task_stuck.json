@@ -22,8 +22,18 @@
     "status": "failed",
     "task_id": "7cff18da2d979d6370e54a160be121ad"
   },
+  "dump_unset": {
+    "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+    "error": "The task was never completed and has been marked failed.",
+    "failure_class": "upstream_unavailable",
+    "failure_reason": "task_stuck",
+    "retryable": true,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
   "render": "failed  — The task was never completed and has been marked failed.\n",
   "render_json": "{\n  \"status\": \"failed\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"\",\n    \"index\": null,\n    \"total\": null,\n    \"elapsed_seconds\": null,\n    \"poll_after_seconds\": null\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"The task was never completed and has been marked failed.\",\n  \"failure_reason\": \"task_stuck\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"upstream_unavailable\",\n  \"retryable\": true,\n  \"docs_url\": \"https://lenz.io/docs/errors#upstream-unavailable\"\n}\n",
+  "repr": "TaskStatus(status='failed', task_id='7cff18da2d979d6370e54a160be121ad', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=None, claims=[], candidates=[], similar_claims=[], error='The task was never completed and has been marked failed.', failure_reason='task_stuck', failure_detail='', failure_class='upstream_unavailable', retryable=True, docs_url='https://lenz.io/docs/errors#upstream-unavailable')",
   "wait": {
     "cause": "The task was never completed and has been marked failed.",
     "code": "",

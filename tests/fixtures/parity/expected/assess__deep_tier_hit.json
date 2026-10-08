@@ -21,6 +21,27 @@
     "error_code": "",
     "more_claims": []
   },
+  "dump_unset": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Water boils at 100C.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": "The claim is verified.",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": "https://lenz.io/api/v1/verifications/f3436f50"
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
   "render": "True (high) — Water boils at 100C.\n    The claim is verified.\n    ask follow-ups: lenz ask f3436f50 \"<your question>\"\n",
-  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Water boils at 100C.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": \"https://lenz.io/api/v1/verifications/f3436f50\",\n      \"rationale\": \"The claim is verified.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n"
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Water boils at 100C.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": \"https://lenz.io/api/v1/verifications/f3436f50\",\n      \"rationale\": \"The claim is verified.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[AssessClaim(claim='Water boils at 100C.', language='en', verdict='True', confidence='high', verification_url='https://lenz.io/api/v1/verifications/f3436f50', rationale='The claim is verified.', dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None)], error=None, error_code='', candidate_claims=[], more_claims=[])"
 }

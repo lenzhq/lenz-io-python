@@ -492,8 +492,9 @@ older ones keep working, with the meaning they always had:
 | `Usage.credits` and `Usage.costs` | the `verify` / `ask` / `assess` blocks, `quota_resets_at` |
 
 "Nothing checkable" is `no_checkable_claim` in the newer names; the older
-fields keep their own spelling (`not_a_claim`, `no_claim`). `model_dump()`
-returns the shape the server sent.
+fields keep their own spelling (`not_a_claim`, `no_claim`). The newer names
+are read-only properties, so an original-shape response parses, dumps and
+compares exactly as before.
 
 ### A suggested rewrite (`suggested_rewrite`)
 

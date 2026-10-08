@@ -1,18 +1,17 @@
 {
   "status": 200,
-  "headers": {},
   "body": {
     "event": "citecheck.failed",
     "event_id": "evt_09301870aba4e8f6ae33ff60",
-    "citecheck_id": "98c0e7d5",
-    "task_id": "13610f0b64b63e006dc66364e0e82c85",
+    "citecheck_id": "8eb49302",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
     "status": "failed",
     "citecheck": {
-      "citecheck_id": "98c0e7d5",
+      "citecheck_id": "8eb49302",
       "status": "failed",
       "outcome": "unchecked",
-      "created_at": "2026-10-01T09:28:00.123456Z",
-      "completed_at": "2026-10-01T09:35:00.123456Z",
+      "created_at": "2026-10-01T09:07:00.123456Z",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
       "language": "en",
       "poll_after_seconds": null,
       "policy": {
@@ -42,6 +41,7 @@
       "more_citations": null
     },
     "attempt": 1,
-    "delivered_at": "2026-10-01T09:42:00.123456+00:00"
-  }
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
 }

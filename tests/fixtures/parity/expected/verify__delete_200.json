@@ -1,0 +1,12 @@
+{
+  "dump": {
+    "claim_text": "",
+    "ok": true,
+    "task_id": ""
+  },
+  "dump_unset": {
+    "ok": true
+  },
+  "render_json": null,
+  "repr": "TaskAccepted(task_id='', claim_text='', ok=True)"
+}

@@ -1,21 +1,16 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "plan": "pro",
     "plan_label": "Pro",
-    "quota_resets_at": "2026-10-01T09:07:00.123456+00:00",
+    "quota_resets_at": "2026-10-01T14:07:00.123456+00:00",
     "credits": {
       "total": 6000,
       "used": 0,
       "remaining": 6000,
       "extra": 1000,
       "bonus": 1000,
-      "resets_at": "2026-10-01T09:07:00.123456+00:00"
+      "resets_at": "2026-10-01T14:07:00.123456+00:00"
     },
     "costs": {
       "verify": 10,
@@ -62,5 +57,10 @@
       "unlimited": false
     },
     "has_webhook_secret": false
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

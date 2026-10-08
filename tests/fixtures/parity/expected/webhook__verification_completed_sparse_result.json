@@ -1,0 +1,48 @@
+{
+  "event": {
+    "attempt": 1,
+    "batch_id": null,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00",
+    "event": "verification.completed",
+    "result": {
+      "audit": {
+        "adjudication_summary": "",
+        "assessments": [],
+        "debate_con": {
+          "argument": "",
+          "rebuttal": "",
+          "role": ""
+        },
+        "debate_pro": {
+          "argument": "",
+          "rebuttal": "",
+          "role": ""
+        },
+        "panel_agreement": ""
+      },
+      "claim": "The Eiffel Tower is in Berlin.",
+      "confidence": "low",
+      "coverage": null,
+      "created_at": "",
+      "depth": "standard",
+      "domain": "",
+      "entities": [],
+      "executive_summary": "",
+      "key_finding": "",
+      "language": "en",
+      "lenz_score": null,
+      "modified_at": null,
+      "presumed_intent": "",
+      "sources": [],
+      "suggested_rewrite": null,
+      "verdict": "",
+      "verification_id": "68ca4aaf",
+      "visibility": "private",
+      "warnings": []
+    },
+    "status": "completed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "VerificationCompleted",
+    "verification_id": "68ca4aaf"
+  }
+}

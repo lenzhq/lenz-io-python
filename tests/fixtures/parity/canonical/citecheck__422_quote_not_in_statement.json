@@ -1,10 +1,5 @@
 {
   "status": 422,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "pairs[0]: Each quote must be words of its statement.",
     "code": "quote_not_in_statement",
@@ -20,5 +15,10 @@
         "type": "quote_not_in_statement"
       }
     ]
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

@@ -1,15 +1,10 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "status": "completed",
     "task_id": "7cff18da2d979d6370e54a160be121ad",
     "result": {
-      "verification_id": "4d44dfaf",
+      "verification_id": "68ca4aaf",
       "claim": "The Earth is round.",
       "visibility": "private",
       "depth": "standard",
@@ -30,8 +25,8 @@
         "Relies on limited sources"
       ],
       "suggested_rewrite": null,
-      "created_at": "2026-10-01T09:21:00.123456+00:00",
-      "completed_at": "2026-10-01T09:28:00.123456+00:00",
+      "created_at": "2026-10-01T09:07:00.123456+00:00",
+      "completed_at": "2026-10-01T09:07:00.123456+00:00",
       "sources": [
         {
           "source_name": "NASA",
@@ -95,5 +90,10 @@
         "terms_version": "v1"
       }
     }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

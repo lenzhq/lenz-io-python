@@ -1,0 +1,12 @@
+{
+  "status": 400,
+  "body": {
+    "error": "invalid_redirect_uri",
+    "error_description": "Each redirect URI must be https, or http on localhost, 127.0.0.1 or [::1], without a fragment."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

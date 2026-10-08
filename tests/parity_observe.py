@@ -96,9 +96,9 @@ def attr_view(obj: Any, template: Any) -> Any:
             out[key] = MISSING if value is MISSING else attr_view(value, sub)
         return out
     if isinstance(template, list):
-        items = list(obj) if isinstance(obj, (list, tuple)) else []
-        if len(items) != len(template):
+        if not isinstance(obj, (list, tuple)) or len(obj) != len(template):
             return _jsonable(obj)
+        items = list(obj)
         return [attr_view(o, t) for o, t in zip(items, template, strict=True)]
     return _jsonable(obj)
 
@@ -186,8 +186,10 @@ def observe(name: str, fixture: dict[str, Any]) -> dict[str, Any]:
         cls = _model_for(name)
         if cls is None:
             return result
-        model = cls.model_validate(body)
+        model = _extract_via_client(name, body) if cls is models.ExtractedClaims else cls.model_validate(body)
         result["dump"] = model.model_dump(mode="json")
+        result["dump_unset"] = model.model_dump(mode="json", exclude_unset=True)
+        result["repr"] = repr(model)
         result["render_json"] = None
         if cls is models.ExtractedClaims:
             result["render"] = _render(render_mod.render_extract, model)
@@ -223,6 +225,26 @@ def observe(name: str, fixture: dict[str, Any]) -> dict[str, Any]:
             result["render"] = _render(citecheck_cli.render_citecheck, model)
             result["exit_code"] = citecheck_cli.exit_code_for_citecheck(model)
     return result
+
+
+def located(name: str) -> bool:
+    """Whether the recorded /extract call asked to locate its claims."""
+    return "locate" in name
+
+
+def _extract_via_client(name: str, body: dict[str, Any]) -> Any:
+    """``client.extract`` on the recorded body, with the recorded ``locate``."""
+    import respx
+
+    from lenz_io.client import DEFAULT_BASE_URL
+
+    client = Lenz(api_key="lenz_" + "0" * 32)
+    try:
+        with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+            mock.post("/extract").respond(200, json=body)
+            return client.extract(text="text", locate=True if located(name) else None)
+    finally:
+        client.close()
 
 
 def load(shape: str, name: str) -> dict[str, Any]:

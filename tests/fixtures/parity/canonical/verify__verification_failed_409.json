@@ -1,10 +1,5 @@
 {
   "status": 409,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "This check failed and has no result.",
     "code": "verification_failed",
@@ -19,5 +14,10 @@
       "retryable": false,
       "docs_url": "https://lenz.io/docs/errors#insufficient-evidence"
     }
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

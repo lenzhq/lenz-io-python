@@ -1,13 +1,13 @@
 {
   "status": 404,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "Not found.",
     "code": "not_found",
     "hint": "Unknown id. If this is a task_id, poll GET /verify/status/dddddddddddddddddddddddddddddddd for its status."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

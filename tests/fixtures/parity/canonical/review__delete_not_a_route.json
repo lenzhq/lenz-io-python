@@ -1,0 +1,12 @@
+{
+  "status": 405,
+  "body": {
+    "detail": "Method not allowed.",
+    "code": "method_not_allowed"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

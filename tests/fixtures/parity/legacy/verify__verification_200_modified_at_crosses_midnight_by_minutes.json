@@ -1,10 +1,5 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "verification_id": "68ca4aaf",
     "claim": "The Earth is round.",
@@ -91,5 +86,10 @@
       "aggregate": 500000,
       "terms_version": "v1"
     }
+  },
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

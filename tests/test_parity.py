@@ -26,7 +26,10 @@ import warnings
 from typing import Any
 
 import pytest
-from parity_observe import FIXTURES, MISSING, _model_for, attr_view, load, names, observe
+from parity_observe import FIXTURES, MISSING, _extract_via_client, _model_for, attr_view, load, names, observe
+
+from lenz_io import models
+from lenz_io.webhooks import parse_webhook
 
 EXPECTED = FIXTURES / "expected"
 
@@ -38,8 +41,8 @@ EXPECTED = FIXTURES / "expected"
 # the server's sentences (error / failure text), the codes and field errors it
 # sends on a 422, `chain_id`, the review / citation-check webhook `task_id`,
 # and a row hint the newer shape does not carry. The single entries in
-# ``KNOWN_GAPS`` below fall in those categories too, plus two where the two
-# recordings simply hold different ids.
+# ``KNOWN_GAPS`` below fall in those categories too, plus one where the two
+# recordings number an id differently.
 
 #: An exception's text fields: built from the body's ``detail``.
 _MESSAGE_PATHS = ("message", "cause", "friendly_text", "payload_json.error.message")
@@ -101,23 +104,9 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
     ("extract__not_a_claim_beside_claims.json", "dump.status"): (
         "the newer shape answers `ready` when claims came back beside a non-claim"
     ),
-    ("verify__list_200.json", "dump.items[1].verification_id"): "the two recordings list different verifications",
-    ("verify__list_200.json", "dump.items[1].created_at"): "the two recordings list different verifications",
-    (
-        "verify__verification_200_covered.json",
-        "dump.coverage.certificate_id",
-    ): "the two recordings issued different certificates",
-    (
-        "verify__verification_200_covered.json",
-        "dump.coverage.certificate_url",
-    ): "the two recordings issued different certificates",
-    ("review__get_completed_issues_all_verified.json", "dump.claims[1].verification.task_id"): (
-        "the two recordings ran different tasks"
+    ("webhook__review_completed.json", "event.review.claims[0].verification.task_id"): (
+        "the two recordings number their task ids differently (the newer payload has no delivery task_id)"
     ),
-    (
-        "review__get_completed_issues_full.json",
-        "dump.claims[2].verification.task_id",
-    ): "the two recordings ran different tasks",
 }
 
 
@@ -162,11 +151,23 @@ def test_original_shape_is_unchanged(name: str) -> None:
 def _canonical_view(name: str, expected: dict[str, Any]) -> dict[str, Any]:
     fixture = load("canonical", name)
     got = _old_event_attrs(observe(name, fixture), expected)
-    view = {k: v for k, v in got.items() if k not in ("dump", "render_json")}
+    view = {k: v for k, v in got.items() if k not in ("dump", "dump_unset", "repr", "render_json")}
+    if "event" in expected:
+        # A review or citation check on an event: read it by attribute too.
+        event = parse_webhook(fixture["body"])
+        for key, old in expected["event"].items():
+            value = getattr(event, key, None)
+            if isinstance(old, dict) and hasattr(value, "model_dump"):
+                view["event"][key] = attr_view(value, old)
     if "dump" in expected:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
-            model = _model_for(name).model_validate(fixture["body"])
+            cls = _model_for(name)
+            model = (
+                _extract_via_client(name, fixture["body"])
+                if cls is models.ExtractedClaims
+                else cls.model_validate(fixture["body"])
+            )
             view["dump"] = attr_view(model, expected["dump"])
             returned = expected.get("wait", {}).get("returned")
             if returned is not None:
@@ -181,7 +182,7 @@ def _canonical_names() -> list[str]:
 
 @pytest.mark.parametrize("name", _canonical_names())
 def test_newer_shape_reads_the_same(name: str) -> None:
-    expected = {k: v for k, v in _expected(name).items() if k != "render_json"}
+    expected = {k: v for k, v in _expected(name).items() if k not in ("render_json", "dump_unset", "repr")}
     got = _canonical_view(name, expected)
     legacy, canonical = load("legacy", name), load("canonical", name)
     gaps = [
@@ -194,7 +195,7 @@ def test_every_known_gap_is_still_a_gap() -> None:
     """A listed gap that closed is stale: drop it, so the list stays exact."""
     stale = []
     for (name, path), _reason in KNOWN_GAPS.items():
-        expected = {k: v for k, v in _expected(name).items() if k != "render_json"}
+        expected = {k: v for k, v in _expected(name).items() if k not in ("render_json", "dump_unset", "repr")}
         if path not in {p for p, _, _ in _diff(expected, _canonical_view(name, expected))}:
             stale.append((name, path))
     assert not stale
@@ -211,3 +212,35 @@ def test_request_bodies_match_the_previous_release() -> None:
     from parity_requests import bodies
 
     assert bodies() == json.loads((FIXTURES / "requests.json").read_text())
+
+
+# ── Schemas and pickles ─────────────────────────────────────────────────────
+
+
+def test_model_schemas_match_the_previous_release() -> None:
+    """Every model the previous release had publishes the same validation and
+    serialization JSON schema: the newer names are properties, not fields."""
+    from parity_static import schemas
+
+    def _shape(schema: Any) -> Any:
+        # Doc text (class docstrings) may change; the shape may not.
+        if isinstance(schema, dict):
+            return {k: _shape(v) for k, v in schema.items() if k != "description"}
+        if isinstance(schema, list):
+            return [_shape(v) for v in schema]
+        return schema
+
+    frozen = _shape(json.loads((FIXTURES / "schemas.json").read_text()))
+    current = _shape(schemas())
+    assert {k: current.get(k) for k in frozen} == frozen
+
+
+def test_objects_pickled_by_the_previous_release_still_dump() -> None:
+    import base64
+    import pickle
+
+    frozen = json.loads((FIXTURES / "pickles.json").read_text())
+    assert frozen
+    for name, blob in frozen.items():
+        model = pickle.loads(base64.b64decode(blob))
+        assert model.model_dump(mode="json") == _expected(name)["dump"], name

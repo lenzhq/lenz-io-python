@@ -35,6 +35,41 @@
     "error_code": "",
     "more_claims": []
   },
+  "dump_unset": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Venus is the closest planet to the Sun.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": "Mercury, not Venus, is the closest planet to the Sun.",
+        "suggested_rewrite": "Mercury is the closest planet to the Sun.",
+        "verdict": "False",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "Mercury is the closest planet to the Sun.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": "Mercury is the innermost planet.",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
   "render": "False (high) — Venus is the closest planet to the Sun.\n    Mercury, not Venus, is the closest planet to the Sun.\nTrue (high) — Mercury is the closest planet to the Sun.\n    Mercury is the innermost planet.\n",
-  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Venus is the closest planet to the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"False\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": \"Mercury, not Venus, is the closest planet to the Sun.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": \"Mercury is the closest planet to the Sun.\",\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    },\n    {\n      \"claim\": \"Mercury is the closest planet to the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": \"Mercury is the innermost planet.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n"
+  "render_json": "{\n  \"claims\": [\n    {\n      \"claim\": \"Venus is the closest planet to the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"False\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": \"Mercury, not Venus, is the closest planet to the Sun.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": \"Mercury is the closest planet to the Sun.\",\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    },\n    {\n      \"claim\": \"Mercury is the closest planet to the Sun.\",\n      \"language\": \"en\",\n      \"verdict\": \"True\",\n      \"confidence\": \"high\",\n      \"verification_url\": null,\n      \"rationale\": \"Mercury is the innermost planet.\",\n      \"dissent\": null,\n      \"suggested_rewrite\": null,\n      \"error_code\": null,\n      \"candidate_claims\": [],\n      \"identified_claims\": [],\n      \"hint\": null\n    }\n  ],\n  \"error\": null,\n  \"error_code\": \"\",\n  \"candidate_claims\": [],\n  \"more_claims\": []\n}\n",
+  "repr": "AssessResponse(claims=[AssessClaim(claim='Venus is the closest planet to the Sun.', language='en', verdict='False', confidence='high', verification_url=None, rationale='Mercury, not Venus, is the closest planet to the Sun.', dissent=None, suggested_rewrite='Mercury is the closest planet to the Sun.', error_code=None, candidate_claims=[], identified_claims=[], hint=None), AssessClaim(claim='Mercury is the closest planet to the Sun.', language='en', verdict='True', confidence='high', verification_url=None, rationale='Mercury is the innermost planet.', dissent=None, suggested_rewrite=None, error_code=None, candidate_claims=[], identified_claims=[], hint=None)], error=None, error_code='', candidate_claims=[], more_claims=[])"
 }

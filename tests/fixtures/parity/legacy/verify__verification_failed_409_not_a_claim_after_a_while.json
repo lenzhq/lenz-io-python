@@ -1,10 +1,5 @@
 {
   "status": 409,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "This check failed and has no result.",
     "code": "verification_failed",
@@ -15,5 +10,10 @@
     "failure_class": "invalid_input",
     "retryable": false,
     "docs_url": "https://lenz.io/docs/errors#invalid-input"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

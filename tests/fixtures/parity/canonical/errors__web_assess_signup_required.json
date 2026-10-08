@@ -1,0 +1,14 @@
+{
+  "status": 403,
+  "body": {
+    "detail": "Sign up to check this — it’s free.",
+    "code": "signup_required",
+    "signup_claim_stashed": false,
+    "attempt": "e2fffcdbaf5c6cfc1939f3eaec689a87"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "Cookie"
+  }
+}

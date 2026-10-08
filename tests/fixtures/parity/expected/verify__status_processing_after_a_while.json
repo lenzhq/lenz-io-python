@@ -9,7 +9,7 @@
     "failure_reason": "",
     "hint": "",
     "progress": {
-      "elapsed_seconds": 2,
+      "elapsed_seconds": 1,
       "index": 4,
       "poll_after_seconds": 5,
       "step": "adjudication",
@@ -22,8 +22,20 @@
     "status": "processing",
     "task_id": "7cff18da2d979d6370e54a160be121ad"
   },
+  "dump_unset": {
+    "progress": {
+      "elapsed_seconds": 1,
+      "index": 4,
+      "poll_after_seconds": 5,
+      "step": "adjudication",
+      "total": 5
+    },
+    "status": "processing",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
   "render": "processing  — Panel review across models (4/5)\n",
-  "render_json": "{\n  \"status\": \"processing\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"adjudication\",\n    \"index\": 4,\n    \"total\": 5,\n    \"elapsed_seconds\": 2,\n    \"poll_after_seconds\": 5\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"\",\n  \"failure_reason\": \"\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"\",\n  \"retryable\": null,\n  \"docs_url\": \"\"\n}\n",
+  "render_json": "{\n  \"status\": \"processing\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"\",\n  \"hint\": \"\",\n  \"progress\": {\n    \"step\": \"adjudication\",\n    \"index\": 4,\n    \"total\": 5,\n    \"elapsed_seconds\": 1,\n    \"poll_after_seconds\": 5\n  },\n  \"result\": null,\n  \"claims\": [],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"\",\n  \"failure_reason\": \"\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"\",\n  \"retryable\": null,\n  \"docs_url\": \"\"\n}\n",
+  "repr": "TaskStatus(status='processing', task_id='7cff18da2d979d6370e54a160be121ad', reason='', hint='', progress=Progress(step='adjudication', index=4, total=5, elapsed_seconds=1, poll_after_seconds=5), result=None, claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
   "wait": {
     "cause": "unknown",
     "code": "",

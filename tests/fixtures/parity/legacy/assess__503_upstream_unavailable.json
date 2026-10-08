@@ -1,15 +1,15 @@
 {
   "status": 503,
-  "headers": {
-    "Content-Type": "application/json",
-    "Retry-After": "90",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "detail": "Our model providers are temporarily unavailable. Please retry shortly.",
     "code": "upstream_unavailable",
     "retry_after": 90,
     "doc_url": "https://lenz.io/docs/errors#unavailable"
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "90",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }

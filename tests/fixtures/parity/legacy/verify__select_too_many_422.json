@@ -1,11 +1,11 @@
 {
   "status": 422,
+  "body": {
+    "detail": "Cannot select more than 20 claims."
+  },
   "headers": {
     "Content-Type": "application/json",
     "Cache-Control": "no-store",
     "Vary": "origin"
-  },
-  "body": {
-    "detail": "Cannot select more than 20 claims."
   }
 }

@@ -1,14 +1,14 @@
 {
   "status": 202,
+  "body": {
+    "citecheck_id": "8eb49302",
+    "status": "queued"
+  },
   "headers": {
     "Content-Type": "application/json",
     "Retry-After": "20",
     "Location": "/api/v1/citechecks/d6b2bd72",
     "Cache-Control": "no-store",
     "Vary": "origin"
-  },
-  "body": {
-    "citecheck_id": "8eb49302",
-    "status": "queued"
   }
 }

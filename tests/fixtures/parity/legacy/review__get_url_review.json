@@ -1,17 +1,12 @@
 {
   "status": 200,
-  "headers": {
-    "Content-Type": "application/json",
-    "Cache-Control": "no-store",
-    "Vary": "origin"
-  },
   "body": {
     "review_id": "d6b2bd72",
     "view": "full",
     "status": "completed",
     "outcome": "clean",
-    "created_at": "2026-10-01T09:14:00.123456Z",
-    "completed_at": "2026-10-01T09:21:00.123456Z",
+    "created_at": "2026-10-01T09:07:00.123456Z",
+    "completed_at": "2026-10-01T10:07:00.123456Z",
     "language": "en",
     "policy": {
       "verdicts": [
@@ -102,5 +97,10 @@
     "more_claims": [],
     "more_claim_locations": [],
     "more_citations": []
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   }
 }
