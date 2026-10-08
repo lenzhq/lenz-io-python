@@ -38,50 +38,49 @@ API's current response shape: read the migration note below.
     `credits` and `costs` the way the API projected them.
   - A `verification.completed` webhook's `result` has every key it had, with
     the same defaults, plus `completed_at`.
-  - Errors: `reset_in_seconds` and `retry_after` on a 429,
-    `LenzQuotaExceededError.credit_balance` on a citation-check 402, and on a
-    422 the original `code` (`blank_item` for a blank `/assess` item,
-    `validation_error` on `/review` and `/citecheck`), `message` (the list of
-    field errors for a request-schema failure; the parameter path on
-    `/review` and `/citecheck`) and `errors`.
-- A repeated `verify` answered from the first submission is now a 202 (it was
-  a 200) without `chain_id`: `verify` returns the same `TaskAccepted`.
+  - A failed `get_status` / `wait`: `error` reads its 2.x sentence, rebuilt
+    from the failure code (the fixed sentence for `cancelled`, `task_stuck`,
+    `task_error` and `not_a_claim`, else "Pipeline stopped at: <code>"), so
+    the `LenzPipelineError` message reads as before; `failure_reason`,
+    `failure_class`, `retryable`, `docs_url` and `hint` too.
+  - Errors: every class and attribute as 2.x set it. `code` is `""` where the
+    2.x error carried none (the API now sends one on every error:
+    `not_authenticated`, `not_found`, `validation_error`, `malformed_body`,
+    `verification_not_ready` from `ask.send`, ...), per endpoint; a 422 keeps
+    its 2.x `code` (`blank_item` for a blank `/assess` item,
+    `validation_error` on `/review`), `message` (the list of field errors
+    for a request-schema failure; the parameter path on `/review` and
+    `/citecheck`) and `errors`; `reset_in_seconds` and `retry_after` on a
+    429; `LenzQuotaExceededError.credit_balance` on a citation-check 402.
 - `map_response_to_error` takes an optional `endpoint=(method, path)`, which
-  the client passes: a 422's original `code` and wording depend on it.
+  the client passes: an error's original `code` and wording depend on it.
 
 ### What reads differently
 
-The current shape does not carry a few values, so these attributes read the
-server's current values:
+The API now words or sends a few things differently, which no client can
+rebuild:
 
-- A failed verification's sentence (`TaskStatus.error`, the message of the
-  `LenzPipelineError` that `wait` raises) is the current wording, e.g. "No
-  sources about the claim were found." where 2.x read "Pipeline stopped at:
-  research_empty". `failure_reason`, `failure_class` and `retryable` are
-  unchanged.
-- Some error sentences are worded differently ("claim is required." for
-  "Text is required.").
-- An error's `code` is set on every error, including those where 2.x read
-  `""` (400s such as `malformed_body` and `verification_not_ready` from
-  `ask.send`, 401, 404, 405, 409 and some 422s); a 422 may list `errors`
-  where 2.x listed none; a failed verification may carry a `hint` where 2.x
-  read `""`.
-- `verifications.get` on a run that failed (409 `verification_failed`): the
-  `LenzPipelineError`'s `hint` and `fix`, and the CLI's message, carry the
-  run's own advice where it has one (e.g. "Send one factual claim, ...") where
-  2.x sometimes read "Resubmit to POST /verify if retryable is true. ...".
-- `ExtractedClaims.status` reads `ready` when claims came back beside input
-  that held none (2.x: `not_a_claim`).
-- A review's quick-check row whose passage held several claims has no `hint`.
-- Reviews stored before the API's current shape: a quick-check row or a
-  `ReviewFailure` that 2.x read with `failure` `None` may read a failure block,
-  and a deep check's `modified_at` is computed from its completion time
-  (set only when it completed on a later UTC calendar day) rather than read
-  as stored.
-- A `review.*` / `citecheck.*` webhook event's `task_id` reads the review or
-  check id (the payload no longer carries the delivery id; deduplicate on
-  `event_id`).
-- `TaskAccepted.chain_id` (an internal id, never pollable) reads `""`.
+- A failed check's `error` (and the `LenzPipelineError` message built from
+  it) reads "Pipeline stopped at: <code>" or its fixed sentence, as a running
+  check's failure did; a failure read back from storage said "Pipeline
+  stopped: <code>." in 2.x.
+- The 409 `verification_failed` from `verifications.get` carries the run's
+  own `hint` (and so `fix`, and the CLI's message), where 2.x sometimes
+  carried a generic one; a failed poll read back from storage can carry a
+  `hint` 2.x left out.
+- Some other hints and 4xx messages are worded anew (the `message` / `cause`
+  of a blank input or an unparseable body, a failed review's hint).
+- Reviews: a review row stored without a failure block (a quick-check row or
+  a `ReviewFailure`) reads one, where 2.x read `failure` `None`; a deep
+  check's `modified_at` is computed from its completion time by the 2.x rule
+  instead of read as stored; a quick-check row whose passage held several
+  claims has no `hint`.
+- An extraction the API first read as not a claim and then found one in says
+  `status == "ready"` (2.x: `"not_a_claim"`).
+- `verify`'s receipt has no `chain_id` (`TaskAccepted.chain_id` reads `""`);
+  the `task_id` of a `review.*` / `citecheck.*` webhook event is the review /
+  citation-check id (deduplicate on `event_id`); a repeated `verify` answered
+  from the first one is a 202 (the SDK returns the same receipt either way).
 
 ### Migration
 

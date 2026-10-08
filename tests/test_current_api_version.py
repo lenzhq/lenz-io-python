@@ -241,3 +241,45 @@ def test_a_blank_verify_webhook_url_is_left_out(client: Lenz, blank: Any) -> Non
     body = _sent(batch)
     assert "webhook_url" not in body
     assert "webhook_url" not in body["claims"][0]
+
+
+@pytest.mark.parametrize(
+    ("fixture", "method", "path", "code"),
+    [
+        ("verify__status_unknown_404.json", "GET", "/verify/status/t1", ""),
+        ("verify__unauthenticated_401.json", "POST", "/verify", ""),
+        ("review__401_no_credentials.json", "POST", "/review", ""),
+        ("errors__ask_not_completed.json", "POST", "/ask/v1", ""),
+        ("verify__idempotency_conflict_409.json", "POST", "/verify", ""),
+        ("verify__verification_not_ready_409.json", "GET", "/verifications/t1", "verification_not_ready"),
+        ("review__get_404_not_found.json", "GET", "/reviews/r1", "not_found"),
+    ],
+)
+def test_an_error_code_reads_as_it_did_in_2x(fixture: str, method: str, path: str, code: str) -> None:
+    """The current shape names a ``code`` on every error; where the 2.x
+    error carried none, the exception's ``code`` stays ``""``."""
+    from lenz_io.errors import map_response_to_error
+
+    response = _canonical(fixture)
+    err = map_response_to_error(response["status"], json.dumps(response["body"]), endpoint=(method, path))
+    assert err.code == code == (load("legacy", fixture)["body"].get("code") or "")
+    assert err.body == response["body"]
+
+
+@pytest.mark.parametrize(
+    ("code", "sentence"),
+    [
+        ("research_empty", "Pipeline stopped at: research_empty"),
+        ("cancelled", "Cancelled."),
+        ("task_stuck", "The task was never completed and has been marked failed."),
+        ("no_checkable_claim", "Not a verifiable claim."),
+    ],
+)
+def test_a_failed_poll_reads_its_2x_sentence(code: str, sentence: str) -> None:
+    from lenz_io.models import TaskStatus
+
+    status = TaskStatus.model_validate(
+        {"status": "failed", "task_id": "t", "failure": {"code": code, "detail": "Current wording."}}
+    )
+    assert status.error == sentence
+    assert status.failure is not None and status.failure.detail == "Current wording."

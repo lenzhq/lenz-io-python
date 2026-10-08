@@ -68,10 +68,6 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
             return "the server words its `detail` sentence differently"
         if rest in _MESSAGE_PATHS and "detail" not in lb and isinstance(cb.get("detail"), str):
             return "the newer shape sends a `detail` sentence where the original sent none"
-        if rest == "code" and "code" not in lb and "code" in cb:
-            return "the newer shape names a `code` where the original sent none"
-        if rest.startswith("errors") and not _validation_items(lb) and _validation_items(cb):
-            return "the newer shape lists the field errors where the original listed none"
         if rest in ("hint", "fix", "friendly_text", "payload_json.error.fix") and lb.get("hint") != cb.get("hint"):
             return "the server words the hint differently"
     if head == "wait" or path in ("dump.error", "render"):
@@ -79,11 +75,14 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
         if (
             name.startswith("verify__")
             and isinstance(sentence, str)
-            and sentence != _failure(cb).get("detail")
+            and sentence.startswith("Pipeline stopped: ")
             and "failure" in cb
         ):
             if path in ("dump.error", "render") or rest in _MESSAGE_PATHS:
-                return "the failed run's sentence: the newer shape's `failure.detail` is worded differently"
+                return (
+                    "a failure read back from storage said 'Pipeline stopped: <code>.'; "
+                    "the sentence is rebuilt in a running check's form"
+                )
     if path in ("dump.hint", "wait.hint") and lb.get("hint", "") != _failure(cb).get("hint", ""):
         return "the newer shape carries a hint the original did not"
     option_claim = path.startswith("wait.payload.claims[") and path.endswith("].claim")
@@ -100,6 +99,9 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
 
 #: Single gaps no rule covers, each with its reason.
 KNOWN_GAPS: dict[tuple[str, str], str] = {
+    ("review__delete_not_a_route.json", "error.code"): (
+        "a route no SDK method calls: the original answered it without a JSON body"
+    ),
     ("review__get_assessment_rows_full_fields.json", "dump.claims[0].assessment.hint"): (
         "the newer shape sends no hint on a completed quick check with other claims found"
     ),

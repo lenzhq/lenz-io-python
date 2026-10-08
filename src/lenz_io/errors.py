@@ -515,100 +515,139 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
-# ── The original 422 shapes, read from a newer-shape body ───────────────
+# ── The original error bodies, read from a newer-shape body ─────────────
 #
-# The API's newer response shape gives every 422 one envelope: ``detail`` is a
-# sentence, ``code`` is set and ``errors`` lists the fields. The original shape
-# differed by endpoint, and a few codes were spelled differently. The
-# exception's attributes keep their original values; ``exc.body`` is the body
-# as sent. Each rule recognises only a newer-shape body, so an original-shape
-# body reads exactly as before.
+# The API's newer response shape gives every error one envelope: ``detail`` is
+# a sentence, ``code`` is always set, a 422 lists its fields in ``errors``, and
+# waits and links have one name each. The original shape differed by
+# endpoint. ``_original_error`` rebuilds the original body by endpoint (the
+# same rules as the Node SDK), so every attribute of the exception keeps its
+# 2.x value; ``exc.body`` is the body as sent. Each rule matches only what the
+# newer shape alone sends, so an original-shape body comes back unchanged.
 
-#: /review and /citecheck (submit and read): one envelope in both shapes,
-#: with the original ``code`` / ``detail`` wording below.
+#: /review and /citecheck (submit and read) kept their own error envelope.
 _REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
-#: The codes a /review 422 renamed (the original said ``validation_error``).
-_REVIEW_RENAMED_422 = ("blank_input", "unsupported_language")
+
+#: Codes the newer shape sends where the original error carried no ``code``
+#: (outside /review and /citecheck, which always sent one).
+_CODELESS = frozenset(
+    {
+        "not_authenticated",
+        "not_found",
+        "idempotency_body_mismatch",
+        "idempotency_conflict",
+        "malformed_body",
+        "method_not_allowed",
+        "validation_error",
+        "blank_input",
+        "unsupported_language",
+        "too_many_items",
+    }
+)
 
 
-def _items(parsed: dict[str, Any]) -> list[dict[str, Any]] | None:
-    errors = parsed.get("errors")
-    if not isinstance(errors, list) or not all(isinstance(i, dict) for i in errors):
-        return None
-    return errors
+def _rename(o: dict[str, Any], old: str, new: str) -> None:
+    """``old`` renamed to ``new`` when only ``old`` is there (in place)."""
+    if old in o and new not in o:
+        o[new] = o.pop(old)
 
 
-def _payload_loc(item: dict[str, Any]) -> bool:
-    """A field error from request-body validation (``body.payload...``)."""
-    loc = item.get("loc")
-    return isinstance(loc, list) and len(loc) >= 2 and loc[0] == "body" and loc[1] == "payload"
+def _original_wait_and_link(o: dict[str, Any], status: int) -> None:
+    """A wait and a docs link under their original names."""
+    code = o.get("code")
+    if status == 429 and code == "extract_daily_limit":
+        _rename(o, "retry_after", "reset_in_seconds")
+    if status == 429 and code in ("review_in_flight", "citecheck_in_flight"):
+        _rename(o, "retry_after", "retry_after_seconds")
+    if status in (402, 429, 503):
+        _rename(o, "docs_url", "doc_url")
 
 
-def _param_loc(item: dict[str, Any]) -> bool:
-    """A field error from query or path parameter validation."""
-    loc = item.get("loc")
-    return isinstance(loc, list) and len(loc) >= 2 and loc[0] in ("query", "path")
-
-
-def _review_family_original(parsed: dict[str, Any]) -> dict[str, Any]:
-    code, detail, items = parsed.get("code"), parsed.get("detail"), _items(parsed)
-    view = dict(parsed)
-    if code in _REVIEW_RENAMED_422:
-        view["code"] = "validation_error"
-        if code == "unsupported_language" and isinstance(detail, str) and not detail.startswith("language: "):
-            view["detail"] = f"language: {detail}"
-    if items:
-        first = items[0]
-        if _payload_loc(first):
-            # The original named the body parameter: ``payload.text: ...``.
-            loc = ".".join(str(p) for p in first["loc"] if p != "body")
-            view["detail"] = f"{loc}: {first.get('msg')}"
-        out = []
-        for item in items:
-            item = {k: v for k, v in item.items() if k in ("loc", "msg")}
-            if view.get("detail") != detail and item.get("msg") == detail:
-                item["msg"] = view["detail"]
-            out.append(item)
-        view["errors"] = out
-    elif code == "idempotency_body_mismatch" and "errors" not in parsed:
-        view["errors"] = [{"loc": ["header"], "msg": detail}]
-    return view
-
-
-def _original_422(parsed: dict[str, Any], method: str, path: str) -> dict[str, Any]:
-    """``parsed`` as the original response shape read, where the newer body
-    lets that be worked out; else ``parsed`` itself."""
-    if not isinstance(parsed.get("detail"), str):
-        return parsed  # the original shape's list ``detail``, or no detail
+def _original_error(status: int, parsed: dict[str, Any], method: str, path: str) -> dict[str, Any]:
+    """``parsed`` as the original response shape sent it, as far as the newer
+    body and the request's endpoint tell."""
+    out = dict(parsed)
+    code = out["code"] if isinstance(out.get("code"), str) else ""
+    errors = out["errors"] if isinstance(out.get("errors"), list) else None
     path = path.split("?", 1)[0]
     if _REVIEW_FAMILY.match(path):
-        return _review_family_original(parsed)
-    code, items = parsed.get("code"), _items(parsed)
-    if not items:
-        return parsed
+        # A missing or unknown credential is refused before the endpoint runs.
+        if code == "not_authenticated":
+            del out["code"]
+        if status == 422:
+            detail = out.get("detail")
+            if method.upper() == "POST" and path == "/review" and isinstance(detail, str):
+                if code in ("blank_input", "unsupported_language"):
+                    out["code"] = "validation_error"
+                    if code == "unsupported_language" and not detail.startswith("language: "):
+                        out["detail"] = f"language: {detail}"
+            if errors is not None:
+                first: dict[str, Any] = next((e for e in errors if isinstance(e, dict)), {})
+                loc, msg = first.get("loc"), first.get("msg")
+                if isinstance(loc, list) and len(loc) > 1 and loc[1] == "payload" and isinstance(msg, str):
+                    # The original named the body parameter: ``payload.text: ...``.
+                    out["detail"] = ".".join(str(p) for p in loc[1:]) + f": {msg}"
+                items: list[Any] = []
+                for item in errors:
+                    if not isinstance(item, dict):
+                        items.append(item)
+                        continue
+                    o: dict[str, Any] = {}
+                    if "loc" in item:
+                        o["loc"] = item["loc"]
+                    if "msg" in item:
+                        renamed = item["msg"] == detail and out.get("detail") != detail
+                        o["msg"] = out["detail"] if renamed else item["msg"]
+                    items.append(o)
+                out["errors"] = items
+            elif code == "idempotency_body_mismatch":
+                out["errors"] = [{"loc": ["header"], "msg": out.get("detail")}]
+        if (
+            status == 402
+            and method.upper() == "POST"
+            and path == "/citecheck"
+            and "credits_remaining" not in out
+            and isinstance(out.get("remaining"), int)
+        ):
+            # One credit per citation: the pool equals ``remaining``.
+            out["credits_remaining"] = out["remaining"]
+        _original_wait_and_link(out, status)
+        return out
+    if status == 422 and code == "blank_input" and path == "/assess":
+        loc = errors[0].get("loc") if errors and isinstance(errors[0], dict) else None
+        if isinstance(loc, list) and "claims" in loc:
+            # A blank item in ``claims``: the original said ``blank_item``.
+            out["code"] = "blank_item"
+            out.pop("errors", None)
+            return out
     if (
-        method.upper() == "POST"
-        and path == "/assess"
-        and code == "blank_input"
-        and isinstance(items[0].get("loc"), list)
-        and items[0]["loc"][:2] == ["body", "claims"]
-        and len(items[0]["loc"]) == 3
+        status == 422
+        and code == "validation_error"
+        and errors
+        and all(isinstance(e, dict) and isinstance(e.get("type"), str) and e["type"] != code for e in errors)
     ):
-        # A blank item in ``claims``: the original said ``blank_item`` and
-        # listed no field errors.
-        return {k: v for k, v in {**parsed, "code": "blank_item"}.items() if k != "errors"}
-    if code == "validation_error" and all(_payload_loc(i) or _param_loc(i) for i in items):
-        if any(i.get("type") in (None, code) for i in items):
-            return parsed  # the endpoint's own check, not request-schema validation
         # Request-schema validation: the original ``detail`` was the list of
         # field errors itself, each ``{type, loc, msg, ...}``, with no ``code``.
         listed = []
-        for item in items:
+        for item in errors:
             ordered = {k: item[k] for k in ("type", "loc", "msg") if k in item}
             ordered.update({k: v for k, v in item.items() if k not in ordered})
             listed.append(ordered)
-        return {k: v for k, v in {**parsed, "detail": listed}.items() if k not in ("code", "errors")}
-    return parsed
+        original: dict[str, Any] = {"detail": listed}
+        for key, value in out.items():
+            if key not in ("detail", "code", "errors"):
+                original["doc_url" if key == "docs_url" else key] = value
+        return original
+    # /assess sent ``too_many_items``; /ask sent no code for an unfinished
+    # verification (``GET /verifications/{id}`` still sends ``verification_not_ready``).
+    codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
+        code == "verification_not_ready" and path.startswith("/ask/")
+    )
+    if codeless:
+        del out["code"]
+    out.pop("errors", None)
+    _original_wait_and_link(out, status)
+    return out
 
 
 def map_response_to_error(
@@ -623,15 +662,15 @@ def map_response_to_error(
     Returns an *instance* (not raised) so callers can decide whether
     to raise, log, or surface. Keep this pure — no I/O.
 
-    ``endpoint`` is the request's ``(method, path)``: with it, a 422 in the
-    API's newer response shape gives the exception the same ``code``,
-    ``message`` and ``errors`` the original shape gave (``exc.body`` is
-    always the body as sent).
+    ``endpoint`` is the request's ``(method, path)``: with it, an error in
+    the API's newer response shape gives the exception the same attributes
+    the original shape gave (``code``, ``message``, ``errors``, waits);
+    ``exc.body`` is always the body as sent.
     """
     raw = _parse_body(body)
     parsed = raw
-    if status_code == 422 and endpoint is not None:
-        parsed = _original_422(raw, *endpoint)
+    if endpoint is not None:
+        parsed = _original_error(status_code, raw, *endpoint)
     headers = headers or {}
     request_id = headers.get("X-Request-ID") or headers.get("x-request-id") or ""
 

@@ -164,7 +164,10 @@ def test_failed_status_failure_block_from_both_shapes(name):
         assert st.failure.retryable is canonical.retryable
         assert st.failure.detail
     assert canonical.failure_reason == legacy.failure_reason
-    assert canonical.error == canonical.failure.detail
+    # ``error`` keeps the original sentence, rebuilt from the code (a failure
+    # read back from storage said "Pipeline stopped: <code>." instead).
+    if not legacy.error.startswith("Pipeline stopped: "):
+        assert canonical.error == legacy.error
 
 
 def test_needs_input_options_from_both_shapes():

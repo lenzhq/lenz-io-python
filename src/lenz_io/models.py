@@ -915,6 +915,26 @@ class Progress(_Lax):
         return self.model_dump().items()
 
 
+#: A failed poll's original ``error`` sentence, for the codes that had a fixed
+#: one.
+_STATUS_ERRORS = {
+    "cancelled": "Cancelled.",
+    "task_stuck": "The task was never completed and has been marked failed.",
+    "task_error": "Pipeline failed.",
+    "not_a_claim": "Not a verifiable claim.",
+}
+
+
+def _original_status_error(code: Any, detail: Any) -> Any:
+    """A failed poll's original ``error``: the code's fixed sentence, else
+    "Pipeline stopped at: <code>" (a running check's form; one read back from
+    storage said "Pipeline stopped: <code>."). The newer shape's sentence when
+    there is no code."""
+    if isinstance(code, str) and code:
+        return _STATUS_ERRORS.get(code, f"Pipeline stopped at: {code}")
+    return detail
+
+
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
 
@@ -967,9 +987,10 @@ class TaskStatus(_Lax):
         if not _is_newer(data, "failure", "failure_reason") or not isinstance(data["failure"], dict):
             return data
         failure = data["failure"]
+        reason = _old_code(failure.get("code"), "not_a_claim")
         values = {
-            "error": failure.get("detail"),
-            "failure_reason": _old_code(failure.get("code"), "not_a_claim"),
+            "error": _original_status_error(reason, failure.get("detail")),
+            "failure_reason": reason,
             "failure_class": failure.get("failure_class"),
             "retryable": failure.get("retryable"),
             "docs_url": failure.get("docs_url"),
