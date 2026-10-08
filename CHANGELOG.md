@@ -67,9 +67,7 @@ on upgrade.
   empty per-item `webhook_url`). The API has always read an empty value there
   as "use the key's default webhook", the same as leaving it out, so nothing
   changes now; leaving it out keeps that meaning on later API versions, where
-  `""` means "no webhook". A retry that reuses an idempotency key from an
-  earlier release's call sends a different body and is refused as a
-  different request. `review` and `citecheck` send `webhook_url` exactly as
+  `""` means "no webhook". `review` and `citecheck` send `webhook_url` exactly as
   before (there `""` means "no webhook").
 - `model_dump()` returns the shape the server sent: attributes filled in from
   the other shape are left out, so an original-shape response dumps exactly as
