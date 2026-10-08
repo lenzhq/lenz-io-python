@@ -542,6 +542,9 @@ _CODELESS = frozenset(
         "blank_input",
         "unsupported_language",
         "too_many_items",
+        # The fallback codes: any 4xx without its own, and a 500.
+        "invalid_request",
+        "internal_error",
     }
 )
 
@@ -620,6 +623,13 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
             out["code"] = "blank_item"
             out.pop("errors", None)
             return out
+    if status == 422 and code == "unsupported_language" and path == "/verify/batch" and errors:
+        loc = errors[0].get("loc") if isinstance(errors[0], dict) else None
+        detail = out.get("detail")
+        if isinstance(loc, list) and len(loc) > 2 and loc[1] == "claims" and isinstance(loc[2], int):
+            if isinstance(detail, str) and not detail.startswith("claims["):
+                # The original named the item: ``claims[1].Unsupported language ...``.
+                out["detail"] = f"claims[{loc[2]}].{detail}"
     if (
         status == 422
         and code == "validation_error"

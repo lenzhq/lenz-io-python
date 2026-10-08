@@ -6,10 +6,10 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-Major release (3.0.0). Code that reads the SDK's attributes keeps working
-unchanged. Code that reads the raw response dict (`model_dump()`,
-`exc.body`, a webhook event's `raw`, the CLI's `--json` output) sees the
-API's current response shape: read the migration note below.
+Major release (3.0.0). Every attribute, exception and CLI rendering reads
+what 2.x read, with one exception: the raw bodies (`exc.body`,
+`model_dump()`, a webhook event's `raw`, the CLI's `--json` output) show the
+API's newer response shape as sent. See the migration note below.
 
 ### Changed
 
@@ -46,11 +46,13 @@ API's current response shape: read the migration note below.
   - Errors: every class and attribute as 2.x set it. `code` is `""` where the
     2.x error carried none (the API now sends one on every error:
     `not_authenticated`, `not_found`, `validation_error`, `malformed_body`,
-    `verification_not_ready` from `ask.send`, ...), per endpoint; a 422 keeps
+    `invalid_request`, `internal_error`, `verification_not_ready` from
+    `ask.send`, ...), per endpoint; a 422 keeps
     its 2.x `code` (`blank_item` for a blank `/assess` item,
     `validation_error` on `/review`), `message` (the list of field errors
     for a request-schema failure; the parameter path on `/review` and
-    `/citecheck`) and `errors`; `reset_in_seconds` and `retry_after` on a
+    `/citecheck`; `claims[<n>].` before a `verify_batch` item's language
+    error) and `errors`; `reset_in_seconds` and `retry_after` on a
     429; `LenzQuotaExceededError.credit_balance` on a citation-check 402.
 - `map_response_to_error` takes an optional `endpoint=(method, path)`, which
   the client passes: an error's original `code` and wording depend on it.
@@ -63,7 +65,12 @@ rebuild:
 - A failed check's `error` (and the `LenzPipelineError` message built from
   it) reads "Pipeline stopped at: <code>" or its fixed sentence, as a running
   check's failure did; a failure read back from storage said "Pipeline
-  stopped: <code>." in 2.x.
+  stopped: <code>." in 2.x. A `task_error` reads "Pipeline failed." and a
+  `task_stuck` "The task was never completed and has been marked failed.",
+  where 2.x said one of several sentences for each (e.g. "Unexpected
+  result.", "Unexpected pipeline step: <step>", "We hit a snag finalizing
+  your result. Please try submitting again.", "The task was never picked up
+  and has been marked failed.").
 - The 409 `verification_failed` from `verifications.get` carries the run's
   own `hint` (and so `fix`, and the CLI's message), where 2.x sometimes
   carried a generic one; a failed poll read back from storage can carry a

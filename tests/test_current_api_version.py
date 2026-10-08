@@ -283,3 +283,29 @@ def test_a_failed_poll_reads_its_2x_sentence(code: str, sentence: str) -> None:
     )
     assert status.error == sentence
     assert status.failure is not None and status.failure.detail == "Current wording."
+
+
+@pytest.mark.parametrize(
+    ("status", "code"), [(500, "internal_error"), (400, "invalid_request"), (422, "invalid_request")]
+)
+def test_the_fallback_codes_read_as_none(status: int, code: str) -> None:
+    from lenz_io.errors import map_response_to_error
+
+    err = map_response_to_error(status, json.dumps({"detail": "x", "code": code}), endpoint=("POST", "/verify"))
+    assert err.code == ""
+    assert err.body == {"detail": "x", "code": code}
+
+
+def test_a_batch_item_language_error_names_its_item() -> None:
+    from lenz_io.errors import map_response_to_error
+
+    sentence = "Unsupported language 'xx'. Supported: en."
+    body = {
+        "detail": sentence,
+        "code": "unsupported_language",
+        "errors": [{"loc": ["body", "claims", 1, "language"], "msg": sentence, "type": "unsupported_language"}],
+    }
+    err = map_response_to_error(422, json.dumps(body), endpoint=("POST", "/verify/batch"))
+    assert err.message == f"claims[1].{sentence}"
+    assert err.code == ""
+    assert err.errors == []
