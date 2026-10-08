@@ -594,19 +594,20 @@ def _original_422(parsed: dict[str, Any], method: str, path: str) -> dict[str, A
         and items[0]["loc"][:2] == ["body", "claims"]
         and len(items[0]["loc"]) == 3
     ):
-        # A blank item in ``claims``: the original code was ``blank_item``.
-        return {**parsed, "code": "blank_item"}
+        # A blank item in ``claims``: the original said ``blank_item`` and
+        # listed no field errors.
+        return {k: v for k, v in {**parsed, "code": "blank_item"}.items() if k != "errors"}
     if code == "validation_error" and all(_payload_loc(i) or _param_loc(i) for i in items):
         if any(i.get("type") in (None, code) for i in items):
             return parsed  # the endpoint's own check, not request-schema validation
         # Request-schema validation: the original ``detail`` was the list of
-        # field errors itself, each ``{type, loc, msg, ...}``.
+        # field errors itself, each ``{type, loc, msg, ...}``, with no ``code``.
         listed = []
         for item in items:
             ordered = {k: item[k] for k in ("type", "loc", "msg") if k in item}
             ordered.update({k: v for k, v in item.items() if k not in ordered})
             listed.append(ordered)
-        return {**parsed, "detail": listed}
+        return {k: v for k, v in {**parsed, "detail": listed}.items() if k not in ("code", "errors")}
     return parsed
 
 

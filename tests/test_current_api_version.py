@@ -143,6 +143,7 @@ def test_a_review_schema_422_names_the_body_parameter_as_before(client: Lenz) ->
 def test_a_blank_assess_item_keeps_blank_item(client: Lenz) -> None:
     err = _raise(client, "POST", "/assess", "assess__422_blank_item.json", lambda: client.assess(claims=["A.", " "]))
     assert err.code == "blank_item"
+    assert err.errors == []
 
 
 def test_a_schema_422_lists_its_field_errors_as_the_message(client: Lenz) -> None:
@@ -151,6 +152,7 @@ def test_a_schema_422_lists_its_field_errors_as_the_message(client: Lenz) -> Non
     err = _raise(client, "POST", "/verify", "verify__invalid_depth_422.json", lambda: client.verify("A claim."))
     original = load("legacy", "verify__invalid_depth_422.json")["body"]["detail"]
     assert err.message == str(original)
+    assert err.code == ""
     assert [list(i) for i in err.errors] == [list(i) for i in original]
 
 
