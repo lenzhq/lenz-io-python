@@ -39,8 +39,9 @@ on upgrade.
   - Webhooks: an `event_id` property on every event,
     `VerificationFailed.failure`, `VerificationNeedsInput.reason` and
     `.claims` (properties: `dataclasses.asdict` and `repr` are unchanged). A review or citation-check
-    event in the newer shape carries no `task_id` (it reads `""`; deduplicate
-    on `event_id`, as before). `parse_webhook` and
+    event in the newer shape carries no `task_id`; it then reads the
+    `review_id` / `citecheck_id`, so code keyed on `task_id` keeps one key per
+    review (deduplicate deliveries on `event_id`, as before). `parse_webhook` and
     `LenzWebhooks.parse` read the newer envelope too (`event`, `event_id`,
     the work's id, `status`, and the polled body under `verification` /
     `review` / `citecheck`).

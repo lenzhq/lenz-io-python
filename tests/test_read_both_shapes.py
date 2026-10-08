@@ -355,7 +355,10 @@ def test_legacy_webhook_event_still_serialises():
 def test_review_webhook_without_task_id(name):
     canonical = parse_webhook(load("canonical", name)["body"])
     assert isinstance(canonical, (ReviewEvent, CitecheckEvent))
-    assert canonical.task_id == "" and canonical.event_id != ""
+    work_id = canonical.review_id if isinstance(canonical, ReviewEvent) else canonical.citecheck_id
+    assert canonical.task_id == work_id != "" and canonical.event_id != ""
+    legacy = parse_webhook(load("legacy", name)["body"])
+    assert legacy.task_id == load("legacy", name)["body"]["task_id"]
 
 
 # ── errors ──

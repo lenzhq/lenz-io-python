@@ -83,7 +83,7 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
     if path == "dump.chain_id" and "chain_id" in lb and "chain_id" not in cb:
         return "`chain_id` is not in the newer shape"
     if path == "event.task_id" and "task_id" in lb and "task_id" not in cb:
-        return "review/citecheck webhooks drop `task_id` (never pollable); dedupe on `event_id`"
+        return "review/citecheck webhooks drop `task_id` (never pollable); it reads the review or check id"
     if path.startswith("event.result.") and name.startswith("webhook__verification_completed"):
         return "`result` is the dict as sent; the newer shape's carries `completed_at`"
     return KNOWN_GAPS.get((name, path))

@@ -229,7 +229,7 @@ class ReviewEvent(WebhookEvent):
     Deduplicate on ``event_id``: it is the same on every delivery attempt of
     one event, while ``attempt`` counts up. ``task_id`` identifies the
     delivery and cannot be polled on ``/verify/status``; the newer payload
-    shape leaves it out (it reads ``""``). The deep checks a
+    shape leaves it out (it then reads ``review_id``). The deep checks a
     review runs send no ``verification.*`` events of their own.
     """
 
@@ -248,7 +248,7 @@ class CitecheckEvent(WebhookEvent):
     still has it). Deduplicate on ``event_id``: it is the same on every
     delivery attempt of one event. ``task_id`` identifies the delivery and
     cannot be polled on ``/verify/status``; the newer payload shape leaves it
-    out (it reads ``""``).
+    out (it then reads ``citecheck_id``).
     """
 
     event_id: str = ""
@@ -360,7 +360,9 @@ def _build_event(raw: dict[str, Any]) -> WebhookEvent:
             review = None
         return ReviewEvent(
             event=event,
-            task_id=task_id,
+            # The newer payload carries no delivery ``task_id``: the review's
+            # id stands in, so code keyed on ``task_id`` keeps one key per review.
+            task_id=task_id if "task_id" in raw else str(payload.get("review_id") or ""),
             attempt=attempt,
             delivered_at=delivered_at,
             verification_id=verification_id,
@@ -379,7 +381,8 @@ def _build_event(raw: dict[str, Any]) -> WebhookEvent:
             check = None
         return CitecheckEvent(
             event=event,
-            task_id=task_id,
+            # As on a review: the check's id stands in for the missing ``task_id``.
+            task_id=task_id if "task_id" in raw else str(payload.get("citecheck_id") or ""),
             attempt=attempt,
             delivered_at=delivered_at,
             verification_id=verification_id,
