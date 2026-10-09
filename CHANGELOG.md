@@ -6,8 +6,10 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-Minor release (2.21.0). Existing code keeps working unchanged; nothing to do
-on upgrade.
+## [2.21.0] - 2026-10-09
+
+Minor release. Existing code keeps working unchanged; nothing to do on
+upgrade.
 
 ### Added
 
@@ -19,8 +21,7 @@ on upgrade.
   most items are written in, else English); name a code to answer a
   mixed-language list in one language. `extract`, `verify_batch`, `citecheck`
   and `review` do not take `auto`. The SDK sends `language` as given, so no
-  code changed; this entry is documentation and tests. Do not release until
-  the API accepts `auto`.
+  code changed; this entry is documentation and tests.
 - **Reads both response shapes.** The API is adding a newer, dated response
   shape that gives each field one name across every endpoint. This release
   still asks for the original shape (it sends the same `X-Lenz-API-Version`
@@ -112,6 +113,12 @@ one. Two things to settle before a release sends the newer date:
 - **`TaskStatus.candidates` and `similar_claims` are not removed on
   2026-11-29** either (2.18.0 said so). They are deprecated, always empty, and
   kept.
+
+### Docs
+
+- `openapi.json` resynced from the API: the `X-Lenz-API-Version` request
+  header and response header, `language: "auto"`, a documented error body on
+  every operation, and the `/verify/batch` and `/select` receipts as `202`.
 
 ## [2.20.0] - 2026-10-05
 
