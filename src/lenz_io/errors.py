@@ -49,7 +49,17 @@ class LenzError(Exception):
         ``"no_credits"``. Present on 402, 403 and 429; ``""`` when the
         server sent none. Branch on this rather than on message text.
       * ``body``       — parsed JSON response body if available
+      * ``retryable``  — whether sending the same request again can succeed:
+        ``True`` for a network failure, a transport timeout, a 429 and a 5xx;
+        ``False`` for any other 4xx, a version error and the client-side
+        errors a resend cannot fix; ``None`` when the SDK cannot say. A failed
+        verification, review or citation check carries the server's value
+        (``None`` when it sent none), and a boolean ``retryable`` in the
+        response's ``failure`` block always wins. Since 3.0; set on every
+        instance at construction, and a ``retryable=`` passed in wins.
     """
+
+    retryable: bool | None
 
     def __init__(
         self,
@@ -73,11 +83,22 @@ class LenzError(Exception):
         self.status_code = status_code
         self.code = code
         self.body = body
+        self.retryable = self._derived_retryable()
         # Per-subclass enrichment (retry_after, task_id, etc.). Set on the
         # instance so they're accessible as ``exc.task_id`` regardless of
         # which subclass raised.
         for k, v in extra.items():
             setattr(self, k, v)
+
+    def _derived_retryable(self) -> bool | None:
+        """``retryable`` when nothing more specific says (see the class
+        docstring). A class with its own rule overrides this."""
+        status = self.status_code
+        if status == 429 or 500 <= status < 600:
+            return True
+        if 400 <= status < 500:
+            return False
+        return None
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         lines = [self.message or self.__class__.__name__]
@@ -102,6 +123,10 @@ class LenzAuthError(LenzError):
     error instead. The two do not share a parent on purpose: "fix your key"
     and "top up your account" are different actions.
     """
+
+    def _derived_retryable(self) -> bool | None:
+        # Also the client-side "API key required" (status 0).
+        return False
 
 
 class LenzQuotaExceededError(LenzError):
@@ -226,15 +251,47 @@ class LenzRateLimitError(LenzError):
     #: know a paid plan raises it.
     upgrade_url: str = ""
 
+    def _derived_retryable(self) -> bool | None:
+        return True
+
 
 class LenzAPIError(LenzError):
     """500 / 502 / 503 / 504 / catch-all for unexpected server errors.
 
     ``retry_after`` is the wait the response stated (``Retry-After``), or
     ``None`` when it stated none.
+
+    Network failures are :class:`LenzConnectionError`, a subclass.
     """
 
     retry_after: int | None = None
+
+    def _derived_retryable(self) -> bool | None:
+        return True
+
+
+class LenzConnectionError(LenzAPIError):
+    """The request never got an answer: the connection failed or broke
+    (DNS, refused, reset, TLS), after the SDK's own retries.
+
+    A subclass of :class:`LenzAPIError`, which is what 2.x raised, so an
+    existing ``except LenzAPIError`` keeps catching it. ``__cause__`` is the
+    underlying ``httpx`` exception and ``status_code`` is 0. ``retryable`` is
+    ``True``: the same request can succeed once the network is back (calls
+    that charge send an ``Idempotency-Key``, so a resend replays rather than
+    runs twice).
+    """
+
+
+class LenzRequestTimeoutError(LenzConnectionError):
+    """One HTTP request got no answer within its timeout (``Lenz(timeout=)``
+    or the call's ``timeout=``), after the SDK's own retries.
+
+    Not :class:`LenzTimeoutError`, which is a ``*_and_wait`` helper reaching
+    its own deadline while the job keeps running. A subclass of
+    :class:`LenzConnectionError` and so of :class:`LenzAPIError`, which is
+    what 2.x raised.
+    """
 
 
 class LenzUpstreamUnavailableError(LenzAPIError):
@@ -259,9 +316,15 @@ class LenzTimeoutError(LenzError):
     """``verify_and_wait`` exceeded the configured timeout.
 
     ``task_id`` is set so callers can resume via ``client.get_status(task_id)``.
+    The job keeps running server-side: read it later rather than resubmit, so
+    ``retryable`` is ``False``. A single HTTP request that timed out is
+    :class:`LenzRequestTimeoutError` instead.
     """
 
     task_id: str = ""
+
+    def _derived_retryable(self) -> bool | None:
+        return False
 
 
 class LenzNeedsInputError(LenzError):
@@ -277,6 +340,10 @@ class LenzNeedsInputError(LenzError):
     kind: str = ""
     hint: str = ""
     payload: dict[str, Any] = {}  # noqa: RUF012 — overridden per-instance
+
+    def _derived_retryable(self) -> bool | None:
+        # A resend pauses the same way: resolve it with ``select``.
+        return False
 
 
 class LenzPipelineError(LenzError):
@@ -301,6 +368,10 @@ class LenzPipelineError(LenzError):
     retryable: bool | None = None
     hint: str = ""
 
+    def _derived_retryable(self) -> bool | None:
+        # The server's value or nothing: never guessed from a status.
+        return None
+
 
 class LenzVerificationNotReadyError(LenzError):
     """409 — ``verifications.get`` was handed the ``task_id`` of a run that is
@@ -321,6 +392,17 @@ class LenzVerificationNotReadyError(LenzError):
     hint: str = ""
 
 
+class LenzNotFoundError(LenzError):
+    """404 — nothing was found under the id (or path) the request names, for
+    the API key it was sent with.
+
+    Check the id and the key: resending the same request will not find it
+    (``retryable`` is ``False``). A subclass of :class:`LenzError`, which is
+    what 2.x raised for a 404. An id whose verification its account's
+    retention period removed answers 410 instead (:class:`LenzGoneError`).
+    """
+
+
 class LenzGoneError(LenzError):
     """410 — the verification existed, and its account's retention period has
     since removed it.
@@ -332,8 +414,8 @@ class LenzGoneError(LenzError):
 
     Raised by ``verifications.get``, ``get_status`` on a completed task,
     ``verifications.related``, ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
-    of polling to the deadline. A 404 stays a plain :class:`LenzError`: only
-    an id you could read before answers 410.
+    of polling to the deadline. A 404 is :class:`LenzNotFoundError`: only an
+    id you could read before answers 410.
     """
 
     purged_at: str | None = None
@@ -401,6 +483,9 @@ class LenzWebhookSignatureError(LenzError):
     ``X-Lenz-Signature`` header, replay window exceeded, malformed body.
     """
 
+    def _derived_retryable(self) -> bool | None:
+        return False
+
 
 class LenzApiVersionError(LenzError):
     """A response named an API version this SDK does not read.
@@ -423,6 +508,18 @@ class LenzApiVersionError(LenzError):
     def __init__(self, *, api_version: str = "", **kwargs: Any) -> None:
         super().__init__(api_version=api_version, **kwargs)
         self.api_version = api_version
+
+    def _derived_retryable(self) -> bool | None:
+        # The same request answers in the same version again.
+        return False
+
+
+#: The job errors under the names the other error classes follow (``...Error``),
+#: the names the Node SDK uses. The same classes: catch either name.
+ReviewFailedError = ReviewFailed
+ReviewTimeoutError = ReviewTimeout
+CitecheckFailedError = CitecheckFailed
+CitecheckTimeoutError = CitecheckTimeout
 
 
 # ── Mapping table ────────────────────────────────────────────────────────
@@ -717,6 +814,8 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
+    elif status_code == 404:
+        cls, default_msg, doc_url = LenzNotFoundError, f"HTTP {status_code}", f"{_DOCS_BASE}/errors"
     elif status_code == 410 and code in _GONE_410_CODES:
         cls, default_msg, doc_url = _GONE_410_CODES[code]
     elif status_code == 409 and code in _VERIFICATION_409_CODES:
@@ -872,6 +971,15 @@ def map_response_to_error(
         else:
             err.retry_after = 0
 
+    # A boolean ``retryable`` in the body's failure block is the server's own
+    # word and wins over the status. (A failed verification's 409 read it
+    # above, with the flat field first.)
+    if not isinstance(err, LenzPipelineError):
+        for block in (raw.get("failure"), parsed.get("failure")):
+            if isinstance(block, dict) and isinstance(block.get("retryable"), bool):
+                err.retryable = block["retryable"]
+                break
+
     return err
 
 
@@ -905,6 +1013,7 @@ def _fix_hint_for(status_code: int) -> str:
         401: "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
         403: "This key doesn't have access to that resource.",
         402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
+        404: "Check the id the request names and the API key it was sent with: retrying will not find it.",
         422: "Check the request body against the OpenAPI spec.",
         429: "Wait Retry-After seconds and retry.",
     }.get(status_code, "Retry; if the error persists, file an issue with the Request ID.")
@@ -915,22 +1024,29 @@ __all__ = [
     "NO_RETRY_429_CODES",
     "UPSTREAM_503_CODES",
     "CitecheckFailed",
+    "CitecheckFailedError",
     "CitecheckTimeout",
+    "CitecheckTimeoutError",
     "LenzAPIError",
     "LenzApiVersionError",
     "LenzAuthError",
+    "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
     "LenzNeedsInputError",
+    "LenzNotFoundError",
     "LenzPipelineError",
     "LenzQuotaExceededError",
     "LenzRateLimitError",
+    "LenzRequestTimeoutError",
     "LenzTimeoutError",
     "LenzUpstreamUnavailableError",
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
     "ReviewFailed",
+    "ReviewFailedError",
     "ReviewTimeout",
+    "ReviewTimeoutError",
     "map_response_to_error",
 ]

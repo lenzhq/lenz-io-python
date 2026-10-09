@@ -95,11 +95,14 @@ from .errors import (
     CitecheckTimeout,
     LenzAPIError,
     LenzApiVersionError,
+    LenzAuthError,
+    LenzConnectionError,
     LenzError,
     LenzGoneError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRateLimitError,
+    LenzRequestTimeoutError,
     LenzTimeoutError,
     ReviewFailed,
     ReviewTimeout,
@@ -344,8 +347,8 @@ class _VerificationsNamespace:
         certificate and their own cap, so this returns YOUR certificate over
         this analysis and never another customer's.
 
-        Raises ``LenzError`` with status 404 when this verification carries no
-        certificate for your account — which is also what an uncovered verdict
+        Raises :class:`LenzNotFoundError` (a ``LenzError``, status 404) when
+        this verification carries no certificate for your account — which is also what an uncovered verdict
         returns, so check ``verification.coverage.status`` first rather than
         using a 404 here to mean "not covered".
 
@@ -1790,8 +1793,6 @@ class Lenz:
         # only (the review wait polls with 0 and does its own pacing).
         retries = self._max_retries if max_retries is None else max_retries
         if auth_required and not self._api_key:
-            from .errors import LenzAuthError
-
             raise LenzAuthError(
                 message="API key required",
                 cause="This method requires authentication; no API key was provided.",
@@ -1829,7 +1830,9 @@ class Lenz:
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
                 if attempt >= retries:
-                    raise LenzAPIError(
+                    # Subclasses of LenzAPIError, which is what 2.x raised.
+                    cls = LenzRequestTimeoutError if isinstance(exc, httpx.TimeoutException) else LenzConnectionError
+                    raise cls(
                         message=f"{method} {path} failed after {attempt + 1} attempts: {exc}",
                         cause=str(exc),
                         fix="Check your network connection; verify base_url is reachable.",

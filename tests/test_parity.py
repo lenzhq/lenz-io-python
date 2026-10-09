@@ -113,6 +113,26 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
 }
 
 
+#: The fix line 3.0 gives a 404 (CHANGELOG "Changed"): 2.x said to retry.
+_NOT_FOUND_FIX = "Check the id the request names and the API key it was sent with: retrying will not find it."
+
+
+def _intended(path: str, old: Any, new: Any, legacy: dict[str, Any]) -> str | None:
+    """Why ``path`` changed on purpose in 3.0 (each listed in the CHANGELOG),
+    or ``None``."""
+    head, _, rest = path.partition(".")
+    if head in ("error", "wait") and rest == "retryable" and old is MISSING and new in (True, False, None):
+        return "3.0 sets `retryable` on every error"
+    if legacy["status"] == 404 and head == "error":
+        if rest == "type" and (old, new) == ("LenzError", "LenzNotFoundError"):
+            return "3.0 raises LenzNotFoundError (a LenzError) for a 404"
+        if rest in ("fix", "payload_json.error.fix") and new == _NOT_FOUND_FIX:
+            return "3.0 says what to check on a 404 instead of advising a retry"
+        if rest == "friendly_text" and isinstance(new, str) and new.endswith(_NOT_FOUND_FIX):
+            return "the same fix line, printed by the CLI"
+    return None
+
+
 def _expected(name: str) -> dict[str, Any]:
     return json.loads((EXPECTED / name).read_text())
 
@@ -189,7 +209,9 @@ def test_newer_shape_reads_the_same(name: str) -> None:
     got = _canonical_view(name, expected)
     legacy, canonical = load("legacy", name), load("canonical", name)
     gaps = [
-        (path, old, new) for path, old, new in _diff(expected, got) if _allowed(name, path, legacy, canonical) is None
+        (path, old, new)
+        for path, old, new in _diff(expected, got)
+        if _allowed(name, path, legacy, canonical) is None and _intended(path, old, new, legacy) is None
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
