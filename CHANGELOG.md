@@ -117,8 +117,9 @@ Deprecated).
   request. Newly refused: a timeout of 0 or less, NaN, infinity or past the
   limit, a negative
   retry count (none of these worked: such a timeout failed every request, a
-  negative retry count sent none), and `True` / `False`, which were read as
-  1 / 0 (pass the number). Real numbers of any type (`Fraction`, numpy
+  negative retry count sent none), and booleans: `True` / `False` as a
+  timeout or a retry count, which 2.21 read as 1 / 0 (`Lenz(timeout=True)`
+  was a 1-second timeout; pass the number). Real numbers of any type (`Fraction`, numpy
   scalars), the tuple form and integer-like retry counts keep working. The
   wait helpers' `timeout` (how long to wait) is not affected: `0` or less
   still reads once.
@@ -223,7 +224,12 @@ Deprecated).
   the `httpx` exception as `__cause__`. Every `httpx.TransportError` worth
   sending again (a server that hung up mid-response, a proxy failure, a read
   or write error) is now retried and raised this way, and a wait polls again
-  after one; 2.x let these escape as the raw `httpx` exception. A request
+  after one; 2.x let these escape as the raw `httpx` exception. For those
+  (`httpx.RemoteProtocolError`, `httpx.ProxyError`, `httpx.ReadError`,
+  `httpx.WriteError` and the like) the new `LenzConnectionError` is **not** a
+  subclass of what 2.21 raised: code that caught `httpx.HTTPError` /
+  `httpx.TransportError` for them no longer catches them; catch
+  `LenzConnectionError` (or `LenzAPIError`) instead. A request
   that could never be sent (`httpx.UnsupportedProtocol`,
   `httpx.LocalProtocolError`) still raises the `httpx` exception.
 - **A 404 raises `LenzNotFoundError`** (a `LenzError`, as before) and its
@@ -406,7 +412,18 @@ rebuild:
   carried a generic one; a failed poll read back from storage can carry a
   `hint` 2.x left out.
 - Some other hints and 4xx messages are worded anew (the `message` / `cause`
-  of a blank input or an unparseable body, a failed review's hint).
+  of a blank input other than a blank claim or an unparseable body, a failed
+  review's hint).
+- The values of a `failure` block (`TaskStatus.failure`, `AssessClaim.failure`,
+  `AssessResponse.failure`) are the server's, where 2.21 rebuilt them from the
+  2.x fields: `failure.detail` is the API's sentence ("No sources about the
+  claim were found.", where 2.21 read "Pipeline stopped at: research_empty",
+  and on an /assess row a sentence where 2.21 read `None`); on a failed
+  /assess row `failure.docs_url`, `failure.failure_class` and
+  `failure.retryable` are filled (2.21: `""`, `""`, `None`), and
+  `failure.hint` too where the API sends one. `failure.code` reads the same.
+  The 2.x attributes (`error`, `error_code`, `hint`, ...) keep their 2.x
+  values. A cancelled task's `failure` is `None` (see Breaking).
 - Reviews: a review row stored without a failure block (a quick-check row or
   a `ReviewFailure`) reads one, where 2.x read `failure` `None`; a deep
   check's `modified_at` is computed from its completion time by the 2.x rule
