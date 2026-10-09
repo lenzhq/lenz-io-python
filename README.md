@@ -949,6 +949,55 @@ if status.status == "completed":
     print(status.result.verdict, status.result.lenz_score)
 ```
 
+## Stopping a run
+
+A verification, a review or a citation check that is still running can be
+stopped. Each has its own method, and each answers 200 whatever the state of
+the run, so losing a race is not an error:
+
+```python
+result = client.cancel("tsk_abc123")            # a verification -> CancelResult
+if result.cancelled:
+    print("stopped:", result.status)             # "cancelled"
+else:
+    print("already ended:", result.status)       # "completed" or "failed"
+
+review = client.cancel_review("d6b2bd72")        # the full view, like get_review
+print(review.status, review.credits.charged)     # "cancelled", what it cost
+
+check = client.cancel_citecheck("12bbbf65")      # like get_citecheck
+print(check.status, check.credits.charged)
+```
+
+- `cancel(task_id)` returns a `CancelResult`. `cancelled=True` with
+  `status == "cancelled"` means the run is cancelled, by this call or an
+  earlier one. `cancelled=False` means it had already ended: `status` is
+  `"completed"` (the verification exists and was charged as usual) or
+  `"failed"`. A run waiting on `select` is cancelled too.
+- `cancel_review(review_id)` stops the review and everything in it: its quick
+  checks, its deep checks and its citation checks. It returns the review as it
+  stands, `status == "cancelled"`; a review that had already ended is returned
+  unchanged (`completed` or `failed`).
+- `cancel_citecheck(citecheck_id)` returns the check the same way.
+- A review's deep checks are cancelled **through the review**. Calling
+  `cancel(task_id)` with the `task_id` of one raises a `LenzError` with
+  `code == "use_review_cancel"` (HTTP 409); call `cancel_review` instead. The
+  SDK sends that request once and does not wait or resend.
+- An unknown id, another account's, or (for `cancel`) a task started on the
+  website raises `LenzNotFoundError`.
+- A cancelled verification is not charged and saves nothing. A cancelled
+  review or citation check is charged only for what it delivered before the
+  cancel (quick checks served, deep checks that finished, citations checked);
+  the rest is refunded or never charged. `credits.charged` on the result is
+  what the review or check cost.
+- Cancelling twice is safe, so the calls send no `Idempotency-Key`. They are
+  retried on a 5xx or a dropped connection, like any call that is safe to
+  repeat.
+- Afterwards `get_status`, `get_review` and `get_citecheck` return the
+  `cancelled` status, and `wait`, `review_and_wait` and `citecheck_and_wait`
+  raise the failed error with `failure_class == "cancelled"`. A `webhook_url`
+  receives `verification.cancelled`, `review.cancelled` or `citecheck.cancelled`.
+
 ## Idempotency
 
 Every call that charges or starts work sends an auto-generated

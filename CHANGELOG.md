@@ -180,6 +180,23 @@ Deprecated).
 
 ### Added
 
+- **Stopping a run: `cancel`, `cancel_review` and `cancel_citecheck`.**
+  `client.cancel(task_id)` stops a verification and returns a `CancelResult`
+  (`task_id`, `cancelled`, `status`); `client.cancel_review(review_id)` stops a
+  review, its deep checks and its citation checks, and returns the full
+  `ReviewFull` (what `get_review` returns); `client.cancel_citecheck(citecheck_id)`
+  returns the `Citecheck`. All three answer 200 whatever the state of the run:
+  `cancelled=False` on a `cancel` means the run had already ended, and
+  `status` says how (`completed` or `failed`); a review or check that had
+  ended comes back unchanged. They send no body and no `Idempotency-Key`
+  (cancelling twice is safe), and are retried on a 5xx or a dropped
+  connection like any call that is safe to repeat. An unknown id, another
+  account's, or (for `cancel`) a task started on the website raises
+  `LenzNotFoundError`. A task that is a review's deep check raises a
+  `LenzError` with `code == "use_review_cancel"` (409): cancel the review
+  instead; it is sent once, never waited on or resent. A cancelled run is not
+  charged; a `wait` on it raises the failed error with
+  `failure_class == "cancelled"`. Needs the API to serve version `2026-10-11`.
 - **`VerificationCancelled`** (new webhook event class, `verification.cancelled`),
   and `review.cancelled` / `citecheck.cancelled` typed as `ReviewEvent` /
   `CitecheckEvent`. They are sent only for work submitted with `2026-10-11`;
