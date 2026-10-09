@@ -84,6 +84,7 @@ import os
 import time
 import uuid
 from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any, Literal, TypedDict, TypeVar, overload
 
 import httpx
@@ -601,6 +602,31 @@ def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
     return uuid.uuid4().hex if idempotency else None
 
 
+@contextmanager
+def _carrying_key(key: str | None) -> Iterator[None]:
+    """Put ``key`` on any ``LenzError`` raised inside (``exc.idempotency_key``)
+    that does not carry one yet: every error of a call that sent a key says
+    which, so a resend can reuse it."""
+    try:
+        yield
+    except LenzError as exc:
+        if key and exc.idempotency_key is None:
+            exc.idempotency_key = key
+        raise
+
+
+def _names_the_job(field: str) -> Callable[[Any], bool]:
+    """Whether a 409 ``idempotency_conflict`` body names the job the first
+    request created (``review_id`` / ``citecheck_id``): that answer settles the
+    call, so it is not sent again."""
+
+    def check(body: Any) -> bool:
+        value = body.get(field) if isinstance(body, dict) else None
+        return isinstance(value, str) and bool(value)
+
+    return check
+
+
 class Lenz:
     """Top-level client.
 
@@ -1026,18 +1052,19 @@ class Lenz:
         ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s).
         """
         key = _call_key(idempotency_key, idempotency)
-        accepted = self._verify_submit(
-            claim=claim,
-            text=text,
-            source_url=source_url,
-            webhook_url=webhook_url,
-            language=language,
-            visibility=visibility,
-            depth=depth,
-            idempotency_key=key,
-        )
-        logger.info("Submitted task: %s", accepted.task_id)
-        return self.wait(accepted, timeout=timeout, on_progress=on_progress)
+        with _carrying_key(key):
+            accepted = self._verify_submit(
+                claim=claim,
+                text=text,
+                source_url=source_url,
+                webhook_url=webhook_url,
+                language=language,
+                visibility=visibility,
+                depth=depth,
+                idempotency_key=key,
+            )
+            logger.info("Submitted task: %s", accepted.task_id)
+            return self.wait(accepted, timeout=timeout, on_progress=on_progress)
 
     def wait(
         self,
@@ -1112,16 +1139,18 @@ class Lenz:
 
         ``idempotency`` / ``idempotency_key``: as on ``verify_batch``.
         """
-        accepted = self._verify_batch(
-            claims=claims,
-            webhook_url=webhook_url,
-            language=language,
-            visibility=visibility,
-            depth=depth,
-            idempotency_key=_call_key(idempotency_key, idempotency),
-        )
-        ids = [it.task_id for it in accepted.items if it.task_id]
-        terminal, timed_out, stopped = self._poll_to_terminal(ids, timeout, on_progress)
+        key = _call_key(idempotency_key, idempotency)
+        with _carrying_key(key):
+            accepted = self._verify_batch(
+                claims=claims,
+                webhook_url=webhook_url,
+                language=language,
+                visibility=visibility,
+                depth=depth,
+                idempotency_key=key,
+            )
+            ids = [it.task_id for it in accepted.items if it.task_id]
+            terminal, timed_out, stopped = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
         for it in accepted.items:  # preserve input order
@@ -1260,7 +1289,9 @@ class Lenz:
             payload["escalate"] = escalate
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         try:
-            body = self._request("POST", "/review", json=payload, headers=headers)
+            body = self._request(
+                "POST", "/review", json=payload, headers=headers, conflict_settles=_names_the_job("review_id")
+            )
         except LenzError as exc:
             # A retried submit (same key) that lands while the first attempt's
             # review is still being created answers 409 with that review's id:
@@ -1336,22 +1367,25 @@ class Lenz:
         ``timeout`` seconds pass first: the review keeps running, and the
         error carries its ``review_id`` and the last body read.
         """
-        started = self.review(
-            text,
-            verdicts=verdicts,
-            confidence=confidence,
-            max_assessments=max_assessments,
-            max_verifications=max_verifications,
-            depth=depth,
-            max_citations=max_citations,
-            suggest_edits=suggest_edits,
-            language=language,
-            webhook_url=webhook_url,
-            visibility=visibility,
-            idempotency_key=idempotency_key,
-        )
-        logger.info("Submitted review: %s", started.review_id)
-        return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
+        # The key is minted here (as ``review`` would) so the wait's errors carry it too.
+        key = idempotency_key or uuid.uuid4().hex
+        with _carrying_key(key):
+            started = self.review(
+                text,
+                verdicts=verdicts,
+                confidence=confidence,
+                max_assessments=max_assessments,
+                max_verifications=max_verifications,
+                depth=depth,
+                max_citations=max_citations,
+                suggest_edits=suggest_edits,
+                language=language,
+                webhook_url=webhook_url,
+                visibility=visibility,
+                idempotency_key=key,
+            )
+            logger.info("Submitted review: %s", started.review_id)
+            return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
 
     # ── /citecheck: the citation check on its own ──
 
@@ -1403,7 +1437,9 @@ class Lenz:
             payload["webhook_url"] = webhook_url
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         try:
-            body = self._request("POST", "/citecheck", json=payload, headers=headers)
+            body = self._request(
+                "POST", "/citecheck", json=payload, headers=headers, conflict_settles=_names_the_job("citecheck_id")
+            )
         except LenzError as exc:
             # A retried submit (same key) that lands while the first attempt's
             # check is still being created answers 409 naming that check: it
@@ -1446,16 +1482,19 @@ class Lenz:
         first: the check keeps running, and the error carries its
         ``citecheck_id`` and the last body read.
         """
-        started = self.citecheck(
-            text,
-            pairs=pairs,
-            max_citations=max_citations,
-            language=language,
-            webhook_url=webhook_url,
-            idempotency_key=idempotency_key,
-        )
-        logger.info("Submitted citation check: %s", started.citecheck_id)
-        return self._wait_citecheck(started.citecheck_id, timeout=timeout, on_update=on_update)
+        # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
+        key = idempotency_key or uuid.uuid4().hex
+        with _carrying_key(key):
+            started = self.citecheck(
+                text,
+                pairs=pairs,
+                max_citations=max_citations,
+                language=language,
+                webhook_url=webhook_url,
+                idempotency_key=key,
+            )
+            logger.info("Submitted citation check: %s", started.citecheck_id)
+            return self._wait_citecheck(started.citecheck_id, timeout=timeout, on_update=on_update)
 
     def _wait_citecheck(
         self,
@@ -1922,6 +1961,38 @@ class Lenz:
         auth_optional: bool = False,
         timeout: float | None = None,
         max_retries: int | None = None,
+        conflict_settles: Callable[[Any], bool] | None = None,
+    ) -> dict[str, Any]:
+        """One API call, with the retry ladder. Every ``LenzError`` it raises
+        carries the ``Idempotency-Key`` it sent (``exc.idempotency_key``)."""
+        key = (headers or {}).get("Idempotency-Key") or None
+        with _carrying_key(key):
+            return self._send(
+                method,
+                path,
+                json=json,
+                params=params,
+                headers=headers,
+                auth_required=auth_required,
+                auth_optional=auth_optional,
+                timeout=timeout,
+                max_retries=max_retries,
+                conflict_settles=conflict_settles,
+            )
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: dict[str, Any] | None,
+        params: dict[str, Any] | None,
+        headers: dict[str, str] | None,
+        auth_required: bool,
+        auth_optional: bool,
+        timeout: float | None,
+        max_retries: int | None,
+        conflict_settles: Callable[[Any], bool] | None,
     ) -> dict[str, Any]:
         # ``max_retries`` overrides the client's retry count for this request
         # only (the review wait polls with 0 and does its own pacing).
@@ -1979,6 +2050,22 @@ class Lenz:
 
             if response.status_code < 400:
                 return response.json() if response.content else {}
+
+            # A 409 ``idempotency_conflict``: the first request with this key is
+            # still running. Send the SAME key and body again after the stated
+            # wait (capped) or the backoff, inside this call's retry budget; a
+            # new key would run the work twice. A conflict that names the job
+            # the first request created settles the call (``conflict_settles``).
+            if (
+                attempt < retries
+                and response.status_code == 409
+                and req_headers.get("Idempotency-Key")
+                and _body_error_code(response) == "idempotency_conflict"
+                and not (conflict_settles is not None and conflict_settles(_json_or_none(response)))
+            ):
+                stated = _stated_retry_after(response)
+                time.sleep(stated if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP else _retry_sleep(attempt))
+                continue
 
             # Error path. Retry on 5xx and 429; otherwise raise immediately.
             #
@@ -2155,6 +2242,13 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         # ladder as a bare ValueError, defeating the typed-exception contract.
         return max(0, int(float(raw)))
     except (TypeError, ValueError):
+        return None
+
+
+def _json_or_none(response: httpx.Response) -> Any:
+    try:
+        return response.json()
+    except Exception:
         return None
 
 

@@ -924,32 +924,33 @@ class TestBatchAndAskIdempotency:
     @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
     def test_an_in_flight_409_is_never_passed_with_a_second_key(self, client, path, call, body, monkeypatch):
         # The retry lands while the first attempt still runs: the server
-        # answers 409 ``idempotency_conflict``. The SDK raises it, as it does
-        # for ``verify``; it never mints a new key to get past it, which would
-        # run (and charge) the request twice.
+        # answers 409 ``idempotency_conflict``. The SDK sends the SAME key and
+        # body again (as ``verify`` does) until the first call's answer comes
+        # back; it never mints a new key to get past it, which would run (and
+        # charge) the request twice.
         monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
         conflict = {"detail": "A request with this key is still running.", "code": "idempotency_conflict"}
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post(path)
-            route.side_effect = [httpx.ReadTimeout("slow"), httpx.Response(409, json=conflict)]
-            with pytest.raises(LenzError) as ei:
-                call(client)
-        assert ei.value.status_code == 409
-        # ``code`` keeps its 2.x value (none, on this 409); the body has it.
-        assert ei.value.body == conflict
-        assert len(route.calls) == 2
+            route.side_effect = [
+                httpx.ReadTimeout("slow"),
+                httpx.Response(409, json=conflict),
+                httpx.Response(200, json=body),
+            ]
+            assert call(client) is not None
+        assert len(route.calls) == 3
         assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+        assert len({c.request.content for c in route.calls}) == 1
 
     @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
-    def test_a_pinned_key_answers_409_then_the_result(self, client, path, call, body):
-        # With a key of its own the caller resends the same request after the
-        # 409 and gets the first call's answer.
+    def test_a_pinned_key_answers_409_then_the_result(self, client, path, call, body, monkeypatch):
+        # The call itself sends the caller's key again after the 409 and gets
+        # the first call's answer.
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
         conflict = {"detail": "A request with this key is still running.", "code": "idempotency_conflict"}
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post(path)
             route.side_effect = [httpx.Response(409, json=conflict), httpx.Response(200, json=body)]
-            with pytest.raises(LenzError):
-                call(client, idempotency_key="mine-1")
             call(client, idempotency_key="mine-1")
         assert [c.request.headers["Idempotency-Key"] for c in route.calls] == ["mine-1", "mine-1"]
 
