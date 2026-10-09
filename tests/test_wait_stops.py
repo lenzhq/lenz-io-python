@@ -354,3 +354,72 @@ class TestTheClientTimeoutSetting:
                 poll = r.get("/verify/status/t").respond(200, json=_DONE)
                 client.wait("t", timeout=300)
         assert _read_timeouts(poll) == [pytest.approx(300.0, abs=1.0)]
+
+
+class TestTheDeadlineBoundsEveryItem:
+    def test_items_after_a_slow_first_poll_are_timed_out_not_polled(self, clock: list[float]) -> None:
+        polls: list[str] = []
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            polls.append(request.url.path.rsplit("/", 1)[-1])
+            clock[0] += 100.0  # every poll is slow
+            return httpx.Response(200, json=_RUNNING)
+
+        with Lenz(api_key="lenz_test", timeout=None) as client, respx.mock(base_url=BASE) as r:
+            r.post("/verify/batch").respond(
+                200,
+                json={"batch_id": "b", "items": [{"task_id": t, "claim": "A."} for t in ("a", "b", "c")]},
+            )
+            r.get(url__regex=r"/verify/status/.*").mock(side_effect=answer)
+            results = client.verify_batch_and_wait(claims=[{"claim": "A."}] * 3, timeout=10)
+        assert polls == ["a"]
+        assert [x.status for x in results] == ["timeout"] * 3
+
+    def test_a_zero_timeout_batch_reads_every_item_once_as_in_2x(self, client: Lenz, clock: list[float]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "a", "claim": "A."}, {"task_id": "t", "claim": "B."}]}
+            )
+            a = r.get("/verify/status/a").respond(200, json=_RUNNING)
+            t = r.get("/verify/status/t").respond(200, json=_DONE)
+            results = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=0)
+        assert (a.call_count, t.call_count) == (1, 1)
+        assert [x.status for x in results] == ["timeout", "completed"]
+
+
+class TestEveryTimeoutPhaseIsKept:
+    def test_each_phase_capped_by_what_is_left(self, clock: list[float]) -> None:
+        configured = httpx.Timeout(30.0, connect=1.0, pool=0.25, write=2.0)
+        with Lenz(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
+            with pytest.raises(LenzTimeoutError):
+                client.wait("t", timeout=5)
+        phases = [c.request.extensions["timeout"] for c in poll.calls]
+        assert phases[0] == {"connect": 1.0, "read": 5.0, "write": 2.0, "pool": 0.25}
+        assert phases[1] == {"connect": 1.0, "read": 3.0, "write": 2.0, "pool": 0.25}
+
+    def test_an_unbounded_phase_is_bounded_by_the_deadline(self, clock: list[float]) -> None:
+        with (
+            Lenz(api_key="lenz_test", timeout=httpx.Timeout(None, connect=1.0)) as client,
+            respx.mock(base_url=BASE) as r,
+        ):
+            poll = r.get("/verify/status/t").respond(200, json=_DONE)
+            client.wait("t", timeout=5)
+        assert poll.calls.last.request.extensions["timeout"] == {
+            "connect": 1.0,
+            "read": 5.0,
+            "write": 5.0,
+            "pool": 5.0,
+        }
+
+    def test_a_zero_timeout_poll_keeps_the_client_phases(self, clock: list[float]) -> None:
+        configured = httpx.Timeout(30.0, connect=1.0, pool=0.25, write=2.0)
+        with Lenz(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_DONE)
+            client.wait("t", timeout=0)
+        assert poll.calls.last.request.extensions["timeout"] == {
+            "connect": 1.0,
+            "read": 30.0,
+            "write": 2.0,
+            "pool": 0.25,
+        }

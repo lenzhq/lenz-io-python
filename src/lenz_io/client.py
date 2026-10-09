@@ -1609,13 +1609,13 @@ class Lenz:
         deadline = time.monotonic() + timeout
         last: _Job | None = None
         last_dump: dict[str, Any] | None = None
-        first = True
+        first = timeout <= 0  # ``timeout <= 0`` reads once, as in 2.x
         while True:
             # One request per poll, bounded by what is left of the deadline:
             # the client's own retry ladder inside a poll could run minutes
             # past it. A failed poll is retried on the next round instead.
-            # Once the deadline is spent no poll starts (the first one always
-            # runs, as in 2.x).
+            # Once the deadline is spent no poll starts (``timeout <= 0``
+            # still reads once, as in 2.x).
             stated_wait: float | None = None
             job: _Job | None = None
             remaining = deadline - time.monotonic()
@@ -1676,9 +1676,9 @@ class Lenz:
         task has no ``TaskStatus`` — ``"timeout"`` is a client-side concept,
         never a wire status — so it lands in the second set, not the dict.
 
-        The first round polls every id once whatever the deadline (as in
-        2.x, ``timeout=0`` reads each status once). After it no poll starts
-        once the deadline is spent: the ids left are timed out. Each poll is
+        No poll starts once the deadline is spent, not even within a round:
+        the ids left are timed out. The one exception is ``timeout <= 0``,
+        which reads every status once, as in 2.x. Each poll is
         ONE request whose timeout is what is left of the deadline, at most the
         client's own timeout (``_poll_timeout``): the client's own retry
         ladder inside a poll could run minutes past it, so a failed poll is
@@ -1713,6 +1713,9 @@ class Lenz:
         timed_out: set[str] = set()
         deadline = time.monotonic() + timeout
         backoff_idx = 0
+        # ``timeout <= 0`` reads every id once, as in 2.x; otherwise no poll
+        # starts once the deadline is spent.
+        one_shot = timeout <= 0
         first_round = True
         while pending:
             still_pending: list[str] = []
@@ -1720,7 +1723,7 @@ class Lenz:
             stated_wait: float | None = None
             for task_id in pending:
                 remaining = deadline - time.monotonic()
-                if remaining <= 0 and not first_round:
+                if remaining <= 0 and not (one_shot and first_round):
                     # The deadline is spent: no poll starts past it.
                     still_pending.append(task_id)
                     continue
@@ -1922,19 +1925,23 @@ class Lenz:
             return None
         return floor
 
-    def _poll_timeout(self, remaining: float) -> float | None:
-        """The timeout of one poll request: what is left of the wait's
-        deadline, at most the client's own read timeout (``None`` there means
-        no client cap). Past the deadline (only the first poll of a wait runs
-        then) the client's own timeout, ``None`` meaning the client default.
+    def _poll_timeout(self, remaining: float) -> httpx.Timeout | None:
+        """The timeouts of one poll request: each phase (connect, read, write,
+        pool) the client in use configured, capped by what is left of the
+        wait's deadline (an unbounded phase gets just that). Past the deadline
+        (only a ``timeout <= 0`` wait polls then) ``None``: the client's own.
 
         Reads the client actually in use, so ``Lenz(timeout=None)``, an
         ``httpx.Timeout`` and an ``httpx.Client`` passed as ``http_client=``
         all work."""
-        cap = self._client.timeout.read
         if remaining <= 0:
-            return cap
-        return remaining if cap is None else min(remaining, cap)
+            return None
+        own = self._client.timeout
+
+        def cap(phase: float | None) -> float:
+            return remaining if phase is None else min(phase, remaining)
+
+        return httpx.Timeout(connect=cap(own.connect), read=cap(own.read), write=cap(own.write), pool=cap(own.pool))
 
     def _extract(
         self,
@@ -2022,7 +2029,7 @@ class Lenz:
         headers: dict[str, str] | None = None,
         auth_required: bool = True,
         auth_optional: bool = False,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         conflict_settles: Callable[[Any], bool] | None = None,
     ) -> dict[str, Any]:
@@ -2053,7 +2060,7 @@ class Lenz:
         headers: dict[str, str] | None,
         auth_required: bool,
         auth_optional: bool,
-        timeout: float | None,
+        timeout: float | httpx.Timeout | None,
         max_retries: int | None,
         conflict_settles: Callable[[Any], bool] | None,
     ) -> dict[str, Any]:
