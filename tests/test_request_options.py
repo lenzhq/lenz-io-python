@@ -18,7 +18,7 @@ import math
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
+from typing import Any, ClassVar
 
 import httpx
 import pytest
@@ -776,3 +776,283 @@ def httpx_refused() -> Iterator[None]:
     with respx.mock(base_url=BASE, assert_all_called=False) as router:
         router.route().mock(side_effect=AssertionError("a request was sent"))
         yield
+
+
+# ── review follow-ups: 2.21 overrides, snapshots, the httpx tuple form ─────
+
+
+class Old221(Lenz):
+    """Overrides with the 2.21 signatures, which know no request option."""
+
+    def __init__(self, **kw: Any) -> None:
+        super().__init__(**kw)
+        self.called: list[str] = []
+
+    def review(  # type: ignore[override]
+        self,
+        text: str,
+        *,
+        verdicts: list[str] | None = None,
+        confidence: list[str] | None = None,
+        max_assessments: int | None = None,
+        max_verifications: int | None = None,
+        depth: str | None = None,
+        max_citations: int | None = None,
+        suggest_edits: bool = False,
+        language: str = "",
+        webhook_url: str | None = None,
+        visibility: str = "private",
+        idempotency_key: str | None = None,
+    ) -> Any:
+        self.called.append("review")
+        return super().review(
+            text,
+            verdicts=verdicts,
+            confidence=confidence,
+            max_assessments=max_assessments,
+            max_verifications=max_verifications,
+            depth=depth,
+            max_citations=max_citations,
+            suggest_edits=suggest_edits,
+            language=language,
+            webhook_url=webhook_url,
+            visibility=visibility,
+            idempotency_key=idempotency_key,
+        )
+
+    def citecheck(  # type: ignore[override]
+        self,
+        text: str | None = None,
+        *,
+        pairs: Any = None,
+        max_citations: int | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> Any:
+        self.called.append("citecheck")
+        return super().citecheck(
+            text,
+            pairs=pairs,
+            max_citations=max_citations,
+            language=language,
+            webhook_url=webhook_url,
+            idempotency_key=idempotency_key,
+        )
+
+    def wait(self, task: Any, *, timeout: float = WAIT_TIMEOUT, on_progress: Any = None) -> Any:  # type: ignore[override]
+        self.called.append("wait")
+        return super().wait(task, timeout=timeout, on_progress=on_progress)
+
+
+class _OldVerifications(lenz_io.client._VerificationsNamespace):
+    def list(self, *, page: int = 1) -> Any:  # type: ignore[override]
+        return super().list(page=page)
+
+
+class _OldLibrary(lenz_io.client._LibraryNamespace):
+    def list(  # type: ignore[override]
+        self,
+        *,
+        page: int = 1,
+        sort: str = "recent",
+        search: str = "",
+        domain: str = "",
+        entity: str = "",
+        curated: Any = None,
+        verdict: str = "",
+    ) -> Any:
+        return super().list(
+            page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
+        )
+
+
+_REVIEW_WAIT: Answers = {
+    ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
+    ("GET", f"/reviews/{RID}"): [(200, REVIEW_DONE)],
+}
+_CHECK_WAIT: Answers = {
+    ("POST", "/citecheck"): [(202, {"citecheck_id": CID, "status": "queued"})],
+    ("GET", f"/citechecks/{CID}"): [(200, CHECK_DONE)],
+}
+_VERIFY_WAIT: Answers = {("POST", "/verify"): [ACCEPTED], ("GET", f"/verify/status/{TASK}"): [DONE]}
+
+
+class TestOverridesWritten221:
+    """A subclass written for 2.21 keeps working through the helpers that call
+    its overridden methods, as long as the caller passes no option (an empty
+    ``extra_headers`` counts as none)."""
+
+    @pytest.mark.parametrize("opts", [{}, {"extra_headers": {}}, {"max_retries": None, "extra_headers": None}])
+    def test_review_and_wait(self, opts: dict[str, Any]) -> None:
+        client = Old221(api_key=API_KEY)
+        with recorded(_REVIEW_WAIT):
+            client.review_and_wait(DRAFT, **opts)
+        assert client.called == ["review"]
+
+    @pytest.mark.parametrize("opts", [{}, {"extra_headers": {}}])
+    def test_citecheck_and_wait(self, opts: dict[str, Any]) -> None:
+        client = Old221(api_key=API_KEY)
+        with recorded(_CHECK_WAIT):
+            client.citecheck_and_wait(DRAFT, **opts)
+        assert client.called == ["citecheck"]
+
+    @pytest.mark.parametrize("opts", [{}, {"extra_headers": {}}, {"max_retries": 1}])
+    def test_verify_and_wait(self, opts: dict[str, Any]) -> None:
+        client = Old221(api_key=API_KEY)
+        with recorded(_VERIFY_WAIT):
+            client.verify_and_wait("A.", **opts)
+        assert client.called == ["wait"]
+
+    def test_the_iterators(self) -> None:
+        client = Lenz(api_key=API_KEY)
+        client.verifications = _OldVerifications(client)
+        client.library = _OldLibrary(client)
+        with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2], ("GET", "/library"): [LIB_1, LIB_2]}):
+            assert len(list(client.verifications.iter())) == 2
+            assert len(list(client.library.iter(extra_headers={}))) == 2
+
+    def test_an_option_still_reaches_an_override_that_takes_it(self) -> None:
+        client = Lenz(api_key=API_KEY)
+        with recorded(_REVIEW_WAIT) as rec:
+            client.review_and_wait(DRAFT, extra_headers={MARK: "m"})
+        assert all(_headers(r).get(MARK.lower()) == "m" for r in rec.requests)
+
+
+class TestSnapshots:
+    def test_a_copy_keeps_the_timeout_it_was_given(self) -> None:
+        t = httpx.Timeout(8)
+        a = Lenz(api_key=API_KEY).with_options(timeout=t)
+        b = a.with_options()
+        t.read = None
+        for client in (a, b):
+            with recorded(_USAGE) as rec:
+                client.usage()
+            assert rec.requests[0]["timeout"] == _all(8)
+
+    def test_an_iterator_keeps_the_options_it_was_created_with(self) -> None:
+        headers: dict[str, str | None] = {MARK: "first"}
+        t = httpx.Timeout(4)
+        with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2]}) as rec:
+            it = Lenz(api_key=API_KEY).verifications.iter(extra_headers=headers, timeout=t)
+            headers[MARK] = "changed"
+            next(it)
+            headers["X-Late"] = "late"
+            t.read = 99
+            list(it)
+        assert [_headers(r).get(MARK.lower()) for r in rec.requests] == ["first", "first"]
+        assert all("x-late" not in _headers(r) for r in rec.requests)
+        assert [r["timeout"]["read"] for r in rec.requests] == [4, 4]
+
+    def test_the_library_iterator_too(self) -> None:
+        headers: dict[str, str | None] = {MARK: "first"}
+        with recorded({("GET", "/library"): [LIB_1, LIB_2]}) as rec:
+            it = Lenz(api_key=API_KEY).library.iter(extra_headers=headers)
+            next(it)
+            headers[MARK] = "changed"
+            list(it)
+        assert [_headers(r).get(MARK.lower()) for r in rec.requests] == ["first", "first"]
+
+
+class TestTimeoutForms:
+    """What 2.21 accepted keeps working: the httpx tuple form and any real
+    number (not ``bool``)."""
+
+    _TUPLE = (5, 30, 6, 7)
+    _AS_DICT: ClassVar[dict[str, int]] = {"connect": 5, "read": 30, "write": 6, "pool": 7}
+
+    def test_the_tuple_form_on_the_constructor(self) -> None:
+        with recorded(_USAGE) as rec:
+            Lenz(api_key=API_KEY, timeout=self._TUPLE).usage()  # type: ignore[arg-type]
+        assert rec.requests[0]["timeout"] == self._AS_DICT
+
+    def test_the_tuple_form_on_a_call_and_a_copy(self) -> None:
+        client = Lenz(api_key=API_KEY)
+        with recorded(_EXTRACT) as rec:
+            client.extract(text="Doc.", timeout=self._TUPLE)  # type: ignore[arg-type]
+        assert rec.requests[0]["timeout"] == self._AS_DICT
+        with recorded(_USAGE) as rec:
+            client.with_options(timeout=self._TUPLE).usage()  # type: ignore[arg-type]
+        assert rec.requests[0]["timeout"] == self._AS_DICT
+
+    @pytest.mark.parametrize("bad", [(5, 0, 5, 5), (5, math.nan, 5, 5), (5, -1, 5, 5), (5, True, 5, 5), (5, 5), ()])
+    def test_a_bad_tuple_is_refused(self, bad: Any) -> None:
+        with pytest.raises(ValueError, match="timeout"):
+            Lenz(api_key=API_KEY, timeout=bad)
+        with pytest.raises(ValueError, match="timeout"):
+            Lenz(api_key=API_KEY).usage(timeout=bad)
+
+    def test_a_tuple_with_an_unbounded_part(self) -> None:
+        with recorded(_USAGE) as rec:
+            Lenz(api_key=API_KEY).usage(timeout=(5, None, 5, 5))  # type: ignore[arg-type]
+        assert rec.requests[0]["timeout"]["read"] is None
+
+    def test_any_real_number_and_any_integer_like_retry_count(self) -> None:
+        from fractions import Fraction
+
+        class Three:
+            def __index__(self) -> int:
+                return 3
+
+        client = Lenz(api_key=API_KEY, timeout=Fraction(5), max_retries=Three())  # type: ignore[arg-type]
+        client.with_options(timeout=Fraction(1, 2), max_retries=Three())  # type: ignore[arg-type]
+        with recorded({("GET", "/me/usage"): [S503]}) as rec, pytest.raises(lenz_io.LenzAPIError):
+            client.usage(max_retries=Three(), timeout=7)  # type: ignore[arg-type]
+        assert len(rec.requests) == 4
+
+
+class TestHeaderSyntax:
+    @pytest.mark.parametrize(
+        "headers",
+        [
+            {"Bad Name": "x"},
+            {"X:A": "x"},
+            {"X-Ä": "x"},
+            {"X-A\n": "x"},
+            {"X-A": "a\r\nInjected: 1"},
+            {"X-A": "a\x00"},
+            {"X-A": "café"},
+        ],
+    )
+    def test_refused_before_a_key_or_a_request(self, headers: dict[str, str], no_key_minted: None) -> None:
+        client = Lenz(api_key=API_KEY)
+        with httpx_refused():
+            for call in (
+                lambda: client.verify("A.", extra_headers=headers),
+                lambda: client.review_and_wait(DRAFT, extra_headers=headers),
+                lambda: client.with_options(extra_headers=headers),
+            ):
+                with pytest.raises(ValueError, match="header"):
+                    call()
+
+    def test_tab_and_space_are_allowed_in_a_value(self) -> None:
+        with recorded(_USAGE) as rec:
+            Lenz(api_key=API_KEY).usage(extra_headers={"X-A": "a b\tc"})
+        assert _headers(rec.requests[0])["x-a"] == "a b\tc"
+
+    def test_a_poll_that_cannot_be_sent_is_not_read_as_an_unreadable_body(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # An error raised while building a poll request (before anything is
+        # sent) ends the wait at once instead of being polled to the timeout.
+        real = Lenz._request
+
+        def failing(self: Lenz, method: str, path: str, **kw: Any) -> Any:
+            if method == "GET":
+                raise UnicodeEncodeError("ascii", "é", 0, 1, "not ASCII")
+            return real(self, method, path, **kw)
+
+        monkeypatch.setattr(Lenz, "_request", failing)
+        with recorded(_REVIEW_WAIT) as rec, pytest.raises(UnicodeEncodeError):
+            Lenz(api_key=API_KEY).review_and_wait(DRAFT, timeout=60)
+        assert rec.clock.sleeps == []
+
+
+def test_a_with_block_on_a_subclass_copy_keeps_the_subclass() -> None:
+    class Sub(Lenz):
+        pass
+
+    with Sub(api_key=API_KEY).with_options(timeout=5) as c:
+        assert isinstance(c, Sub)
+    ann = inspect.signature(Lenz.__enter__).return_annotation
+    assert "Self" in str(ann)

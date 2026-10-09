@@ -82,7 +82,10 @@ import builtins
 import copy
 import logging
 import math
+import numbers
+import operator
 import os
+import re
 import time
 import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -92,6 +95,7 @@ from typing import Any, Final, Literal, TypedDict, TypeVar, overload
 from urllib.parse import quote
 
 import httpx
+from typing_extensions import Self
 
 from . import __version__
 from .errors import (
@@ -249,41 +253,79 @@ _RESERVED_HEADERS = frozenset(
 )
 
 
-def _check_timeout(value: Any, where: str) -> None:
-    """A per-request timeout: a finite number of seconds greater than 0, an
-    ``httpx.Timeout`` (taken as given) or ``None``. ``ValueError`` otherwise,
-    before any request is made."""
-    if value is None or isinstance(value, httpx.Timeout):
-        return
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
-        raise ValueError(
-            f"{where}: timeout must be a number of seconds greater than 0, None or an httpx.Timeout (got {value!r})."
-        )
+def _seconds(value: Any) -> bool:
+    """A finite real number of seconds greater than 0 (``bool`` is not one)."""
+    return not isinstance(value, bool) and isinstance(value, numbers.Real) and math.isfinite(value) and float(value) > 0
 
 
-def _check_retries(value: Any, where: str) -> None:
-    """A retry count: a whole number, 0 or more. ``ValueError`` otherwise."""
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+def _snapshot(value: Any) -> Any:
+    """A copy of an ``httpx.Timeout`` (they are mutable); anything else as is."""
+    return httpx.Timeout(value) if isinstance(value, httpx.Timeout) else value
+
+
+def _check_timeout(value: Any, where: str) -> float | httpx.Timeout | None:
+    """A per-request timeout, checked and snapshotted: ``None``, a finite real
+    number of seconds greater than 0, httpx's 4-tuple ``(connect, read, write,
+    pool)`` whose parts are each ``None`` or such a number, or an
+    ``httpx.Timeout`` (taken as given). An ``httpx.Timeout`` or a tuple comes
+    back as a new ``httpx.Timeout``, so changing the caller's object later
+    changes nothing here. ``ValueError`` otherwise, before any request."""
+    if value is None or _seconds(value):
+        return value  # type: ignore[no-any-return]
+    if isinstance(value, httpx.Timeout):
+        return httpx.Timeout(value)
+    if isinstance(value, tuple) and len(value) == 4 and all(part is None or _seconds(part) for part in value):
+        return httpx.Timeout(value)
+    raise ValueError(
+        f"{where}: timeout must be a number of seconds greater than 0, None, an httpx.Timeout or a "
+        f"(connect, read, write, pool) tuple of such numbers or None (got {value!r})."
+    )
+
+
+def _check_retries(value: Any, where: str) -> int:
+    """A retry count: a whole number (anything ``operator.index`` takes, but
+    not ``bool``), 0 or more, returned as an ``int``. ``ValueError`` otherwise."""
+    count: int | None = None
+    if not isinstance(value, bool):
+        try:
+            count = operator.index(value)
+        except TypeError:
+            count = None
+    if count is None or count < 0:
         raise ValueError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
+    return count
+
+
+#: A header name is an RFC 7230 token; a value is visible ASCII, spaces and
+#: tabs (no CR, LF or NUL: those would end the header or the request).
+_HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
+_HEADER_VALUE = re.compile(r"[\t\x20-\x7e]*")
 
 
 def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]:
     """``extra_headers`` as (name, value) pairs in the order given: names
-    strings outside ``_RESERVED_HEADERS``, values strings or ``None``
-    (removes the header a ``with_options`` copy added). ``ValueError``
-    otherwise."""
+    RFC 7230 tokens outside ``_RESERVED_HEADERS``, values visible-ASCII
+    strings or ``None`` (removes the header a ``with_options`` copy added).
+    ``ValueError`` otherwise. The pairs are a snapshot: changing the caller's
+    mapping later changes nothing here."""
     if value is None:
         return ()
     if not isinstance(value, Mapping):
         raise ValueError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
     pairs: list[tuple[str, str | None]] = []
     for name, header in value.items():
-        if not isinstance(name, str) or not name.strip():
-            raise ValueError(f"{where}: a header name must be a non-empty string (got {name!r}).")
+        if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
+            raise ValueError(
+                f"{where}: a header name must be a non-empty token of ASCII letters, digits and "
+                f"!#$%&'*+-.^_`|~ (got {name!r})."
+            )
         if name.lower() in _RESERVED_HEADERS:
             raise ValueError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
-        if header is not None and not isinstance(header, str):
-            raise ValueError(f"{where}: the value of header {name} must be a string or None (got {header!r}).")
+        if header is not None and (not isinstance(header, str) or not _HEADER_VALUE.fullmatch(header)):
+            raise ValueError(
+                f"{where}: the value of header {name} must be a string of visible ASCII characters, spaces "
+                f"and tabs, or None."
+            )
         pairs.append((name, header))
     return tuple(pairs)
 
@@ -322,12 +364,27 @@ def _call_options(
     extra_headers: Mapping[str, str | None] | None,
     where: str,
 ) -> _CallOptions:
-    """One call's request options, checked: raises ``ValueError`` before the
-    call mints a key or makes a request."""
-    _check_timeout(timeout, where)
-    if max_retries is not None:
-        _check_retries(max_retries, where)
-    return _CallOptions(timeout=timeout, max_retries=max_retries, headers=_check_headers(extra_headers, where))
+    """One call's request options, checked and snapshotted: raises
+    ``ValueError`` before the call mints a key or makes a request."""
+    return _CallOptions(
+        timeout=_check_timeout(timeout, where),
+        max_retries=None if max_retries is None else _check_retries(max_retries, where),
+        headers=_check_headers(extra_headers, where),
+    )
+
+
+def _given(options: _CallOptions) -> dict[str, Any]:
+    """``options`` as keywords for another public method, only those that were
+    given: a method overridden with a 2.21 signature (which knows none of
+    them) is still called the way 2.21 called it when there are none."""
+    out: dict[str, Any] = {}
+    if options.timeout is not None:
+        out["timeout"] = options.timeout
+    if options.max_retries is not None:
+        out["max_retries"] = options.max_retries
+    if options.headers:
+        out["extra_headers"] = dict(options.headers)
+    return out
 
 
 @dataclass(frozen=True)
@@ -549,11 +606,9 @@ class _VerificationsNamespace:
         apply to every page request, and a bad one raises here, before the
         first page: see :meth:`Lenz.with_options`.
         """
-        _call_options(timeout, max_retries, extra_headers, "verifications.iter()")
-        return _walk(
-            lambda n: self.list(page=n, timeout=timeout, max_retries=max_retries, extra_headers=extra_headers),
-            _first_page(page),
-        )
+        # Checked and snapshotted now: every page is read with these.
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.iter()")
+        return _walk(lambda n: self.list(page=n, **_given(options)), _first_page(page))
 
     def get(
         self,
@@ -893,7 +948,8 @@ class _LibraryNamespace:
         apply to every page request, and a bad one raises here, before the
         first page: see :meth:`Lenz.with_options`.
         """
-        _call_options(timeout, max_retries, extra_headers, "library.iter()")
+        # Checked and snapshotted now: every page is read with these.
+        options = _call_options(timeout, max_retries, extra_headers, "library.iter()")
         if sort == "random":
             raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
         page = _first_page(page)
@@ -906,9 +962,7 @@ class _LibraryNamespace:
                 entity=entity,
                 curated=curated,
                 verdict=verdict,
-                timeout=timeout,
-                max_retries=max_retries,
-                extra_headers=extra_headers,
+                **_given(options),
             ),
             page,
         )
@@ -1020,8 +1074,8 @@ class Lenz:
     ) -> None:
         # The same rule as every request option: refused here, before the
         # client exists, rather than failing (or retrying forever) later.
-        _check_timeout(timeout, "Lenz()")
-        _check_retries(max_retries, "Lenz()")
+        timeout = _check_timeout(timeout, "Lenz()")
+        max_retries = _check_retries(max_retries, "Lenz()")
         self._api_key = api_key or os.environ.get("LENZ_API_KEY") or ""
         self._base_url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self._timeout = timeout
@@ -1107,15 +1161,16 @@ class Lenz:
         copy is as safe to share across threads as the client.
         """
         if not isinstance(timeout, NotGiven):
-            _check_timeout(timeout, "with_options()")
+            timeout = _check_timeout(timeout, "with_options()")
         if not isinstance(max_retries, NotGiven):
-            _check_retries(max_retries, "with_options()")
+            max_retries = _check_retries(max_retries, "with_options()")
         headers = _check_headers(extra_headers, "with_options()")
         layer = self._options
         clone = copy.copy(self)
         clone._owns_client = False
         clone._options = _ClientOptions(
-            timeout=layer.timeout if isinstance(timeout, NotGiven) else timeout,
+            # A snapshot: each copy holds its own ``httpx.Timeout``.
+            timeout=_snapshot(layer.timeout) if isinstance(timeout, NotGiven) else timeout,
             max_retries=layer.max_retries if isinstance(max_retries, NotGiven) else max_retries,
             headers=_merge_headers(layer.headers, headers),
         )
@@ -1124,7 +1179,7 @@ class Lenz:
         clone.library = _LibraryNamespace(clone)
         return clone
 
-    def __enter__(self) -> Lenz:
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *exc_info: Any) -> None:
@@ -1618,7 +1673,8 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
-        _call_options(None, max_retries, extra_headers, "verify_and_wait()")
+        # Checked and snapshotted once: the submit and every poll use these.
+        options = _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
             accepted = self._verify_submit(
@@ -1630,14 +1686,16 @@ class Lenz:
                 visibility=visibility,
                 depth=depth,
                 idempotency_key=key,
-                max_retries=max_retries,
-                extra_headers=extra_headers,
+                max_retries=options.max_retries,
+                extra_headers=dict(options.headers),
             )
             logger.info("Submitted task: %s", accepted.task_id)
-            if extra_headers is None:
-                # Called as in 2.x, so a subclass overriding ``wait`` is still called.
-                return self.wait(accepted, timeout=timeout, on_progress=on_progress)
-            return self.wait(accepted, timeout=timeout, on_progress=on_progress, extra_headers=extra_headers)
+            # Only the headers reach the polls, and only when there are some, so
+            # a subclass overriding ``wait`` with the 2.21 signature is still
+            # called the way 2.21 called it.
+            return self.wait(
+                accepted, timeout=timeout, on_progress=on_progress, **_given(_CallOptions(headers=options.headers))
+            )
 
     def wait(
         self,
@@ -1731,6 +1789,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
@@ -1741,8 +1800,8 @@ class Lenz:
                 visibility=visibility,
                 depth=depth,
                 idempotency_key=key,
-                max_retries=max_retries,
-                extra_headers=extra_headers,
+                max_retries=options.max_retries,
+                extra_headers=dict(options.headers),
             )
             ids = [it.task_id for it in accepted.items if it.task_id]
             terminal, timed_out, stopped = self._poll_to_terminal(
@@ -2054,7 +2113,8 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
-        _call_options(None, max_retries, extra_headers, "review_and_wait()")
+        # Checked and snapshotted once: the submit and every poll use these.
+        options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
         key = idempotency_key or uuid.uuid4().hex
         with _carrying_key(key):
@@ -2071,12 +2131,12 @@ class Lenz:
                 webhook_url=webhook_url,
                 visibility=visibility,
                 idempotency_key=key,
-                max_retries=max_retries,
-                extra_headers=extra_headers,
+                # Only the options given, so a 2.21 ``review`` override is still called.
+                **_given(options),
             )
             logger.info("Submitted review: %s", started.review_id)
             return self._wait_review(
-                started.review_id, timeout=timeout, on_update=on_update, extra_headers=extra_headers
+                started.review_id, timeout=timeout, on_update=on_update, extra_headers=dict(options.headers)
             )
 
     # ── /citecheck: the citation check on its own ──
@@ -2241,7 +2301,8 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
-        _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
+        # Checked and snapshotted once: the submit and every poll use these.
+        options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
         key = idempotency_key or uuid.uuid4().hex
         with _carrying_key(key):
@@ -2252,12 +2313,12 @@ class Lenz:
                 language=language,
                 webhook_url=webhook_url,
                 idempotency_key=key,
-                max_retries=max_retries,
-                extra_headers=extra_headers,
+                # Only the options given, so a 2.21 ``citecheck`` override is still called.
+                **_given(options),
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
             return self._wait_citecheck(
-                started.citecheck_id, timeout=timeout, on_update=on_update, extra_headers=extra_headers
+                started.citecheck_id, timeout=timeout, on_update=on_update, extra_headers=dict(options.headers)
             )
 
     def _wait_citecheck(
@@ -2362,6 +2423,10 @@ class Lenz:
                 job = parse(body)
                 if job is None:
                     raise ValueError("not this job's body")
+            except UnicodeEncodeError:
+                # The request could not be built (nothing was sent): no later
+                # poll would do better, so it is not read as an unreadable body.
+                raise
             except ValueError:
                 # A body this release cannot read (pydantic's ValidationError
                 # is a ValueError): read again next round, as for a 5xx.
