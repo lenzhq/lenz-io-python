@@ -408,7 +408,7 @@ class _ClientOptions:
     copy it was made from. ``NOT_GIVEN`` inherits from the ``httpx.Client`` in
     use (timeout) or the constructor (retries)."""
 
-    timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN
+    timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN
     max_retries: int | NotGiven = NOT_GIVEN
     headers: tuple[tuple[str, str], ...] = ()
 
@@ -1128,7 +1128,7 @@ class Lenz:
     def with_options(
         self: _Client,
         *,
-        timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN,
+        timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN,
         max_retries: int | NotGiven = NOT_GIVEN,
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> _Client:

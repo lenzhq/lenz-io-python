@@ -959,16 +959,16 @@ stopped. Each has its own method, and each answers 200 whatever the state of
 the run, so losing a race is not an error:
 
 ```python
-result = client.cancel("tsk_abc123")            # a verification -> CancelResult
+result = client.cancel("tsk_abc123")  # a verification -> CancelResult
 if result.cancelled:
-    print("stopped:", result.status)             # "cancelled"
+    print("stopped:", result.status)  # "cancelled"
 else:
-    print("already ended:", result.status)       # "completed" or "failed"
+    print("already ended:", result.status)  # "completed" or "failed"
 
-review = client.cancel_review("d6b2bd72")        # the full view, like get_review
-print(review.status, review.credits.charged)     # "cancelled", what it cost
+review = client.cancel_review("d6b2bd72")  # the full view, like get_review
+print(review.status, review.credits.charged)  # "cancelled", what it cost
 
-check = client.cancel_citecheck("12bbbf65")      # like get_citecheck
+check = client.cancel_citecheck("12bbbf65")  # like get_citecheck
 print(check.status, check.credits.charged)
 ```
 
@@ -1175,6 +1175,7 @@ from lenz_io import Lenz
 
 client = Lenz()  # one client for the whole app; it is safe to share across threads
 
+
 async def quick_check(claim: str) -> str:
     out = await asyncio.to_thread(client.assess, claim=claim)
     return out.claims[0].verdict
@@ -1191,13 +1192,16 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from lenz_io import Lenz
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.lenz = Lenz()
     yield
     app.state.lenz.close()
 
+
 app = FastAPI(lifespan=lifespan)
+
 
 @app.post("/check")
 def check(claim: str) -> dict[str, object]:  # `def`, not `async def`: FastAPI runs it in a thread
@@ -1244,8 +1248,8 @@ built.
 Every method takes three keyword-only request options, for that call only:
 
 ```python
-client.assess(claim="...", timeout=20)                    # one HTTP attempt, in seconds
-client.usage(max_retries=0)                               # no retries for this call
+client.assess(claim="...", timeout=20)  # one HTTP attempt, in seconds
+client.usage(max_retries=0)  # no retries for this call
 client.verify("...", extra_headers={"X-Trace-Id": trace})  # added to the request
 ```
 
