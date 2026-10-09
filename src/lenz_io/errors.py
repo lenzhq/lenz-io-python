@@ -50,10 +50,12 @@ class LenzError(Exception):
         server sent none. Branch on this rather than on message text.
       * ``body``       — parsed JSON response body if available
       * ``retryable``  — whether sending the same request again can succeed:
-        ``True`` for a network failure, a transport timeout, a 429 and a 5xx;
-        ``False`` for any other 4xx and a version error; ``None`` when there
-        was no HTTP status (a missing key, a ``*_and_wait`` timeout, a
-        needs-input pause, a bad webhook signature). A failed
+        ``True`` for a network failure, a transport timeout, a 429, a 5xx and
+        a 409 ``idempotency_conflict`` (the first request with that key is
+        still running) or ``verification_not_ready``; ``False`` for any other
+        4xx and a version error; ``None`` when there was no HTTP status (a
+        missing key, a ``*_and_wait`` timeout, a needs-input pause, a bad
+        webhook signature). A failed
         verification, review or citation check carries the server's value
         (``None`` when it sent none), and a boolean ``retryable`` in the
         response's ``failure`` block always wins. Since 3.0; set on every
@@ -61,6 +63,12 @@ class LenzError(Exception):
     """
 
     retryable: bool | None
+    #: The ``Idempotency-Key`` the failed call sent, or ``None`` when it sent
+    #: none. To resend safely, pass it back (``idempotency_key=exc.idempotency_key``):
+    #: the server then replays the first answer, or reports the first request
+    #: still running, instead of running it twice. A plain new call sends a
+    #: new key, and can run (and charge) the work a second time. Since 3.0.
+    idempotency_key: str | None = None
 
     def __init__(
         self,
@@ -97,6 +105,8 @@ class LenzError(Exception):
         status = self.status_code
         if status == 429 or 500 <= status < 600:
             return True
+        if status == 409 and _resendable_409(self):
+            return True
         if 400 <= status < 500:
             return False
         return None
@@ -112,6 +122,18 @@ class LenzError(Exception):
         if self.request_id:
             lines.append(f"  Request ID: {self.request_id}")
         return "\n".join(lines)
+
+
+#: 409 codes that mean "not yet": the same request, sent again later (with the
+#: same ``Idempotency-Key``), can succeed.
+_RESENDABLE_409_CODES = ("idempotency_conflict", "verification_not_ready")
+
+
+def _resendable_409(err: LenzError) -> bool:
+    """Whether a 409 says "not yet". Reads the body as sent too: the 2.x
+    attributes leave ``code`` empty on endpoints whose original body had none."""
+    sent = err.body.get("code") if isinstance(err.body, dict) else None
+    return err.code in _RESENDABLE_409_CODES or sent in _RESENDABLE_409_CODES
 
 
 class LenzAuthError(LenzError):
@@ -248,9 +270,6 @@ class LenzRateLimitError(LenzError):
     #: know a paid plan raises it.
     upgrade_url: str = ""
 
-    def _derived_retryable(self) -> bool | None:
-        return True
-
 
 class LenzAPIError(LenzError):
     """500 / 502 / 503 / 504 / catch-all for unexpected server errors.
@@ -264,7 +283,9 @@ class LenzAPIError(LenzError):
     retry_after: int | None = None
 
     def _derived_retryable(self) -> bool | None:
-        return True
+        # Any status this class is raised for is a 5xx; without one (built by
+        # hand, or a request that failed with no diagnostic) it is unknown.
+        return None if self.status_code == 0 else True
 
 
 class LenzConnectionError(LenzAPIError):
@@ -275,9 +296,14 @@ class LenzConnectionError(LenzAPIError):
     existing ``except LenzAPIError`` keeps catching it. ``__cause__`` is the
     underlying ``httpx`` exception and ``status_code`` is 0. ``retryable`` is
     ``True``: the same request can succeed once the network is back (calls
-    that charge send an ``Idempotency-Key``, so a resend replays rather than
-    runs twice).
+    that charge send an ``Idempotency-Key``). Resend with the same key: pass
+    ``idempotency_key=exc.idempotency_key`` back, and the server replays the
+    first answer if the first request did arrive. A plain new call sends a new
+    key, and can run (and charge) the work twice.
     """
+
+    def _derived_retryable(self) -> bool | None:
+        return True
 
 
 class LenzRequestTimeoutError(LenzConnectionError):
@@ -288,6 +314,12 @@ class LenzRequestTimeoutError(LenzConnectionError):
     its own deadline while the job keeps running. A subclass of
     :class:`LenzConnectionError` and so of :class:`LenzAPIError`, which is
     what 2.x raised.
+
+    The request may have reached the server and be running. Resend only with
+    the same key (``idempotency_key=exc.idempotency_key``): the server then
+    replays the first answer (or answers 409 ``idempotency_conflict`` while it
+    still runs) instead of running it again. A plain new call sends a new key,
+    and can run (and charge) the work twice.
     """
 
 

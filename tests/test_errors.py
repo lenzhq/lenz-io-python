@@ -569,7 +569,8 @@ class TestRetryable:
             (402, {"code": "no_credits"}, False),
             (403, {}, False),
             (404, {}, False),
-            (409, {"code": "idempotency_conflict"}, False),
+            (409, {"code": "idempotency_conflict"}, True),
+            (409, {"code": "select_not_pending"}, False),
             (410, {"code": "purged"}, False),
             (422, {}, False),
             (429, {}, True),
@@ -579,11 +580,26 @@ class TestRetryable:
             (503, {}, True),
             (503, {"code": "upstream_unavailable"}, True),
             (503, {"code": "capacity"}, True),
-            (409, {"code": "verification_not_ready", "status": "processing"}, False),
+            (409, {"code": "verification_not_ready", "status": "processing"}, True),
         ],
     )
     def test_derived_from_the_response(self, status, body, expected):
         assert map_response_to_error(status, _body(body), {}).retryable is expected
+
+    @pytest.mark.parametrize(
+        ("endpoint", "code"),
+        [
+            (("POST", "/verify"), "idempotency_conflict"),
+            (("POST", "/ask/v1"), "idempotency_conflict"),
+            (("POST", "/ask/v1"), "verification_not_ready"),
+            (("GET", "/verifications/v1"), "verification_not_ready"),
+        ],
+    )
+    def test_a_409_worth_resending_is_retryable_whatever_code_the_2x_body_keeps(self, endpoint, code):
+        # The 2.x body has no ``code`` on some endpoints (``exc.code`` stays
+        # ""), but the answer is still worth sending again (with the same key).
+        e = map_response_to_error(409, _body({"detail": "x", "code": code}), {}, endpoint=endpoint)
+        assert e.retryable is True
 
     @pytest.mark.parametrize(("status", "flag"), [(503, False), (400, True), (500, False), (422, True)])
     def test_a_boolean_in_the_failure_block_wins(self, status, flag):
@@ -628,8 +644,13 @@ class TestRetryable:
         assert ReviewTimeout().retryable is None
         assert LenzNeedsInputError().retryable is None
         assert LenzWebhookSignatureError().retryable is None
-        assert LenzAPIError().retryable is True
-        assert LenzRateLimitError().retryable is True
+        # No status and no connection failure: unknown, as in the Node SDK.
+        assert LenzAPIError().retryable is None
+        assert LenzRateLimitError().retryable is None
+        from lenz_io import LenzConnectionError, LenzRequestTimeoutError
+
+        assert LenzConnectionError().retryable is True
+        assert LenzRequestTimeoutError().retryable is True
 
     def test_a_value_passed_in_wins(self):
         assert LenzPipelineError(retryable=True).retryable is True
