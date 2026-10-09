@@ -673,6 +673,7 @@ _REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/
 #: The cancel calls are new in 3.0: no earlier shape to read, so the server's
 #: ``code`` stays on the error (``not_found``, ``use_review_cancel``, ...).
 _CANCEL_PATH = re.compile(r"^/(?:verify|reviews|citechecks)/[^/]+/cancel$")
+_SELECT_PATH = re.compile(r"^/verify/[^/]+/select$")
 
 #: Codes the newer shape sends where the original error carried no ``code``
 #: (outside /review and /citecheck, which always sent one).
@@ -719,6 +720,11 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
     code = out["code"] if isinstance(out.get("code"), str) else ""
     errors = out["errors"] if isinstance(out.get("errors"), list) else None
     path = path.split("?", 1)[0]
+    if method.upper() == "POST" and _CANCEL_PATH.match(path):
+        # The three cancel calls are new in 3.0: there is no 2.x reading of
+        # their errors, so the body is read as sent (code, detail and errors),
+        # as the Node SDK reads it.
+        return out
     if _REVIEW_FAMILY.match(path):
         # A missing or unknown credential is refused before the endpoint runs.
         if code == "not_authenticated":
@@ -762,6 +768,20 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
             out["credits_remaining"] = out["remaining"]
         _original_wait_and_link(out, status)
         return out
+    if status == 422 and code == "blank_input" and isinstance(out.get("detail"), str) and method.upper() == "POST":
+        # A blank input said "Text is required." (or named its item, or
+        # ``texts``), where the newer sentence names ``claim`` / ``claims``.
+        loc = errors[0].get("loc") if errors and isinstance(errors[0], dict) else None
+        if isinstance(loc, list) and loc and loc[0] == "body":
+            if path in ("/verify", "/assess"):
+                if len(loc) == 2 and loc[1] == "claim":
+                    out["detail"] = "Text is required."
+            elif path == "/verify/batch":
+                if len(loc) == 4 and loc[1] == "claims" and isinstance(loc[2], int) and not isinstance(loc[2], bool):
+                    out["detail"] = f"claims[{loc[2]}].text is required."
+            elif _SELECT_PATH.match(path):
+                if len(loc) == 2 and loc[1] == "claims":
+                    out["detail"] = "texts is required and must be non-empty."
     if status == 422 and code == "blank_input" and path == "/assess":
         loc = errors[0].get("loc") if errors and isinstance(errors[0], dict) else None
         if isinstance(loc, list) and "claims" in loc:
@@ -799,7 +819,6 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
     codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
         code == "verification_not_ready" and path.startswith("/ask/")
     )
-    codeless = codeless and not _CANCEL_PATH.match(path)
     if codeless:
         del out["code"]
     out.pop("errors", None)
@@ -1038,7 +1057,8 @@ def _opt_int(value: Any) -> int | None:
         return None
     try:
         return int(float(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: an infinite value (``"1e999"``) is unknown, as in Node.
         return None
 
 

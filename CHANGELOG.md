@@ -14,7 +14,10 @@ All notable changes to this SDK are documented here. Format follows
 > shape; (3) re-record tests that replay recorded 2.x response bodies; (4) an
 > idempotent request first sent before the switch and replayed after it raises
 > `LenzApiVersionError`: finish that work with 2.x, never change the key to
-> get past it. May do: move off the deprecated names (they keep working).
+> get past it; (5) a hand-written polling loop must treat `cancelled` as
+> final: `get_status`, `get_review` and `get_citecheck` return it where 2.21
+> returned `failed`, so a loop waiting for `failed` polls until its own
+> timeout. May do: move off the deprecated names (they keep working).
 > Details under Migration.
 
 Major release (3.0.0). The SDK asks for the API's current response shape
@@ -81,14 +84,37 @@ Deprecated).
 
 ### Changed
 
+- **`verify_signature` refuses an empty secret** with `ValueError`, as
+  `LenzWebhooks(secret="")` always did. 2.x accepted a body signed with the
+  empty key.
+- **A whitespace-only `webhook_url` is no longer sent** on `verify`,
+  `verify_batch` (the batch-wide value and each item's) and the `*_and_wait`
+  helpers that submit them; 2.x sent it as given. It means the key's default
+  webhook either way, but the request body (and so its idempotency hash)
+  differs: a request first sent by 2.x with a pinned `Idempotency-Key` and a
+  whitespace-only `webhook_url`, and resent by 3.0 with the same key, is
+  refused with a 422 (`idempotency_body_mismatch`). Finish such a request
+  with 2.x, or resend it with a new key.
+- **`TaskAccepted.model_dump()` has no `chain_id` key**: 2.x carried it only
+  because the API sent it, and the API no longer does. The
+  `TaskAccepted.chain_id` attribute is kept and reads `""` (deprecated).
+- **A `Retry-After` the SDK cannot use is read safely.** An infinite wait
+  (`Retry-After: 1e999`) is read as the longest wait, past every cap (a 429
+  then raises at once), where it raised `OverflowError`; on the error's
+  `retry_after` it reads `None` (unknown).
+- **A cancel's error body is read as sent**: its `code` (a 422's
+  `validation_error` too), `detail` and `errors`.
 - **One rule for every timeout and retry count of a request, checked before
   anything is sent.** A timeout must be `None` (no timeout), a finite real
   number of seconds greater than 0, httpx's `(connect, read, write, pool)`
   tuple of such numbers or `None`, or an `httpx.Timeout`; a retry count a
-  whole number, 0 or more. Anything else raises `ValueError`: in
+  whole number, 0 or more. A timeout is at most 2,147,483 seconds (about 24.8
+  days, the Node SDK's limit): a longer one overflowed in the socket layer on
+  every request. Anything else raises `ValueError`: in
   `Lenz(timeout=..., max_retries=...)` when the client is built, and in the
   `timeout=` of `extract` / `assess` before the call mints a key or sends a
-  request. Newly refused: a timeout of 0 or less, NaN or infinity, a negative
+  request. Newly refused: a timeout of 0 or less, NaN, infinity or past the
+  limit, a negative
   retry count (none of these worked: such a timeout failed every request, a
   negative retry count sent none), and `True` / `False`, which were read as
   1 / 0 (pass the number). Real numbers of any type (`Fraction`, numpy
@@ -107,8 +133,10 @@ Deprecated).
   and `".."` raise `ValueError` before any request (the methods that took an
   empty id now raise as `get_review` and `wait` already did).
 - **The SDK asks for the API's current response shape, and reads only that.** Every request sends
-  `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`; 2.x sent
-  `2026-05-13`). In that shape each field, status and error code has one name
+  `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`). 2.x sent
+  `2026-05-13` from the client it built, and no version header at all through
+  an `http_client=` of your own (the server then answered in the account's
+  version); 3.0 sends it on every request either way. In that shape each field, status and error code has one name
   across every endpoint.
 - **Every attribute keeps the value it had in 2.x** (except the `status` of a
   cancelled task, see Breaking), computed from the
@@ -243,8 +271,9 @@ Deprecated).
   deep checks that finished, citations checked) and the rest is refunded or
   never charged. A `wait` on a cancelled run raises the failed error with
   `failure_class == "cancelled"`. Needs the API to serve version `2026-10-11`.
-- **`VerificationCancelled`** (new webhook event class, `verification.cancelled`),
-  and `review.cancelled` / `citecheck.cancelled` typed as `ReviewEvent` /
+- **`VerificationCancelled`** (new webhook event class, `verification.cancelled`;
+  its `verification` property reads the payload as `get_status` returns it,
+  `status` `"cancelled"`), and `review.cancelled` / `citecheck.cancelled` typed as `ReviewEvent` /
   `CitecheckEvent`. They are sent only for work submitted with `2026-10-11`;
   a cancellation of older work keeps arriving as `*.failed`. See Breaking.
 - `LenzNotFoundError` (404), `LenzConnectionError` and
@@ -431,10 +460,12 @@ rebuild:
 - `model_dump()` and the CLI's `--json` return the 2.x-compatible fields
   (computed from the response) plus the current-shape keys the server sent;
   they are not the wire body. If a script parses `--json` output, it keeps
-  finding every 2.x key and gains the new ones.
-- `webhook_url` keeps its meaning: on `verify` and `verify_batch` an empty
-  or whitespace-only value (the default is `""`) means your key's default
-  webhook and is not sent; on `review` and `citecheck`, `None` means your
+  finding every 2.x key but `chain_id` (see Changed) and gains the new ones.
+- `webhook_url` keeps its meaning, though not always its bytes: on `verify`
+  and `verify_batch` an empty or whitespace-only value (the default is `""`)
+  means your key's default webhook and is not sent (2.x sent a
+  whitespace-only one; see Changed for its effect on a pinned
+  `Idempotency-Key`); on `review` and `citecheck`, `None` means your
   key's default and `""` means no webhook. In the current shape the API reads
   a missing `webhook_url` as the key's default and `""` as no webhook on
   every endpoint.

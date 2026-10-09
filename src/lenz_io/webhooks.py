@@ -72,7 +72,12 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
     Returns rather than raising on success makes ``if verify_signature(...)``
     idioms work; the raise-on-bad path means a silent ``False`` can't
     accidentally pass through.
+
+    An empty ``secret`` raises ``ValueError``, as ``LenzWebhooks(secret="")``
+    does: a body signed with the empty key proves nothing.
     """
+    if not secret:
+        raise ValueError("verify_signature requires a non-empty secret. Get it from /api-credentials.")
     if not signature:
         raise LenzWebhookSignatureError(
             message="Missing webhook signature",

@@ -362,7 +362,7 @@ class Verification(_Lax):
     The verdict block is FLAT at top level (was nested ``Verdict`` object
     pre-unify). ``created_at`` + ``completed_at`` are the only timestamp
     fields on the API surface (``modified_at`` is the deprecated 2.x name of
-    the second) — editorial ``published_at`` is internal-only.
+    the second); a claim's ``published_at`` is not part of the API.
 
     1.1.0: dropped ``url`` and ``visibility``. API claims are private by
     default and referenced by ``verification_id`` only. Cache-hit on
@@ -1091,7 +1091,9 @@ class BatchItemResult(_Lax):
     - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims).
     - ``failed``       — terminal failure (or completed-without-result), or cancelled elsewhere
       (``status_detail.status`` is then ``cancelled``); ``status_detail`` carries the diagnostic.
-      A verification removed by its account's retention period (HTTP 410) is ``failed``, ``status_detail`` ``None``.
+      An item whose poll could never succeed is ``failed`` with ``status_detail`` ``None``: a verification
+      removed by its account's retention period (HTTP 410), a task id nothing was found under (404), or an
+      answer in another API version.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
     """
 

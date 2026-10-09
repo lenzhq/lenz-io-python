@@ -253,9 +253,21 @@ _RESERVED_HEADERS = frozenset(
 )
 
 
+#: The longest timeout a request can take, in seconds (the Node SDK's limit,
+#: 2^31 - 1 ms): past it the socket layer overflows on every request. Also the
+#: longest wait a ``Retry-After`` is read as.
+MAX_TIMEOUT_SECONDS = 2_147_483
+
+
 def _seconds(value: Any) -> bool:
-    """A finite real number of seconds greater than 0 (``bool`` is not one)."""
-    return not isinstance(value, bool) and isinstance(value, numbers.Real) and math.isfinite(value) and float(value) > 0
+    """A finite real number of seconds greater than 0 and at most
+    :data:`MAX_TIMEOUT_SECONDS` (``bool`` is not one)."""
+    return (
+        not isinstance(value, bool)
+        and isinstance(value, numbers.Real)
+        and math.isfinite(value)
+        and 0 < float(value) <= MAX_TIMEOUT_SECONDS
+    )
 
 
 def _snapshot(value: Any) -> Any:
@@ -273,12 +285,14 @@ def _check_timeout(value: Any, where: str) -> float | httpx.Timeout | None:
     if value is None or _seconds(value):
         return value  # type: ignore[no-any-return]
     if isinstance(value, httpx.Timeout):
-        return httpx.Timeout(value)
-    if isinstance(value, tuple) and len(value) == 4 and all(part is None or _seconds(part) for part in value):
+        parts = (value.connect, value.read, value.write, value.pool)
+        if not any(isinstance(p, (int, float)) and p > MAX_TIMEOUT_SECONDS for p in parts):
+            return httpx.Timeout(value)
+    elif isinstance(value, tuple) and len(value) == 4 and all(part is None or _seconds(part) for part in value):
         return httpx.Timeout(value)
     raise ValueError(
-        f"{where}: timeout must be a number of seconds greater than 0, None, an httpx.Timeout or a "
-        f"(connect, read, write, pool) tuple of such numbers or None (got {value!r})."
+        f"{where}: timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an "
+        f"httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got {value!r})."
     )
 
 
@@ -3223,7 +3237,12 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         # Floored at zero: `Retry-After: -5` is malformed, and time.sleep()
         # raises ValueError on a negative — which would escape the retry
         # ladder as a bare ValueError, defeating the typed-exception contract.
-        return max(0, int(float(raw)))
+        seconds = float(raw)
+        if math.isnan(seconds):
+            return None
+        # ``Retry-After: 1e999`` is infinity: read as the longest wait, which
+        # is past any cap (so a 429 raises), never an OverflowError.
+        return int(min(max(seconds, 0.0), MAX_TIMEOUT_SECONDS))
     except (TypeError, ValueError):
         return None
 

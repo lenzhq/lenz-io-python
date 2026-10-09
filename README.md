@@ -31,7 +31,10 @@ from lenz_io import Lenz
 
 client = Lenz()  # reads LENZ_API_KEY
 row = client.assess(claim="The Great Wall of China is visible from space.").claims[0]
-print(row.verdict, row.confidence)  # e.g. False high  (about 15-20 s, 1 credit)
+if row.status == "failed":  # no verdict for this row (not charged): failure says why
+    print(row.failure.code, row.failure.hint)
+else:
+    print(row.verdict, row.confidence)  # e.g. False high  (about 15-20 s, 1 credit)
 ```
 
 From there: [the whole ladder](#quickstart--the-canonical-integration) on an
@@ -871,9 +874,9 @@ Local argument mistakes (an empty id, two exclusive arguments) raise
 
 A `*_and_wait` helper that reaches its own `timeout` raises `LenzTimeoutError`
 (`ReviewTimeout`, `CitecheckTimeout`): the job keeps running server-side, so
-read it later by its id rather than resubmitting. A poll answered 401, 403 or
-404 (or in another API version) ends the wait at once with that error; in
-`verify_batch_and_wait` a 404 or a version error fails that item only (the
+read it later by its id rather than resubmitting. A poll answered 401, 403,
+404 or 410 (or in another API version) ends the wait at once with that error;
+in `verify_batch_and_wait` a 404, a 410 or a version error fails that item only (the
 others keep going), while a 401 / 403 raises. A 5xx, a 429 or a network
 failure is polled again. Each poll is bounded by what is left of the
 `timeout` (each phase at most the client's own), and no poll starts once it
@@ -994,8 +997,8 @@ print(check.status, check.credits.charged)
   the rest is refunded or never charged. `credits.charged` on the result is
   what the review or check cost.
 - Cancelling twice is safe, so the calls send no `Idempotency-Key`. They are
-  retried on a 5xx or a dropped connection, like any call that is safe to
-  repeat.
+  retried on a 5xx, a 429 or a dropped connection, like any call that is safe
+  to repeat.
 - Afterwards `get_status`, `get_review` and `get_citecheck` return the
   `cancelled` status, and `wait`, `review_and_wait` and `citecheck_and_wait`
   raise the failed error with `failure_class == "cancelled"`. A `webhook_url`
@@ -1231,7 +1234,7 @@ Environment variables:
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
 
-`timeout` must be a number of seconds greater than 0, `None` (no timeout), an
+`timeout` must be a number of seconds greater than 0 and at most 2,147,483, `None` (no timeout), an
 `httpx.Timeout` or httpx's `(connect, read, write, pool)` tuple; `max_retries` a
 whole number, 0 or more. Anything else raises `ValueError` when the client is
 built.
