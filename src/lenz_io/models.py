@@ -203,7 +203,7 @@ class CandidateClaim(_Lax):
     """One of multiple distinct claims framing found in the submitted text."""
 
     #: **Deprecated**, use :attr:`claim` (the same string).
-    text: str = ""
+    text: str = Field(default="", json_schema_extra={"deprecated": True})
     domain: str = ""
 
     @model_validator(mode="before")
@@ -391,7 +391,7 @@ class Verification(_Lax):
     created_at: str | None = None
     # Deprecated: use ``completed_at``. Set only when the verification
     # completed on a later UTC day than ``created_at``.
-    modified_at: str | None = None
+    modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
     # older cached payloads that lack the field.
@@ -440,7 +440,7 @@ class VerificationListItem(_Lax):
     suggested_rewrite: str | None = None
     created_at: str | None = None
     # Deprecated: use ``completed_at``. See ``Verification.modified_at``.
-    modified_at: str | None = None
+    modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
 
@@ -574,9 +574,9 @@ class ExtractedClaims(_Lax):
     # ``"not_a_claim"`` is the 2.x spelling of the API's ``no_checkable_claim``.
     status: str = ""
     # Deprecated: use ``claims[0].claim``.
-    claim: str = ""
+    claim: str = Field(default="", json_schema_extra={"deprecated": True})
     # Deprecated: use ``claims`` (this is its names, and ``[]`` for one claim).
-    identified_claims: list[str] = Field(default_factory=list)
+    identified_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
@@ -585,7 +585,7 @@ class ExtractedClaims(_Lax):
     presumed_intent: str = ""
     original_input: str = ""
     # Deprecated: use ``claims`` (each with its ``positions``).
-    locations: list[ClaimLocation] | None = None
+    locations: list[ClaimLocation] | None = Field(default=None, json_schema_extra={"deprecated": True})
 
     @model_validator(mode="before")
     @classmethod
@@ -686,18 +686,18 @@ class AssessClaim(_Lax):
     # 'framing_failed' is deterministic, so retrying the same text will not
     # help (a provider outage comes back as 'upstream_unavailable' instead).
     # 'no_claim' wants a different input; read ``hint``.
-    error_code: str | None = None
+    error_code: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Deprecated: always empty since 2026-09-12, when the ``ambiguous`` cause
     # that filled it was retired. Kept because the server still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # Deprecated: use ``more_claims``. Other claims found in the input that
     # were NOT assessed; else empty.
-    identified_claims: list[str] = Field(default_factory=list)
+    identified_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # Deprecated: use ``failure.hint`` (on a failed row; the sentence on a
     # verdict row that found other claims has no replacement). One sentence on
     # what to send next. Set on every Error row and on a row with a non-empty
     # ``identified_claims``; ``None`` on a plain verdict row.
-    hint: str | None = None
+    hint: str | None = Field(default=None, json_schema_extra={"deprecated": True})
 
     @model_validator(mode="before")
     @classmethod
@@ -784,9 +784,9 @@ class AssessResponse(_Lax):
     claims: list[AssessClaim] = Field(default_factory=list)
     # Deprecated: use ``failure`` / ``status``. The 2.x sentence for an input
     # with no claim.
-    error: str | None = None
+    error: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Deprecated: use ``failure.code`` (``"no_checkable_claim"``).
-    error_code: str = ""  # '' | 'no_claim'
+    error_code: str = Field(default="", json_schema_extra={"deprecated": True})  # '' | 'no_claim'
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
@@ -831,7 +831,7 @@ class TaskAccepted(_Lax):
 
     task_id: str = ""
     #: **Deprecated**, use :attr:`claim`.
-    claim_text: str = ""
+    claim_text: str = Field(default="", json_schema_extra={"deprecated": True})
 
     @model_validator(mode="before")
     @classmethod
@@ -976,19 +976,19 @@ class TaskStatus(_Lax):
     # (``failure.detail``, ``.code``, ``.failure_class``, ...). ``error`` keeps
     # its 2.x sentence; ``failure_detail`` is always empty, with no
     # replacement.
-    error: str = ""
-    failure_reason: str = ""
-    failure_detail: str = ""
+    error: str = Field(default="", json_schema_extra={"deprecated": True})
+    failure_reason: str = Field(default="", json_schema_extra={"deprecated": True})
+    failure_detail: str = Field(default="", json_schema_extra={"deprecated": True})
     # WHY it failed — the closed set is ``FailureClass`` (import it for
     # exhaustive matching). The annotation stays ``str`` on purpose: a
     # ``Literal`` here would make an unknown class the server adds later a
     # hard ValidationError, and every other field on this model is lax.
     # Rows predating 2026-08 omit this and ``retryable`` (the derived retry
     # signal — true iff ``upstream_unavailable``).
-    failure_class: str = ""
-    retryable: bool | None = None
+    failure_class: str = Field(default="", json_schema_extra={"deprecated": True})
+    retryable: bool | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Where this ``failure_class`` is explained. ``""`` from older servers.
-    docs_url: str = ""
+    docs_url: str = Field(default="", json_schema_extra={"deprecated": True})
 
     @model_validator(mode="before")
     @classmethod
@@ -1042,7 +1042,7 @@ class BatchItemResult(_Lax):
 
     task_id: str = ""
     #: **Deprecated**, use :attr:`claim`.
-    claim_text: str = ""
+    claim_text: str = Field(default="", json_schema_extra={"deprecated": True})
     status: Literal["completed", "needs_input", "failed", "timeout"]
     verification: Verification | None = None
     status_detail: TaskStatus | None = None
@@ -1205,7 +1205,7 @@ class Usage(_Lax):
     #: Empty on servers predating this field — fall back to :attr:`plan`.
     plan_label: str = ""
     #: **Deprecated**, use :attr:`UsageCredits.resets_at` (``credits.resets_at``).
-    quota_resets_at: str | None = None
+    quota_resets_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
     #: Credits per call, keyed by CAPABILITY, at its default price:
@@ -1245,11 +1245,11 @@ class Usage(_Lax):
     #: :attr:`costs` instead::
     #:
     #:     left = u.credits.remaining // u.costs["verify"]
-    verify: UsageCapacity = Field(default_factory=UsageCapacity)
+    verify: UsageCapacity = Field(default_factory=UsageCapacity, json_schema_extra={"deprecated": True})
     #: DEPRECATED, kept for existing code. See :attr:`verify`.
-    ask: UsageCapacity = Field(default_factory=UsageCapacity)
+    ask: UsageCapacity = Field(default_factory=UsageCapacity, json_schema_extra={"deprecated": True})
     #: DEPRECATED, kept for existing code. See :attr:`verify`.
-    assess: UsageCapacity = Field(default_factory=UsageCapacity)
+    assess: UsageCapacity = Field(default_factory=UsageCapacity, json_schema_extra={"deprecated": True})
     extract: UsageExtract = Field(default_factory=UsageExtract)
     # Whether this key has a webhook signing secret provisioned. ``POST /verify``
     # with a ``webhook_url`` is rejected without one, so callers that rely on
@@ -1373,7 +1373,7 @@ class FailureBlock(_Lax):
     """
 
     #: **Deprecated**, use :attr:`code`.
-    failure_reason: str | None = ""
+    failure_reason: str | None = Field(default="", json_schema_extra={"deprecated": True})
     failure_class: str | None = ""
     retryable: bool | None = None
     hint: str | None = None
@@ -1491,7 +1491,7 @@ class ReviewSummary(_Lax):
     claim_limit: int = 20
     #: **Deprecated**, use :attr:`claim_limit_exceeded`. The draft held at
     #: least ``claim_limit`` claims: more MAY exist.
-    claim_limit_reached: bool | None = None
+    claim_limit_reached: bool | None = Field(default=None, json_schema_extra={"deprecated": True})
     #: The text was cut at 50,000 characters.
     input_truncated: bool = False
     assessments: ReviewAssessmentCounts | None = None
@@ -1505,7 +1505,7 @@ class ReviewSummary(_Lax):
     citation_limit: int | None = None
     #: **Deprecated**, use :attr:`citation_limit_exceeded`.
     #: ``citations_found`` is over ``citation_limit``.
-    citation_limit_reached: bool | None = None
+    citation_limit_reached: bool | None = Field(default=None, json_schema_extra={"deprecated": True})
     citation_checks: ReviewCitationCheckCounts | None = None
     #: ``len(citation_issues)``.
     citation_issues: int = 0
@@ -1579,11 +1579,11 @@ class ReviewAssessment(_Lax):
     verification_url: str | None = None
     #: **Deprecated**, use ``failure.code`` (``no_checkable_claim`` where this
     #: reads ``no_claim``).
-    error_code: str | None = None
+    error_code: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     #: **Deprecated**, use :attr:`more_claims`.
-    identified_claims: list[str] = Field(default_factory=list)
+    identified_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     #: **Deprecated**, use ``failure.hint`` (on a failed quick check).
-    hint: str | None = None
+    hint: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     #: With ``suggest_edits=True``: the claim with its wrong part corrected,
     #: from the quick check's reasoning, when it found the claim "False" or
     #: "Mostly False" with high confidence. ``None`` otherwise, and from
@@ -1656,7 +1656,7 @@ class ReviewVerification(_Lax):
     created_at: str | None = None
     #: **Deprecated**, use :attr:`completed_at`. Set only when the check
     #: completed on a later UTC day than ``created_at``.
-    modified_at: str | None = None
+    modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     verification_url: str | None = None
     url: str | None = None
     failure: FailureBlock | None = None
@@ -1988,7 +1988,7 @@ class CitecheckSummary(_Lax):
     citations_selected: int | None = None
     citation_limit: int | None = None
     #: **Deprecated**, use :attr:`citation_limit_exceeded`.
-    citation_limit_reached: bool | None = None
+    citation_limit_reached: bool | None = Field(default=None, json_schema_extra={"deprecated": True})
     citation_checks: ReviewCitationCheckCounts | None = None
     citation_issues: int = 0
 

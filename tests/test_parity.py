@@ -226,9 +226,10 @@ def test_model_schemas_match_the_previous_release() -> None:
     from parity_static import schemas
 
     def _shape(schema: Any) -> Any:
-        # Doc text (class docstrings) may change; the shape may not.
+        # Doc text (class docstrings) and deprecation markers may change; the
+        # shape may not.
         if isinstance(schema, dict):
-            return {k: _shape(v) for k, v in schema.items() if k != "description"}
+            return {k: _shape(v) for k, v in schema.items() if k not in ("description", "deprecated")}
         if isinstance(schema, list):
             return [_shape(v) for v in schema]
         return schema
