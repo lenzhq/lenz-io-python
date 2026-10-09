@@ -6,6 +6,15 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+> **Upgrading from 2.x.** Must do: (1) upgrade every service that *receives*
+> your webhooks to lenz-io 2.21+ before the sending service moves to 3.0;
+> (2) code reading raw bodies (`exc.body`, `event.raw`) reads the current
+> shape; (3) re-record tests that replay recorded 2.x response bodies; (4) an
+> idempotent request first sent before the switch and replayed after it raises
+> `LenzApiVersionError`: finish that work with 2.x, never change the key to
+> get past it. May do: move off the deprecated names (they keep working).
+> Details under Migration.
+
 Major release (3.0.0). The SDK asks for the API's current response shape
 (`2026-10-11`) and reads only that shape from its own calls. Every attribute,
 exception and CLI rendering keeps the value it had in 2.x (computed from the
@@ -93,6 +102,76 @@ Deprecated).
     429; `LenzQuotaExceededError.credit_balance` on a citation-check 402.
 - `map_response_to_error` takes an optional `endpoint=(method, path)`, which
   the client passes: an error's original `code` and wording depend on it.
+- **Batch submit and `ask.send` send an automatic `Idempotency-Key`.**
+  `verify_batch`, `verify_batch_and_wait` and `ask.send` generate one random
+  key per call, reused across that call's own retries (as `verify`, `assess`
+  and `extract` already did), so a retried batch or question replays the
+  first answer instead of being charged twice. A key you pass wins;
+  `idempotency=False` sends none. Asking the same question again is a new
+  call with a new key, so it is asked again. A retry that lands while the
+  first attempt still runs gets the 409 it got before; the SDK never sends a
+  second key to get past it. 2.x sent a key there only when you passed one.
+- **`wait`, `verify_and_wait` and `verify_batch_and_wait` stop at once on a
+  401, 403 or 404** (raising `LenzAuthError` / `LenzNotFoundError`; in a
+  batch, that item is `failed` with no `status_detail` and the others keep
+  going) instead of polling to a misleading `LenzTimeoutError`. A 5xx, a 429
+  or a network failure is still polled again, after the wait it stated. Each
+  poll is one request bounded by what is left of the deadline (at least 1s,
+  at most the client timeout); the client's own retry ladder no longer runs
+  inside a poll.
+- **Network failures and transport timeouts raise subclasses of the class
+  they raised before**: `LenzConnectionError` and `LenzRequestTimeoutError`
+  (a `LenzConnectionError`), both `LenzAPIError`s, with the same message and
+  the `httpx` exception as `__cause__`.
+- **A 404 raises `LenzNotFoundError`** (a `LenzError`, as before) and its
+  `fix` reads "Check the id the request names and the API key it was sent
+  with: retrying will not find it." (2.x advised retrying). The message, the
+  other fields and every other error's text are unchanged.
+
+### Added
+
+- `LenzNotFoundError` (404), `LenzConnectionError` and
+  `LenzRequestTimeoutError` (see Changed).
+- **`retryable` on every error**, set when the error is built: whether sending
+  the same request again can succeed. `True` for a connection failure, a
+  request timeout, a 429 and a 5xx; `False` for any other 4xx, a
+  `LenzApiVersionError` and the client-side errors a resend cannot fix (a
+  missing key, a `*_and_wait` timeout, a needs-input pause, a bad webhook
+  signature); `None` when the SDK cannot say. A failed verification, review
+  or citation check keeps the server's value (`None` when it sent none), and a
+  boolean `retryable` in a response's `failure` block always wins. A
+  `retryable=` passed to an error's constructor wins too.
+- `ReviewFailedError`, `ReviewTimeoutError`, `CitecheckFailedError` and
+  `CitecheckTimeoutError`: the job errors under the names the Node SDK uses
+  (the same classes as `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed`,
+  `CitecheckTimeout`).
+- **`verifications.iter()` and `library.iter(**filters)`**: every item, page
+  after page from `page`, fetched lazily (a page only when its first item is
+  asked for), the page size read from each response, ending after a short or
+  empty page. `library.iter` takes `list`'s filters and refuses
+  `sort="random"` (`ValueError`), which is not exhaustive.
+- **`.verification` on the `verification.completed`, `verification.failed`
+  and `verification.needs_input` webhook events**: the verification as
+  `client.get_status` returns it (a `TaskStatus`; on a completed event the
+  verdict is `.verification.result`, a typed `Verification`), built from
+  either payload shape, `None` when a payload cannot be read as one. A
+  property, so the events' fields and `repr` are unchanged; the dict
+  `result` stays (prefer `.verification`). A recognised event whose nested
+  `result` is not an object no longer crashes `parse_webhook`.
+- `Verdict`, `VerdictLabel`, `Confidence` and `Depth`: `Literal` aliases of
+  the accepted values, for comparisons and exhaustive matching. Fields and
+  arguments stay `str`.
+- `verify`, `review_and_wait` and `citecheck_and_wait` list every option they
+  forward (`source_url` and `webhook_url`; every `review` / `citecheck`
+  option) as keyword-only parameters with the same defaults, instead of
+  `**kwargs`, so editors complete them and type checkers check them. Request
+  bodies are unchanged, and an unknown option is still a `TypeError`.
+- A "First call" at the top of the README, and runnable review and
+  citation-check examples (`examples/core/review_draft.py`,
+  `examples/core/citecheck_draft.py`); CI type-checks every example. The
+  quickstarts no longer fail when no claim needed escalating, read failed
+  rows by `status == "failed"`, and give `depth="low"`'s price (5 credits, not
+  10) everywhere.
 
 ### Deprecated
 
@@ -198,6 +277,14 @@ rebuild:
 - **Tests with recorded 2.x response bodies** must be re-recorded: the SDK
   reads the current shape only, so a stored 2.x body no longer parses into
   the values it did.
+- **Replays of requests made before the switch.** An idempotent request
+  first sent before lenz.io served `2026-10-11` and replayed with the same
+  `Idempotency-Key` afterwards answers with its stored reply in
+  `2026-05-13`, which 3.x refuses with `LenzApiVersionError`. Replays are
+  kept for 24 hours and replies stored since 2026-10-09 are kept in both
+  versions, so in practice none remain at release. If you meet one, finish
+  that work with 2.x; never change the key to get past it, which would run
+  (and charge) the request again.
 - **The values the API no longer sends** (see Breaking): `chain_id`, the
   review / citecheck webhook `task_id`, reworded failure sentences and hints,
   and an `/extract` status on a mixed input.

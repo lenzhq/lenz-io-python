@@ -18,12 +18,13 @@ Multi-language SDK convention:
   byte-identical English path. The empty-default-then-omit convention
   exists precisely to avoid that.
 
-Shape (four-primitive ladder + the supporting reads):
+Shape (six calls: the four-call ladder, ``review`` and ``citecheck``, plus
+the supporting reads):
 
     from lenz_io import Lenz
     client = Lenz(api_key="lenz_...")
 
-    # Marquee verbs — top-level (the four-primitive ladder)
+    # Marquee verbs — top-level (the four-call ladder)
     out = client.extract(text="...")                       # find claims in a document
     r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
     r = client.assess(claim="...")                         # ...or a single claim, ~15s
@@ -305,8 +306,9 @@ class VerifyBatchItem(TypedDict, total=False):
     # 'private' (default) or 'unlisted' (link-readable, never listed).
     # Per-item value overrides the batch-wide ``visibility`` default.
     visibility: str
-    # 'standard' (default) or 'low' (shallower check — fewer sources,
-    # faster). Per-item value overrides the batch-wide ``depth`` default.
+    # 'standard' (default, 10 credits) or 'low' (shallower check — fewer
+    # sources, faster, 5 credits). Per-item value overrides the batch-wide
+    # ``depth`` default.
     depth: str
 
 
@@ -689,8 +691,8 @@ class Lenz:
         never surfaced in the Library or search). Omit for private.
 
         ``depth`` (optional): ``'standard'`` (default) or ``'low'``. ``'low'``
-        runs a shallower check — fewer sources, faster. Same models, same
-        quota cost. The completed ``Verification.depth`` echoes the depth the
+        runs a shallower check — fewer sources, faster, same models — for half
+        the credits (5 instead of 10). The completed ``Verification.depth`` echoes the depth the
         verdict was actually produced with, which can be ``'standard'`` for a
         ``'low'`` request served from cache.
 
@@ -741,8 +743,9 @@ class Lenz:
         to override the batch-wide value.
 
         ``depth`` (optional): batch-wide default, ``'standard'`` or ``'low'``
-        (shallower check — fewer sources, faster). Each item dict may set its
-        own ``depth`` key to override the batch-wide value.
+        (shallower check — fewer sources, faster, 5 credits instead of 10).
+        Each item dict may set its own ``depth`` key to override the
+        batch-wide value.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` for
         the whole batch, so a retry after a network drop returns the tasks the

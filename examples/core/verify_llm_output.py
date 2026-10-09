@@ -15,8 +15,9 @@ Run:
 from __future__ import annotations
 
 import os
+from typing import Any
 
-from lenz_io import Lenz
+from lenz_io import Lenz, VerifyBatchItem
 
 LLM_OUTPUT = """
 The Eiffel Tower was completed in 1889 and stands 330 meters tall.
@@ -43,7 +44,7 @@ def main() -> None:
     print(f"Assessed {len(quick)} claims:\n")
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
-        if c.failure:
+        if c.status == "failed" and c.failure:
             print(f"    {c.failure.code}: {c.failure.hint}")
         elif c.more_claims:
             print(f"    also found (not assessed): {c.more_claims}")
@@ -54,7 +55,8 @@ def main() -> None:
     # claim that already has a deep verification surfaces immediately
     # via ``verification_url`` and you can skip the escalation.
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-    doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
+    low = [c for c in quick if c.status == "completed" and c.confidence == "low"]
+    doubtful: list[VerifyBatchItem | dict[str, Any]] = [{"claim": c.claim} for c in low[:20]]
     print(f"Escalating {len(doubtful)} low-confidence claims to full verification:\n")
     results = client.verify_batch_and_wait(claims=doubtful, timeout=180) if doubtful else []
     for r in results:

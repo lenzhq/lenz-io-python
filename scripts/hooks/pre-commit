@@ -9,7 +9,7 @@
 # Runs (~10s total on a warm cache):
 #   1. ruff check     — lint
 #   2. ruff format    — formatting
-#   3. mypy           — strict type-check on src/lenz_io
+#   3. mypy           — strict type-check on src/lenz_io and examples/
 #   4. pytest         — unit suite (skips live-API smoke; those run in CI / on release)
 #
 # Skip on a specific commit with `git commit --no-verify`. Don't habituate.
@@ -43,6 +43,7 @@ done_ok "ruff format"
 
 step "mypy (strict)"
 uv run mypy src/lenz_io || fail "mypy"
+uv run mypy examples || fail "mypy (examples)"
 done_ok "mypy"
 
 step "pytest (unit; skips live-API smoke)"

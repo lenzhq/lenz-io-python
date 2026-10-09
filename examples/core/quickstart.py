@@ -1,4 +1,4 @@
-"""Lenz quickstart — the canonical four-primitive integration.
+"""Lenz quickstart — the canonical integration: the four-call ladder.
 
 Run:
     export LENZ_API_KEY=lenz_...
@@ -18,8 +18,9 @@ verify call can come back in seconds; otherwise it runs the full pipeline
 from __future__ import annotations
 
 import os
+from typing import Any
 
-from lenz_io import Lenz
+from lenz_io import Lenz, VerifyBatchItem
 
 
 def main() -> None:
@@ -35,24 +36,28 @@ def main() -> None:
 
     # 2. assess — one call over the extracted claims, one row per claim (sync)
     quick = client.assess(claims=claims).claims
-    for c in quick:
-        print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
-        if c.failure:
+    for row in quick:
+        print(f"  {row.verdict:<12}  conf={row.confidence:<7}  {row.claim}")
+        if row.status == "failed" and row.failure:
             # No verdict for this item — failure.code says why, failure.hint says what to send next.
-            print(f"    {c.failure.code}: {c.failure.hint}")
-        if c.more_claims:
+            print(f"    {row.failure.code}: {row.failure.hint}")
+        if row.more_claims:
             # A compound item: only its main claim was assessed.
-            print(f"    also found (not assessed): {c.more_claims}")
+            print(f"    also found (not assessed): {row.more_claims}")
     print()
 
     # 3. verify — escalate the low-confidence rows to the full multi-model panel
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-    doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
+    low = [row for row in quick if row.status == "completed" and row.confidence == "low"]
+    doubtful: list[VerifyBatchItem | dict[str, Any]] = [{"claim": row.claim} for row in low[:20]]
     # Fall back to the demo claim so the walkthrough always reaches steps 3
     # and 4 even when every row came back confident.
     doubtful = doubtful or [{"claim": "Sharks don't get cancer"}]
     results = client.verify_batch_and_wait(claims=doubtful)
-    v = next(r.verification for r in results if r.verification is not None)
+    v = next((r.verification for r in results if r.verification is not None), None)
+    if v is None:
+        print("No verification completed:", [r.status for r in results])
+        return
     print(f"Verdict: {v.verdict} (lenz_score {v.lenz_score}, confidence {v.confidence})")
     print(f"Summary: {v.executive_summary}")
     print()
@@ -65,7 +70,7 @@ def main() -> None:
     reply = client.ask.send(v.verification_id, message="Which source is strongest?")
     print()
     print("Q: Which source is strongest?")
-    print(f"A: {reply.reply}")
+    print(f"A: {reply.content}")
 
 
 if __name__ == "__main__":

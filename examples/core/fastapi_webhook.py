@@ -1,3 +1,4 @@
+# mypy: allow-untyped-decorators
 """Receive Lenz webhook events in a FastAPI app.
 
 Lenz POSTs HMAC-signed payloads to your ``webhook_url`` when a

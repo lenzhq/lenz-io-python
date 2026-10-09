@@ -2,9 +2,16 @@
 
     pip install lenz-io
 
-The fact-check API for AI products. Four primitives form a research-depth
-ladder — find claims, judge them fast, prove them deep, follow up — and a
-fifth call runs the ladder on a whole draft:
+The fact-check API for AI products, in six calls: four form a research-depth
+ladder (find claims, judge them fast, prove them deep, follow up), ``review``
+runs the ladder on a whole draft, and ``citecheck`` checks a draft's sources
+on its own:
+
+    from lenz_io import Lenz
+    client = Lenz()  # reads LENZ_API_KEY
+
+    row = client.assess(claim="The Great Wall of China is visible from space.").claims[0]
+    print(row.verdict, row.confidence)
 
     # /review — every claim quick-checked, the doubtful ones deep-checked (2-4 min)
     review = client.review_and_wait(text=draft)
@@ -30,9 +37,10 @@ The primitives, call by call:
     doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
     results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
-    # 4. /ask — follow-up questions grounded on a verification
-    deep = results[0].verification
-    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
+    # 4. /ask — follow-up questions grounded on a verification (when one was escalated)
+    deep = next((r.verification for r in results if r.verification is not None), None)
+    if deep is not None:
+        reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """

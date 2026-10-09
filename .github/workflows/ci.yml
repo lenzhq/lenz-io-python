@@ -35,7 +35,11 @@ jobs:
           ruff format --check .
       - name: Type-check
         # mypy strict only on hand-written code; generated _generated/ (if added later) is excluded via pyproject.
-        run: mypy src/lenz_io
+        # The examples too: they are what people copy, so a renamed field or a
+        # wrong type there fails CI like one in the SDK.
+        run: |
+          mypy src/lenz_io
+          mypy examples
       - name: Test
         # `--no-cov` because the coverage gate lives in `addopts` and would
         # otherwise run in all eight matrix cells. Coverage does not vary
