@@ -386,3 +386,39 @@ class TestCitecheck:
             client.citecheck_and_wait(*args, idempotency_key=KEY, **kwargs)
         assert _ordered(route.calls.last.request.content) == expected
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+
+# ── 3.0: every forwarded option is a named, keyword-only parameter ─────────
+
+
+@pytest.mark.parametrize(
+    ("outer", "inner", "own"),
+    [
+        ("verify", "_verify_submit", {"claim", "text", "idempotency", "idempotency_key"}),
+        ("review_and_wait", "review", {"text", "timeout", "on_update"}),
+        ("citecheck_and_wait", "citecheck", {"text", "timeout", "on_update"}),
+    ],
+)
+def test_forwarded_options_are_listed(outer: str, inner: str, own: set[str]) -> None:
+    import inspect
+
+    outer_params = inspect.signature(getattr(Lenz, outer)).parameters
+    inner_params = inspect.signature(getattr(Lenz, inner)).parameters
+    assert not any(p.kind is inspect.Parameter.VAR_KEYWORD for p in outer_params.values()), "no **kwargs"
+    forwarded = {n for n in inner_params if n != "self"} - own
+    for name in forwarded:
+        assert name in outer_params, name
+        assert outer_params[name].kind is inspect.Parameter.KEYWORD_ONLY, name
+        assert outer_params[name].default == inner_params[name].default, name
+    first = next(n for n in outer_params if n != "self")
+    assert outer_params[first].kind is inspect.Parameter.POSITIONAL_OR_KEYWORD
+
+
+def test_an_unknown_option_is_still_a_type_error(client: Lenz) -> None:
+    for call in (
+        lambda: client.verify("A.", sorce_url="x"),  # type: ignore[call-arg]
+        lambda: client.review_and_wait("Draft.", max_asessments=1),  # type: ignore[call-arg]
+        lambda: client.citecheck_and_wait("Draft.", max_citation=1),  # type: ignore[call-arg]
+    ):
+        with pytest.raises(TypeError):
+            call()

@@ -670,7 +670,8 @@ class Lenz:
         depth: str = "",
         idempotency: bool = True,
         idempotency_key: str | None = None,
-        **kwargs: Any,
+        source_url: str = "",
+        webhook_url: str = "",
     ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
@@ -700,15 +701,21 @@ class Lenz:
         ``idempotency_key=`` to make a retry from a different process replay
         too, or pass ``idempotency=False`` to send none. Never derived from
         the claim: the same claim sent again later is a new verification.
+
+        ``source_url`` (optional): where the claim was found, kept with the
+        verification. ``webhook_url`` (optional): where to send this
+        verification's ``verification.*`` events; leave it out (or blank) for
+        your key's default webhook URL.
         """
         return self._verify_submit(
             claim=claim,
             text=text,
+            source_url=source_url,
+            webhook_url=webhook_url,
             language=language,
             visibility=visibility,
             depth=depth,
             idempotency_key=_call_key(idempotency_key, idempotency),
-            **kwargs,
         )
 
     def verify_batch(
@@ -1302,9 +1309,20 @@ class Lenz:
         *,
         timeout: float = 600.0,
         on_update: Callable[[ReviewFull], None] | None = None,
-        **kw: Any,
+        verdicts: list[str] | None = None,
+        confidence: list[str] | None = None,
+        max_assessments: int | None = None,
+        max_verifications: int | None = None,
+        depth: str | None = None,
+        max_citations: int | None = None,
+        suggest_edits: bool = False,
+        language: str = "",
+        webhook_url: str | None = None,
+        visibility: str = "private",
+        idempotency_key: str | None = None,
     ) -> ReviewFull:
-        """Start a review (``review(text, **kw)``) and poll it until it ends.
+        """Start a review (``review(text, ...)``, which documents every option
+        but ``timeout`` and ``on_update``) and poll it until it ends.
 
         Returns the completed ``ReviewFull``: read ``outcome``, then
         ``issues``. Polls on the review's own ``poll_after_seconds`` (never
@@ -1318,7 +1336,20 @@ class Lenz:
         ``timeout`` seconds pass first: the review keeps running, and the
         error carries its ``review_id`` and the last body read.
         """
-        started = self.review(text, **kw)
+        started = self.review(
+            text,
+            verdicts=verdicts,
+            confidence=confidence,
+            max_assessments=max_assessments,
+            max_verifications=max_verifications,
+            depth=depth,
+            max_citations=max_citations,
+            suggest_edits=suggest_edits,
+            language=language,
+            webhook_url=webhook_url,
+            visibility=visibility,
+            idempotency_key=idempotency_key,
+        )
         logger.info("Submitted review: %s", started.review_id)
         return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
 
@@ -1397,9 +1428,14 @@ class Lenz:
         *,
         timeout: float = 600.0,
         on_update: Callable[[Citecheck], None] | None = None,
-        **kw: Any,
+        pairs: list[CitationPair] | None = None,
+        max_citations: int | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        idempotency_key: str | None = None,
     ) -> Citecheck:
-        """Start a citation check (``citecheck(text, **kw)``) and poll it until
+        """Start a citation check (``citecheck(text, ...)``, which documents
+        every option but ``timeout`` and ``on_update``) and poll it until
         it ends. Returns the completed :class:`Citecheck`: read ``outcome``,
         then ``citation_issues``.
 
@@ -1410,7 +1446,14 @@ class Lenz:
         first: the check keeps running, and the error carries its
         ``citecheck_id`` and the last body read.
         """
-        started = self.citecheck(text, **kw)
+        started = self.citecheck(
+            text,
+            pairs=pairs,
+            max_citations=max_citations,
+            language=language,
+            webhook_url=webhook_url,
+            idempotency_key=idempotency_key,
+        )
         logger.info("Submitted citation check: %s", started.citecheck_id)
         return self._wait_citecheck(started.citecheck_id, timeout=timeout, on_update=on_update)
 
