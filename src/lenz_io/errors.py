@@ -897,6 +897,12 @@ def map_response_to_error(
             else:
                 err.fix = "This run will not produce a result. Resubmit with a different claim."
 
+    if status_code == 409 and code == "use_review_cancel":
+        # Not "not yet": the task belongs to a review, and the review is what
+        # to cancel. Sending the same request again can never succeed.
+        err.fix = "Cancel the review that started this task instead: client.cancel_review(review_id)."
+        err.retryable = False
+
     if isinstance(err, LenzGoneError):
         err.purged_at = _opt_str(parsed.get("purged_at")) or None
         # Retrying cannot bring it back, so not the generic 4xx advice.

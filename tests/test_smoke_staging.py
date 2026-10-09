@@ -10,6 +10,7 @@ These exercise the SDK against the live API across the four primitives:
   3. ``verify_and_wait`` — the quickstart claim at ``depth="low"``, the
      cheap run (~60s); a cache hit is a bonus, never assumed
   4. ``ask.history`` — read-only follow-up surface (no exchange burned)
+  5. ``cancel`` — a ``depth="low"`` run stopped right after it starts
 
 Plus webhook signature roundtrip + ``/me/usage`` shape.
 
@@ -27,7 +28,7 @@ import os
 
 import pytest
 
-from lenz_io import Lenz, LenzWebhooks, verify_signature
+from lenz_io import Lenz, LenzPipelineError, LenzWebhooks, verify_signature
 
 pytestmark = pytest.mark.smoke
 
@@ -55,6 +56,27 @@ def test_quickstart_claim_verifies_at_low_depth(smoke_client):
     """
     v = smoke_client.verify_and_wait(claim="Sharks don't get cancer", depth="low", timeout=150)
     assert v.verdict  # any non-empty verdict string
+
+
+def test_a_run_can_be_cancelled(smoke_client):
+    """``cancel`` answers 200 whatever the state of the run: stopped by this
+    call, or already ended. Neither is an error, so the test cannot be flaky.
+
+    A cancelled run is not charged. A cache hit (an answer the API already
+    holds) has finished by the time we cancel, which is the other branch."""
+    started = smoke_client.verify(claim="The Eiffel Tower is in Paris", depth="low")
+    result = smoke_client.cancel(started.task_id)
+    assert result.task_id == started.task_id
+    if result.cancelled:
+        assert result.status == "cancelled"
+        # Safe to repeat: still cancelled, and a wait ends on it at once.
+        assert smoke_client.cancel(started.task_id).cancelled is True
+        with pytest.raises(LenzPipelineError) as raised:
+            smoke_client.wait(started.task_id, timeout=60)
+        assert raised.value.failure_class == "cancelled"
+    else:
+        # It finished first; nothing was left to stop.
+        assert result.status in ("completed", "failed")
 
 
 def test_assess_returns_typed_claims(smoke_client):

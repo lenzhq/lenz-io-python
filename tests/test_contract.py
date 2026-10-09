@@ -35,6 +35,7 @@ from pydantic import BaseModel
 from lenz_io.models import (
     AssessClaim,
     AssessResponse,
+    CancelResult,
     Certificate,
     Citecheck,
     CitecheckStarted,
@@ -213,6 +214,8 @@ def _load(name: str) -> dict:
         ("citecheck_accepted.json", CitecheckStarted),
         ("citecheck_completed.json", Citecheck),
         ("citecheck_pairs_completed.json", Citecheck),
+        ("cancel_verify_cancelled.json", CancelResult),
+        ("cancel_verify_completed.json", CancelResult),
     ],
 )
 def test_contract_no_unknown_fields(fixture_name, model_cls):

@@ -14,6 +14,7 @@ change to a signature that forwards an option differently fails here.
 
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from typing import Any
@@ -386,6 +387,35 @@ class TestCitecheck:
             client.citecheck_and_wait(*args, idempotency_key=KEY, **kwargs)
         assert _ordered(route.calls.last.request.content) == expected
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+
+# ── cancel / cancel_review / cancel_citecheck ──────────────────────────────
+
+
+_ID = {"cancel": "task_id", "cancel_review": "review_id", "cancel_citecheck": "citecheck_id"}
+
+
+class TestCancels:
+    """A cancel is a POST with no body and no key: it is safe to repeat, so
+    there is nothing for an ``Idempotency-Key`` to replay."""
+
+    @pytest.mark.parametrize(
+        ("method", "path", "fixture"),
+        [
+            ("cancel", "/verify/t1/cancel", "cancel_verify_cancelled.json"),
+            ("cancel_review", "/reviews/r1/cancel", "cancel_review_cancelled.json"),
+            ("cancel_citecheck", "/citechecks/c1/cancel", "cancel_citecheck_cancelled.json"),
+        ],
+    )
+    def test_no_body_no_key(self, client: Lenz, method: str, path: str, fixture: str) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post(path).respond(200, json=_load(fixture))
+            getattr(client, method)(path.split("/")[2])
+        request = route.calls.last.request
+        assert request.content == b""
+        assert "Idempotency-Key" not in request.headers
+        # The id is the only parameter: no option can reach the wire.
+        assert list(inspect.signature(getattr(Lenz, method)).parameters) == ["self", _ID[method]]
 
 
 # ── 3.0: every forwarded option is a named, keyword-only parameter ─────────

@@ -885,6 +885,21 @@ class BatchAccepted(_Lax):
     items: list[TaskAccepted] = Field(default_factory=list)
 
 
+class CancelResult(_Lax):
+    """Returned by ``POST /verify/{task_id}/cancel`` (``Lenz.cancel``).
+
+    ``cancelled`` is ``True`` when the run is cancelled, by this call or an
+    earlier one; ``status`` is then ``"cancelled"``. It is ``False`` when the
+    run had already ended: ``status`` says how (``"completed"``, the
+    verification exists and was charged as usual, or ``"failed"``). The call
+    answers 200 either way.
+    """
+
+    task_id: str = ""
+    cancelled: bool = False
+    status: str = ""
+
+
 class Progress(_Lax):
     """Where a running verification has got to. Advisory — never results.
 

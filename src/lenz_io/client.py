@@ -118,6 +118,7 @@ from .models import (
     AssessResponse,
     BatchAccepted,
     BatchItemResult,
+    CancelResult,
     Certificate,
     Citecheck,
     CitecheckStarted,
@@ -1042,6 +1043,40 @@ class Lenz:
         """
         return self._get_status(task_id)
 
+    def cancel(self, task_id: str) -> CancelResult:
+        """Stop a verification that has not finished (``POST /verify/{task_id}/cancel``).
+
+        A cancelled run is not charged and saves nothing; work already under
+        way (a model call in flight) is not billed to you, and the run stops
+        at its next step. A run waiting for ``select`` is cancelled too.
+
+        The call is safe to repeat and answers 200 whatever the state of the
+        run, so losing a race is not an error. Read the result:
+
+        - ``cancelled`` is ``True`` and ``status`` is ``"cancelled"``: the run
+          is cancelled, by this call or an earlier one.
+        - ``cancelled`` is ``False``: it had already ended. ``status`` says
+          how: ``"completed"`` (the verification exists and was charged as
+          usual) or ``"failed"``.
+
+        ``client.wait(task_id)`` and ``get_status`` then see ``cancelled``;
+        ``wait`` raises :class:`LenzPipelineError` with
+        ``failure_class == "cancelled"``.
+
+        Raises :class:`LenzNotFoundError` (404) for an unknown task, another
+        account's, or a task started on the website. A task that is a
+        review's deep check raises :class:`LenzError` with
+        ``code == "use_review_cancel"`` (409): cancel the review with
+        :meth:`cancel_review`, which stops everything in it. A server error or
+        a dropped connection is retried, as for every call that is safe to
+        send twice.
+
+        Since 3.0.
+        """
+        if not task_id:
+            raise ValueError("cancel() needs a task_id.")
+        return CancelResult.model_validate(self._request("POST", f"/verify/{task_id}/cancel"))
+
     # ── headline ergonomic ──
 
     def verify_and_wait(
@@ -1378,6 +1413,26 @@ class Lenz:
             raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
         return ReviewFull.model_validate(self._request("GET", f"/reviews/{review_id}"))
 
+    def cancel_review(self, review_id: str) -> ReviewFull:
+        """Stop a review (``POST /reviews/{review_id}/cancel``), including the
+        deep checks it started. Returns the review as it stands afterwards, the
+        full view: ``status`` is ``"cancelled"``.
+
+        A review that had already ended is returned unchanged (``completed`` or
+        ``failed``), and cancelling again is safe. What was not delivered is
+        not charged: see ``credits.charged`` on the result for what the review
+        cost.
+
+        Raises :class:`LenzNotFoundError` (404) for an unknown review or
+        another account's, and :class:`LenzGoneError` (410) once the account's
+        retention period has removed it.
+
+        Since 3.0.
+        """
+        if not review_id:
+            raise ValueError("cancel_review() needs a review_id.")
+        return ReviewFull.model_validate(self._request("POST", f"/reviews/{review_id}/cancel"))
+
     def review_and_wait(
         self,
         text: str,
@@ -1502,6 +1557,26 @@ class Lenz:
         if not citecheck_id:
             raise ValueError("get_citecheck() needs a citecheck_id.")
         return Citecheck.model_validate(self._request("GET", f"/citechecks/{citecheck_id}"))
+
+    def cancel_citecheck(self, citecheck_id: str) -> Citecheck:
+        """Stop a citation check (``POST /citechecks/{citecheck_id}/cancel``).
+        Returns the check as it stands afterwards: ``status`` is
+        ``"cancelled"``.
+
+        You are charged only for the citations it checked before the cancel;
+        the rest are refunded (``credits.charged``). A check that had already
+        ended is returned unchanged (``completed`` or ``failed``), and
+        cancelling again is safe.
+
+        Raises :class:`LenzNotFoundError` (404) for an unknown check, another
+        account's, or the id of a review, and :class:`LenzGoneError` (410) once
+        the account's retention period has removed it.
+
+        Since 3.0.
+        """
+        if not citecheck_id:
+            raise ValueError("cancel_citecheck() needs a citecheck_id.")
+        return Citecheck.model_validate(self._request("POST", f"/citechecks/{citecheck_id}/cancel"))
 
     def citecheck_and_wait(
         self,
