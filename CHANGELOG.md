@@ -81,6 +81,17 @@ Deprecated).
 
 ### Changed
 
+- **One rule for every timeout and retry count of a request, checked before
+  anything is sent.** A timeout must be a finite number of seconds greater
+  than 0, `None` (no timeout) or an `httpx.Timeout`; a retry count a whole
+  number, 0 or more (`True` / `False` are refused). Anything else raises
+  `ValueError`: in `Lenz(timeout=..., max_retries=...)` when the client is
+  built, and in the `timeout=` of `extract` / `assess` before the call mints a
+  key or sends a request. These values did not work before (a zero or
+  negative timeout failed every request, a negative retry count sent none),
+  except `True` / `False`, which were read as 1 / 0: pass the number.
+  The wait helpers' `timeout` (how long to wait) is not affected: `0` or less
+  still reads once.
 - **An id goes into the URL path as one segment.** Every method that puts an
   id in a path (`get_status`, `select`, `get_review`, `get_citecheck`, the
   cancels, `verifications.*`, `ask.*`, the waits) percent-encodes it whole, so
@@ -187,6 +198,21 @@ Deprecated).
 
 ### Added
 
+- **Per-call request options and `with_options`.** Every method takes three
+  keyword-only options for that call: `timeout` (one HTTP attempt, seconds or
+  an `httpx.Timeout`; `None` keeps the client's), `max_retries` and
+  `extra_headers` (added to every request the call makes; the SDK's own
+  headers are refused). On the wait helpers `timeout` stays how long to wait,
+  `max_retries` is the submit's, and `wait` takes `extra_headers` only.
+  `client.with_options(timeout=..., max_retries=..., extra_headers=...)`
+  returns a copy with other defaults that shares the connection pool; closing
+  a copy does nothing. Per option the call wins over the copy and the copy
+  over the client; headers merge, and `None` removes one a copy added. The
+  `extract` / `assess` floors (150 s / 100 s) apply to an inherited timeout
+  only. A call that passes no option sends exactly the request it sent before.
+  `NOT_GIVEN` / `NotGiven` (the default of `with_options`) are exported for
+  type annotations. The `timeout=` of `extract` / `assess` now also takes an
+  `httpx.Timeout`. See "Per-call options" in the README.
 - **Stopping a run: `cancel`, `cancel_review` and `cancel_citecheck`.**
   `client.cancel(task_id)` stops a verification and returns a `CancelResult`
   (`task_id`, `cancelled`, `status`); `client.cancel_review(review_id)` stops a

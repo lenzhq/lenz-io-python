@@ -1202,6 +1202,12 @@ def check(claim: str) -> dict[str, object]:  # `def`, not `async def`: FastAPI r
     return {"verdict": v.verdict, "score": v.lenz_score}
 ```
 
+Cancelling the asyncio task that awaits `asyncio.to_thread(...)` does not stop the call: the
+thread runs on until the call returns. Bound each request with `timeout=` (see
+[Per-call options](#per-call-options)), and stop paid work on the server with `cancel()`,
+`cancel_review()` or `cancel_citecheck()` (see [Stopping a run](#stopping-a-run)). A native
+async client is planned.
+
 For a long check behind a web request, `verify(..., webhook_url=...)` returns at once and
 Lenz posts the result to you when it is done (see [Webhooks](#webhooks)). That ties up no
 thread for the wait. To check many claims at once, send them in one call
@@ -1224,6 +1230,83 @@ Environment variables:
 - `LENZ_BASE_URL` — read if `base_url=` is not passed
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
+
+`timeout` must be a number of seconds greater than 0, `None` (no timeout) or an
+`httpx.Timeout`; `max_retries` a whole number, 0 or more. Anything else raises
+`ValueError` when the client is built.
+
+### Per-call options
+
+Every method takes three keyword-only request options, for that call only:
+
+```python
+client.assess(claim="...", timeout=20)                    # one HTTP attempt, in seconds
+client.usage(max_retries=0)                               # no retries for this call
+client.verify("...", extra_headers={"X-Trace-Id": trace})  # added to the request
+```
+
+- `timeout`: one HTTP attempt, a number of seconds greater than 0 or an
+  `httpx.Timeout`. httpx applies it per phase (connect, read, write, pool), and
+  the read limit to each chunk of the answer: it limits inactivity, not the
+  whole call, and each retry gets its own.
+- `max_retries`: how often a request that failed in a way worth retrying (a
+  5xx, a 429, a dropped connection) is sent again: a whole number, 0 or more.
+- `extra_headers`: headers added to the request. The SDK's own headers are
+  refused (`X-Lenz-API-Version`, `Idempotency-Key`, `Authorization`,
+  `Content-Type`, `Content-Length`, `Host`, `Transfer-Encoding`): use
+  `idempotency_key=` and `api_key=` for the first two. A header with the name
+  of a default one (`User-Agent`, `Accept`) replaces it.
+
+What each option reaches:
+
+| Methods | `timeout` | `max_retries` | `extra_headers` |
+|---|---|---|---|
+| Plain calls (`verify`, `review`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, `library.list`, ...) | the attempt | the call's retries | every request |
+| `extract`, `assess` | the attempt, used as given | the call's retries | every request |
+| Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
+| `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
+| `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default | added to every request of the copy |
+
+A bad value raises `ValueError` before anything is sent (for the iterators,
+when the iterator is created). Precedence, per option: the call's keyword, then
+the copy's (`with_options`), then the client's; headers merge, the call's over
+the copy's.
+
+`extract` and `assess` wait at least 150 s and 100 s when the timeout comes
+from a copy or the client, as they always did. A timeout passed to the call is
+used as given, even below that: it can time out a call the server is still
+running, so retry it with the same `idempotency_key` to get its answer.
+
+`None` means different things in two places:
+
+| | `None` | not passed |
+|---|---|---|
+| `timeout=` on a call | the copy's or the client's timeout | the same |
+| `with_options(timeout=...)`, `Lenz(timeout=...)` | no timeout | keep the current one (the client default is 30 s) |
+| `extra_headers={"X-A": None}` | removes `X-A` added by a copy | — |
+
+For no timeout on one call, pass `timeout=httpx.Timeout(None)`.
+
+### A client with other defaults: `with_options`
+
+`client.with_options(...)` returns a copy with its own defaults, sharing the
+connection pool, key and base URL. It is cheap, so you can make one per request
+or per job, and the client it was made from does not change:
+
+```python
+fast = client.with_options(timeout=10, max_retries=0)
+fast.assess(claim="...")
+
+for job in jobs:
+    scoped = client.with_options(extra_headers={"X-Job-Id": job.id})
+    scoped.review_and_wait(job.draft)
+```
+
+A copy of a copy starts from the copy's options. The pool belongs to the
+client that created it: `close()` and `with` on a copy do nothing, closing the
+original closes the pool for every copy (a copy then raises httpx's
+closed-client error), and a client given `http_client=` never closes it. A
+copy is as safe to share across threads as the client.
 
 ## Compatibility
 
