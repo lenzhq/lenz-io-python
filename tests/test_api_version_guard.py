@@ -144,10 +144,16 @@ def test_the_error_is_exported_and_pickles_its_fields() -> None:
     assert json.dumps(exc.body)
 
 
-def test_waiting_on_a_batch_does_not_swallow_the_version_error(client: Lenz) -> None:
+def test_waiting_never_swallows_the_version_error(client: Lenz) -> None:
+    # A version error is never read as a slow poll: it stops that id at once
+    # (``wait`` raises it; a batch marks that item failed).
     with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
-        mock.get(url__regex=r".*/verify/.*").respond(
+        route = mock.get(url__regex=r".*/verify/.*").respond(
             200, json={"status": "processing"}, headers={"X-Lenz-API-Version": OLD}
         )
+        terminal, timed_out, stopped = client._poll_to_terminal(["a" * 32], 5)
         with pytest.raises(LenzApiVersionError):
-            client._poll_to_terminal(["a" * 32], 5)
+            client.wait("a" * 32, timeout=5)
+    assert isinstance(stopped["a" * 32], LenzApiVersionError)
+    assert terminal == {} and timed_out == set()
+    assert route.call_count == 2

@@ -1126,9 +1126,11 @@ class Lenz:
         order**. Never raises on a per-item outcome — a claim that fails, pauses
         for input, or times out becomes a ``BatchItemResult`` with the matching
         ``status`` rather than an exception. (Transport/auth errors on the
-        initial submit still raise.) An item whose poll is answered 401 / 403 /
-        404 or 410 is ``failed`` at once, with no ``status_detail``; the other
-        items keep being polled.
+        initial submit still raise.) An item whose poll is answered 404 or 410,
+        or in another API version (``LenzApiVersionError``), is ``failed`` at
+        once, with no ``status_detail``; the other items keep being polled. A
+        poll answered 401 / 403 refuses the key itself, so the whole call
+        raises ``LenzAuthError``.
 
         ``on_progress(task_id, progress)`` fires per still-running item per
         round; the ``task_id`` is what tells you which claim moved.
@@ -1157,8 +1159,8 @@ class Lenz:
             status = terminal.get(it.task_id)
             if it.task_id in stopped:
                 # An error no later poll could change: removed by the
-                # account's retention period (410), a refused key (401 / 403)
-                # or an unknown task (404). Terminal, with no status to carry.
+                # account's retention period (410), an unknown task (404) or
+                # an answer in another API version. Terminal, with no status.
                 results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
             elif not it.task_id or it.task_id in timed_out or status is None:
                 results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
@@ -1655,10 +1657,12 @@ class Lenz:
         other error a later poll can change does not abort the other ids: that
         id stays pending and is polled next round (after the wait the server
         stated, if it stated one), so a persistent one surfaces as a timeout
-        once the deadline passes. An error no later poll can change stops that
-        id at once and lands in ``stopped_by_id``: a 410 (``LenzGoneError``,
-        retention removed it), a 401 / 403 (``LenzAuthError``) and a 404
-        (``LenzNotFoundError``). A version error is raised for the whole wait.
+        once the deadline passes. An error no later poll can change for that
+        id stops it at once and lands in ``stopped_by_id``: a 410
+        (``LenzGoneError``, retention removed it), a 404
+        (``LenzNotFoundError``) and a version error (``LenzApiVersionError``).
+        A 401 / 403 (``LenzAuthError``) refuses the key itself, so it is raised
+        for the whole wait. ``wait`` raises a stopped id's error.
 
         ``on_progress(task_id, progress)`` fires once per still-running poll.
         It takes the id as well as the object because this loop round-robins a
@@ -1696,14 +1700,16 @@ class Lenz:
                         timeout=self._poll_timeout(remaining),
                     )
                     status = TaskStatus.model_validate(body)
-                except (LenzGoneError, LenzAuthError, LenzNotFoundError) as exc:
-                    # Terminal: no later poll will say otherwise. (The API
-                    # never answers 410 for a task that is still running.)
+                except LenzAuthError:
+                    # The key itself is refused: every other id would answer
+                    # the same, so the whole wait ends with it.
+                    raise
+                except (LenzGoneError, LenzNotFoundError, LenzApiVersionError) as exc:
+                    # Terminal for this id: no later poll will say otherwise.
+                    # (The API never answers 410 for a task that is still
+                    # running; a version error answers the same again.)
                     stopped[task_id] = exc
                     continue
-                except LenzApiVersionError:
-                    # Not a failed poll: every later poll would answer the same.
-                    raise
                 except LenzError as exc:
                     # Don't let one id's poll failure abort the rest — retry it
                     # next round (bounded by the deadline below), after the

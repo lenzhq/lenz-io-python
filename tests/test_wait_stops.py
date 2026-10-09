@@ -16,6 +16,7 @@ import respx
 
 from lenz_io import (
     Lenz,
+    LenzApiVersionError,
     LenzAuthError,
     LenzError,
     LenzNotFoundError,
@@ -63,22 +64,52 @@ class TestPermanentErrorsStopTheWait:
         assert poll.call_count == 1
         assert slept == []
 
-    def test_a_batch_item_fails_and_the_others_continue(
-        self, client: Lenz, slept: list[float], status, body, cls
-    ) -> None:
-        with respx.mock(base_url=BASE) as r:
+    def test_a_batch(self, client: Lenz, slept: list[float], status, body, cls) -> None:
+        # A 404 is that item's outcome; a 401 / 403 is the whole account's, so
+        # the batch wait raises it (before the other item is polled).
+        with respx.mock(base_url=BASE, assert_all_called=False) as r:
             r.post("/verify/batch").respond(
                 200, json={"batch_id": "b", "items": [{"task_id": "a", "claim": "A."}, {"task_id": "t", "claim": "B."}]}
             )
             bad = r.get("/verify/status/a").respond(status, json=body)
             good = r.get("/verify/status/t")
             good.side_effect = [httpx.Response(200, json=_RUNNING), httpx.Response(200, json=_DONE)]
+            if status in (401, 403):
+                with pytest.raises(cls):
+                    client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=300)
+                assert bad.call_count == 1
+                return
             results = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=300)
         assert [x.status for x in results] == ["failed", "completed"]
         assert results[0].status_detail is None
         assert results[0].verification is None
         assert bad.call_count == 1
         assert good.call_count == 2
+
+
+_OLD = {"X-Lenz-API-Version": "2026-05-13"}
+
+
+class TestVersionErrorsInAWait:
+    def test_a_batch_item_fails_and_the_others_continue(self, client: Lenz, slept: list[float]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "a", "claim": "A."}, {"task_id": "t", "claim": "B."}]}
+            )
+            bad = r.get("/verify/status/a").respond(200, json=_DONE, headers=_OLD)
+            good = r.get("/verify/status/t")
+            good.side_effect = [httpx.Response(200, json=_RUNNING), httpx.Response(200, json=_DONE)]
+            results = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=300)
+        assert [x.status for x in results] == ["failed", "completed"]
+        assert results[0].status_detail is None
+        assert bad.call_count == 1
+
+    def test_a_single_wait_raises_it(self, client: Lenz, slept: list[float]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_DONE, headers=_OLD)
+            with pytest.raises(LenzApiVersionError):
+                client.wait("t", timeout=300)
+        assert poll.call_count == 1
 
 
 class TestTransientErrorsAreRetried:
