@@ -321,3 +321,31 @@ def test_deprecated_property_aliases_are_marked_without_warning() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert TaskAccepted.model_validate({"task_id": "t"}).chain_id == ""
+
+
+# ── ``credit_balance`` is restored for the citation check only ──
+
+
+def _no_credits(path: str, body: dict[str, Any], client: Lenz) -> LenzQuotaExceededError:
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        mock.post(path).respond(402, json=body)
+        with pytest.raises(LenzQuotaExceededError) as info:
+            if path == "/citecheck":
+                client.citecheck(text="See https://example.org/a.")
+            else:
+                client.review("A claim.")
+    return info.value
+
+
+def test_a_citecheck_402_without_the_pool_reads_it_as_remaining(client: Lenz) -> None:
+    body = _canonical("citecheck__402_no_credits.json")["body"]
+    assert "credits_remaining" not in body
+    assert _no_credits("/citecheck", body, client).credit_balance == body["remaining"]
+
+
+def test_another_endpoint_does_not_invent_a_credit_balance(client: Lenz) -> None:
+    body = {"detail": "No remaining credits.", "code": "no_credits", "remaining": 7, "cost": 1}
+    assert _no_credits("/review", body, client).credit_balance is None
+    from lenz_io.errors import map_response_to_error
+
+    assert map_response_to_error(402, json.dumps(body)).credit_balance is None  # type: ignore[attr-defined]

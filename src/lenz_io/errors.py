@@ -794,11 +794,10 @@ def map_response_to_error(
         # credits. The body's ``credits_remaining`` lands on ``credit_balance``,
         # NOT on the same-named deprecated property — that one aliases
         # ``remaining`` and means a different quantity (see the class docstring).
+        # (A citation check's current-shape 402 leaves the pool out because it
+        # equals ``remaining``; ``_original_error`` restores it for that
+        # endpoint only.)
         err.credit_balance = _opt_int(parsed.get("credits_remaining"))
-        if err.credit_balance is None and err.remaining is not None and "remaining" in parsed:
-            # The current shape leaves the pool out where it equals
-            # ``remaining`` (a citation check costs one credit).
-            err.credit_balance = err.remaining
         err.cost = _opt_int(parsed.get("cost"))
         resets_at = parsed.get("resets_at")
         err.resets_at = resets_at if isinstance(resets_at, str) and resets_at else None
