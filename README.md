@@ -1159,6 +1159,54 @@ batch = client.verify_batch(
 )
 ```
 
+## Using Lenz from async code
+
+The client is synchronous. Lenz calls take a while (`assess` about 15 s, a deep check about
+90 s, a review a few minutes), so calling one directly inside an `async def` blocks the event
+loop for that long: in a FastAPI or aiohttp server, every other request on that worker
+waits. Run the call in a worker thread instead:
+
+```python
+import asyncio
+from lenz_io import Lenz
+
+client = Lenz()  # one client for the whole app; it is safe to share across threads
+
+async def quick_check(claim: str) -> str:
+    out = await asyncio.to_thread(client.assess, claim=claim)
+    return out.claims[0].verdict
+```
+
+The same applies to every method, and above all to the ones that wait (`verify_and_wait`,
+`verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`, `wait`): never call them
+directly inside an async handler. In FastAPI, a plain `def` route runs in the thread pool
+already:
+
+```python
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from lenz_io import Lenz
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.lenz = Lenz()
+    yield
+    app.state.lenz.close()
+
+app = FastAPI(lifespan=lifespan)
+
+@app.post("/check")
+def check(claim: str) -> dict[str, object]:  # `def`, not `async def`: FastAPI runs it in a thread
+    v = app.state.lenz.verify_and_wait(claim)
+    return {"verdict": v.verdict, "score": v.lenz_score}
+```
+
+For a long check behind a web request, `verify(..., webhook_url=...)` returns at once and
+Lenz posts the result to you when it is done (see [Webhooks](#webhooks)). That ties up no
+thread for the wait. To check many claims at once, send them in one call
+(`assess(claims=[...])`, `verify_batch`) rather than one thread per claim.
+
 ## Configuration
 
 ```python
