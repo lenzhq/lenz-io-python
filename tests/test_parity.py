@@ -101,9 +101,6 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
     ("review__delete_not_a_route.json", "error.code"): (
         "a route no SDK method calls: the original answered it without a JSON body"
     ),
-    ("review__get_assessment_rows_full_fields.json", "dump.claims[0].assessment.hint"): (
-        "the newer shape sends no hint on a completed quick check with other claims found"
-    ),
     ("review__get_failed_every_assessment_failed.json", "dump.failure.hint"): "the server words the hint differently",
     ("review__get_failed_every_assessment_failed.json", "render"): "the same hint, printed by the CLI",
     ("review__get_failed_every_assessment_failed.json", "render_issues"): "the same hint, printed by the CLI",

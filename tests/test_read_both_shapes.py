@@ -421,3 +421,16 @@ def test_verify_never_sends_an_empty_webhook_url(webhook_url):
 def test_verify_sends_a_webhook_url_that_was_set():
     body = _sent(lambda c: c.verify("x", webhook_url="https://hooks.example.test/x"))
     assert body["webhook_url"] == "https://hooks.example.test/x"
+
+
+def test_a_completed_compound_quick_check_in_a_review_reads_the_2x_hint() -> None:
+    from parity_observe import load
+
+    from lenz_io.models import ReviewFull
+
+    review = ReviewFull.model_validate(load("canonical", "review__get_assessment_rows_full_fields.json")["body"])
+    done, failed = (c.assessment for c in review.claims[:2])
+    assert done is not None and failed is not None
+    assert done.hint == "This text holds more than one claim."
+    assert done.more_claims == done.identified_claims
+    assert failed.hint is None

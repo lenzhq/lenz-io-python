@@ -619,6 +619,9 @@ class ExtractedClaims(_Lax):
 
 #: The original shape's ``hint`` on an /assess verdict row that found other
 #: claims in its input, and its ``error`` on an input holding no claim.
+#: A completed quick check inside a review that found other claims: the one
+#: sentence 2.x put in ``hint`` (a failed quick check had none).
+_REVIEW_COMPOUND_HINT = "This text holds more than one claim."
 _COMPOUND_HINT = "Assessed the main claim only. Send identified_claims as their own items to check the rest."
 _NO_CLAIM_ERROR = "No verifiable claim detected"
 
@@ -1595,10 +1598,13 @@ class ReviewAssessment(_Lax):
         if not _is_newer(data, "more_claims"):
             return data
         failure = data.get("failure") if isinstance(data.get("failure"), dict) else {}
+        more = data.get("more_claims") or []
+        completed = not failure and data.get("verdict") is not None
         return _fill(
             data,
-            identified_claims=data.get("more_claims") or [],
+            identified_claims=more,
             error_code=_old_code(failure.get("code"), "no_claim") if failure else None,
+            hint=_REVIEW_COMPOUND_HINT if completed and more else None,
         )
 
     @property
