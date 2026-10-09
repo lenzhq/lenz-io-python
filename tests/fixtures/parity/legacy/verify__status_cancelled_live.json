@@ -3,14 +3,11 @@
   "body": {
     "status": "failed",
     "task_id": "7cff18da2d979d6370e54a160be121ad",
-    "failure": {
-      "code": "cancelled",
-      "detail": "The check was cancelled.",
-      "hint": null,
-      "failure_class": "cancelled",
-      "retryable": false,
-      "docs_url": "https://lenz.io/docs/errors#cancelled"
-    }
+    "error": "Pipeline stopped at: cancelled",
+    "failure_reason": "cancelled",
+    "failure_class": "cancelled",
+    "retryable": false,
+    "docs_url": "https://lenz.io/docs/errors#cancelled"
   },
   "headers": {
     "Content-Type": "application/json; charset=utf-8",

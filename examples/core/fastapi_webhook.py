@@ -1,7 +1,8 @@
+# mypy: allow-untyped-decorators
 """Receive Lenz webhook events in a FastAPI app.
 
-Lenz POSTs HMAC-signed payloads to your ``webhook_url`` when the
-verification pipeline terminates. This handler verifies the signature,
+Lenz POSTs HMAC-signed payloads to your ``webhook_url`` when a
+verification, a review or a citation check ends. This handler verifies the signature,
 parses the payload into a typed event, and dispatches per event type.
 
 Run:
@@ -22,8 +23,11 @@ import os
 from fastapi import FastAPI, HTTPException, Request
 
 from lenz_io import (
+    CitecheckEvent,
     LenzWebhooks,
     LenzWebhookSignatureError,
+    ReviewEvent,
+    VerificationCancelled,
     VerificationCompleted,
     VerificationFailed,
     VerificationNeedsInput,
@@ -45,23 +49,57 @@ async def lenz_webhook(request: Request) -> dict[str, str]:
         logger.warning("Rejected webhook: %s", exc.message)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    # A delivery can be retried: deduplicate on event.event_id (stable across
+    # attempts) before acting on it.
     if isinstance(event, VerificationCompleted):
-        # Verdict block is FLAT on event.result — no nested object.
-        logger.info(
-            "Completed: %s -> %s (lenz_score %s, confidence %s)",
-            event.verification_id,
-            event.result.get("verdict"),
-            event.result.get("lenz_score"),
-            event.result.get("confidence"),
-        )
+        # The verification as client.get_status returns it; the verdict is
+        # under .result.
+        result = event.verification.result if event.verification else None
+        if result is not None:
+            logger.info(
+                "Completed: %s -> %s (lenz_score %s, confidence %s)",
+                result.verification_id,
+                result.verdict,
+                result.lenz_score,
+                result.confidence,
+            )
         # TODO: persist verdict + sources to your DB; ping users; etc.
     elif isinstance(event, VerificationNeedsInput):
-        logger.info("Needs input on %s: %s", event.task_id, event.needs_input.get("reason"))
+        logger.info("Needs input on %s: %s", event.task_id, [c.claim for c in event.claims])
         # TODO: surface the candidate claims to the user, then call
         # client.select(task_id, claims=[...]) to resolve.
     elif isinstance(event, VerificationFailed):
-        logger.warning("Pipeline failed: %s (%s)", event.task_id, event.error)
+        failure = event.failure
+        logger.warning("Verification failed: %s (%s)", event.task_id, failure.code if failure else "unknown")
+    elif isinstance(event, VerificationCancelled):
+        # Stopped elsewhere (the website's Stop button, another process).
+        # Work submitted by an older client reports this as verification.failed
+        # with failure_class "cancelled" instead.
+        logger.info("Verification cancelled: %s", event.task_id)
+    elif isinstance(event, ReviewEvent):
+        # review.completed / review.failed / review.cancelled: the final review,
+        # as get_review returns it (event.status says which).
+        if event.review is not None:
+            logger.info(
+                "Review %s %s: outcome %s, %d issue(s)",
+                event.review_id,
+                event.status,
+                event.review.outcome,
+                len(event.review.issues),
+            )
+    elif isinstance(event, CitecheckEvent):
+        # citecheck.completed / citecheck.failed / citecheck.cancelled: the final
+        # check (event.status says which).
+        if event.citecheck is not None:
+            logger.info(
+                "Citation check %s %s: outcome %s, %d issue(s)",
+                event.citecheck_id,
+                event.status,
+                event.citecheck.outcome,
+                len(event.citecheck.citation_issues),
+            )
     else:
+        # A new event type: acknowledge it and move on.
         logger.info("Unhandled webhook event: %s", event.event)
 
     # Always return 2xx fast. Lenz expects an ack within 5s; otherwise the

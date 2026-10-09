@@ -16,80 +16,30 @@ generators, deep-research products, due-diligence platforms, vertical
 agents producing structured deliverables. Not chat AI, not voice AI,
 not real-time copilots — pipeline runs are the wrong shape for those.
 
+## First call
+
+Get a free API key, with free credits to start, at
+[lenz.io/api-credentials](https://lenz.io/api-credentials), then:
+
 ```bash
 pip install lenz-io
+export LENZ_API_KEY=lenz_...
 ```
 
-## Command-line tool
+```python
+from lenz_io import Lenz
 
-The same primitives from your terminal — submit, poll, and read full reports.
-Ships inside this package behind the `cli` extra (quotes matter — bare brackets
-are a glob in zsh):
-
-```bash
-pipx install "lenz-io[cli]"      # isolated CLI install (recommended)
-pip install "lenz-io[cli]"       # or into your current environment
+client = Lenz()  # reads LENZ_API_KEY
+row = client.assess(claim="The Great Wall of China is visible from space.").claims[0]
+if row.status == "failed":  # no verdict for this row (not charged): failure says why
+    print(row.failure.code, row.failure.hint)
+else:
+    print(row.verdict, row.confidence)  # e.g. False high  (about 15-20 s, 1 credit)
 ```
 
-```bash
-lenz login                       # paste an API key (free — get one at lenz.io/api-credentials)
-lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
-lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
-lenz extract "$(cat draft.txt)" --locate                    # where the text makes each claim
-lenz assess  "The Great Wall is visible from space"          # fast verdict
-lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
-lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
-lenz verify  "<claim>" --depth low                          # shallower, faster, half the credits
-lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
-lenz status  <task_id>           # non-blocking: poll a verify task's progress
-lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
-lenz ask <verification_id> "Which source is strongest?"
-lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
-lenz review draft.md --issues    # only the issues
-lenz review draft.md --max-citations 0    # claims only, no source checked
-lenz review draft.md --max-assessments 0  # only the sources, no claim
-lenz citecheck draft.md          # the citation check on its own
-lenz citecheck --pairs pairs.json   # statement-source pairs, each checked as it is
-lenz usage                       # credits left, what they buy, and when they reset
-lenz config                      # show which key/base URL is in use
-```
-
-Every command takes `--json` for a clean machine-readable object (also emitted
-automatically when stdout is not a TTY, so pipes Just Work). Errors in `--json`
-mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
-exit (an out-of-credits run reports `"code": "no_credits"` and adds
-`upgrade_url`). `lenz usage` leads with the balance:
-
-```text
-Lenz usage  (Pro plan)
-  5070 credits left  (≈ 507 verifications · 5070 assessments)
-  Verify:   507 left  (13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low")
-  Ask:      5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
-  Assess:   5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
-  Extract:  4 / 1000 today  (free — no credit charge)
-  Credits reset in 3 days (Sep 1, 2026)
-```
-
-`verify` blocks with a progress spinner; Ctrl-C prints a
-`lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
-order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
-
-**Scripting the lifecycle (no blocking).** `verify --detach` returns a
-`task_id` immediately; poll it with `status` and read the full report with
-`show` once it completes:
-
-```bash
-tid=$(lenz verify "<claim>" --detach --json | jq -r .task_id)
-lenz status "$tid" --json | jq -r .status          # processing → completed
-lenz show <verification_id> --json                 # full report once done
-```
-
-If the input holds several claims, `status` reports `needs_input` and lists
-them; resolve it non-interactively by index (spawns one verification per pick):
-
-```bash
-lenz verify --resume "$tid" --claim 1,3 --detach --json   # → spawned task_ids
-```
+From there: [the whole ladder](#quickstart--the-canonical-integration) on an
+LLM answer, [a review](#review-a-draft) of a draft, or [the command-line
+tool](#command-line-tool).
 
 ## Review a draft
 
@@ -220,15 +170,19 @@ edited = "".join(chars)
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
 they are in and each deep check as it lands; without it the helper is silent.
-It raises `ReviewFailed` when the review fails (`error_code` and `hint` say
-why; `review.failure.code` is the cause in the newer spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
+It raises `ReviewFailed` when the review fails (`review.failure.code` and
+`review.failure.hint` say why; the exception's `error_code` keeps its 2.x spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
 keeps running, and the error carries its `review_id` and the last body read.
 To submit without waiting, `client.review(draft)` returns a `review_id`;
 read it with `client.get_review(review_id)`, or only the issues with
 `client.get_review(review_id, view="issues")`.
 
+A runnable version, with the errors handled:
+[`examples/core/review_draft.py`](examples/core/review_draft.py).
+
 **Credits.** 1 per claim assessed, plus 10 (5 at `depth="low"`) per deep
-check; `review.credits.charged` says what the review cost. A resend with the
+check, plus 1 per checked citation; `review.credits.charged` says what the
+review cost. A resend with the
 same `Idempotency-Key` within 24 hours returns the same review; a new key is a
 new review.
 
@@ -279,13 +233,86 @@ The body carries the same rows as a review's: `citations`, `citation_issues`,
 `citation_failures`, `summary` and `more_citations` (the draft's citations past
 `max_citations`, found but not checked). `client.citecheck(...)` returns a
 `citecheck_id` at once; read it with `client.get_citecheck(citecheck_id)`.
-`citecheck_and_wait` raises `CitecheckFailed` when the check fails and
-`CitecheckTimeout` after `timeout` seconds. The `citecheck.completed` and
-`citecheck.failed` webhooks parse into a `CitecheckEvent`.
+`citecheck_and_wait` raises `CitecheckFailed` when the check fails (or is
+cancelled elsewhere: `failure_class` `cancelled`) and `CitecheckTimeout` after
+`timeout` seconds. The `citecheck.completed`, `citecheck.failed` and
+`citecheck.cancelled` webhooks parse into a `CitecheckEvent`. A runnable version:
+[`examples/core/citecheck_draft.py`](examples/core/citecheck_draft.py).
 
 From the terminal: `lenz citecheck draft.md` (or `--pairs pairs.json`, a JSON
 list of pairs) prints the count, the key numbers and each source issue, and
 exits `0` clean, `1` issues found, `2` anything else.
+
+## Command-line tool
+
+The same primitives from your terminal — submit, poll, and read full reports.
+Ships inside this package behind the `cli` extra (quotes matter — bare brackets
+are a glob in zsh):
+
+```bash
+pipx install "lenz-io[cli]"      # isolated CLI install (recommended)
+pip install "lenz-io[cli]"       # or into your current environment
+```
+
+```bash
+lenz login                       # paste an API key (free — get one at lenz.io/api-credentials)
+lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
+lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
+lenz extract "$(cat draft.txt)" --locate                    # where the text makes each claim
+lenz assess  "The Great Wall is visible from space"          # fast verdict
+lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
+lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
+lenz verify  "<claim>" --depth low                          # shallower, faster, half the credits
+lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
+lenz status  <task_id>           # non-blocking: poll a verify task's progress
+lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
+lenz ask <verification_id> "Which source is strongest?"
+lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
+lenz review draft.md --issues    # only the issues
+lenz review draft.md --max-citations 0    # claims only, no source checked
+lenz review draft.md --max-assessments 0  # only the sources, no claim
+lenz citecheck draft.md          # the citation check on its own
+lenz citecheck --pairs pairs.json   # statement-source pairs, each checked as it is
+lenz usage                       # credits left, what they buy, and when they reset
+lenz config                      # show which key/base URL is in use
+```
+
+Every command takes `--json` for a clean machine-readable object (also emitted
+automatically when stdout is not a TTY, so pipes Just Work). Errors in `--json`
+mode are `{"error": {"code", "message", "status"}}` on stdout with a nonzero
+exit (an out-of-credits run reports `"code": "no_credits"` and adds
+`upgrade_url`). `lenz usage` leads with the balance:
+
+```text
+Lenz usage  (Pro plan)
+  5070 credits left  (≈ 507 verifications · 5070 assessments)
+  Verify:   507 left  (13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low")
+  Ask:      5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
+  Assess:   5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
+  Extract:  4 / 1000 today  (free — no credit charge)
+  Credits reset in 3 days (Sep 1, 2026)
+```
+
+`verify` blocks with a progress spinner; Ctrl-C prints a
+`lenz verify --resume <task_id>` handle so a long run isn't lost. Key resolution
+order is `--api-key` flag → `LENZ_API_KEY` → `~/.config/lenz/config.json`.
+
+**Scripting the lifecycle (no blocking).** `verify --detach` returns a
+`task_id` immediately; poll it with `status` and read the full report with
+`show` once it completes:
+
+```bash
+tid=$(lenz verify "<claim>" --detach --json | jq -r .task_id)
+lenz status "$tid" --json | jq -r .status          # processing → completed
+lenz show <verification_id> --json                 # full report once done
+```
+
+If the input holds several claims, `status` reports `needs_input` and lists
+them; resolve it non-interactively by index (spawns one verification per pick):
+
+```bash
+lenz verify --resume "$tid" --claim 1,3 --detach --json   # → spawned task_ids
+```
 
 ## Quickstart — the canonical integration
 
@@ -302,6 +329,9 @@ claims = [c.claim for c in out.claims]
 # 2. assess — one call per 20 claims (extract finds up to 100), one row per claim, same order
 quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
 for c in quick:
+    if c.status == "failed":  # no verdict: failure.code says why, failure.hint what to send next
+        print("failed", c.failure.code if c.failure else "", c.claim)
+        continue
     print(c.verdict, c.confidence, c.claim)
     if c.rationale:
         print("  ", c.rationale)
@@ -314,10 +344,11 @@ for r in results:
     if r.verification:
         print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
 
-# 4. ask — follow-up grounded on a verification
-v = results[0].verification
-reply = client.ask.send(v.verification_id, message="Which source is strongest?")
-print(reply.content)
+# 4. ask — follow-up grounded on a verification (when a claim was escalated)
+deep = next((r.verification for r in results if r.verification is not None), None)
+if deep is not None:
+    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
+    print(reply.content)
 ```
 
 `assess(claims=[...])` takes up to 20 claims per call and always answers
@@ -395,8 +426,8 @@ your own claims. Use webhooks for production async flows.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
-- **`client.verifications.{list,get,delete,related}(...)`** → manage past verifications. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
-- **`client.library.list(...)`** → browse the public catalog (no API key needed).
+- **`client.verifications.{list,iter,get,delete,related}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
+- **`client.library.list(...)`** / **`client.library.iter(...)`** → browse the public catalog (no API key needed); `iter` walks every page lazily and refuses `sort="random"`, which is not exhaustive.
 - **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
@@ -432,8 +463,10 @@ for r in results:
 ```
 
 A `failed` item with `status_detail is None` is a verification its account's
-retention period has removed (HTTP 410, see [Retention](#retention)); every
-other failure carries a `status_detail`.
+retention period has removed (HTTP 410, see [Retention](#retention)), a task
+id nothing was found under (404) or an answer in another API version; every
+other failure carries a `status_detail`. A 401 / 403 on a poll (the key
+itself refused) raises from the whole call.
 
 A verify takes ~90 seconds, so show your users where it is. `on_progress` fires
 once per poll while the run is going — it takes the `task_id` as well, because
@@ -471,12 +504,28 @@ Every claim-shaped response shares these fields at top level:
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
-### Field names: both response shapes
+The accepted values are exported as `Literal` aliases for comparisons and
+exhaustive matching: `Verdict` (the five labels and `"Error"`), `VerdictLabel`
+(the five labels), `Confidence` and `Depth` (`"standard"` or `"low"`). The
+fields themselves stay `str`, so a value a later API adds still reads.
 
-The API is adding a newer, dated response shape that gives each field one
-name across every endpoint. This SDK still asks for the original shape, and
-its models read either one. The newer names are attributes already; the
-older ones keep working, with the meaning they always had:
+```python
+from lenz_io import Verdict
+
+NEEDS_A_LOOK: set[Verdict] = {"False", "Mostly False", "Mixed"}
+flagged = [row for row in quick if row.verdict in NEEDS_A_LOOK]
+```
+
+### Field names: the current names, and the deprecated 2.x ones
+
+The API's current response shape gives each field one name across every
+endpoint. Since 3.0 the SDK asks for it (`X-Lenz-API-Version: 2026-10-11`) and
+reads only that shape from its own calls (webhooks of both shapes are still
+parsed). The current names are attributes already. The 2.x names are
+**deprecated** and still work, with the value they had in 2.x (except the few
+values the API no longer sends, listed under "What reads differently" in the
+[changelog](CHANGELOG.md)); they will be removed in a future major release.
+Move to the current names when convenient:
 
 | Read this | Instead of (deprecated, still works) |
 |---|---|
@@ -484,17 +533,24 @@ older ones keep working, with the meaning they always had:
 | `AssessClaim.status` (`"completed"` / `"failed"`) and `.failure` | `verdict == "Error"`, `error_code`, `hint` |
 | `AssessClaim.more_claims`, `ReviewAssessment.more_claims` | `identified_claims` |
 | `AssessResponse.status` and `.failure` | `error`, `error_code` |
-| `TaskStatus.failure` (`code`, `detail`, `hint`, `failure_class`, `retryable`, `docs_url`) | `error`, `failure_reason` and the flat fields |
+| `TaskStatus.failure` (`code`, `detail`, `hint`, `failure_class`, `retryable`, `docs_url`) | `error`, `failure_reason`, `failure_detail` and the flat fields |
 | `TaskAccepted.claim`, `BatchItemResult.claim`, `CandidateClaim.claim` | `claim_text`, `text` |
 | `Verification.completed_at` | `modified_at` |
 | `ReviewSummary.claim_limit_exceeded`, `citation_limit_exceeded` | `claim_limit_reached`, `citation_limit_reached` |
 | `FailureBlock.code`, `.detail` | `failure_reason` |
 | `Usage.credits` and `Usage.costs` | the `verify` / `ask` / `assess` blocks, `quota_resets_at` |
 
-"Nothing checkable" is `no_checkable_claim` in the newer names; the older
-fields keep their own spelling (`not_a_claim`, `no_claim`). The newer names
-are read-only properties, so an original-shape response parses, dumps and
-compares exactly as before.
+"Nothing checkable" is `no_checkable_claim` in the current names; the 2.x
+fields keep their own spelling (`not_a_claim`, `no_claim`). The current names
+are read-only properties. The full list, with the aliases that have no
+replacement, is in the [changelog](CHANGELOG.md).
+
+**What `model_dump()` and `--json` return.** Not the response body as sent:
+a model's `model_dump()` (and the CLI's `--json`, which prints it) holds the
+2.x-compatible fields, computed from the response, plus the current-shape
+keys the server sent (`failure`, `more_claims`, `claims`, `completed_at`, ...).
+The body exactly as sent is `exc.body` on an error and `event.raw` on a
+webhook event.
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -582,19 +638,26 @@ webhooks = LenzWebhooks(secret="whsec_...")
 # In your web handler:
 event = webhooks.parse(raw_body=request.body, headers=request.headers)
 if isinstance(event, VerificationCompleted):
-    vid, result = event.verification_id, event.result
-    # result["verdict"], result["lenz_score"], result["confidence"], ...
+    # event.verification is the verification as client.get_status returns it
+    # (a TaskStatus); the verdict is under .result, a typed Verification.
+    v = event.verification.result if event.verification else None
+    if v is not None:
+        print(v.verification_id, v.verdict, v.lenz_score, v.confidence)
 elif isinstance(event, VerificationNeedsInput):
-    tid, ni = event.task_id, event.needs_input
-    ...
+    options = [c.claim for c in event.claims]  # pick, then client.select(event.task_id, claims=[...])
 elif isinstance(event, VerificationFailed):
-    # event.error is WHERE the pipeline stopped; event.failure_class is WHY
-    # (closed set) and event.retryable tells you what to do about it.
-    if event.retryable:
+    # failure.code is WHAT stopped it; failure_class is WHY (closed set) and
+    # retryable tells you what to do about it.
+    if event.failure and event.failure.retryable:
         resubmit_later(event.task_id)  # transient provider outage
     else:
-        log_permanent_failure(event.task_id, event.error)
+        log_permanent_failure(event.task_id, event.failure.code if event.failure else "")
 ```
+
+`.verification` (since 3.0) is built from either payload shape, and is `None`
+only when a payload cannot be read as one. The flat `event.result` dict (and
+`error`, `failure_class`, `retryable` on a failed event) are kept with their
+2.x values; prefer `.verification` and `.failure`.
 
 If you're on Python 3.10+ a `match` statement reads even cleaner — events are
 plain dataclasses, so structural pattern matching works.
@@ -615,6 +678,13 @@ if isinstance(event, CertificateTimestamped):
 
 It carries `coverage` instead of `result` — it reports a timestamp landing,
 not a verdict being produced.
+
+A task cancelled elsewhere (the website's Stop button, another process) sends
+`verification.cancelled`, parsed as `VerificationCancelled`
+(`event.verification.status` is `"cancelled"`), `review.cancelled` and
+`citecheck.cancelled`. These are sent for work submitted with the API version
+this SDK uses; a cancellation of work submitted by an older client keeps
+arriving as the `*.failed` event with `failure_class` `cancelled`.
 
 A review sends `review.completed` or `review.failed`, parsed as `ReviewEvent`
 with the final review on `event.review`. Deduplicate on `event.event_id`: it is
@@ -658,14 +728,15 @@ u = client.usage()
 print(u.credits.remaining, "credits")  # the balance — the authoritative number
 print(u.costs["verify"], "credits per verification")  # the price list
 print(u.cost_options["verify"]["depth"]["low"], "at depth low")  # 5 — half price
-print(u.verify.remaining, "verifications left")  # a projection of that balance
+print(u.credits.remaining // u.costs["verify"], "verifications left")  # that balance in verifications
 print(u.credits.extra, "of them non-expiring")  # grants + top-ups
 ```
 
-The `verify` / `ask` / `assess` blocks are **projections** of the one balance
-into each capability's unit — how many of those calls the remaining credits
-would buy — not separate allowances. Spending on any one of them moves all of
-them.
+The `verify` / `ask` / `assess` blocks on `Usage` are deprecated (kept, with
+their 2.x values) **projections** of the one balance into each capability's
+unit — how many of those calls the remaining credits would buy — not separate
+allowances. Spending on any one of them moves all of them. Derive the same
+number from `credits` and `costs`, as above.
 
 `credits.extra` is the non-expiring part of the balance. Its old name,
 `credits.bonus`, is deprecated: the same number, it emits a
@@ -715,6 +786,8 @@ support tickets:
 ```python
 from lenz_io import (
     LenzAuthError,
+    LenzConnectionError,
+    LenzNotFoundError,
     LenzQuotaExceededError,
     LenzRateLimitError,
     LenzUpstreamUnavailableError,
@@ -754,6 +827,90 @@ except LenzUpstreamUnavailableError as exc:
     # charged. Waits up to 60s are already slept through by the automatic
     # retry ladder; reaching here means the server stated a longer one.
     schedule_retry_in(exc.retry_after)  # typically 90-120s
+except LenzNotFoundError as exc:
+    # HTTP 404. The id (or key) the request names finds nothing: retrying
+    # will not change that. A LenzError, as in 2.x.
+    print(exc.fix)
+except LenzConnectionError as exc:
+    # No answer at all, after the SDK's own retries: the network, DNS, TLS,
+    # or (LenzRequestTimeoutError, a subclass) one request's timeout. A
+    # LenzAPIError, as in 2.x; exc.__cause__ is the httpx exception. The
+    # request may have reached the server: resend with the SAME key
+    # (idempotency_key=exc.idempotency_key), never as a plain new call.
+    schedule_retry_in(30)
+```
+
+**`retryable`** (since 3.0, on every error): whether sending the same request
+again can succeed. `True` for a connection failure, a request timeout, a 429,
+a 5xx and a 409 that means "not yet" (`idempotency_conflict`: the first
+request with that key is still running; `verification_not_ready`); `False`
+for any other 4xx and a version error; `None` when there was no HTTP status
+(a missing key, a `*_and_wait` timeout). A failed verification, review or
+citation check carries the server's own value (`None` when it sent none).
+
+**`idempotency_key`** (since 3.0, on every error): the `Idempotency-Key` the
+failed call sent, or `None` when it sent none. A resend is safe only with the
+same key: pass `idempotency_key=exc.idempotency_key` back, and the server
+replays the first answer (or reports the first request still running)
+instead of running it again. A plain new call sends a new key, and can run
+(and charge) the work twice.
+
+```python
+from lenz_io import LenzError
+
+try:
+    client.assess(claim="...")
+except LenzError as exc:
+    if exc.retryable:
+        # Later, the same request with the same key:
+        # client.assess(claim="...", idempotency_key=exc.idempotency_key)
+        schedule_retry_in(getattr(exc, "retry_after", None) or 30)
+    else:
+        raise
+```
+
+Local argument mistakes (an empty id, two exclusive arguments) raise
+`ValueError`, never a `LenzError`.
+
+A `*_and_wait` helper that reaches its own `timeout` raises `LenzTimeoutError`
+(`ReviewTimeout`, `CitecheckTimeout`): the job keeps running server-side, so
+read it later by its id rather than resubmitting. A poll answered 401, 403,
+404 or 410 (or in another API version) ends the wait at once with that error;
+in `verify_batch_and_wait` a 404, a 410 or a version error fails that item only (the
+others keep going), while a 401 / 403 raises. A 5xx, a 429 or a network
+failure is polled again. Each poll is bounded by what is left of the
+`timeout` (each phase at most the client's own), and no poll starts once it
+is spent; `timeout=0` reads each status once, as in 2.x. `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed` and
+`CitecheckTimeout` are also importable as `ReviewFailedError`,
+`ReviewTimeoutError`, `CitecheckFailedError` and `CitecheckTimeoutError` (the
+same classes).
+
+`LenzApiVersionError` (a `LenzError`) is raised when a response names an API
+version other than the one this SDK reads. Every response carries the version
+that served it in `X-Lenz-API-Version`; lenz-io 3.x asks for `2026-10-11` and
+reads that version's shape only, so an answer in `2026-05-13` (a server still
+on the older version, or a reply replayed from an idempotent request stored
+before the change) is refused rather than misread. It carries `api_version`
+(what the response named), `status_code` and `body` as sent. If it persists,
+contact support with the request id; lenz-io 2.x reads both versions. A response without the header is read as usual, and webhook
+payloads are never refused (they are parsed in either shape).
+
+**Replays of requests made before the switch.** An idempotent request first
+sent before lenz.io served `2026-10-11`, and replayed with the same
+`Idempotency-Key` afterwards, answers with the stored reply in `2026-05-13`,
+which 3.x refuses with `LenzApiVersionError`. Replays are kept for 24 hours
+and replies stored since 2026-10-09 are kept in both versions, so in practice
+none remain when 3.0 ships. If you meet one, finish that work with lenz-io
+2.x; never change the key to get past it, which would run (and charge) the
+request a second time.
+
+```python
+from lenz_io import LenzApiVersionError
+
+try:
+    client.assess("The Earth is round.")
+except LenzApiVersionError as exc:
+    print(exc.api_version)  # "2026-05-13"
 ```
 
 A failed *verification* (as opposed to a failed HTTP call) raises
@@ -761,7 +918,10 @@ A failed *verification* (as opposed to a failed HTTP call) raises
 `failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
 | `invalid_input` | `cancelled` | `internal`) and `retryable` — `True` means
 a transient provider-side exhaustion where resubmitting the same claim is the
-right move; older servers leave it `None`.
+right move; older servers leave it `None`. A verification cancelled elsewhere
+(the website's Stop button, another process) raises the same error with
+`failure_class == "cancelled"` and `retryable` `False`; `review_and_wait` and
+`citecheck_and_wait` do the same with `ReviewFailed` and `CitecheckFailed`.
 
 `LenzQuotaExceededError` is a **sibling** of `LenzAuthError`, not a subclass —
 "fix your key" and "top up your account" are different actions. So if you were
@@ -792,17 +952,73 @@ if status.status == "completed":
     print(status.result.verdict, status.result.lenz_score)
 ```
 
+## Stopping a run
+
+A verification, a review or a citation check that is still running can be
+stopped. Each has its own method, and each answers 200 whatever the state of
+the run, so losing a race is not an error:
+
+```python
+result = client.cancel("tsk_abc123")  # a verification -> CancelResult
+if result.cancelled:
+    print("stopped:", result.status)  # "cancelled"
+else:
+    print("already ended:", result.status)  # "completed" or "failed"
+
+review = client.cancel_review("d6b2bd72")  # the full view, like get_review
+print(review.status, review.credits.charged)  # "cancelled", what it cost
+
+check = client.cancel_citecheck("12bbbf65")  # like get_citecheck
+print(check.status, check.credits.charged)
+```
+
+- `cancel(task_id)` returns a `CancelResult`. `cancelled=True` with
+  `status == "cancelled"` means the run is cancelled, by this call or an
+  earlier one, so a repeated or retried cancel answers `True` too.
+  `cancelled=False` means it is not cancelled, and `status` is the run's
+  status, normally `"completed"` (the verification exists and was charged as
+  usual) or `"failed"`. A run waiting on `select` is cancelled too. A task that
+  `select` already resolved answers `cancelled=False` with `needs_input`: cancel
+  the task ids `select` returned.
+- `cancel_review(review_id)` stops the review and everything in it: its quick
+  checks, its deep checks and its citation checks. It returns the review as it
+  stands, `status == "cancelled"`; a review that had already ended is returned
+  unchanged (`completed` or `failed`).
+- `cancel_citecheck(citecheck_id)` returns the check the same way.
+- A review's deep checks are cancelled **through the review**. Calling
+  `cancel(task_id)` with the `task_id` of one raises a `LenzError` with
+  `code == "use_review_cancel"` (HTTP 409); call `cancel_review` instead. The
+  SDK sends that request once and does not wait or resend.
+- An unknown id, another account's, or (for `cancel`) a task started on the
+  website raises `LenzNotFoundError`.
+- A cancelled verification is not charged and saves nothing. A cancelled
+  review or citation check is charged only for what it delivered before the
+  cancel (quick checks served, deep checks that finished, citations checked);
+  the rest is refunded or never charged. `credits.charged` on the result is
+  what the review or check cost.
+- Cancelling twice is safe, so the calls send no `Idempotency-Key`. They are
+  retried on a 5xx, a 429 or a dropped connection, like any call that is safe
+  to repeat.
+- Afterwards `get_status`, `get_review` and `get_citecheck` return the
+  `cancelled` status, and `wait`, `review_and_wait` and `citecheck_and_wait`
+  raise the failed error with `failure_class == "cancelled"`. A `webhook_url`
+  receives `verification.cancelled`, `review.cancelled` or `citecheck.cancelled`.
+
 ## Idempotency
 
-`verify_and_wait` sends an auto-generated `Idempotency-Key` on every call by
-default, so a network drop after submit doesn't spawn a duplicate verification
-or charge a second credit. Override with `idempotency_key="..."` to pin a
-specific key, or `idempotency=False` to opt out.
+Every call that charges or starts work sends an auto-generated
+`Idempotency-Key` by default: `verify`, `verify_and_wait`, `verify_batch`,
+`verify_batch_and_wait`, `select`, `assess`, `extract` and `ask.send` (one
+random key per call, reused across that call's own retries), so a network
+drop after submit doesn't spawn a duplicate or charge a second time. Override
+with `idempotency_key="..."` to pin a specific key (it also makes a retry
+from another process replay), or `idempotency=False` to opt out. `review` and
+`citecheck` always send one (pin it with `idempotency_key=`). The batch and
+`ask.send` keys are new in 3.0; 2.x sent one there only when you passed it.
 
-`assess` does the same, and `review` always sends one (pin it with `idempotency_key=`). `ask.send` takes an `idempotency_key="..."` too, but
-never generates one: re-asking the same question is a normal thing to do, and
-a key you did not choose would replay the earlier answer. Pass one when your
-retry means "the same question, once" — the reply, the credit and the
+The key is never derived from the request: asking the same question again on
+`ask.send` is a new call, with a new key, and is asked again. Pin a key when
+your retry means "the same question, once" — the reply, the credit and the
 conversation history are then all the first call's:
 
 ```python
@@ -813,9 +1029,14 @@ reply = client.ask.send(
 )
 ```
 
-A retry that arrives while the first call is still running gets a 409
-(`LenzError`) rather than the reply — there is nothing finished to replay
-yet.
+A retry that arrives while the first call with that key is still running is
+answered 409 `idempotency_conflict`. The SDK sends the same key and body
+again inside the same call, after the wait the server states (or its usual
+backoff), within the call's retries; if the first call is still running
+after them, it raises that `LenzError` with `retryable=True`. It never mints
+a second key to get past it. Every error of a call that sent a key carries
+it as `exc.idempotency_key`: resend with that key, never as a plain new call,
+which would send a new key and could run (and charge) the work twice.
 
 ## Steering extract
 
@@ -941,13 +1162,71 @@ batch = client.verify_batch(
 )
 ```
 
+## Using Lenz from async code
+
+The client is synchronous. Lenz calls take a while (`assess` about 15 s, a deep check about
+90 s, a review a few minutes), so calling one directly inside an `async def` blocks the event
+loop for that long: in a FastAPI or aiohttp server, every other request on that worker
+waits. Run the call in a worker thread instead:
+
+```python
+import asyncio
+from lenz_io import Lenz
+
+client = Lenz()  # one client for the whole app; it is safe to share across threads
+
+
+async def quick_check(claim: str) -> str:
+    out = await asyncio.to_thread(client.assess, claim=claim)
+    return out.claims[0].verdict
+```
+
+The same applies to every method, and above all to the ones that wait (`verify_and_wait`,
+`verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`, `wait`): never call them
+directly inside an async handler. In FastAPI, a plain `def` route runs in the thread pool
+already:
+
+```python
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
+from lenz_io import Lenz
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    app.state.lenz = Lenz()
+    yield
+    app.state.lenz.close()
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+@app.post("/check")
+def check(claim: str) -> dict[str, object]:  # `def`, not `async def`: FastAPI runs it in a thread
+    v = app.state.lenz.verify_and_wait(claim)
+    return {"verdict": v.verdict, "score": v.lenz_score}
+```
+
+Cancelling the asyncio task that awaits `asyncio.to_thread(...)` does not stop the call: the
+thread runs on until the call returns. Bound each request with `timeout=` (see
+[Per-call options](#per-call-options)), and stop paid work on the server with `cancel()`,
+`cancel_review()` or `cancel_citecheck()` (see [Stopping a run](#stopping-a-run)). A native
+async client is planned.
+
+For a long check behind a web request, `verify(..., webhook_url=...)` returns at once and
+Lenz posts the result to you when it is done (see [Webhooks](#webhooks)). That ties up no
+thread for the wait. To check many claims at once, send them in one call
+(`assess(claims=[...])`, `verify_batch`) rather than one thread per claim.
+
 ## Configuration
 
 ```python
 Lenz(
     api_key="lenz_...",  # or set LENZ_API_KEY env var
     base_url="https://lenz.io/api/v1",  # override for staging / local
-    timeout=30.0,
+    timeout=30.0,  # seconds per request; also None or an httpx.Timeout
     max_retries=3,
 )
 ```
@@ -958,6 +1237,90 @@ Environment variables:
 - `LENZ_BASE_URL` — read if `base_url=` is not passed
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
+
+`timeout` must be a number of seconds greater than 0 and at most 2,147,483, `None` (no timeout), an
+`httpx.Timeout` or httpx's `(connect, read, write, pool)` tuple; `max_retries` a
+whole number, 0 or more. Anything else raises `ValueError` when the client is
+built.
+
+### Per-call options
+
+Every method takes three keyword-only request options, for that call only:
+
+```python
+client.assess(claim="...", timeout=20)  # one HTTP attempt, in seconds
+client.usage(max_retries=0)  # no retries for this call
+client.verify("...", extra_headers={"X-Trace-Id": trace})  # added to the request
+```
+
+- `timeout`: one HTTP attempt, a number of seconds greater than 0 or an
+  `httpx.Timeout`. httpx applies it per phase (connect, read, write, pool), and
+  the read limit to each chunk of the answer: it limits inactivity, not the
+  whole call, and each retry gets its own.
+- `max_retries`: how often a request that failed in a way worth retrying (a
+  5xx, a 429, a dropped connection) is sent again: a whole number, 0 or more.
+- `extra_headers`: headers added to the request. Names are header tokens and
+  values visible ASCII, with spaces and tabs allowed inside but not at either
+  end (an empty value is fine); anything else raises `ValueError`. The SDK's own headers are
+  refused (`X-Lenz-API-Version`, `Idempotency-Key`, `Authorization`,
+  `Content-Type`, `Content-Length`, `Host`, `Transfer-Encoding`): use
+  `idempotency_key=` and `api_key=` for the first two. A header with the name
+  of a default one (`User-Agent`, `Accept`), in any casing, replaces the
+  default instead of being sent next to it.
+
+What each option reaches:
+
+| Methods | `timeout` | `max_retries` | `extra_headers` |
+|---|---|---|---|
+| Plain calls (`verify`, `review`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, `library.list`, ...) | the attempt | the call's retries | every request |
+| `extract`, `assess` | the attempt, used as given | the call's retries | every request |
+| Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
+| `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
+| `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default for plain calls and submits; never a wait's polls, which are one attempt each | added to every request of the copy |
+
+A bad value raises `ValueError` before anything is sent (for the iterators,
+when the iterator is created). Precedence, per option: the call's keyword, then
+the copy's (`with_options`), then the client's; headers merge, the call's over
+the copy's.
+
+`extract` and `assess` wait at least 150 s and 100 s when the timeout comes
+from a copy or the client, as they always did. A timeout passed to the call is
+used as given, even below that: it can time out a call the server is still
+running, so retry it with the same `idempotency_key` to get its answer.
+
+`None` means different things in two places:
+
+| | `None` | not passed |
+|---|---|---|
+| `timeout=` on a call | the copy's or the client's timeout | the same |
+| `with_options(timeout=...)`, `Lenz(timeout=...)` | no timeout | keep the current one (the client default is 30 s) |
+| `extra_headers={"X-A": None}` | removes `X-A` added by a copy | — |
+
+For no timeout on one call, pass `timeout=httpx.Timeout(None)`.
+
+### A client with other defaults: `with_options`
+
+`client.with_options(...)` returns a copy with its own defaults, sharing the
+connection pool, key and base URL. It is cheap, so you can make one per request
+or per job, and the client it was made from does not change:
+
+```python
+fast = client.with_options(timeout=10, max_retries=0)
+fast.assess(claim="...")
+
+for job in jobs:
+    scoped = client.with_options(extra_headers={"X-Job-Id": job.id})
+    scoped.review_and_wait(job.draft)
+```
+
+A copy of a copy starts from the copy's options (timeout, retries and
+headers), and changes only what it is given. The pool belongs to the
+client that created it: `close()` and `with` on a copy do nothing, closing the
+original closes the pool for every copy (a copy then raises httpx's
+closed-client error), and a client given `http_client=` never closes it. A
+copy is as safe to share across threads as the client. The copy is shallow:
+attributes a subclass of `Lenz` adds are shared with the client it was made
+from.
 
 ## Compatibility
 

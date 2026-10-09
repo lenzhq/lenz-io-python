@@ -1,0 +1,119 @@
+{
+  "dump": {
+    "candidates": [],
+    "claims": [
+      {
+        "domain": "",
+        "text": "A."
+      },
+      {
+        "domain": "",
+        "text": "A happened."
+      },
+      {
+        "domain": "",
+        "text": "B happened."
+      }
+    ],
+    "docs_url": "",
+    "error": "",
+    "failure_class": "",
+    "failure_detail": "",
+    "failure_reason": "",
+    "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.",
+    "progress": {
+      "elapsed_seconds": null,
+      "index": null,
+      "poll_after_seconds": null,
+      "step": "",
+      "total": null
+    },
+    "reason": "multi_claim",
+    "result": null,
+    "retryable": null,
+    "similar_claims": [],
+    "status": "needs_input",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "dump_unset": {
+    "claims": [
+      {
+        "domain": "",
+        "text": "A."
+      },
+      {
+        "domain": "",
+        "text": "A happened."
+      },
+      {
+        "domain": "",
+        "text": "B happened."
+      }
+    ],
+    "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.",
+    "reason": "multi_claim",
+    "status": "needs_input",
+    "task_id": "7cff18da2d979d6370e54a160be121ad"
+  },
+  "render": "needs input  (multi_claim)\nclaims found:\n  1. A.\n  2. A happened.\n  3. B happened.\nresolve it: lenz verify --resume t --claim <N|all> --detach\n",
+  "render_json": "{\n  \"status\": \"needs_input\",\n  \"task_id\": \"7cff18da2d979d6370e54a160be121ad\",\n  \"reason\": \"multi_claim\",\n  \"hint\": \"The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.\",\n  \"progress\": {\n    \"step\": \"\",\n    \"index\": null,\n    \"total\": null,\n    \"elapsed_seconds\": null,\n    \"poll_after_seconds\": null\n  },\n  \"result\": null,\n  \"claims\": [\n    {\n      \"text\": \"A.\",\n      \"domain\": \"\"\n    },\n    {\n      \"text\": \"A happened.\",\n      \"domain\": \"\"\n    },\n    {\n      \"text\": \"B happened.\",\n      \"domain\": \"\"\n    }\n  ],\n  \"candidates\": [],\n  \"similar_claims\": [],\n  \"error\": \"\",\n  \"failure_reason\": \"\",\n  \"failure_detail\": \"\",\n  \"failure_class\": \"\",\n  \"retryable\": null,\n  \"docs_url\": \"\"\n}\n",
+  "repr": "TaskStatus(status='needs_input', task_id='7cff18da2d979d6370e54a160be121ad', reason='multi_claim', hint='The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=None, claims=[CandidateClaim(text='A.', domain=''), CandidateClaim(text='A happened.', domain=''), CandidateClaim(text='B happened.', domain='')], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
+  "wait": {
+    "cause": "The verification needs caller input to proceed.",
+    "code": "",
+    "doc_url": "https://lenz.io/docs/verify#needs-input",
+    "fix": "Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
+    "friendly_text": "Pipeline paused: multi_claim\n  Fix: Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
+    "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.",
+    "kind": "multi_claim",
+    "message": "Pipeline paused: multi_claim",
+    "payload": {
+      "candidates": [],
+      "claims": [
+        {
+          "domain": "",
+          "text": "A."
+        },
+        {
+          "domain": "",
+          "text": "A happened."
+        },
+        {
+          "domain": "",
+          "text": "B happened."
+        }
+      ],
+      "docs_url": "",
+      "error": "",
+      "failure_class": "",
+      "failure_detail": "",
+      "failure_reason": "",
+      "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.",
+      "progress": {
+        "elapsed_seconds": null,
+        "index": null,
+        "poll_after_seconds": null,
+        "step": "",
+        "total": null
+      },
+      "reason": "multi_claim",
+      "result": null,
+      "retryable": null,
+      "similar_claims": [],
+      "status": "needs_input",
+      "task_id": "7cff18da2d979d6370e54a160be121ad"
+    },
+    "payload_json": {
+      "error": {
+        "code": "needs_input",
+        "fix": "Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
+        "message": "Pipeline paused: multi_claim",
+        "status": 0
+      }
+    },
+    "request_id": "",
+    "status_code": 0,
+    "task_id": "t",
+    "type": "LenzNeedsInputError"
+  }
+}

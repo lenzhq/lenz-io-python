@@ -236,8 +236,10 @@ def render_citecheck(out: Output, check: Citecheck) -> None:
         f"Citation check {escape(check.citecheck_id)}: {outcome} — {_count(check.credits.charged, 'credit')} charged"
     )
     if check.failure is not None:
-        hint = check.failure.hint or check.failure.failure_reason or "no reason given"
+        hint = check.failure.hint or check.failure.code or "no reason given"
         out.console.print(f"[red]Failed:[/red] {escape(hint)}")
+    elif check.status == "cancelled":
+        out.console.print("[red]Cancelled.[/red]")
     render_citations(out, check)
     if check.status == "completed" and not check.citation_issues and not check.citation_failures:
         out.console.print("\n[green]No issues.[/green]")

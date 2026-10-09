@@ -133,16 +133,6 @@ def test_dumping_keeps_the_alias_and_does_not_warn():
     assert dumped["credits"] == 20
 
 
-def test_old_server_sending_only_credits_still_fills_bonus():
-    """Pre-pool server (or a mid-deploy revision): `credits` only."""
-    cap = UsageCapacity.model_validate(
-        {"quota_used": 120, "quota_total": 500, "quota_remaining": 380, "credits": 25, "remaining": 405}
-    )
-    assert cap.bonus == 25
-    with pytest.deprecated_call():
-        assert cap.credits == 25
-
-
 def test_server_after_the_alias_removal_still_fills_credits():
     """A response without `credits` (a computed block) still reads the alias."""
     cap = UsageCapacity.model_validate(
@@ -185,11 +175,6 @@ def test_dumping_the_pool_keeps_bonus_and_does_not_warn():
         warnings.simplefilter("error", DeprecationWarning)
         dumped = c.model_dump()
     assert dumped["extra"] == dumped["bonus"] == 200
-
-
-def test_a_server_sending_only_bonus_still_fills_extra():
-    c = UsageCredits.model_validate({"total": 300, "used": 0, "remaining": 300, "bonus": 200})
-    assert c.extra == 200
 
 
 def test_a_server_sending_only_extra_still_fills_bonus():

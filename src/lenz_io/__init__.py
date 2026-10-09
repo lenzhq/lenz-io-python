@@ -2,9 +2,16 @@
 
     pip install lenz-io
 
-The fact-check API for AI products. Four primitives form a research-depth
-ladder — find claims, judge them fast, prove them deep, follow up — and a
-fifth call runs the ladder on a whole draft:
+The fact-check API for AI products, in six calls: four form a research-depth
+ladder (find claims, judge them fast, prove them deep, follow up), ``review``
+runs the ladder on a whole draft, and ``citecheck`` checks a draft's sources
+on its own:
+
+    from lenz_io import Lenz
+    client = Lenz()  # reads LENZ_API_KEY
+
+    row = client.assess(claim="The Great Wall of China is visible from space.").claims[0]
+    print(row.verdict, row.confidence)
 
     # /review — every claim quick-checked, the doubtful ones deep-checked (2-4 min)
     review = client.review_and_wait(text=draft)
@@ -30,9 +37,10 @@ The primitives, call by call:
     doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
     results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
-    # 4. /ask — follow-up questions grounded on a verification
-    deep = results[0].verification
-    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
+    # 4. /ask — follow-up questions grounded on a verification (when one was escalated)
+    deep = next((r.verification for r in results if r.verification is not None), None)
+    if deep is not None:
+        reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """
@@ -46,26 +54,34 @@ except ImportError:
     __version__ = "0.0.0+local"
 
 # Public surface
-from .client import API_VERSION, DEFAULT_BASE_URL, CitationPair, Lenz, VerifyBatchItem
+from .client import API_VERSION, DEFAULT_BASE_URL, NOT_GIVEN, CitationPair, Lenz, NotGiven, VerifyBatchItem
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
     CitecheckFailed,
+    CitecheckFailedError,
     CitecheckTimeout,
+    CitecheckTimeoutError,
     LenzAPIError,
+    LenzApiVersionError,
     LenzAuthError,
+    LenzConnectionError,
     LenzError,
     LenzGoneError,
     LenzNeedsInputError,
+    LenzNotFoundError,
     LenzPipelineError,
     LenzQuotaExceededError,
     LenzRateLimitError,
+    LenzRequestTimeoutError,
     LenzTimeoutError,
     LenzUpstreamUnavailableError,
     LenzValidationError,
     LenzVerificationNotReadyError,
     LenzWebhookSignatureError,
     ReviewFailed,
+    ReviewFailedError,
     ReviewTimeout,
+    ReviewTimeoutError,
 )
 from .models import (
     AskHistory,
@@ -78,15 +94,18 @@ from .models import (
     Audit,
     BatchAccepted,
     BatchItemResult,
+    CancelResult,
     CandidateClaim,
     Certificate,
     Citecheck,
     CitecheckStarted,
     ClaimLocation,
+    Confidence,
     Coverage,
     CoverageReason,
     CoverageStatus,
     DebateSide,
+    Depth,
     EntityRef,
     Escalation,
     EscalationPolicy,
@@ -120,6 +139,8 @@ from .models import (
     UsageCapacity,
     UsageCredits,
     UsageExtract,
+    Verdict,
+    VerdictLabel,
     Verification,
     VerificationList,
     VerificationListItem,
@@ -129,6 +150,7 @@ from .webhooks import (
     CitecheckEvent,
     LenzWebhooks,
     ReviewEvent,
+    VerificationCancelled,
     VerificationCompleted,
     VerificationFailed,
     VerificationNeedsInput,
@@ -141,6 +163,7 @@ __all__ = [
     "API_VERSION",
     "DEFAULT_BASE_URL",
     "MAX_RETRY_AFTER_SLEEP",
+    "NOT_GIVEN",
     "AskHistory",
     "AskMessage",
     "AskReply",
@@ -151,6 +174,7 @@ __all__ = [
     "Audit",
     "BatchAccepted",
     "BatchItemResult",
+    "CancelResult",
     "CandidateClaim",
     "Certificate",
     "CertificateTimestamped",
@@ -158,13 +182,17 @@ __all__ = [
     "Citecheck",
     "CitecheckEvent",
     "CitecheckFailed",
+    "CitecheckFailedError",
     "CitecheckStarted",
     "CitecheckTimeout",
+    "CitecheckTimeoutError",
     "ClaimLocation",
+    "Confidence",
     "Coverage",
     "CoverageReason",
     "CoverageStatus",
     "DebateSide",
+    "Depth",
     "EntityRef",
     "Escalation",
     "EscalationPolicy",
@@ -176,13 +204,17 @@ __all__ = [
     "FailureClass",
     "Lenz",
     "LenzAPIError",
+    "LenzApiVersionError",
     "LenzAuthError",
+    "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
     "LenzNeedsInputError",
+    "LenzNotFoundError",
     "LenzPipelineError",
     "LenzQuotaExceededError",
     "LenzRateLimitError",
+    "LenzRequestTimeoutError",
     "LenzTimeoutError",
     "LenzUpstreamUnavailableError",
     "LenzValidationError",
@@ -191,6 +223,7 @@ __all__ = [
     "LenzWebhooks",
     "LibraryItem",
     "LibraryList",
+    "NotGiven",
     "Position",
     "Progress",
     "RelatedVerifications",
@@ -200,12 +233,14 @@ __all__ = [
     "ReviewClaim",
     "ReviewEvent",
     "ReviewFailed",
+    "ReviewFailedError",
     "ReviewFailure",
     "ReviewFull",
     "ReviewIssue",
     "ReviewIssues",
     "ReviewStarted",
     "ReviewTimeout",
+    "ReviewTimeoutError",
     "SimilarVerification",
     "Source",
     "SuggestedEdit",
@@ -216,7 +251,10 @@ __all__ = [
     "UsageCapacity",
     "UsageCredits",
     "UsageExtract",
+    "Verdict",
+    "VerdictLabel",
     "Verification",
+    "VerificationCancelled",
     "VerificationCompleted",
     "VerificationFailed",
     "VerificationList",

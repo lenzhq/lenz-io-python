@@ -1,0 +1,19 @@
+{
+  "status": 200,
+  "body": {
+    "attempt": 2,
+    "batch_id": null,
+    "coverage": null,
+    "delivered_at": "2026-10-01T09:07:00.123456+00:00",
+    "error": "conclusion_failed",
+    "event": "verification.failed",
+    "failure_class": "internal",
+    "needs_input": null,
+    "result": null,
+    "retryable": false,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "verification_id": null
+  },
+  "headers": {}
+}

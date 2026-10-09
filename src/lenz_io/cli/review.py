@@ -274,7 +274,7 @@ def _progress_cell(c: ReviewClaim) -> Any:
     if a.status in ("pending", "running", ""):
         return Spinner("dots", text=Text("quick check…", style="dim"))
     if a.status == "failed":
-        return Text(f"failed ({a.error_code or 'error'})", style="red")
+        return Text(f"failed ({(a.failure.code if a.failure else None) or 'error'})", style="red")
     quick = Text.from_markup(_verdict_text(a.verdict, a.confidence))
     if v is None:
         return quick
@@ -385,7 +385,7 @@ def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
     out.console.print(f"[bold]\\[{c.index + 1}/{n}][/bold] {escape(c.claim or '')}{_position_suffix(c)}")
     a, v = c.assessment, c.verification
     if a.status == "failed":
-        hint = (a.failure.hint if a.failure else None) or a.hint or a.error_code or "failed"
+        hint = (a.failure.hint if a.failure else None) or (a.failure.code if a.failure else None) or "failed"
         out.console.print(f"  [red]Quick check failed:[/red] {escape(hint)}")
         return
     if v is not None and v.status == "completed":
@@ -418,9 +418,7 @@ def _render_issue(out: Output, i: Any, n: int) -> None:
     if i.suggested_rewrite:
         out.console.print(f"  [dim]Suggested rewrite:[/dim] {escape(i.suggested_rewrite)}")
     if i.failure is not None:
-        out.console.print(
-            f"  [red]Deep check failed:[/red] {escape(i.failure.hint or i.failure.failure_reason or 'failed')}"
-        )
+        out.console.print(f"  [red]Deep check failed:[/red] {escape(i.failure.hint or i.failure.code or 'failed')}")
     elif i.source != "verification" and i.escalation is not None and i.escalation.disposition != "planned":
         out.console.print(f"  [dim]Not deep-checked ({escape(i.escalation.disposition)}).[/dim]")
     if i.url:
@@ -433,8 +431,10 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
     or the reviewers' note (quick), and the suggested rewrite."""
     out.console.print(_summary_line(review))
     if review.failure is not None:
-        hint = review.failure.hint or review.failure.failure_reason or "no reason given"
+        hint = review.failure.hint or review.failure.code or "no reason given"
         out.console.print(f"[red]Failed:[/red] {escape(hint)}")
+    elif review.status == "cancelled":
+        out.console.print("[red]Cancelled.[/red]")
     n = review.summary.claims_selected or len(review.claims)
     if issues_only:
         for i in review.issues:
@@ -621,7 +621,7 @@ def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> N
         for d in i.metadata_differences:
             _print_text(out, f"Your reference says {d.cited or '(none)'}; the record says {d.registered or '(none)'}.")
     if i.failure is not None:
-        hint = i.failure.hint or i.failure.failure_reason or "failed"
+        hint = i.failure.hint or i.failure.code or "failed"
         out.console.print(f"  [yellow]Part of the check failed:[/yellow] {escape(hint)}")
 
 

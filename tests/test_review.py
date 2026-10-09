@@ -527,9 +527,10 @@ class TestReviewAndWait:
         assert isinstance(err, LenzTimeoutError)
         assert err.review_id == "442b6aa9"
         assert isinstance(err.partial, ReviewFull) and err.partial.status == "verifying"
-        # never sleeps past the deadline, and polls once more at it
+        # never sleeps past the deadline, and starts no poll once it is spent
+        # (3.0; 2.x polled once more at the deadline, past it)
         assert clock[0] == 40
-        assert get.call_count == 4
+        assert get.call_count == 3
 
     def test_timeout_before_any_body_has_no_partial(self, client, monkeypatch):
         clock = [0.0]

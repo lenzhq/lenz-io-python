@@ -336,7 +336,7 @@ class TestMapResponseToError:
             assert e.status_code == 410
 
     def test_gone_is_not_a_not_found(self):
-        # A 404 stays a plain LenzError: only 410 is gone.
+        # A 404 is a not-found error, never a gone one: only 410 is gone.
         e = map_response_to_error(404, _body({"detail": "Not found."}), {})
         assert not isinstance(e, LenzGoneError)
 
@@ -475,3 +475,212 @@ def test_errors_all_lists_every_public_error_class_and_constant():
     assert {"LenzGoneError", "LenzUpstreamUnavailableError", "UPSTREAM_503_CODES"} <= set(errors.__all__)
     for name in errors.__all__:
         assert hasattr(errors, name), name
+
+
+# ── 3.0: not found, connection failures, ``retryable`` ─────────────────────
+
+NOT_FOUND_FIX = (
+    "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+)
+
+
+class TestNotFound:
+    def test_404_is_its_own_error_and_still_a_lenz_error(self):
+        from lenz_io import LenzNotFoundError
+
+        e = map_response_to_error(404, _body({"detail": "Not found."}), {"X-Request-ID": "rq9"})
+        assert type(e) is LenzNotFoundError
+        assert isinstance(e, LenzError)
+        assert not isinstance(e, (LenzGoneError, LenzAPIError))
+        assert e.status_code == 404
+        assert e.request_id == "rq9"
+
+    def test_404_keeps_its_message_and_says_what_to_check(self):
+        e = map_response_to_error(404, _body({"detail": "Not found."}), {})
+        assert e.message == "Not found."
+        assert e.cause == "Not found."
+        assert e.doc_url == "https://lenz.io/docs/errors"
+        assert e.fix == NOT_FOUND_FIX
+        assert (
+            str(e)
+            == f"Not found.\n  Cause:  Not found.\n  Fix:    {NOT_FOUND_FIX}\n  Docs:   https://lenz.io/docs/errors"
+        )
+
+    def test_404_without_a_body_keeps_the_2x_message(self):
+        e = map_response_to_error(404, b"", {})
+        assert e.message == "HTTP 404"
+
+    def test_other_errors_keep_their_text(self):
+        e = map_response_to_error(500, _body({"detail": "boom"}), {})
+        assert e.fix == "Retry; if the error persists, file an issue with the Request ID."
+        assert repr(e) == "LenzAPIError('boom')"
+
+
+class TestConnectionErrors:
+    def _fail(self, exc: Exception):
+        import respx
+
+        from lenz_io import Lenz
+
+        with respx.mock(base_url="https://lenz.io/api/v1") as r:
+            r.get("/me/usage").mock(side_effect=exc)
+            with Lenz(api_key="lenz_test", max_retries=0) as client:
+                try:
+                    client.usage()
+                except LenzError as caught:
+                    return caught
+        raise AssertionError("no error raised")  # pragma: no cover
+
+    def test_a_network_failure_is_a_connection_error_and_still_an_api_error(self):
+        import httpx
+
+        from lenz_io import LenzConnectionError, LenzRequestTimeoutError, LenzTimeoutError
+
+        cause = httpx.ConnectError("connection refused")
+        e = self._fail(cause)
+        assert type(e) is LenzConnectionError
+        assert isinstance(e, LenzAPIError)
+        assert not isinstance(e, (LenzRequestTimeoutError, LenzTimeoutError))
+        assert e.__cause__ is cause
+        assert e.message == "GET /me/usage failed after 1 attempts: connection refused"
+        assert e.fix == "Check your network connection; verify base_url is reachable."
+        assert e.retryable is True
+
+    def test_a_transport_timeout_is_a_request_timeout_not_a_job_timeout(self):
+        import httpx
+
+        from lenz_io import LenzConnectionError, LenzRequestTimeoutError, LenzTimeoutError
+
+        e = self._fail(httpx.ReadTimeout("timed out"))
+        assert type(e) is LenzRequestTimeoutError
+        assert isinstance(e, LenzConnectionError)
+        assert isinstance(e, LenzAPIError)
+        assert not isinstance(e, LenzTimeoutError)
+        assert e.message == "GET /me/usage failed after 1 attempts: timed out"
+        assert e.retryable is True
+
+
+class TestRetryable:
+    @pytest.mark.parametrize(
+        ("status", "body", "expected"),
+        [
+            (400, {}, False),
+            (401, {}, False),
+            (402, {"code": "no_credits"}, False),
+            (403, {}, False),
+            (404, {}, False),
+            (409, {"code": "idempotency_conflict"}, True),
+            (409, {"code": "select_not_pending"}, False),
+            (410, {"code": "purged"}, False),
+            (422, {}, False),
+            (429, {}, True),
+            (429, {"code": "review_in_flight"}, True),
+            (500, {}, True),
+            (502, {}, True),
+            (503, {}, True),
+            (503, {"code": "upstream_unavailable"}, True),
+            (503, {"code": "capacity"}, True),
+            (409, {"code": "verification_not_ready", "status": "processing"}, True),
+        ],
+    )
+    def test_derived_from_the_response(self, status, body, expected):
+        assert map_response_to_error(status, _body(body), {}).retryable is expected
+
+    @pytest.mark.parametrize(
+        ("endpoint", "code"),
+        [
+            (("POST", "/verify"), "idempotency_conflict"),
+            (("POST", "/ask/v1"), "idempotency_conflict"),
+            (("POST", "/ask/v1"), "verification_not_ready"),
+            (("GET", "/verifications/v1"), "verification_not_ready"),
+        ],
+    )
+    def test_a_409_worth_resending_is_retryable_whatever_code_the_2x_body_keeps(self, endpoint, code):
+        # The 2.x body has no ``code`` on some endpoints (``exc.code`` stays
+        # ""), but the answer is still worth sending again (with the same key).
+        e = map_response_to_error(409, _body({"detail": "x", "code": code}), {}, endpoint=endpoint)
+        assert e.retryable is True
+
+    @pytest.mark.parametrize(("status", "flag"), [(503, False), (400, True), (500, False), (422, True)])
+    def test_a_boolean_in_the_failure_block_wins(self, status, flag):
+        e = map_response_to_error(status, _body({"detail": "x", "failure": {"retryable": flag}}), {})
+        assert e.retryable is flag
+
+    def test_a_top_level_boolean_wins_after_the_failure_block(self):
+        assert map_response_to_error(503, _body({"retryable": False}), {}).retryable is False
+        both = {"retryable": True, "failure": {"retryable": False}}
+        assert map_response_to_error(400, _body(both), {}).retryable is False
+
+    def test_a_non_boolean_in_the_failure_block_is_ignored(self):
+        e = map_response_to_error(503, _body({"failure": {"retryable": "yes"}}), {})
+        assert e.retryable is True
+
+    def test_a_failed_verification_keeps_the_servers_value_unknown_included(self):
+        failed = {"detail": "Verification failed.", "code": "verification_failed", "task_id": _TASK_ID}
+        assert map_response_to_error(409, _body(failed), {}).retryable is None
+        failed["retryable"] = True
+        assert map_response_to_error(409, _body(failed), {}).retryable is True
+
+    def test_a_version_error_is_not_retryable(self):
+        from lenz_io import LenzApiVersionError
+
+        assert LenzApiVersionError(api_version="2026-05-13", status_code=200).retryable is False
+
+    def test_client_side_errors(self):
+        from lenz_io import (
+            LenzNeedsInputError,
+            LenzTimeoutError,
+            LenzWebhookSignatureError,
+            ReviewFailed,
+            ReviewTimeout,
+        )
+
+        assert LenzError().retryable is None
+        assert LenzPipelineError().retryable is None
+        assert ReviewFailed().retryable is None
+        # No HTTP status: unknown.
+        assert LenzAuthError(message="API key required").retryable is None
+        assert LenzTimeoutError().retryable is None
+        assert ReviewTimeout().retryable is None
+        assert LenzNeedsInputError().retryable is None
+        assert LenzWebhookSignatureError().retryable is None
+        # No status and no connection failure: unknown, as in the Node SDK.
+        assert LenzAPIError().retryable is None
+        assert LenzRateLimitError().retryable is None
+        from lenz_io import LenzConnectionError, LenzRequestTimeoutError
+
+        assert LenzConnectionError().retryable is True
+        assert LenzRequestTimeoutError().retryable is True
+
+    def test_a_value_passed_in_wins(self):
+        assert LenzPipelineError(retryable=True).retryable is True
+        assert LenzAPIError(retryable=False).retryable is False
+        assert LenzError(status_code=503, retryable=None).retryable is None
+
+    def test_it_is_an_instance_field_not_a_property(self):
+        e = map_response_to_error(500, b"{}", {})
+        assert "retryable" in vars(e)
+        e.retryable = False
+        assert e.retryable is False
+
+
+def test_the_job_error_aliases_are_the_same_classes():
+    import lenz_io
+    from lenz_io import errors
+
+    for alias, original in (
+        ("ReviewFailedError", "ReviewFailed"),
+        ("ReviewTimeoutError", "ReviewTimeout"),
+        ("CitecheckFailedError", "CitecheckFailed"),
+        ("CitecheckTimeoutError", "CitecheckTimeout"),
+    ):
+        assert getattr(lenz_io, alias) is getattr(lenz_io, original)
+        assert alias in errors.__all__ and alias in lenz_io.__all__
+
+
+def test_the_new_classes_are_exported():
+    import lenz_io
+
+    for name in ("LenzNotFoundError", "LenzConnectionError", "LenzRequestTimeoutError"):
+        assert name in lenz_io.__all__
+        assert issubclass(getattr(lenz_io, name), LenzError)

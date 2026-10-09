@@ -27,7 +27,7 @@ from typing import Any
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzError, LenzGoneError
+from lenz_io.errors import LenzApiVersionError, LenzError, LenzGoneError
 from lenz_io.models import TaskStatus
 
 from ._run import execute, read_text_arg
@@ -188,7 +188,7 @@ def _poll(
         if st.status == "completed":
             render_verification(out, st.result)
             return
-        if st.status == "failed":
+        if st.status in ("failed", "cancelled"):  # cancelled elsewhere: the same exit as a failure
             raise CLIError(st.error or st.failure_detail or "Verification failed.", code="pipeline_failed")
         if st.status == "needs_input":
             if st.reason == "multi_claim":
@@ -198,7 +198,7 @@ def _poll(
                 # Sub-claims inherit the parent submission's depth server-side
                 # (/select reads it off the task meta), so nothing to send here.
                 items = client.select(task_id, claims=texts).items
-                picks = [(it.task_id, it.claim_text or txt) for it, txt in zip(items, texts, strict=True)]
+                picks = [(it.task_id, it.claim or txt) for it, txt in zip(items, texts, strict=True)]
                 # detach, or >1 claim → batch path; exactly one → keep the
                 # single-verdict flow (nicer than a 1-row table).
                 if detach or len(picks) > 1:
@@ -256,7 +256,7 @@ def _resolve_multi_claim(out: Output, task_id: str, st: TaskStatus, selection: l
     Otherwise json mode emits the needs_input object and exits 3 (never hangs on
     a prompt that can't happen); a TTY shows the checkbox picker.
     """
-    options = [c.text for c in st.claims]
+    options = [c.claim for c in st.claims]
     if selection is not None:
         return [options[i] for i in _selection_to_indices(selection, len(options))]
     if out.json_mode:
@@ -371,7 +371,7 @@ def _batch_item_json(task_id: str, claim_text: str, st: TaskStatus | None) -> di
             "status": "completed",
             "verification": st.result.model_dump(mode="json"),
         }
-    if st.status == "failed":
+    if st.status in ("failed", "cancelled"):  # cancelled elsewhere: a failed row, as in the original shape
         return {"task_id": task_id, "claim": claim_text, "status": "failed", "error": st.error or st.failure_detail}
     return {"task_id": task_id, "claim": claim_text, "status": st.status or "unknown"}
 
@@ -413,14 +413,14 @@ def _resume(
     try:
         st = client.get_status(ident)
     except LenzError as exc:
-        if exc.status_code == 404:
+        if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
             _resume_as_verification(client, out, ident)
             return
         raise
     if st.status == "completed":
         render_verification(out, st.result)
-    elif st.status == "failed":
-        raise CLIError(st.error or "Verification failed.", code="pipeline_failed")
+    elif st.status in ("failed", "cancelled"):
+        raise CLIError(st.error or st.failure_detail or "Verification failed.", code="pipeline_failed")
     else:  # processing / needs_input → keep polling from here, honoring --claim/--detach
         _poll(client, out, ident, timeout, selection=selection, detach=detach)
 

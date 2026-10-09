@@ -4,12 +4,13 @@ Tagged `smoke` so they don't run in the normal unit-test suite. The
 release workflow invokes `pytest -m smoke` with `LENZ_E2E_KEY` set; tests
 are skipped if the env var is absent.
 
-These exercise the SDK against the live API across the four primitives:
+These exercise the SDK against the live API:
   1. ``extract`` — free, parses identified_claims
   2. ``assess`` — fast 3-model verdict, returns flat claim entries
   3. ``verify_and_wait`` — the quickstart claim at ``depth="low"``, the
      cheap run (~60s); a cache hit is a bonus, never assumed
-  4. ``ask.history`` — read-only follow-up surface (no exchange burned)
+  4. ``cancel`` — a ``depth="low"`` run stopped right after it starts
+  5. request options — ``with_options`` and a per-call ``timeout`` on ``assess``
 
 Plus webhook signature roundtrip + ``/me/usage`` shape.
 
@@ -27,7 +28,7 @@ import os
 
 import pytest
 
-from lenz_io import Lenz, LenzWebhooks, verify_signature
+from lenz_io import Lenz, LenzPipelineError, LenzWebhooks, verify_signature
 
 pytestmark = pytest.mark.smoke
 
@@ -57,6 +58,30 @@ def test_quickstart_claim_verifies_at_low_depth(smoke_client):
     assert v.verdict  # any non-empty verdict string
 
 
+def test_a_run_can_be_cancelled(smoke_client):
+    """``cancel`` answers 200 whatever the state of the run: stopped by this
+    call, or already ended. Neither is an error, so the test cannot be flaky.
+
+    A cancelled verification is not charged. A run the API answers from its
+    cache still goes through the pipeline, so the cancel may stop it or find
+    it already completed; either branch passes. Not the quickstart claim, so
+    a cache hit is less likely."""
+    started = smoke_client.verify(claim="The Eiffel Tower is in Paris", depth="low")
+    result = smoke_client.cancel(started.task_id)
+    assert result.task_id == started.task_id
+    if result.cancelled:
+        assert result.status == "cancelled"
+        # Safe to repeat: still cancelled, and a wait ends on it at once.
+        again = smoke_client.cancel(started.task_id)
+        assert (again.cancelled, again.status) == (True, "cancelled")
+        with pytest.raises(LenzPipelineError) as raised:
+            smoke_client.wait(started.task_id, timeout=30)
+        assert raised.value.failure_class == "cancelled"
+    else:
+        # It finished first; nothing was left to stop.
+        assert result.status in ("completed", "failed")
+
+
 def test_assess_returns_typed_claims(smoke_client):
     """``/assess`` is sync, ~15s. Returns one entry per identified claim."""
     out = smoke_client.assess(text="Sharks don't get cancer")
@@ -65,6 +90,15 @@ def test_assess_returns_typed_claims(smoke_client):
     assert first.claim
     assert first.verdict
     assert first.confidence in ("high", "medium", "low")
+
+
+def test_request_options_reach_the_live_api(smoke_client):
+    """The request options on a real call: a copy with its own retries and an
+    extra header, and a per-call timeout (the same claim as above, so the
+    API's cache usually answers it)."""
+    copy = smoke_client.with_options(max_retries=1, extra_headers={"X-Smoke-Check": "request-options"})
+    out = copy.assess(claim="Sharks don't get cancer", timeout=120)
+    assert out.claims and out.claims[0].verdict
 
 
 def test_webhook_signature_roundtrip():

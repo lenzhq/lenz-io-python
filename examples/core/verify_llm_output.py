@@ -30,23 +30,23 @@ def main() -> None:
 
     # Step 1: extract — pull the verifiable claims out of the answer (free).
     out = client.extract(text=LLM_OUTPUT)
-    claims = out.identified_claims or [out.claim]
+    claims = [c.claim for c in out.claims]
     print(f"Extracted {len(claims)} claims.\n")
 
     # Step 2: assess — one call per 20 extracted claims (extract finds up to
     # 100; one assess call takes 20), one row per claim, same order. A row
-    # with verdict "Error" got no verdict: ``error_code`` says why
-    # (``upstream_unavailable`` is worth a retry) and ``hint`` says what to
-    # send next. A compound item is assessed on its main claim and lists the
-    # rest in ``identified_claims``.
+    # with ``status == "failed"`` got no verdict: ``failure.code`` says why
+    # (``upstream_unavailable`` is worth a retry) and ``failure.hint`` says
+    # what to send next. A compound item is assessed on its main claim and
+    # lists the rest in ``more_claims``.
     quick = [row for i in range(0, len(claims), 20) for row in client.assess(claims=claims[i : i + 20]).claims]
     print(f"Assessed {len(quick)} claims:\n")
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
-        if c.verdict == "Error":
-            print(f"    {c.error_code}: {c.hint}")
-        elif c.identified_claims:
-            print(f"    also found (not assessed): {c.identified_claims}")
+        if c.status == "failed" and c.failure:
+            print(f"    {c.failure.code}: {c.failure.hint}")
+        elif c.more_claims:
+            print(f"    also found (not assessed): {c.more_claims}")
     print()
 
     # Step 3: verify — escalate the low-confidence rows to the full pipeline.
@@ -54,15 +54,16 @@ def main() -> None:
     # claim that already has a deep verification surfaces immediately
     # via ``verification_url`` and you can skip the escalation.
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
+    low = [c for c in quick if c.status == "completed" and c.confidence == "low"]
+    doubtful = [{"claim": c.claim} for c in low[:20]]
     print(f"Escalating {len(doubtful)} low-confidence claims to full verification:\n")
     results = client.verify_batch_and_wait(claims=doubtful, timeout=180) if doubtful else []
     for r in results:
         v = r.verification
         if v is None:
-            print(f"{r.status.upper():<14} {r.claim_text}")
+            print(f"{r.status.upper():<14} {r.claim}")
             continue
-        print(f"{v.verdict.upper():<14} (lenz_score {v.lenz_score}) {r.claim_text}")
+        print(f"{v.verdict.upper():<14} (lenz_score {v.lenz_score}) {r.claim}")
         if v.verdict.lower() in ("false", "misleading") and v.sources:
             print(f"  ↳ {v.sources[0].title}")
             print(f"    {v.sources[0].url}")

@@ -31,14 +31,14 @@ def main() -> None:
 
     for r in results:
         if r.status == "completed" and r.verification is not None:
-            print(f"[completed] {r.claim_text} → {r.verification.verdict} ({r.verification.lenz_score})")
+            print(f"[completed] {r.claim} → {r.verification.verdict} ({r.verification.lenz_score})")
         elif r.status == "failed":
             detail = r.status_detail
-            reason = (detail.error or detail.failure_detail) if detail else "unknown"
-            print(f"[failed]    {r.claim_text} → {reason}")
+            reason = detail.failure.detail if detail and detail.failure else "unknown"
+            print(f"[failed]    {r.claim} → {reason}")
         else:
             # needs_input (resolve with client.select) or timeout (poll later)
-            print(f"[{r.status}] {r.claim_text}")
+            print(f"[{r.status}] {r.claim}")
 
 
 if __name__ == "__main__":

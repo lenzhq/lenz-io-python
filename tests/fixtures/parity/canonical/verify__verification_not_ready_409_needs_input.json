@@ -1,0 +1,15 @@
+{
+  "status": 409,
+  "body": {
+    "detail": "This check is waiting for your input.",
+    "code": "verification_not_ready",
+    "status": "needs_input",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "hint": "GET /verify/status/7cff18da2d979d6370e54a160be121ad lists the options and how to resolve them."
+  },
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  }
+}

@@ -20,8 +20,11 @@ Error messages follow the Tier 2 Rust-style format:
 from __future__ import annotations
 
 import json
+import re
 import warnings
 from typing import TYPE_CHECKING, Any
+
+from typing_extensions import deprecated
 
 if TYPE_CHECKING:
     from .models import Citecheck, ReviewFull
@@ -46,7 +49,26 @@ class LenzError(Exception):
         ``"no_credits"``. Present on 402, 403 and 429; ``""`` when the
         server sent none. Branch on this rather than on message text.
       * ``body``       — parsed JSON response body if available
+      * ``retryable``  — whether sending the same request again can succeed:
+        ``True`` for a network failure, a transport timeout, a 429, a 5xx and
+        a 409 ``idempotency_conflict`` (the first request with that key is
+        still running) or ``verification_not_ready``; ``False`` for any other
+        4xx and a version error; ``None`` when there was no HTTP status (a
+        missing key, a ``*_and_wait`` timeout, a needs-input pause, a bad
+        webhook signature). A failed
+        verification, review or citation check carries the server's value
+        (``None`` when it sent none), and a boolean ``retryable`` in the
+        response's ``failure`` block always wins. Since 3.0; set on every
+        instance at construction, and a ``retryable=`` passed in wins.
     """
+
+    retryable: bool | None
+    #: The ``Idempotency-Key`` the failed call sent, or ``None`` when it sent
+    #: none. To resend safely, pass it back (``idempotency_key=exc.idempotency_key``):
+    #: the server then replays the first answer, or reports the first request
+    #: still running, instead of running it twice. A plain new call sends a
+    #: new key, and can run (and charge) the work a second time. Since 3.0.
+    idempotency_key: str | None = None
 
     def __init__(
         self,
@@ -70,11 +92,24 @@ class LenzError(Exception):
         self.status_code = status_code
         self.code = code
         self.body = body
+        self.retryable = self._derived_retryable()
         # Per-subclass enrichment (retry_after, task_id, etc.). Set on the
         # instance so they're accessible as ``exc.task_id`` regardless of
         # which subclass raised.
         for k, v in extra.items():
             setattr(self, k, v)
+
+    def _derived_retryable(self) -> bool | None:
+        """``retryable`` when nothing more specific says (see the class
+        docstring). A class with its own rule overrides this."""
+        status = self.status_code
+        if status == 429 or 500 <= status < 600:
+            return True
+        if status == 409 and _resendable_409(self):
+            return True
+        if 400 <= status < 500:
+            return False
+        return None
 
     def __str__(self) -> str:  # pragma: no cover - trivial
         lines = [self.message or self.__class__.__name__]
@@ -87,6 +122,18 @@ class LenzError(Exception):
         if self.request_id:
             lines.append(f"  Request ID: {self.request_id}")
         return "\n".join(lines)
+
+
+#: 409 codes that mean "not yet": the same request, sent again later (with the
+#: same ``Idempotency-Key``), can succeed.
+_RESENDABLE_409_CODES = ("idempotency_conflict", "verification_not_ready")
+
+
+def _resendable_409(err: LenzError) -> bool:
+    """Whether a 409 says "not yet". Reads the body as sent too: the 2.x
+    attributes leave ``code`` empty on endpoints whose original body had none."""
+    sent = err.body.get("code") if isinstance(err.body, dict) else None
+    return err.code in _RESENDABLE_409_CODES or sent in _RESENDABLE_409_CODES
 
 
 class LenzAuthError(LenzError):
@@ -145,8 +192,9 @@ class LenzQuotaExceededError(LenzError):
     cost: int | None = None
 
     @property
+    @deprecated("Use `remaining`.", category=None)
     def credits_remaining(self) -> int:
-        """Deprecated alias for ``remaining``. Removed in 3.0.
+        """Deprecated: use `remaining`. To be removed in a future major release.
 
         Returns 0 when ``remaining`` is unknown, which is exactly the
         ambiguity ``remaining`` exists to fix — migrate to ``remaining``.
@@ -178,7 +226,7 @@ class LenzQuotaExceededError(LenzError):
     @staticmethod
     def _warn_credits_remaining() -> None:
         warnings.warn(
-            "credits_remaining is deprecated and will be removed in 3.0; "
+            "credits_remaining is deprecated and will be removed in a future major release; "
             "use `remaining`, which is None when the server didn't report a "
             "balance (credits_remaining reports that as 0). It is NOT the "
             "API's `credits_remaining` body field — that is the credit pool, "
@@ -228,9 +276,52 @@ class LenzAPIError(LenzError):
 
     ``retry_after`` is the wait the response stated (``Retry-After``), or
     ``None`` when it stated none.
+
+    Network failures are :class:`LenzConnectionError`, a subclass.
     """
 
     retry_after: int | None = None
+
+    def _derived_retryable(self) -> bool | None:
+        # Any status this class is raised for is a 5xx; without one (built by
+        # hand, or a request that failed with no diagnostic) it is unknown.
+        return None if self.status_code == 0 else True
+
+
+class LenzConnectionError(LenzAPIError):
+    """The request never got an answer: the connection failed or broke
+    (DNS, refused, reset, TLS, a server or proxy that hung up), after the
+    SDK's own retries.
+
+    A subclass of :class:`LenzAPIError`, which is what 2.x raised, so an
+    existing ``except LenzAPIError`` keeps catching it. ``__cause__`` is the
+    underlying ``httpx`` exception and ``status_code`` is 0. ``retryable`` is
+    ``True``: the same request can succeed once the network is back (calls
+    that charge send an ``Idempotency-Key``). Resend with the same key: pass
+    ``idempotency_key=exc.idempotency_key`` back, and the server replays the
+    first answer if the first request did arrive. A plain new call sends a new
+    key, and can run (and charge) the work twice.
+    """
+
+    def _derived_retryable(self) -> bool | None:
+        return True
+
+
+class LenzRequestTimeoutError(LenzConnectionError):
+    """One HTTP request got no answer within its timeout (``Lenz(timeout=)``
+    or the call's ``timeout=``), after the SDK's own retries.
+
+    Not :class:`LenzTimeoutError`, which is a ``*_and_wait`` helper reaching
+    its own deadline while the job keeps running. A subclass of
+    :class:`LenzConnectionError` and so of :class:`LenzAPIError`, which is
+    what 2.x raised.
+
+    The request may have reached the server and be running. Resend only with
+    the same key (``idempotency_key=exc.idempotency_key``): the server then
+    replays the first answer (or answers 409 ``idempotency_conflict`` while it
+    still runs) instead of running it again. A plain new call sends a new key,
+    and can run (and charge) the work twice.
+    """
 
 
 class LenzUpstreamUnavailableError(LenzAPIError):
@@ -255,6 +346,9 @@ class LenzTimeoutError(LenzError):
     """``verify_and_wait`` exceeded the configured timeout.
 
     ``task_id`` is set so callers can resume via ``client.get_status(task_id)``.
+    The job keeps running server-side: read it later by its id rather than
+    resubmit (``retryable`` is ``None``: no request failed). A single HTTP request that timed out is
+    :class:`LenzRequestTimeoutError` instead.
     """
 
     task_id: str = ""
@@ -297,6 +391,10 @@ class LenzPipelineError(LenzError):
     retryable: bool | None = None
     hint: str = ""
 
+    def _derived_retryable(self) -> bool | None:
+        # The server's value or nothing: never guessed from a status.
+        return None
+
 
 class LenzVerificationNotReadyError(LenzError):
     """409 — ``verifications.get`` was handed the ``task_id`` of a run that is
@@ -317,6 +415,17 @@ class LenzVerificationNotReadyError(LenzError):
     hint: str = ""
 
 
+class LenzNotFoundError(LenzError):
+    """404 — nothing was found under the id (or path) the request names, for
+    the API key it was sent with.
+
+    Check the id and the key: resending the same request will not find it
+    (``retryable`` is ``False``). A subclass of :class:`LenzError`, which is
+    what 2.x raised for a 404. An id whose verification its account's
+    retention period removed answers 410 instead (:class:`LenzGoneError`).
+    """
+
+
 class LenzGoneError(LenzError):
     """410 — the verification existed, and its account's retention period has
     since removed it.
@@ -328,8 +437,8 @@ class LenzGoneError(LenzError):
 
     Raised by ``verifications.get``, ``get_status`` on a completed task,
     ``verifications.related``, ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
-    of polling to the deadline. A 404 stays a plain :class:`LenzError`: only
-    an id you could read before answers 410.
+    of polling to the deadline. A 404 is :class:`LenzNotFoundError`: only an
+    id you could read before answers 410.
     """
 
     purged_at: str | None = None
@@ -396,6 +505,41 @@ class LenzWebhookSignatureError(LenzError):
     Possible reasons: tampered body (HMAC mismatch), missing
     ``X-Lenz-Signature`` header, replay window exceeded, malformed body.
     """
+
+
+class LenzApiVersionError(LenzError):
+    """A response named an API version this SDK does not read.
+
+    Every API response names the version that served it in the
+    ``X-Lenz-API-Version`` header. lenz-io 3.x asks for ``2026-10-11`` and reads
+    that version's response shape only, so an answer in another version (in
+    practice ``2026-05-13``, which a reply replayed from before the account's
+    version changed, or a server pinned to the older version, still sends) is
+    refused instead of being misread. Applies to every response of a client
+    call, success or error; never to webhook payloads.
+
+    Fields:
+      * ``api_version`` — the version the response named.
+      * ``status_code`` — the response's HTTP status.
+      * ``body``        — the response body as sent (parsed JSON), or ``None``
+        when it was not a JSON object.
+    """
+
+    def __init__(self, *, api_version: str = "", **kwargs: Any) -> None:
+        super().__init__(api_version=api_version, **kwargs)
+        self.api_version = api_version
+
+    def _derived_retryable(self) -> bool | None:
+        # The same request answers in the same version again.
+        return False
+
+
+#: The job errors under the names the other error classes follow (``...Error``),
+#: the names the Node SDK uses. The same classes: catch either name.
+ReviewFailedError = ReviewFailed
+ReviewTimeoutError = ReviewTimeout
+CitecheckFailedError = CitecheckFailed
+CitecheckTimeoutError = CitecheckTimeout
 
 
 # ── Mapping table ────────────────────────────────────────────────────────
@@ -514,17 +658,195 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+# ── The original error bodies, read from a newer-shape body ─────────────
+#
+# The API's current response shape (what 3.0 asks for) gives every error one
+# envelope: ``detail`` is a sentence, ``code`` is always set, a 422 lists its
+# fields in ``errors``, and waits and links have one name each. The 2.x shape
+# differed by endpoint. ``_original_error`` rebuilds the 2.x body by endpoint
+# (the same rules as the Node SDK), so every attribute of the exception keeps
+# its 2.x value; ``exc.body`` is the body as sent.
+
+#: /review and /citecheck (submit and read) kept their own error envelope.
+_REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
+
+#: The cancel calls are new in 3.0: no earlier shape to read, so the server's
+#: ``code`` stays on the error (``not_found``, ``use_review_cancel``, ...).
+_CANCEL_PATH = re.compile(r"^/(?:verify|reviews|citechecks)/[^/]+/cancel$")
+_SELECT_PATH = re.compile(r"^/verify/[^/]+/select$")
+
+#: Codes the newer shape sends where the original error carried no ``code``
+#: (outside /review and /citecheck, which always sent one).
+_CODELESS = frozenset(
+    {
+        "not_authenticated",
+        "not_found",
+        "idempotency_body_mismatch",
+        "idempotency_conflict",
+        "malformed_body",
+        "method_not_allowed",
+        "validation_error",
+        "blank_input",
+        "unsupported_language",
+        "too_many_items",
+        # The fallback codes: any 4xx without its own, and a 500.
+        "invalid_request",
+        "internal_error",
+    }
+)
+
+
+def _rename(o: dict[str, Any], old: str, new: str) -> None:
+    """``old`` renamed to ``new`` when only ``old`` is there (in place)."""
+    if old in o and new not in o:
+        o[new] = o.pop(old)
+
+
+def _original_wait_and_link(o: dict[str, Any], status: int) -> None:
+    """A wait and a docs link under their original names."""
+    code = o.get("code")
+    if status == 429 and code == "extract_daily_limit":
+        _rename(o, "retry_after", "reset_in_seconds")
+    if status == 429 and code in ("review_in_flight", "citecheck_in_flight"):
+        _rename(o, "retry_after", "retry_after_seconds")
+    if status in (402, 429, 503):
+        _rename(o, "docs_url", "doc_url")
+
+
+def _original_error(status: int, parsed: dict[str, Any], method: str, path: str) -> dict[str, Any]:
+    """``parsed`` as the original response shape sent it, as far as the newer
+    body and the request's endpoint tell."""
+    out = dict(parsed)
+    code = out["code"] if isinstance(out.get("code"), str) else ""
+    errors = out["errors"] if isinstance(out.get("errors"), list) else None
+    path = path.split("?", 1)[0]
+    if method.upper() == "POST" and _CANCEL_PATH.match(path):
+        # The three cancel calls are new in 3.0: there is no 2.x reading of
+        # their errors, so the body is read as sent (code, detail and errors),
+        # as the Node SDK reads it.
+        return out
+    if _REVIEW_FAMILY.match(path):
+        # A missing or unknown credential is refused before the endpoint runs.
+        if code == "not_authenticated":
+            del out["code"]
+        if status == 422:
+            detail = out.get("detail")
+            if method.upper() == "POST" and path == "/review" and isinstance(detail, str):
+                if code in ("blank_input", "unsupported_language"):
+                    out["code"] = "validation_error"
+                    if code == "unsupported_language" and not detail.startswith("language: "):
+                        out["detail"] = f"language: {detail}"
+            if errors is not None:
+                first: dict[str, Any] = next((e for e in errors if isinstance(e, dict)), {})
+                loc, msg = first.get("loc"), first.get("msg")
+                if isinstance(loc, list) and len(loc) > 1 and loc[1] == "payload" and isinstance(msg, str):
+                    # The original named the body parameter: ``payload.text: ...``.
+                    out["detail"] = ".".join(str(p) for p in loc[1:]) + f": {msg}"
+                items: list[Any] = []
+                for item in errors:
+                    if not isinstance(item, dict):
+                        items.append(item)
+                        continue
+                    o: dict[str, Any] = {}
+                    if "loc" in item:
+                        o["loc"] = item["loc"]
+                    if "msg" in item:
+                        renamed = item["msg"] == detail and out.get("detail") != detail
+                        o["msg"] = out["detail"] if renamed else item["msg"]
+                    items.append(o)
+                out["errors"] = items
+            elif code == "idempotency_body_mismatch":
+                out["errors"] = [{"loc": ["header"], "msg": out.get("detail")}]
+        if (
+            status == 402
+            and method.upper() == "POST"
+            and path == "/citecheck"
+            and "credits_remaining" not in out
+            and isinstance(out.get("remaining"), int)
+        ):
+            # One credit per citation: the pool equals ``remaining``.
+            out["credits_remaining"] = out["remaining"]
+        _original_wait_and_link(out, status)
+        return out
+    if status == 422 and code == "blank_input" and isinstance(out.get("detail"), str) and method.upper() == "POST":
+        # A blank input said "Text is required." (or named its item, or
+        # ``texts``), where the newer sentence names ``claim`` / ``claims``.
+        loc = errors[0].get("loc") if errors and isinstance(errors[0], dict) else None
+        if isinstance(loc, list) and loc and loc[0] == "body":
+            if path in ("/verify", "/assess"):
+                if len(loc) == 2 and loc[1] == "claim":
+                    out["detail"] = "Text is required."
+            elif path == "/verify/batch":
+                if len(loc) == 4 and loc[1] == "claims" and isinstance(loc[2], int) and not isinstance(loc[2], bool):
+                    out["detail"] = f"claims[{loc[2]}].text is required."
+            elif _SELECT_PATH.match(path):
+                if len(loc) == 2 and loc[1] == "claims":
+                    out["detail"] = "texts is required and must be non-empty."
+    if status == 422 and code == "blank_input" and path == "/assess":
+        loc = errors[0].get("loc") if errors and isinstance(errors[0], dict) else None
+        if isinstance(loc, list) and "claims" in loc:
+            # A blank item in ``claims``: the original said ``blank_item``.
+            out["code"] = "blank_item"
+            out.pop("errors", None)
+            return out
+    if status == 422 and code == "unsupported_language" and path == "/verify/batch" and errors:
+        loc = errors[0].get("loc") if isinstance(errors[0], dict) else None
+        detail = out.get("detail")
+        if isinstance(loc, list) and len(loc) > 2 and loc[1] == "claims" and isinstance(loc[2], int):
+            if isinstance(detail, str) and not detail.startswith("claims["):
+                # The original named the item: ``claims[1].Unsupported language ...``.
+                out["detail"] = f"claims[{loc[2]}].{detail}"
+    if (
+        status == 422
+        and code == "validation_error"
+        and errors
+        and all(isinstance(e, dict) and isinstance(e.get("type"), str) and e["type"] != code for e in errors)
+    ):
+        # Request-schema validation: the original ``detail`` was the list of
+        # field errors itself, each ``{type, loc, msg, ...}``, with no ``code``.
+        listed = []
+        for item in errors:
+            ordered = {k: item[k] for k in ("type", "loc", "msg") if k in item}
+            ordered.update({k: v for k, v in item.items() if k not in ordered})
+            listed.append(ordered)
+        original: dict[str, Any] = {"detail": listed}
+        for key, value in out.items():
+            if key not in ("detail", "code", "errors"):
+                original["doc_url" if key == "docs_url" else key] = value
+        return original
+    # /assess sent ``too_many_items``; /ask sent no code for an unfinished
+    # verification (``GET /verifications/{id}`` still sends ``verification_not_ready``).
+    codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
+        code == "verification_not_ready" and path.startswith("/ask/")
+    )
+    if codeless:
+        del out["code"]
+    out.pop("errors", None)
+    _original_wait_and_link(out, status)
+    return out
+
+
 def map_response_to_error(
     status_code: int,
     body: bytes | str | None,
     headers: dict[str, str] | None = None,
+    *,
+    endpoint: tuple[str, str] | None = None,
 ) -> LenzError:
     """Translate an HTTP error response into the right typed exception.
 
     Returns an *instance* (not raised) so callers can decide whether
     to raise, log, or surface. Keep this pure — no I/O.
+
+    ``endpoint`` is the request's ``(method, path)``: the client passes it, and
+    the exception gets the attributes 2.x gave (``code``, ``message``,
+    ``errors``, waits), which differed by endpoint; ``exc.body`` is the body
+    as sent. Without it the body is read as it stands.
     """
-    parsed = _parse_body(body)
+    raw = _parse_body(body)
+    parsed = raw
+    if endpoint is not None:
+        parsed = _original_error(status_code, raw, *endpoint)
     headers = headers or {}
     request_id = headers.get("X-Request-ID") or headers.get("x-request-id") or ""
 
@@ -536,6 +858,8 @@ def map_response_to_error(
 
     if status_code in _STATUS_MAP:
         cls, default_msg, doc_url = _STATUS_MAP[status_code]
+    elif status_code == 404:
+        cls, default_msg, doc_url = LenzNotFoundError, f"HTTP {status_code}", f"{_DOCS_BASE}/errors"
     elif status_code == 410 and code in _GONE_410_CODES:
         cls, default_msg, doc_url = _GONE_410_CODES[code]
     elif status_code == 409 and code in _VERIFICATION_409_CODES:
@@ -560,7 +884,7 @@ def map_response_to_error(
         request_id=request_id,
         status_code=status_code,
         code=code,
-        body=parsed,
+        body=raw,
     )
 
     # Class-specific enrichment from the response body. Each is set on the
@@ -568,12 +892,9 @@ def map_response_to_error(
     if status_code == 409 and isinstance(err, (LenzVerificationNotReadyError, LenzPipelineError)):
         # The generic 4xx advice ("retry; file an issue") is wrong for both:
         # the server's own hint says what to do, with a class default behind it.
-        # A failed run states its cause flat in the original response shape
-        # and in one ``failure`` block in the newer one. The block is read only
-        # for a newer-shape body, and only where the flat key is absent.
+        # A failed run states its cause in one ``failure`` block.
         raw_failure = parsed.get("failure")
-        newer = isinstance(raw_failure, dict) and "failure_reason" not in parsed
-        failure: dict[str, Any] = raw_failure if newer and isinstance(raw_failure, dict) else {}
+        failure: dict[str, Any] = raw_failure if isinstance(raw_failure, dict) else {}
 
         def _read(key: str, block_key: str) -> Any:
             return parsed[key] if key in parsed else failure.get(block_key)
@@ -586,7 +907,7 @@ def map_response_to_error(
         else:
             reason = _opt_str(_read("failure_reason", "code"))
             # The original spelling of "nothing checkable" on a verification.
-            err.failure_reason = "not_a_claim" if newer and reason == "no_checkable_claim" else reason
+            err.failure_reason = "not_a_claim" if reason == "no_checkable_claim" else reason
             err.failure_class = _opt_str(_read("failure_class", "failure_class"))
             # Only a real boolean is a retry signal, as in the wait path.
             retryable = _read("retryable", "retryable")
@@ -600,23 +921,29 @@ def map_response_to_error(
             else:
                 err.fix = "This run will not produce a result. Resubmit with a different claim."
 
+    if status_code == 409 and code == "use_review_cancel":
+        # Not "not yet": the task belongs to a review, and the review is what
+        # to cancel. Sending the same request again can never succeed.
+        err.fix = "Cancel the review that started this task instead: client.cancel_review(review_id)."
+        err.retryable = False
+
     if isinstance(err, LenzGoneError):
         err.purged_at = _opt_str(parsed.get("purged_at")) or None
         # Retrying cannot bring it back, so not the generic 4xx advice.
         err.fix = "Its account's retention period removed it. A certificate issued for it is still available."
 
     if isinstance(err, LenzAPIError) and not isinstance(err, LenzUpstreamUnavailableError):
-        err.retry_after = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+        err.retry_after = _opt_wait(headers.get("Retry-After") or headers.get("retry-after"))
 
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
         # the fallback for any proxy that strips the body.
-        stated = _opt_int(parsed.get("retry_after"))
+        stated = _opt_wait(parsed.get("retry_after"))
         if stated is None:
             # The /review error body states its wait under this name.
-            stated = _opt_int(parsed.get("retry_after_seconds"))
+            stated = _opt_wait(parsed.get("retry_after_seconds"))
         if stated is None:
-            stated = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+            stated = _opt_wait(headers.get("Retry-After") or headers.get("retry-after"))
         err.retry_after = stated
 
     if isinstance(err, LenzQuotaExceededError):
@@ -628,9 +955,9 @@ def map_response_to_error(
         # sending null precisely so "unknown" stays distinguishable from
         # "zero". Collapsing that here would throw the distinction away.
         err.remaining = _opt_int(parsed.get("remaining"))
-        if "remaining" not in parsed and "requested" not in parsed and "doc_url" not in parsed and "docs_url" in parsed:
-            # A newer-shape body (``docs_url``) without the capability figure:
-            # the pool divided by this one call's price.
+        if "remaining" not in parsed and "requested" not in parsed:
+            # A body without the capability figure: the pool divided by this
+            # one call's price.
             pool, price = _opt_int(parsed.get("credits_remaining")), _opt_int(parsed.get("cost"))
             if pool is not None and price:
                 err.remaining = pool // price
@@ -639,6 +966,9 @@ def map_response_to_error(
         # credits. The body's ``credits_remaining`` lands on ``credit_balance``,
         # NOT on the same-named deprecated property — that one aliases
         # ``remaining`` and means a different quantity (see the class docstring).
+        # (A citation check's current-shape 402 leaves the pool out because it
+        # equals ``remaining``; ``_original_error`` restores it for that
+        # endpoint only.)
         err.credit_balance = _opt_int(parsed.get("credits_remaining"))
         err.cost = _opt_int(parsed.get("cost"))
         resets_at = parsed.get("resets_at")
@@ -659,13 +989,10 @@ def map_response_to_error(
             "reset_in_seconds" not in parsed
             and "retry_after_seconds" not in parsed
             and "retry_after" in parsed
-            and "docs_url" in parsed
-            and "doc_url" not in parsed
             and code not in _IN_FLIGHT_429_CODES
         ):
-            # A newer-shape body (``docs_url``) names every wait
-            # ``retry_after``. The in-flight refusals never carried
-            # ``reset_in_seconds``.
+            # The current shape names every wait ``retry_after``. The
+            # in-flight refusals never carried ``reset_in_seconds``.
             err.reset_in_seconds = _opt_int(parsed.get("retry_after"))
         rl_upgrade_url = parsed.get("upgrade_url")
         err.upgrade_url = rl_upgrade_url if isinstance(rl_upgrade_url, str) else ""
@@ -687,14 +1014,38 @@ def map_response_to_error(
             parsed.get("retry_after_seconds"),
             parsed.get("retry_after"),
         ):
-            resolved = _opt_int(candidate)
+            resolved = _opt_wait(candidate)
             if resolved is not None:
                 err.retry_after = resolved
                 break
         else:
             err.retry_after = 0
 
+    # A boolean ``retryable`` in the body's failure block, else at its top
+    # level, is the server's own word and wins over the status. (A failed
+    # verification's 409 read it above.)
+    if not isinstance(err, LenzPipelineError):
+        candidates = [
+            block.get("retryable") for block in (raw.get("failure"), parsed.get("failure")) if isinstance(block, dict)
+        ]
+        candidates += [raw.get("retryable"), parsed.get("retryable")]
+        stated = next((c for c in candidates if isinstance(c, bool)), None)
+        if stated is not None:
+            err.retryable = stated
+
     return err
+
+
+#: The longest wait ``retry_after`` reports, in seconds (the client's
+#: ``MAX_TIMEOUT_SECONDS``): a larger stated wait reads as this.
+_MAX_STATED_WAIT = 2_147_483
+
+
+def _opt_wait(value: Any) -> int | None:
+    """A stated wait in seconds, as ``_opt_int`` reads it (a non-finite or
+    unparseable value is ``None``), at most ``_MAX_STATED_WAIT``."""
+    seconds = _opt_int(value)
+    return None if seconds is None else min(seconds, _MAX_STATED_WAIT)
 
 
 def _opt_int(value: Any) -> int | None:
@@ -718,7 +1069,8 @@ def _opt_int(value: Any) -> int | None:
         return None
     try:
         return int(float(value))
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: an infinite value (``"1e999"``) is unknown, as in Node.
         return None
 
 
@@ -727,6 +1079,9 @@ def _fix_hint_for(status_code: int) -> str:
         401: "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
         403: "This key doesn't have access to that resource.",
         402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
+        404: (
+            "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+        ),
         422: "Check the request body against the OpenAPI spec.",
         429: "Wait Retry-After seconds and retry.",
     }.get(status_code, "Retry; if the error persists, file an issue with the Request ID.")
@@ -737,21 +1092,29 @@ __all__ = [
     "NO_RETRY_429_CODES",
     "UPSTREAM_503_CODES",
     "CitecheckFailed",
+    "CitecheckFailedError",
     "CitecheckTimeout",
+    "CitecheckTimeoutError",
     "LenzAPIError",
+    "LenzApiVersionError",
     "LenzAuthError",
+    "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
     "LenzNeedsInputError",
+    "LenzNotFoundError",
     "LenzPipelineError",
     "LenzQuotaExceededError",
     "LenzRateLimitError",
+    "LenzRequestTimeoutError",
     "LenzTimeoutError",
     "LenzUpstreamUnavailableError",
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
     "ReviewFailed",
+    "ReviewFailedError",
     "ReviewTimeout",
+    "ReviewTimeoutError",
     "map_response_to_error",
 ]

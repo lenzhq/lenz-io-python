@@ -1,0 +1,172 @@
+{
+  "status": 200,
+  "body": {
+    "event": "review.failed",
+    "event_id": "evt_09301870aba4e8f6ae33ff60",
+    "review_id": "d6b2bd72",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "status": "failed",
+    "review": {
+      "review_id": "d6b2bd72",
+      "view": "full",
+      "status": "failed",
+      "outcome": "incomplete",
+      "created_at": "2026-10-01T09:07:00.123456Z",
+      "completed_at": "2026-10-01T10:07:00.123456Z",
+      "language": "en",
+      "policy": {
+        "verdicts": [
+          "False",
+          "Mostly False",
+          "Mixed"
+        ],
+        "confidence": [
+          "low"
+        ],
+        "max_assessments": 20,
+        "max_verifications": 5,
+        "depth": "standard",
+        "max_citations": 0,
+        "suggest_edits": false
+      },
+      "summary": {
+        "claims_selected": 1,
+        "claim_limit": 20,
+        "claim_limit_reached": false,
+        "input_truncated": false,
+        "assessments": {
+          "completed": 1,
+          "failed": 0
+        },
+        "verifications": {
+          "planned": 1,
+          "completed": 0,
+          "failed": 1
+        },
+        "issues": 1,
+        "citations_found": null,
+        "citations_selected": null,
+        "citation_limit": null,
+        "citation_limit_reached": null,
+        "citation_checks": null,
+        "citation_issues": 0,
+        "citations_skipped": null
+      },
+      "credits": {
+        "charged": 1
+      },
+      "poll_after_seconds": null,
+      "issues": [
+        {
+          "claim_index": 0,
+          "claim": "The Eiffel Tower is in Berlin.",
+          "verified_claim": null,
+          "verdict": "False",
+          "confidence": "high",
+          "source": "assessment",
+          "verification_id": null,
+          "verification_status": "failed",
+          "verification_url": null,
+          "url": null,
+          "escalation": {
+            "matched_rules": [
+              "verdict"
+            ],
+            "disposition": "planned"
+          },
+          "key_finding": null,
+          "rationale": null,
+          "suggested_rewrite": null,
+          "failure": {
+            "failure_reason": "cancelled",
+            "failure_class": "cancelled",
+            "retryable": false,
+            "hint": null,
+            "docs_url": "https://lenz.io/docs/errors#cancelled"
+          },
+          "suggested_edits": null
+        }
+      ],
+      "failures": [],
+      "citation_issues": [],
+      "citation_failures": [],
+      "claims": [
+        {
+          "index": 0,
+          "claim": "The Eiffel Tower is in Berlin.",
+          "positions": null,
+          "result": {
+            "verdict": "False",
+            "confidence": "high",
+            "source": "assessment",
+            "is_issue": true
+          },
+          "assessment": {
+            "status": "completed",
+            "verdict": "False",
+            "confidence": "high",
+            "rationale": null,
+            "dissent": null,
+            "verification_url": null,
+            "error_code": null,
+            "identified_claims": [],
+            "hint": null,
+            "suggested_rewrite": null,
+            "failure": null
+          },
+          "escalation": {
+            "matched_rules": [
+              "verdict"
+            ],
+            "disposition": "planned"
+          },
+          "verification": {
+            "verification_id": null,
+            "task_id": "7cff18da2d979d6370e54a160be121ad",
+            "claim": null,
+            "language": null,
+            "visibility": null,
+            "depth": null,
+            "domain": null,
+            "entities": [],
+            "verdict": null,
+            "confidence": null,
+            "lenz_score": null,
+            "key_finding": null,
+            "executive_summary": null,
+            "suggested_rewrite": null,
+            "warnings": [],
+            "created_at": null,
+            "modified_at": null,
+            "verification_url": null,
+            "url": null,
+            "failure": {
+              "failure_reason": "cancelled",
+              "failure_class": "cancelled",
+              "retryable": false,
+              "hint": null,
+              "docs_url": "https://lenz.io/docs/errors#cancelled"
+            },
+            "status": "failed",
+            "content_status": "available"
+          },
+          "suggested_edits": null
+        }
+      ],
+      "citations": [],
+      "failure": {
+        "failure_reason": "cancelled",
+        "failure_class": "cancelled",
+        "retryable": false,
+        "hint": null,
+        "docs_url": "https://lenz.io/docs/errors#cancelled"
+      },
+      "more_claims": [],
+      "more_claim_locations": [],
+      "more_citations": []
+    },
+    "attempt": 1,
+    "delivered_at": "2026-10-01T11:07:00.123456+00:00"
+  },
+  "headers": {}
+}

@@ -1,0 +1,350 @@
+"""Every public call form, with scripted answers, for the request freeze.
+
+Each case is ``(name, client, call, answers)``: ``client`` names a factory in
+``freeze_harness.CLIENTS``, ``call`` runs the public method, ``answers`` maps
+``(method, path)`` to the scripted answers. ``test_request_freeze.py`` records
+what each case sends (URL, raw body, ordered headers, the four timeout
+components, sleeps) and compares it with ``fixtures/freeze/requests.json``.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+import httpx
+from freeze_harness import PINNED, Answer
+
+from lenz_io import Lenz
+
+_CONTRACT = Path(__file__).parent / "fixtures" / "contract"
+
+
+def _load(name: str) -> Any:
+    return json.loads((_CONTRACT / name).read_text())
+
+
+TASK = "t1"
+ACCEPTED = (200, {"task_id": TASK, "claim_text": "A."})
+DONE = (200, {"status": "completed", "task_id": TASK, "result": {"verification_id": "v1", "claim": "A."}})
+DONE2 = (200, {"status": "completed", "task_id": "t2", "result": {"verification_id": "v2", "claim": "B."}})
+RUNNING = (200, {"status": "processing", "task_id": TASK, "progress": {"step": "research", "poll_after_seconds": 3}})
+RUNNING_NO_HINT = (200, {"status": "processing", "task_id": TASK, "progress": {"step": "research"}})
+BATCH = (200, {"batch_id": "b1", "items": [{"task_id": TASK, "claim": "A."}, {"task_id": "t2", "claim": "B."}]})
+EXTRACTED = (200, {"claims": [], "status": "ok"})
+ASSESSED = (200, {"claims": []})
+SELECTED = (200, {"items": []})
+REVIEW_DONE = _load("review_completed.json")
+REVIEW_RUNNING = _load("review_assessing.json")
+RID = REVIEW_DONE["review_id"]
+CHECK_DONE = _load("citecheck_completed.json")
+CID = CHECK_DONE["citecheck_id"]
+CANCEL_TASK = _load("cancel_verify_cancelled.json")
+CANCEL_REVIEW = _load("cancel_review_cancelled.json")
+CANCEL_CHECK = _load("cancel_citecheck_cancelled.json")
+_ITEM = _load("verifications_list.json")["items"][0]
+PAGE_1 = (200, {"items": [_ITEM], "total": 2, "page": 1, "page_size": 1})
+PAGE_2 = (200, {"items": [_ITEM], "total": 2, "page": 2, "page_size": 1})
+LIB_ITEM = {"verification_id": "lib1", "claim": "A."}
+LIB_1 = (200, {"items": [LIB_ITEM], "total": 2, "page": 1, "page_size": 1})
+LIB_2 = (200, {"items": [LIB_ITEM], "total": 2, "page": 2, "page_size": 1})
+DETAIL = (200, _load("verifications_detail.json"))
+CERT = (200, _load("certificate.json"))
+USAGE = (200, _load("usage.json"))
+ASK_REPLY = (200, {"role": "expert", "content": "Because."})
+ASK_HISTORY = (200, {"messages": []})
+RELATED = (200, {"items": []})
+DRAFT = "Draft text."
+
+S503 = (503, {"detail": "busy"})
+CONFLICT = (409, {"code": "idempotency_conflict", "detail": "in flight"}, {"Retry-After": "2"})
+LIMITED = (429, {"code": "rate_limited", "detail": "slow down"}, {"Retry-After": "2"})
+NOT_FOUND = (404, {"code": "not_found", "detail": "nope"})
+
+
+def _drop() -> Exception:
+    return httpx.ConnectError("connection refused")
+
+
+Case = tuple[str, str, Callable[[Lenz], Any], dict[tuple[str, str], list[Answer]]]
+
+CASES: list[Case] = [
+    # ── submits ──
+    ("verify_pinned", "default", lambda c: c.verify("A.", idempotency_key=PINNED), {("POST", "/verify"): [ACCEPTED]}),
+    ("verify_random_key", "default", lambda c: c.verify(claim="A."), {("POST", "/verify"): [ACCEPTED]}),
+    ("verify_no_key", "default", lambda c: c.verify("A.", idempotency=False), {("POST", "/verify"): [ACCEPTED]}),
+    (
+        "verify_options",
+        "default",
+        lambda c: c.verify(
+            "A.",
+            language="es",
+            visibility="unlisted",
+            depth="low",
+            source_url="https://e.x/a",
+            webhook_url="https://e.x/h",
+        ),
+        {("POST", "/verify"): [ACCEPTED]},
+    ),
+    (
+        "verify_batch",
+        "default",
+        lambda c: c.verify_batch(claims=[{"claim": "A."}, {"text": "B."}], idempotency_key=PINNED, language="de"),
+        {("POST", "/verify/batch"): [BATCH]},
+    ),
+    ("extract", "default", lambda c: c.extract(text="Doc."), {("POST", "/extract"): [EXTRACTED]}),
+    (
+        "extract_options",
+        "default",
+        lambda c: c.extract(text="Doc.", language="it", focus="figures", locate=True, idempotency_key=PINNED),
+        {("POST", "/extract"): [EXTRACTED]},
+    ),
+    ("extract_timeout_5", "default", lambda c: c.extract(text="Doc.", timeout=5), {("POST", "/extract"): [EXTRACTED]}),
+    (
+        "extract_timeout_obj",
+        "default",
+        lambda c: c.extract(text="Doc.", timeout=httpx.Timeout(7, read=300)),  # type: ignore[arg-type]
+        {("POST", "/extract"): [EXTRACTED]},
+    ),
+    ("assess_claim", "default", lambda c: c.assess("A."), {("POST", "/assess"): [ASSESSED]}),
+    (
+        "assess_claims",
+        "default",
+        lambda c: c.assess(claims=["A.", "B."], language="auto", suggest_rewrite=True, idempotency_key=PINNED),
+        {("POST", "/assess"): [ASSESSED]},
+    ),
+    ("assess_timeout_20", "default", lambda c: c.assess("A.", timeout=20), {("POST", "/assess"): [ASSESSED]}),
+    (
+        "select",
+        "default",
+        lambda c: c.select(TASK, claims=["A.", "B."]),
+        {("POST", f"/verify/{TASK}/select"): [SELECTED]},
+    ),
+    ("get_status", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [DONE]}),
+    (
+        "cancel",
+        "default",
+        lambda c: c.cancel(CANCEL_TASK["task_id"]),
+        {("POST", f"/verify/{CANCEL_TASK['task_id']}/cancel"): [(200, CANCEL_TASK)]},
+    ),
+    (
+        "review",
+        "default",
+        lambda c: c.review(DRAFT),
+        {("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})]},
+    ),
+    (
+        "review_options",
+        "default",
+        lambda c: c.review(DRAFT, verdicts=["False"], max_citations=3, suggest_edits=True, idempotency_key=PINNED),
+        {("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})]},
+    ),
+    ("get_review", "default", lambda c: c.get_review(RID), {("GET", f"/reviews/{RID}"): [(200, REVIEW_DONE)]}),
+    (
+        "get_review_issues",
+        "default",
+        lambda c: c.get_review(RID, view="issues"),
+        {("GET", f"/reviews/{RID}"): [(200, _load("review_completed_issues.json"))]},
+    ),
+    (
+        "cancel_review",
+        "default",
+        lambda c: c.cancel_review(CANCEL_REVIEW["review_id"]),
+        {("POST", f"/reviews/{CANCEL_REVIEW['review_id']}/cancel"): [(200, CANCEL_REVIEW)]},
+    ),
+    (
+        "citecheck_text",
+        "default",
+        lambda c: c.citecheck(DRAFT, max_citations=2),
+        {("POST", "/citecheck"): [(202, {"citecheck_id": CID, "status": "queued"})]},
+    ),
+    (
+        "citecheck_pairs",
+        "default",
+        lambda c: c.citecheck(pairs=[{"statement": "S.", "url": "https://e.x/s"}], idempotency_key=PINNED),
+        {("POST", "/citecheck"): [(202, {"citecheck_id": CID, "status": "queued"})]},
+    ),
+    ("get_citecheck", "default", lambda c: c.get_citecheck(CID), {("GET", f"/citechecks/{CID}"): [(200, CHECK_DONE)]}),
+    (
+        "cancel_citecheck",
+        "default",
+        lambda c: c.cancel_citecheck(CID),
+        {("POST", f"/citechecks/{CID}/cancel"): [(200, CANCEL_CHECK)]},
+    ),
+    ("usage", "default", lambda c: c.usage(), {("GET", "/me/usage"): [USAGE]}),
+    # ── namespaces ──
+    ("verifications_list", "default", lambda c: c.verifications.list(), {("GET", "/verifications"): [PAGE_1]}),
+    ("verifications_list_p2", "default", lambda c: c.verifications.list(page=2), {("GET", "/verifications"): [PAGE_2]}),
+    ("verifications_iter", "default", lambda c: c.verifications.iter(), {("GET", "/verifications"): [PAGE_1, PAGE_2]}),
+    ("verifications_get", "default", lambda c: c.verifications.get("v1"), {("GET", "/verifications/v1"): [DETAIL]}),
+    (
+        "verifications_get_keyless",
+        "keyless",
+        lambda c: c.verifications.get("v1"),
+        {("GET", "/verifications/v1"): [DETAIL]},
+    ),
+    (
+        "verifications_get_certificate",
+        "default",
+        lambda c: c.verifications.get_certificate("v1"),
+        {("GET", "/verifications/v1/certificate"): [CERT]},
+    ),
+    (
+        "verifications_delete",
+        "default",
+        lambda c: c.verifications.delete("v1"),
+        {("DELETE", "/verifications/v1"): [(204, None)]},
+    ),
+    (
+        "verifications_delete_404",
+        "default",
+        lambda c: c.verifications.delete("v1"),
+        {("DELETE", "/verifications/v1"): [NOT_FOUND]},
+    ),
+    (
+        "verifications_related",
+        "default",
+        lambda c: c.verifications.related("v1", limit=3),
+        {("GET", "/verifications/v1/related"): [RELATED]},
+    ),
+    ("ask_history", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [ASK_HISTORY]}),
+    (
+        "ask_send",
+        "default",
+        lambda c: c.ask.send("v1", message="Why?", language="auto"),
+        {("POST", "/ask/v1"): [ASK_REPLY]},
+    ),
+    ("ask_reset", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [(204, None)]}),
+    ("library_list", "default", lambda c: c.library.list(), {("GET", "/library"): [LIB_1]}),
+    (
+        "library_list_filters",
+        "keyless",
+        lambda c: c.library.list(page=2, sort="most_true", search="x", curated=["trivia"], verdict="True"),
+        {("GET", "/library"): [LIB_2]},
+    ),
+    ("library_iter", "default", lambda c: c.library.iter(search="x"), {("GET", "/library"): [LIB_1, LIB_2]}),
+    # ── waits ──
+    (
+        "verify_and_wait",
+        "default",
+        lambda c: c.verify_and_wait("A.", idempotency_key=PINNED),
+        {("POST", "/verify"): [ACCEPTED], ("GET", f"/verify/status/{TASK}"): [RUNNING, RUNNING_NO_HINT, DONE]},
+    ),
+    (
+        "verify_and_wait_times_out",
+        "default",
+        lambda c: c.verify_and_wait("A.", timeout=5),
+        {("POST", "/verify"): [ACCEPTED], ("GET", f"/verify/status/{TASK}"): [RUNNING_NO_HINT]},
+    ),
+    ("wait_zero", "default", lambda c: c.wait(TASK, timeout=0), {("GET", f"/verify/status/{TASK}"): [RUNNING]}),
+    ("wait_negative", "default", lambda c: c.wait(TASK, timeout=-1), {("GET", f"/verify/status/{TASK}"): [DONE]}),
+    (
+        "wait_poll_errors",
+        "default",
+        lambda c: c.wait(TASK, timeout=60),
+        {("GET", f"/verify/status/{TASK}"): [S503, LIMITED, _drop(), DONE]},
+    ),
+    (
+        "verify_batch_and_wait",
+        "default",
+        lambda c: c.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], idempotency_key=PINNED),
+        {
+            ("POST", "/verify/batch"): [BATCH],
+            ("GET", f"/verify/status/{TASK}"): [RUNNING, DONE],
+            ("GET", "/verify/status/t2"): [NOT_FOUND],
+        },
+    ),
+    (
+        "review_and_wait",
+        "default",
+        lambda c: c.review_and_wait(DRAFT, idempotency_key=PINNED),
+        {
+            ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
+            ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING), S503, (200, REVIEW_DONE)],
+        },
+    ),
+    (
+        "review_and_wait_zero",
+        "default",
+        lambda c: c.review_and_wait(DRAFT, timeout=0),
+        {
+            ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
+            ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING)],
+        },
+    ),
+    (
+        "review_and_wait_times_out",
+        "default",
+        lambda c: c.review_and_wait(DRAFT, timeout=25),
+        {
+            ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
+            ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING)],
+        },
+    ),
+    (
+        "citecheck_and_wait",
+        "default",
+        lambda c: c.citecheck_and_wait(DRAFT),
+        {
+            ("POST", "/citecheck"): [(202, {"citecheck_id": CID, "status": "queued"})],
+            ("GET", f"/citechecks/{CID}"): [(200, CHECK_DONE)],
+        },
+    ),
+    # ── retries and errors ──
+    ("retry_503", "default", lambda c: c.assess("A.", idempotency_key=PINNED), {("POST", "/assess"): [S503, ASSESSED]}),
+    ("retry_429_stated", "default", lambda c: c.usage(), {("GET", "/me/usage"): [LIMITED, USAGE]}),
+    (
+        "retry_409_conflict",
+        "default",
+        lambda c: c.verify("A.", idempotency_key=PINNED),
+        {("POST", "/verify"): [CONFLICT, ACCEPTED]},
+    ),
+    ("retry_transport", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [_drop(), DONE]}),
+    ("retries_exhausted_503", "default", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
+    ("retries_exhausted_transport", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [_drop()]}),
+    ("max_retries_0_503", "max_retries_0", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
+    ("max_retries_1_503", "max_retries_1", lambda c: c.assess("A."), {("POST", "/assess"): [S503]}),
+    ("error_404", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [NOT_FOUND]}),
+    ("keyless_refused", "keyless", lambda c: c.usage(), {}),
+]
+
+# The per-attempt timeout under every client configuration: the floored calls,
+# a plain call, and a wait's polls (capped by what is left of the wait).
+_TIMEOUT_CLIENTS = [
+    "timeout_none",
+    "timeout_5_read_200",
+    "timeout_200_read_5",
+    "timeout_30_read_none",
+    "timeout_120",
+    "borrowed_10",
+    "borrowed_300",
+]
+for _client in _TIMEOUT_CLIENTS:
+    CASES += [
+        (f"{_client}:extract", _client, lambda c: c.extract(text="Doc."), {("POST", "/extract"): [EXTRACTED]}),
+        (f"{_client}:assess", _client, lambda c: c.assess("A."), {("POST", "/assess"): [ASSESSED]}),
+        (
+            f"{_client}:extract_timeout_9",
+            _client,
+            lambda c: c.extract(text="Doc.", timeout=9),
+            {("POST", "/extract"): [EXTRACTED]},
+        ),
+        (f"{_client}:usage", _client, lambda c: c.usage(), {("GET", "/me/usage"): [USAGE]}),
+        (
+            f"{_client}:wait",
+            _client,
+            lambda c: c.wait(TASK, timeout=12),
+            {("GET", f"/verify/status/{TASK}"): [RUNNING_NO_HINT, RUNNING_NO_HINT, RUNNING_NO_HINT, DONE]},
+        ),
+        (
+            f"{_client}:review_and_wait",
+            _client,
+            lambda c: c.review_and_wait(DRAFT, timeout=12, idempotency_key=PINNED),
+            {
+                ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
+                ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING), (200, REVIEW_DONE)],
+            },
+        ),
+    ]

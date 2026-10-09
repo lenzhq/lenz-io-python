@@ -12,6 +12,7 @@ Fixture names are ``<area>__<case>.json``; the area picks what is observed.
 from __future__ import annotations
 
 import contextlib
+import inspect
 import io
 import json
 import warnings
@@ -136,6 +137,23 @@ def _error_view(err: BaseException) -> dict[str, Any]:
     return view
 
 
+def endpoint_for(name: str) -> tuple[str, str]:
+    """The ``(method, path)`` a recorded error answered, as precisely as the
+    error mapping needs it: /review and /citecheck, /assess, or any other."""
+    area, case = name.split("__", 1)
+    if area == "review":
+        return ("GET", "/reviews/r1") if case.startswith("get_") else ("POST", "/review")
+    if area == "citecheck":
+        return ("GET", "/citechecks/c1") if case.startswith("get_") else ("POST", "/citecheck")
+    if area == "assess":
+        return ("POST", "/assess")
+    if area == "extract":
+        return ("POST", "/extract")
+    if area == "errors" and case.startswith("ask_"):
+        return ("POST", "/ask/v1")
+    return ("POST", "/verify")
+
+
 def _model_for(name: str) -> Any:
     area = name.split("__", 1)[0]
     case = name.split("__", 1)[1]
@@ -148,11 +166,15 @@ def _model_for(name: str) -> Any:
     if area == "account" and case.startswith("library"):
         return models.LibraryList
     if area == "review":
-        return models.ReviewStarted if case.startswith(("receipt", "idempotent", "replay")) else models.ReviewFull
+        return (
+            models.ReviewStarted
+            if case.startswith(("receipt", "idempotent", "replay", "stored_replay"))
+            else models.ReviewFull
+        )
     if area == "citecheck":
         return models.CitecheckStarted if case.startswith(("receipt", "idempotent")) else models.Citecheck
     if area == "verify":
-        if case.startswith("status_"):
+        if case.startswith(("status_", "stored_progress")):
             return models.TaskStatus
         if case.startswith(("batch_", "select_")):
             return models.BatchAccepted
@@ -180,7 +202,12 @@ def observe(name: str, fixture: dict[str, Any]) -> dict[str, Any]:
             result["event"] = view
             return result
         if status >= 400:
-            err = errors_mod.map_response_to_error(status, json.dumps(body).encode(), headers)
+            kwargs: dict[str, Any] = {}
+            if "endpoint" in inspect.signature(errors_mod.map_response_to_error).parameters:
+                # The request the client sends, as far as the mapping reads it
+                # (releases before the newer shape take no endpoint).
+                kwargs["endpoint"] = endpoint_for(name)
+            err = errors_mod.map_response_to_error(status, json.dumps(body).encode(), headers, **kwargs)
             result["error"] = _error_view(err)
             return result
         cls = _model_for(name)

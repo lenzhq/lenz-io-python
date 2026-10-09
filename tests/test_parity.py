@@ -1,22 +1,21 @@
-"""Both response shapes give existing code exactly what the previous release did.
+"""The current response shape gives existing code exactly what 2.x did.
 
-The oracle in ``tests/fixtures/parity/expected/`` was produced by the code
-BEFORE this SDK read the newer response shape (see
-``tests/parity_generate.py``), from the original-shape responses in
-``tests/fixtures/parity/legacy/``. Each response has its newer-shape twin in
-``tests/fixtures/parity/canonical/`` (the same answer, as the API's newer
+The oracle in ``tests/fixtures/parity/expected/`` was produced by the 2.x code
+(see ``tests/parity_generate.py``), from the 2.x-shape responses in
+``tests/fixtures/parity/legacy/``. Each response has its current-shape twin in
+``tests/fixtures/parity/canonical/`` (the same answer, as the API's current
 version sends it).
 
-* An original-shape response must produce the frozen output byte for byte:
-  the model dump, every CLI rendering (text and ``--json``), the exception
-  ``wait`` raises, the error an HTTP error maps to, the parsed webhook.
-* Its newer-shape twin must produce the same values through every attribute
-  the previous release had, the same CLI text, the same ``wait`` outcome and
-  the same error, except for the few values the newer shape does not carry,
+* A 2.x-shape WEBHOOK payload must produce the frozen output byte for byte:
+  the parsed event. (The SDK's own calls no longer read the 2.x response
+  shape; webhooks of work submitted by older clients still arrive in it.)
+* A current-shape response must produce the same values through every
+  attribute 2.x had, the same CLI text, the same ``wait`` outcome and the
+  same error, except for the few values the current shape does not carry,
   listed one by one in ``KNOWN_GAPS`` with the reason.
 
 ``model_dump()`` and the CLI's ``--json`` show the shape the server sent, so
-they are compared for the original shape only.
+they are not compared for the current shape.
 """
 
 from __future__ import annotations
@@ -58,45 +57,104 @@ def _validation_items(body: dict[str, Any]) -> Any:
     return detail if isinstance(detail, list) else body.get("errors", [])
 
 
+#: What a cancelled task reads differently in the current version: its own
+#: status and event (the original said ``failed``), no failure block (the
+#: original sent one with ``failure_class`` ``cancelled``; a wait and the
+#: failed error rebuild it, which the ``wait`` paths below still hold to the
+#: original), and the CLI's own words for it.
+_CANCELLED_SENTENCE_PATHS = (
+    "dump.error",
+    "wait.cause",
+    "wait.message",
+    "wait.friendly_text",
+    "wait.payload_json.error.message",
+)
+
+
+def _cancelled_gap(name: str, path: str) -> str | None:
+    last = path.rsplit(".", 1)[-1]
+    if path in ("dump.status", "event.status", "event.event", "event.review.status", "event.citecheck.status"):
+        return "a cancelled task is its own status in the current version; the original said `failed`"
+    top_level_block = path.startswith(("dump.failure.", "event.review.failure.", "event.citecheck.failure."))
+    if top_level_block and last in ("docs_url", "failure_class", "failure_reason", "hint", "retryable"):
+        return "the current version sends no failure block for a cancelled task"
+    if name == "webhook__verification_cancelled.json" and path in (
+        "event.type",
+        "event.error",
+        "event.failure_class",
+        "event.retryable",
+    ):
+        return "`verification.cancelled` is its own event (`VerificationCancelled`), with no failure fields"
+    if name == "verify__status_cancelled_live.json" and path in _CANCELLED_SENTENCE_PATHS:
+        return "a running task's original sentence was `Pipeline stopped at: cancelled`; the status reads `Cancelled.`"
+    return None
+
+
+#: The lines the CLI prints for a cancelled task's status, in the original
+#: shape and now: the rest of the text must be the same.
+_CANCELLED_RENDER_LINES = {
+    "failed  — Cancelled.": "cancelled",
+    "failed  — Pipeline stopped at: cancelled": "cancelled",
+    "Failed: cancelled": "Cancelled.",
+}
+
+
+def _cancelled_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a `render` text differs only by the line the CLI words anew for
+    a cancelled task."""
+    if path not in ("render", "render_issues") or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    lines = [_CANCELLED_RENDER_LINES.get(line, line) for line in old.splitlines()]
+    return lines == new.splitlines()
+
+
 def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, Any]) -> str | None:
     """Why ``path`` may differ for ``name``, or ``None`` when it may not."""
     lb, cb = legacy["body"], canonical["body"]
     head, _, rest = path.partition(".")
     if head == "error":
-        if rest in _MESSAGE_PATHS and lb.get("detail") != cb.get("detail"):
-            return "the server words `detail` differently (a 422 sends a sentence, not the list)"
-        if rest == "code" and lb.get("code") != cb.get("code"):
-            return "the server sends a different (or a first) `code`"
-        if rest.startswith("errors") and _validation_items(lb) != _validation_items(cb):
-            return "the server's field errors differ"
+        legacy_sentence = isinstance(lb.get("detail"), str)
+        if rest in _MESSAGE_PATHS and legacy_sentence and lb.get("detail") != cb.get("detail"):
+            return "the server words its `detail` sentence differently"
+        if rest in _MESSAGE_PATHS and "detail" not in lb and isinstance(cb.get("detail"), str):
+            return "the newer shape sends a `detail` sentence where the original sent none"
         if rest in ("hint", "fix", "friendly_text", "payload_json.error.fix") and lb.get("hint") != cb.get("hint"):
             return "the server words the hint differently"
     if head == "wait" or path in ("dump.error", "render"):
         sentence = lb.get("error")
-        if isinstance(sentence, str) and sentence != _failure(cb).get("detail"):
+        if (
+            name.startswith("verify__")
+            and isinstance(sentence, str)
+            and sentence.startswith("Pipeline stopped: ")
+            and "failure" in cb
+        ):
             if path in ("dump.error", "render") or rest in _MESSAGE_PATHS:
-                return "the failed run's sentence: the newer shape's `failure.detail` is worded differently"
+                return (
+                    "a failure read back from storage said 'Pipeline stopped: <code>.'; "
+                    "the sentence is rebuilt in a running check's form"
+                )
+    if cb.get("status") == "cancelled":
+        why = _cancelled_gap(name, path)
+        if why is not None:
+            return why
     if path in ("dump.hint", "wait.hint") and lb.get("hint", "") != _failure(cb).get("hint", ""):
         return "the newer shape carries a hint the original did not"
-    if path.startswith("wait.payload.") and name.startswith("verify__status_needs_input"):
-        return "LenzNeedsInputError.payload is the status as sent (model_dump)"
+    option_claim = path.startswith("wait.payload.claims[") and path.endswith("].claim")
+    if option_claim and name.startswith("verify__status_needs_input"):
+        return "LenzNeedsInputError.payload is the status dump: an option also carries its newer name `claim`"
     if path == "dump.chain_id" and "chain_id" in lb and "chain_id" not in cb:
         return "`chain_id` is not in the newer shape"
     if path == "event.task_id" and "task_id" in lb and "task_id" not in cb:
         return "review/citecheck webhooks drop `task_id` (never pollable); it reads the review or check id"
-    if path.startswith("event.result.") and name.startswith("webhook__verification_completed"):
-        return "`result` is the dict as sent; the newer shape's carries `completed_at`"
+    if path == "event.result.completed_at" and name.startswith("webhook__verification_completed"):
+        return "`result` also carries the newer `completed_at` beside `modified_at`"
     return KNOWN_GAPS.get((name, path))
 
 
 #: Single gaps no rule covers, each with its reason.
 KNOWN_GAPS: dict[tuple[str, str], str] = {
-    ("assess__list_compound_item.json", "dump.claims[0].hint"): (
-        "the newer shape sends no hint on a completed row with other claims found"
-    ),
-    ("assess__list_compound_item.json", "render"): "the same hint line, printed by the CLI",
-    ("review__get_assessment_rows_full_fields.json", "dump.claims[0].assessment.hint"): (
-        "the newer shape sends no hint on a completed quick check with other claims found"
+    ("review__delete_not_a_route.json", "error.code"): (
+        "a route no SDK method calls: the original answered it without a JSON body"
     ),
     ("review__get_failed_every_assessment_failed.json", "dump.failure.hint"): "the server words the hint differently",
     ("review__get_failed_every_assessment_failed.json", "render"): "the same hint, printed by the CLI",
@@ -108,6 +166,28 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
         "the two recordings number their task ids differently (the newer payload has no delivery task_id)"
     ),
 }
+
+
+#: The fix line 3.0 gives a 404 (CHANGELOG "Changed"): 2.x said to retry.
+_NOT_FOUND_FIX = (
+    "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+)
+
+
+def _intended(path: str, old: Any, new: Any, legacy: dict[str, Any]) -> str | None:
+    """Why ``path`` changed on purpose in 3.0 (each listed in the CHANGELOG),
+    or ``None``."""
+    head, _, rest = path.partition(".")
+    if head in ("error", "wait") and rest == "retryable" and old is MISSING and new in (True, False, None):
+        return "3.0 sets `retryable` on every error"
+    if legacy["status"] == 404 and head == "error":
+        if rest == "type" and (old, new) == ("LenzError", "LenzNotFoundError"):
+            return "3.0 raises LenzNotFoundError (a LenzError) for a 404"
+        if rest in ("fix", "payload_json.error.fix") and new == _NOT_FOUND_FIX:
+            return "3.0 says what to check on a 404 instead of advising a retry"
+        if rest == "friendly_text" and isinstance(new, str) and new.endswith(_NOT_FOUND_FIX):
+            return "the same fix line, printed by the CLI"
+    return None
 
 
 def _expected(name: str) -> dict[str, Any]:
@@ -142,8 +222,8 @@ def _old_event_attrs(observed: dict[str, Any], expected: dict[str, Any]) -> dict
     return {**observed, "event": {k: v for k, v in event.items() if k in expected["event"]}}
 
 
-@pytest.mark.parametrize("name", names())
-def test_original_shape_is_unchanged(name: str) -> None:
+@pytest.mark.parametrize("name", [n for n in names() if n.startswith("webhook__")])
+def test_original_shape_webhook_is_unchanged(name: str) -> None:
     expected = _expected(name)
     assert _old_event_attrs(observe(name, load("legacy", name)), expected) == expected
 
@@ -186,7 +266,11 @@ def test_newer_shape_reads_the_same(name: str) -> None:
     got = _canonical_view(name, expected)
     legacy, canonical = load("legacy", name), load("canonical", name)
     gaps = [
-        (path, old, new) for path, old, new in _diff(expected, got) if _allowed(name, path, legacy, canonical) is None
+        (path, old, new)
+        for path, old, new in _diff(expected, got)
+        if _allowed(name, path, legacy, canonical) is None
+        and _intended(path, old, new, legacy) is None
+        and not (canonical["body"].get("status") == "cancelled" and _cancelled_render_gap(path, old, new))
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
@@ -223,9 +307,10 @@ def test_model_schemas_match_the_previous_release() -> None:
     from parity_static import schemas
 
     def _shape(schema: Any) -> Any:
-        # Doc text (class docstrings) may change; the shape may not.
+        # Doc text (class docstrings) and deprecation markers may change; the
+        # shape may not.
         if isinstance(schema, dict):
-            return {k: _shape(v) for k, v in schema.items() if k != "description"}
+            return {k: _shape(v) for k, v in schema.items() if k not in ("description", "deprecated")}
         if isinstance(schema, list):
             return [_shape(v) for v in schema]
         return schema
