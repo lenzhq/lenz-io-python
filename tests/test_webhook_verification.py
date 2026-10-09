@@ -88,3 +88,42 @@ def test_other_events_do_not_carry_it() -> None:
         {"event": "something.new", "verification": {"status": "completed"}},
     ):
         assert not hasattr(parse_webhook(payload), "verification")
+
+
+_SPARSE_RESULT = {"verification_id": "v1", "claim": "A.", "verdict": "True", "lenz_score": 9}
+_SPARSE = [
+    pytest.param(
+        {
+            "event": "verification.completed",
+            "event_id": "evt_1",
+            "verification": {"status": "completed", "task_id": "t", "result": dict(_SPARSE_RESULT)},
+        },
+        id="current-shape",
+    ),
+    pytest.param(
+        {"event": "verification.completed", "task_id": "t", "result": dict(_SPARSE_RESULT)},
+        id="original-shape",
+    ),
+]
+
+
+@pytest.mark.parametrize("payload", _SPARSE)
+def test_a_sparse_result_reads_the_webhook_defaults(payload: dict) -> None:
+    # The values ``event.result`` gives a key the payload left out (and the
+    # Node SDK's ``event.verification.result``), not the model's own defaults.
+    event = parse_webhook(payload)
+    assert isinstance(event, VerificationCompleted)
+    assert event.verification is not None
+    result = event.verification.result
+    assert isinstance(result, Verification)
+    assert (result.visibility, result.depth, result.created_at) == ("private", "standard", "")
+    assert (result.confidence, result.language, result.verdict, result.lenz_score) == ("low", "en", "True", 9)
+
+
+def test_a_sparse_current_shape_result_matches_event_result() -> None:
+    event = parse_webhook(_SPARSE[0].values[0])
+    assert isinstance(event, VerificationCompleted)
+    assert event.verification is not None and event.verification.result is not None
+    result = event.verification.result
+    for key in ("verification_id", "claim", "visibility", "depth", "verdict", "confidence", "created_at", "language"):
+        assert getattr(result, key) == event.result[key], key
