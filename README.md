@@ -477,9 +477,10 @@ The API's current response shape gives each field one name across every
 endpoint. Since 3.0 the SDK asks for it (`X-Lenz-API-Version: 2026-10-11`) and
 reads only that shape from its own calls (webhooks of both shapes are still
 parsed). The current names are attributes already. The 2.x names are
-**deprecated** and still work, with the value they had in 2.x, so 2.x code
-runs unchanged; they will be removed in a future major release. Move to the
-current names when convenient:
+**deprecated** and still work, with the value they had in 2.x (except the few
+values the API no longer sends, listed under "What reads differently" in the
+[changelog](CHANGELOG.md)); they will be removed in a future major release.
+Move to the current names when convenient:
 
 | Read this | Instead of (deprecated, still works) |
 |---|---|
@@ -496,9 +497,15 @@ current names when convenient:
 
 "Nothing checkable" is `no_checkable_claim` in the current names; the 2.x
 fields keep their own spelling (`not_a_claim`, `no_claim`). The current names
-are read-only properties, so the 2.x fields parse, dump and compare as they
-did. The full list, with the aliases that have no replacement, is in the
-[changelog](CHANGELOG.md).
+are read-only properties. The full list, with the aliases that have no
+replacement, is in the [changelog](CHANGELOG.md).
+
+**What `model_dump()` and `--json` return.** Not the response body as sent:
+a model's `model_dump()` (and the CLI's `--json`, which prints it) holds the
+2.x-compatible fields, computed from the response, plus the current-shape
+keys the server sent (`failure`, `more_claims`, `claims`, `completed_at`, ...).
+The body exactly as sent is `exc.body` on an error and `event.raw` on a
+webhook event.
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -759,6 +766,26 @@ except LenzUpstreamUnavailableError as exc:
     # charged. Waits up to 60s are already slept through by the automatic
     # retry ladder; reaching here means the server stated a longer one.
     schedule_retry_in(exc.retry_after)  # typically 90-120s
+```
+
+`LenzApiVersionError` (a `LenzError`) is raised when a response names an API
+version other than the one this SDK reads. Every response carries the version
+that served it in `X-Lenz-API-Version`; lenz-io 3.x asks for `2026-10-11` and
+reads that version's shape only, so an answer in `2026-05-13` (a server still
+on the older version, or a reply replayed from an idempotent request stored
+before the change) is refused rather than misread. It carries `api_version`
+(what the response named), `status_code` and `body` as sent. Set the API
+version on the server side to `2026-10-11`, or pin `lenz-io<3` to keep reading
+the older version. A response without the header is read as usual, and webhook
+payloads are never refused (they are parsed in either shape).
+
+```python
+from lenz_io import LenzApiVersionError
+
+try:
+    client.assess("The Earth is round.")
+except LenzApiVersionError as exc:
+    print(exc.api_version)  # "2026-05-13"
 ```
 
 A failed *verification* (as opposed to a failed HTTP call) raises

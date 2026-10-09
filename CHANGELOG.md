@@ -6,20 +6,41 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
-Major release (3.0.0). Every attribute, exception and CLI rendering reads
-what 2.x read, with one exception: the raw bodies (`exc.body`,
-`model_dump()`, a webhook event's `raw`, the CLI's `--json` output) show the
-API's current response shape as sent. Every 2.x name is kept as a deprecated
-alias (see Deprecated); see the migration note below.
+Major release (3.0.0). The SDK asks for the API's current response shape
+(`2026-10-11`) and reads only that shape from its own calls. Every attribute,
+exception and CLI rendering keeps the value it had in 2.x (computed from the
+current shape), with the exceptions listed under Breaking and "What reads
+differently". The raw bodies are the current shape: `exc.body` and a webhook
+event's `raw` hold the body as sent; `model_dump()` and the CLI's `--json`
+hold the 2.x-compatible fields plus the current-shape keys the server sent
+(see Migration). Every 2.x name is kept as a deprecated alias (see
+Deprecated).
 
 ### Breaking
 
 - **3.0 reads only the API's `2026-10-11` response shape for its own calls**
-  (lenz.io serves it from 2026-10-11). Run against a server that does not
-  serve that version, it does not read the 2.x (`2026-05-13`) response
-  shape any more: stay on 2.21 until the API serves `2026-10-11`. The SDK no
-  longer detects or fills in a 2.x-shaped response body, a 2.x-shaped error
-  body, or a `/me/usage` body from before the credit pool.
+  (lenz.io serves it from 2026-10-11). The SDK no longer detects or fills in
+  a 2.x-shaped response body, a 2.x-shaped error body, or a `/me/usage` body
+  from before the credit pool.
+- **`LenzApiVersionError` (new, a `LenzError`) is raised when a response
+  names another version** in its `X-Lenz-API-Version` header, in practice
+  `2026-05-13`: a server still on the older version, or a reply replayed from
+  an idempotent request stored before the change. It carries `api_version`,
+  `status_code` and `body` (as sent), applies to success and error responses
+  of client calls, and never to webhook payloads. A response without the
+  header is read as usual. Set the API version on the server side to
+  `2026-10-11`, or pin `lenz-io<3`.
+- **Values the API no longer sends**, which no client can rebuild:
+  - `TaskAccepted.chain_id` reads `""` (use `task_id`).
+  - The `task_id` of a `review.*` or `citecheck.*` webhook event is the
+    review or citation-check id (use `event_id` to deduplicate, and the
+    event's `review_id` / `citecheck_id`); these ids were never pollable.
+  - Some failure sentences and hints are worded anew (listed under "What
+    reads differently"); compare on `failure.code` / `code`, never on the
+    text.
+  - An `/extract` on an input the API first read as not a claim and then
+    found a claim in says `status == "ready"` (2.x: `"not_a_claim"`); branch
+    on `claims`.
 - **Webhooks of both shapes are still parsed** (`parse_webhook`,
   `LenzWebhooks.parse` and the event models): work submitted by an older
   client on the same account is delivered in the 2.x shape.
@@ -40,8 +61,11 @@ alias (see Deprecated); see the migration note below.
   - "Nothing checkable" keeps each field's old spelling: `no_claim` on
     `/assess` rows, `AssessResponse.error_code`, review rows and the review's
     own failure; `not_a_claim` on `/extract`, a verification
-    (`TaskStatus.failure_reason`, `LenzPipelineError.failure_reason`, the
-    `verification.failed` webhook's `error`) and a deep check inside a review.
+    (`TaskStatus.failure_reason` and the `failure_reason` of its `failure`
+    block, `LenzPipelineError.failure_reason`, the `verification.failed`
+    webhook's `error` and the `failure_reason` of its `failure` block) and a
+    deep check inside a review. `failure.code` is `no_checkable_claim`
+    everywhere.
   - `modified_at` (set only when a verification completed on a later UTC
     calendar day than it was created), `claim_text` on receipts, `text` on
     `needs_input` options, `ExtractedClaims.claim` / `identified_claims` /
@@ -87,9 +111,9 @@ now a declared dependency (pydantic already installs it).
 | `ExtractedClaims.candidate_claims`, `AssessClaim.candidate_claims`, `AssessResponse.candidate_claims`, `TaskStatus.candidates`, `TaskStatus.similar_claims` | none: always empty |
 | `AssessClaim.verdict == "Error"` (with `confidence == "low"`) | `status == "failed"` |
 | `AssessClaim.error_code` | `failure.code` (`no_checkable_claim` where it reads `no_claim`) |
-| `AssessClaim.hint` | `failure.hint`; none for the sentence on a completed row that found other claims |
+| `AssessClaim.hint` | on a failed row `failure.hint`; on a completed row that found other claims, `more_claims` (the sentence is no longer sent; the attribute still reads it) |
 | `AssessClaim.identified_claims`, `ReviewAssessment.identified_claims` | `more_claims` |
-| `ReviewAssessment.error_code`, `ReviewAssessment.hint` | `failure.code`, `failure.hint` |
+| `ReviewAssessment.error_code`, `ReviewAssessment.hint` | `failure.code`, `failure.hint` on a failed quick check; `more_claims` on a completed one that found other claims (`hint` still reads "This text holds more than one claim.") |
 | `AssessResponse.error`, `AssessResponse.error_code` | `status` and `failure` |
 | `CandidateClaim.text` | `claim` |
 | `TaskAccepted.claim_text`, `BatchItemResult.claim_text` | `claim` |
@@ -142,8 +166,8 @@ rebuild:
 - Reviews: a review row stored without a failure block (a quick-check row or
   a `ReviewFailure`) reads one, where 2.x read `failure` `None`; a deep
   check's `modified_at` is computed from its completion time by the 2.x rule
-  instead of read as stored; a quick-check row whose passage held several
-  claims has no `hint`.
+  instead of read as stored; a completed quick-check row that found other claims reads the fixed 2.x
+  `hint` ("This text holds more than one claim."); a failed one has none.
 - An extraction the API first read as not a claim and then found one in says
   `status == "ready"` (2.x: `"not_a_claim"`).
 - `verify`'s receipt has no `chain_id` (`TaskAccepted.chain_id` reads `""`);
@@ -153,28 +177,45 @@ rebuild:
 
 ### Migration
 
-- **Webhooks follow the version of the request that submitted the work.** A
-  `verify`, `verify_batch`, `select`, `review` or `citecheck` call made with
-  3.0 gets its webhooks in the current shape (one envelope: `event`,
-  `event_id`, the work's id, `status`, and the polled body under
-  `verification` / `review` / `citecheck`). If the service that RECEIVES your
-  webhooks parses them with lenz-io 2.20 or older, or reads the raw JSON,
-  upgrade it to 2.21 or later (which reads both shapes) before the service
-  that SENDS requests moves to 3.0. Work submitted with 2.x keeps sending
-  the original shape.
-- Code that reads attributes: nothing to do. The deprecated names above keep
-  working; the SDK needs an API that serves `2026-10-11` (see Breaking).
-- Code that reads the raw dict: the keys are the current shape's. A model's
-  `model_dump()` holds what the server sent plus the 2.x fields filled in from
-  it; `exc.body` and `event.raw` hold the body as sent (`failure` blocks,
-  `claims` lists, `completed_at`, `more_claims`, `docs_url`, `retry_after`).
-  Read the attributes instead, or stay on 2.21 until you move.
+**Required**
+
+- **Webhook receivers.** Webhooks follow the version of the request that
+  submitted the work: a `verify`, `verify_batch`, `select`, `review` or
+  `citecheck` call made with 3.0 gets its webhooks in the current shape (one
+  envelope: `event`, `event_id`, the work's id, `status`, and the polled body
+  under `verification` / `review` / `citecheck`). A service that RECEIVES
+  your webhooks and parses them with lenz-io 2.20 or older, or reads the raw
+  JSON, must be upgraded to 2.21 or later (which reads both shapes) before
+  the service that SENDS requests moves to 3.0. Work submitted with 2.x keeps
+  sending the original shape.
+- **The API must answer `2026-10-11`.** 3.0 raises `LenzApiVersionError`
+  from any call whose response names another version; until the API serves
+  `2026-10-11` for your account, stay on 2.21.
+- **Code that reads raw bodies**: `exc.body` and `event.raw` are the body as
+  sent, in the current shape (`failure` blocks, `claims` lists,
+  `completed_at`, `more_claims`, `docs_url`, `retry_after`); read the
+  attributes instead, or stay on 2.21 until you move.
+- **Tests with recorded 2.x response bodies** must be re-recorded: the SDK
+  reads the current shape only, so a stored 2.x body no longer parses into
+  the values it did.
+- **The values the API no longer sends** (see Breaking): `chain_id`, the
+  review / citecheck webhook `task_id`, reworded failure sentences and hints,
+  and an `/extract` status on a mixed input.
+
+**Optional**
+
+- Move off the deprecated names (see Deprecated): they keep working with
+  their 2.x values, so nothing breaks if you do not.
+- `model_dump()` and the CLI's `--json` return the 2.x-compatible fields
+  (computed from the response) plus the current-shape keys the server sent;
+  they are not the wire body. If a script parses `--json` output, it keeps
+  finding every 2.x key and gains the new ones.
 - `webhook_url` keeps its meaning: on `verify` and `verify_batch` an empty
   or whitespace-only value (the default is `""`) means your key's default
-  webhook and is not sent; on
-  `review` and `citecheck`, `None` means your key's default and `""` means no
-  webhook. In the current shape the API reads a missing `webhook_url` as the
-  key's default and `""` as no webhook on every endpoint.
+  webhook and is not sent; on `review` and `citecheck`, `None` means your
+  key's default and `""` means no webhook. In the current shape the API reads
+  a missing `webhook_url` as the key's default and `""` as no webhook on
+  every endpoint.
 
 ## [2.21.0] - 2026-10-09
 
