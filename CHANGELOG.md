@@ -82,16 +82,23 @@ Deprecated).
 ### Changed
 
 - **One rule for every timeout and retry count of a request, checked before
-  anything is sent.** A timeout must be a finite number of seconds greater
-  than 0, `None` (no timeout) or an `httpx.Timeout`; a retry count a whole
-  number, 0 or more (`True` / `False` are refused). Anything else raises
-  `ValueError`: in `Lenz(timeout=..., max_retries=...)` when the client is
-  built, and in the `timeout=` of `extract` / `assess` before the call mints a
-  key or sends a request. These values did not work before (a zero or
-  negative timeout failed every request, a negative retry count sent none),
-  except `True` / `False`, which were read as 1 / 0: pass the number.
-  The wait helpers' `timeout` (how long to wait) is not affected: `0` or less
+  anything is sent.** A timeout must be `None` (no timeout), a finite real
+  number of seconds greater than 0, httpx's `(connect, read, write, pool)`
+  tuple of such numbers or `None`, or an `httpx.Timeout`; a retry count a
+  whole number, 0 or more. Anything else raises `ValueError`: in
+  `Lenz(timeout=..., max_retries=...)` when the client is built, and in the
+  `timeout=` of `extract` / `assess` before the call mints a key or sends a
+  request. Newly refused: a timeout of 0 or less, NaN or infinity, a negative
+  retry count (none of these worked: such a timeout failed every request, a
+  negative retry count sent none), and `True` / `False`, which were read as
+  1 / 0 (pass the number). Real numbers of any type (`Fraction`, numpy
+  scalars), the tuple form and integer-like retry counts keep working. The
+  wait helpers' `timeout` (how long to wait) is not affected: `0` or less
   still reads once.
+- **The private `_request` / `_send` methods take other arguments.** Code that
+  overrode them to add headers or change timeouts should use the
+  `extra_headers` / `timeout` / `max_retries` options or `with_options`
+  instead.
 - **An id goes into the URL path as one segment.** Every method that puts an
   id in a path (`get_status`, `select`, `get_review`, `get_citecheck`, the
   cancels, `verifications.*`, `ask.*`, the waits) percent-encodes it whole, so

@@ -1231,9 +1231,10 @@ Environment variables:
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
 
-`timeout` must be a number of seconds greater than 0, `None` (no timeout) or an
-`httpx.Timeout`; `max_retries` a whole number, 0 or more. Anything else raises
-`ValueError` when the client is built.
+`timeout` must be a number of seconds greater than 0, `None` (no timeout), an
+`httpx.Timeout` or httpx's `(connect, read, write, pool)` tuple; `max_retries` a
+whole number, 0 or more. Anything else raises `ValueError` when the client is
+built.
 
 ### Per-call options
 
@@ -1251,7 +1252,9 @@ client.verify("...", extra_headers={"X-Trace-Id": trace})  # added to the reques
   whole call, and each retry gets its own.
 - `max_retries`: how often a request that failed in a way worth retrying (a
   5xx, a 429, a dropped connection) is sent again: a whole number, 0 or more.
-- `extra_headers`: headers added to the request. The SDK's own headers are
+- `extra_headers`: headers added to the request. Names are header tokens and
+  values visible ASCII (spaces and tabs allowed); anything else raises
+  `ValueError`. The SDK's own headers are
   refused (`X-Lenz-API-Version`, `Idempotency-Key`, `Authorization`,
   `Content-Type`, `Content-Length`, `Host`, `Transfer-Encoding`): use
   `idempotency_key=` and `api_key=` for the first two. A header with the name
@@ -1306,7 +1309,9 @@ A copy of a copy starts from the copy's options. The pool belongs to the
 client that created it: `close()` and `with` on a copy do nothing, closing the
 original closes the pool for every copy (a copy then raises httpx's
 closed-client error), and a client given `http_client=` never closes it. A
-copy is as safe to share across threads as the client.
+copy is as safe to share across threads as the client. The copy is shallow:
+attributes a subclass of `Lenz` adds are shared with the client it was made
+from.
 
 ## Compatibility
 
