@@ -10,6 +10,8 @@ Six endpoint methods gain an optional ``language`` kwarg:
   caller's wire format must stay byte-identical after this change.
 * ``language='es' | 'de' | …`` (any of 12 supported codes) MUST send
   ``"language": "<code>"`` in the JSON body.
+* ``language='auto'`` (``assess``, ``verify``, ``ask.send``) is sent as
+  ``"language": "auto"``, unchanged. The SDK does no validation of its own.
 * Response models populate ``.language`` from the server's echoed
   field, defaulting to ``'en'`` for legacy payloads that omit it.
 
@@ -214,6 +216,50 @@ class TestExplicitLanguageWireFormat:
             )
             client.extract(text="x", language="es")
         assert self._body(route)["language"] == "es"
+
+    def test_assess_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claim="Die Erde ist flach.", language="auto")
+        assert self._body(route) == {"text": "Die Erde ist flach.", "language": "auto"}
+
+    def test_assess_claims_list_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": [], "error": None})
+            client.assess(claims=["Die Erde ist flach.", "Paris ist die Hauptstadt von Frankreich."], language="auto")
+        assert self._body(route)["language"] == "auto"
+
+    def test_verify_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t", "claim_text": "x"})
+            client.verify(claim="Die Erde ist flach.", language="auto")
+        assert self._body(route)["language"] == "auto"
+
+    def test_verify_and_wait_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            submit = r.post("/verify").respond(200, json={"task_id": "t1", "claim_text": "x"})
+            r.get("/verify/status/t1").respond(
+                200,
+                json={
+                    "status": "completed",
+                    "result": {
+                        "verification_id": "v1",
+                        "claim": "Die Erde ist flach.",
+                        "verdict": "False",
+                        "confidence": "high",
+                        "language": "de",
+                    },
+                },
+            )
+            v = client.verify_and_wait(claim="Die Erde ist flach.", language="auto", timeout=5.0)
+        assert self._body(submit)["language"] == "auto"
+        assert v.language == "de"
+
+    def test_ask_send_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/ask/v1").respond(200, json={"reply": "ok"})
+            client.ask.send("v1", message="Warum?", language="auto")
+        assert self._body(route)["language"] == "auto"
 
     def test_ask_send_sends_language(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
