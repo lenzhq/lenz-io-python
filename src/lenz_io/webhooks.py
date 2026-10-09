@@ -124,16 +124,30 @@ class WebhookEvent:
         return value if isinstance(value, str) else ""
 
 
+#: The run status each ``verification.*`` event reports.
+_EVENT_STATUS = {
+    "verification.completed": "completed",
+    "verification.failed": "failed",
+    "verification.needs_input": "needs_input",
+}
+
+
 def _status_envelope(event: WebhookEvent) -> TaskStatus | None:
     """The verification of a ``verification.*`` event as ``client.get_status``
     returns it: the newer payload's ``verification``, else one built from the
-    original flat fields. ``None`` when the payload cannot be read as one."""
+    original flat fields. ``None`` when the payload cannot be read as one,
+    or its status is not the event's (``completed`` / ``failed`` /
+    ``needs_input``)."""
     raw = event.raw
     nested = raw.get("verification")
     body: dict[str, Any]
     if isinstance(nested, dict):
         # A ``null`` reads as the field left out (``hint: null`` on a pause).
         body = {k: v for k, v in nested.items() if v is not None}
+        # Never presented as this event's kind when it says it is another
+        # (a ``verification.completed`` carrying a failed run).
+        if body.get("status") != _EVENT_STATUS.get(event.event):
+            return None
     elif event.event == "verification.completed":
         body = {"status": "completed", "task_id": raw.get("task_id") or ""}
         if raw.get("result") is not None:

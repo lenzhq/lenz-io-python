@@ -127,3 +127,18 @@ def test_a_sparse_current_shape_result_matches_event_result() -> None:
     result = event.verification.result
     for key in ("verification_id", "claim", "visibility", "depth", "verdict", "confidence", "created_at", "language"):
         assert getattr(result, key) == event.result[key], key
+
+
+@pytest.mark.parametrize(
+    ("event", "nested"),
+    [
+        ("verification.completed", "failed"),
+        ("verification.failed", "completed"),
+        ("verification.needs_input", "processing"),
+        ("verification.completed", None),
+    ],
+)
+def test_a_nested_status_of_another_kind_is_not_presented_as_this_one(event: str, nested: str | None) -> None:
+    body: dict = {"task_id": "t"} if nested is None else {"status": nested, "task_id": "t"}
+    parsed = parse_webhook({"event": event, "event_id": "evt_1", "verification": body})
+    assert parsed.verification is None  # type: ignore[attr-defined]
