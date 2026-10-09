@@ -18,7 +18,9 @@ from lenz_io import (
     parse_webhook,
 )
 
-_VERIFICATION_EVENTS = [n for n in names() if n.startswith("webhook__verification_")]
+# A cancellation is a different event in each shape (``verification.cancelled``
+# against ``verification.failed``): ``tests/test_cancelled.py`` reads both.
+_VERIFICATION_EVENTS = [n for n in names() if n.startswith("webhook__verification_") and "cancelled" not in n]
 
 
 def _both(name: str) -> tuple[WebhookEvent, WebhookEvent]:

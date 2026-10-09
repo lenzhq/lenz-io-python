@@ -57,6 +57,40 @@ def _validation_items(body: dict[str, Any]) -> Any:
     return detail if isinstance(detail, list) else body.get("errors", [])
 
 
+#: What a cancelled task reads differently in the current version: its own
+#: status and event (the original said ``failed``), no failure block (the
+#: original sent one with ``failure_class`` ``cancelled``; a wait and the
+#: failed error rebuild it, which the ``wait`` paths below still hold to the
+#: original), and the CLI's own words for it.
+_CANCELLED_SENTENCE_PATHS = (
+    "dump.error",
+    "wait.cause",
+    "wait.message",
+    "wait.friendly_text",
+    "wait.payload_json.error.message",
+)
+
+
+def _cancelled_gap(name: str, path: str) -> str | None:
+    last = path.rsplit(".", 1)[-1]
+    if path in ("dump.status", "event.status", "event.event", "event.review.status", "event.citecheck.status"):
+        return "a cancelled task is its own status in the current version; the original said `failed`"
+    if ".failure." in path and last in ("docs_url", "failure_class", "failure_reason", "hint", "retryable"):
+        return "the current version sends no failure block for a cancelled task"
+    if name == "webhook__verification_cancelled.json" and path in (
+        "event.type",
+        "event.error",
+        "event.failure_class",
+        "event.retryable",
+    ):
+        return "`verification.cancelled` is its own event (`VerificationCancelled`), with no failure fields"
+    if path in ("render", "render_issues"):
+        return "the CLI says `Cancelled.` for a cancelled task"
+    if name == "verify__status_cancelled_live.json" and path in _CANCELLED_SENTENCE_PATHS:
+        return "a running task's original sentence was `Pipeline stopped at: cancelled`; the status reads `Cancelled.`"
+    return None
+
+
 def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, Any]) -> str | None:
     """Why ``path`` may differ for ``name``, or ``None`` when it may not."""
     lb, cb = legacy["body"], canonical["body"]
@@ -82,6 +116,10 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
                     "a failure read back from storage said 'Pipeline stopped: <code>.'; "
                     "the sentence is rebuilt in a running check's form"
                 )
+    if cb.get("status") == "cancelled":
+        why = _cancelled_gap(name, path)
+        if why is not None:
+            return why
     if path in ("dump.hint", "wait.hint") and lb.get("hint", "") != _failure(cb).get("hint", ""):
         return "the newer shape carries a hint the original did not"
     option_claim = path.startswith("wait.payload.claims[") and path.endswith("].claim")

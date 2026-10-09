@@ -433,6 +433,8 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
     if review.failure is not None:
         hint = review.failure.hint or review.failure.code or "no reason given"
         out.console.print(f"[red]Failed:[/red] {escape(hint)}")
+    elif review.status == "cancelled":
+        out.console.print("[red]Cancelled.[/red]")
     n = review.summary.claims_selected or len(review.claims)
     if issues_only:
         for i in review.issues:

@@ -122,6 +122,7 @@ from .models import (
     Citecheck,
     CitecheckStarted,
     ExtractedClaims,
+    FailureBlock,
     LibraryItem,
     LibraryList,
     Progress,
@@ -182,6 +183,10 @@ DEFAULT_MAX_RETRIES = 3
 RETRY_BACKOFF = (1.0, 2.0, 4.0)
 POLL_BACKOFF = (2.0, 4.0, 8.0)
 POLL_BACKOFF_CAP = 10.0
+# The statuses a verification poll ends on. ``cancelled`` is a task stopped
+# elsewhere (the website's Stop button, another process): its own status in
+# API version 2026-10-11, where 2026-05-13 said ``failed``.
+_TERMINAL_STATUSES = ("completed", "needs_input", "failed", "cancelled")
 # Bounds on the server's ``progress.poll_after_seconds``. A hint outside
 # them is treated as garbage and the local ladder is used instead — the
 # floor stops a bad value turning the poll loop into a hot loop, the
@@ -1113,7 +1118,10 @@ class Lenz:
         ``verify`` / ``select`` — so ``client.wait(client.verify(claim=...))``
         reads naturally. Raises ``ValueError`` for an empty id,
         ``LenzNeedsInputError`` / ``LenzPipelineError`` on terminal
-        non-success, ``LenzGoneError`` if its account's retention period has
+        non-success (a verification cancelled elsewhere, such as the
+        website's Stop button, raises the same ``LenzPipelineError`` as a
+        failed one, with ``failure_class == "cancelled"``),
+        ``LenzGoneError`` if its account's retention period has
         removed the verification, and ``LenzTimeoutError`` if ``timeout``
         (default ``WAIT_TIMEOUT``, 300s) elapses (the task may still finish
         server-side — resume via ``get_status``).
@@ -1652,7 +1660,7 @@ class Lenz:
                 last = job
                 if job.status == "completed":
                     return job
-                if job.status == "failed":
+                if job.status in ("failed", "cancelled"):
                     raise failed(job)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
@@ -1673,7 +1681,7 @@ class Lenz:
         on_progress: Callable[[str, Progress], None] | None = None,
     ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzError]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
-        (completed / needs_input / failed) or the deadline elapses.
+        (completed / needs_input / failed / cancelled) or the deadline elapses.
 
         Returns ``(terminal_by_id, timed_out_ids, stopped_by_id)``. A timed-out
         task has no ``TaskStatus`` — ``"timeout"`` is a client-side concept,
@@ -1758,7 +1766,7 @@ class Lenz:
                         stated_wait = wait_s if stated_wait is None else max(stated_wait, wait_s)
                     still_pending.append(task_id)
                     continue
-                if status.status in ("completed", "needs_input", "failed"):
+                if status.status in _TERMINAL_STATUSES:
                     terminal[task_id] = status
                 else:
                     still_pending.append(task_id)
@@ -1816,7 +1824,9 @@ class Lenz:
                 hint=status.hint,
                 payload=status.model_dump(),
             )
-        # failed. ``error`` is the 2.x sentence, rebuilt from ``failure``.
+        # failed, or cancelled elsewhere (the same outcome, as in 2.x, where the
+        # original shape said ``failed`` with ``failure_class`` ``cancelled``).
+        # ``error`` is the 2.x sentence, rebuilt from ``failure``.
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
         if status.retryable:
             fix = "Transient provider outage — retry the same request after a short wait."
@@ -2227,8 +2237,26 @@ def _is_citecheck_body(body: Any, citecheck_id: str) -> bool:
     )
 
 
+#: What the original response shape said of a task cancelled elsewhere, which
+#: the current one states as the status ``cancelled`` and no failure block.
+_CANCELLED_FAILURE = {
+    "failure_reason": "cancelled",
+    "failure_class": "cancelled",
+    "retryable": False,
+    "docs_url": "https://lenz.io/docs/errors#cancelled",
+}
+
+
+def _failure_of(job: Citecheck | ReviewFull) -> FailureBlock | None:
+    """Why a job ended without a result: its failure block, or the cancelled
+    one for a job cancelled elsewhere."""
+    if job.failure is None and job.status == "cancelled":
+        return FailureBlock.model_validate(_CANCELLED_FAILURE)
+    return job.failure
+
+
 def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
-    failure = check.failure
+    failure = _failure_of(check)
     reason = (failure.failure_reason if failure else None) or ""
     hint = (failure.hint if failure else None) or ""
     retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
@@ -2248,7 +2276,7 @@ def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
 
 
 def _review_failed(review: ReviewFull) -> ReviewFailed:
-    failure = review.failure
+    failure = _failure_of(review)
     reason = (failure.failure_reason if failure else None) or ""
     hint = (failure.hint if failure else None) or ""
     retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None

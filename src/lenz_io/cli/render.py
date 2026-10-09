@@ -396,6 +396,8 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
         # and `--detach` returns the spawned task_id(s) without blocking. Drop
         # both flags for the interactive picker.
         out.console.print(f"[dim]resolve it:[/dim] lenz verify --resume {ref} --claim <N|all> --detach")
+    elif state == "cancelled":
+        out.console.print("[red]cancelled[/red]")
     elif state == "failed":
         err = st.error or st.failure_detail or st.failure_reason or "Verification failed."
         out.console.print(f"[red]failed[/red]  [dim]— {err}[/dim]")
@@ -428,6 +430,8 @@ def _batch_status_cell(st: Any) -> Any:
         return Text(f"{v.verdict or '?'} ({v.confidence}){score}", style=f"bold {color}")
     if st.status == "failed":
         return Text("failed", style="red")
+    if st.status == "cancelled":
+        return Text("cancelled", style="red")
     return Text(st.status or "?", style="yellow")
 
 
@@ -481,7 +485,7 @@ def render_batch_details(out: Output, picks: list[tuple[str, str]], statuses: di
         st = statuses.get(tid)
         if st is not None and st.status == "completed" and st.result is not None:
             _batch_verdict_block(out, st.result)
-        elif st is not None and st.status == "failed":
+        elif st is not None and st.status in ("failed", "cancelled"):
             out.console.print(f"[red]Failed:[/red] {st.error or st.failure_detail or 'pipeline error'}")
         else:
             label = "timed out" if st is None else (st.status or "unknown")

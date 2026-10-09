@@ -968,7 +968,11 @@ def _original_status_error(code: Any, detail: Any) -> Any:
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
 
-    status: str = ""  # processing | needs_input | completed | failed
+    # processing | needs_input | completed | failed | cancelled. ``cancelled``
+    # is a task stopped elsewhere (the website's Stop button, another
+    # process): its own status since API version 2026-10-11, which the
+    # original shape said as ``failed`` with ``failure_class`` ``cancelled``.
+    status: str = ""
     # Echoed on every shape since 2026-09, so a caller polling several
     # verifications in one loop can tell the replies apart. ``""`` from
     # older servers.
@@ -1015,6 +1019,17 @@ class TaskStatus(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
+        if isinstance(data, dict) and data.get("status") == "cancelled" and "failure" not in data:
+            # A task cancelled elsewhere: its own status, with no failure
+            # block. The 2.x fields read what the original shape said of it.
+            return _fill(
+                data,
+                error=_STATUS_ERRORS["cancelled"],
+                failure_reason="cancelled",
+                failure_class="cancelled",
+                retryable=False,
+                docs_url="https://lenz.io/docs/errors#cancelled",
+            )
         if not _is_newer(data, "failure") or not isinstance(data["failure"], dict):
             return data
         failure = data["failure"]
@@ -1057,7 +1072,8 @@ class BatchItemResult(_Lax):
 
     - ``completed``    — ``verification`` is set (and ``status_detail`` carries the raw poll).
     - ``needs_input``  — paused for caller input; inspect ``status_detail`` (reason / claims).
-    - ``failed``       — terminal failure (or completed-without-result); ``status_detail`` carries the diagnostic.
+    - ``failed``       — terminal failure (or completed-without-result), or cancelled elsewhere
+      (``status_detail.status`` is then ``cancelled``); ``status_detail`` carries the diagnostic.
       A verification removed by its account's retention period (HTTP 410) is ``failed``, ``status_detail`` ``None``.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
     """
@@ -2031,7 +2047,9 @@ class CitecheckSummary(_Lax):
 class Citecheck(_Lax):
     """``GET /citechecks/{citecheck_id}``: a citation check as it stands.
 
-    ``status``: ``queued`` → ``checking`` → ``completed``, or ``failed``.
+    ``status``: ``queued`` → ``checking`` → ``completed``, or ``failed``, or
+    ``cancelled`` (stopped elsewhere; ``citecheck_and_wait`` raises the failed
+    error for it, ``failure_class`` ``cancelled``).
     ``outcome`` is ``None`` until it ends, then ``clean``, ``issues_found``,
     ``incomplete`` (a citation could not be checked for a reason of ours) or
     ``unchecked``. ``citations``, ``citation_issues`` and ``citation_failures``
@@ -2059,7 +2077,9 @@ class ReviewEnvelope(_Lax):
     """What both views of ``GET /reviews/{review_id}`` carry.
 
     ``status`` is the lifecycle: ``queued`` → ``assessing`` → ``verifying``
-    → ``completed``, or ``failed``. ``outcome`` is ``None`` until the review
+    → ``completed``, or ``failed``, or ``cancelled`` (stopped elsewhere;
+    ``review_and_wait`` raises the failed error for it, ``failure_class``
+    ``cancelled``). ``outcome`` is ``None`` until the review
     ends, then one of ``clean`` (every selected claim checked, no issue),
     ``issues_found``, ``incomplete`` (some work failed) or ``unchecked`` (it
     failed before any claim was checked; ``failure`` says why).

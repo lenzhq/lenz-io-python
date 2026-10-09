@@ -128,6 +128,7 @@ class WebhookEvent:
 _EVENT_STATUS = {
     "verification.completed": "completed",
     "verification.failed": "failed",
+    "verification.cancelled": "cancelled",
     "verification.needs_input": "needs_input",
 }
 
@@ -137,7 +138,7 @@ def _status_envelope(event: WebhookEvent) -> TaskStatus | None:
     returns it: the newer payload's ``verification``, else one built from the
     original flat fields. ``None`` when the payload cannot be read as one,
     or its status is not the event's (``completed`` / ``failed`` /
-    ``needs_input``)."""
+    ``cancelled`` / ``needs_input``)."""
     raw = event.raw
     nested = raw.get("verification")
     body: dict[str, Any]
@@ -246,6 +247,26 @@ class VerificationFailed(WebhookEvent):
 
 
 @dataclass
+class VerificationCancelled(WebhookEvent):
+    """``event=verification.cancelled`` — the verification was cancelled (from
+    the website, or by another process) before it finished.
+
+    Sent only for work submitted with API version 2026-10-11 (this SDK's);
+    work submitted by an older client reports a cancellation as
+    ``verification.failed`` with ``failure_class`` ``cancelled``
+    (:class:`VerificationFailed`). Nothing was charged. Read
+    :attr:`verification`: ``status`` is ``"cancelled"``.
+    """
+
+    @property
+    def verification(self) -> TaskStatus | None:
+        """The verification as ``client.get_status`` returns it: ``status``
+        (``"cancelled"``) and ``task_id``. ``None`` when the payload cannot be
+        read as one."""
+        return _status_envelope(self)
+
+
+@dataclass
 class VerificationNeedsInput(WebhookEvent):
     """``event=verification.needs_input`` — pipeline paused for caller input.
 
@@ -311,12 +332,15 @@ class CertificateTimestamped(WebhookEvent):
 
 @dataclass
 class ReviewEvent(WebhookEvent):
-    """``event=review.completed`` or ``review.failed`` — a review ended.
+    """``event=review.completed``, ``review.failed`` or ``review.cancelled`` —
+    a review ended.
 
     ``review`` is the final review (the same body ``get_review`` returns),
     or ``None`` if it could not be parsed (``raw["review"]`` still has it).
-    ``status`` is ``completed`` or ``failed``; read ``review.outcome`` and
-    ``review.issues``.
+    ``status`` is ``completed``, ``failed`` or ``cancelled``; read
+    ``review.outcome`` and ``review.issues``. ``review.cancelled`` is sent
+    only for work submitted with API version 2026-10-11; an older client's
+    cancelled review arrives as ``review.failed``.
 
     Deduplicate on ``event_id``: it is the same on every delivery attempt of
     one event, while ``attempt`` counts up. ``task_id`` identifies the
@@ -332,8 +356,10 @@ class ReviewEvent(WebhookEvent):
 
 @dataclass
 class CitecheckEvent(WebhookEvent):
-    """``event=citecheck.completed`` or ``citecheck.failed`` — a citation
-    check ended.
+    """``event=citecheck.completed``, ``citecheck.failed`` or
+    ``citecheck.cancelled`` — a citation check ended. ``citecheck.cancelled``
+    is sent only for work submitted with API version 2026-10-11; an older
+    client's cancelled check arrives as ``citecheck.failed``.
 
     ``citecheck`` is the final check (the same body ``get_citecheck``
     returns), or ``None`` if it could not be parsed (``raw["citecheck"]``
@@ -474,6 +500,17 @@ def _build_event(raw: dict[str, Any]) -> WebhookEvent:
             failure_class=str(payload.get("failure_class") or ""),
             retryable=payload.get("retryable") if isinstance(payload.get("retryable"), bool) else None,
         )
+    if event == "verification.cancelled":
+        return VerificationCancelled(
+            event=event,
+            task_id=task_id,
+            attempt=attempt,
+            delivered_at=delivered_at,
+            verification_id=verification_id,
+            batch_id=batch_id,
+            status=status,
+            raw=raw,
+        )
     if event == "verification.needs_input":
         needs_input = payload.get("needs_input") or {}
         return VerificationNeedsInput(
@@ -500,7 +537,7 @@ def _build_event(raw: dict[str, Any]) -> WebhookEvent:
             raw=raw,
             coverage=payload.get("coverage") or {},
         )
-    if event in ("review.completed", "review.failed"):
+    if event in ("review.completed", "review.failed", "review.cancelled"):
         body = payload.get("review")
         try:
             review = ReviewFull.model_validate(body) if isinstance(body, dict) else None
@@ -521,7 +558,7 @@ def _build_event(raw: dict[str, Any]) -> WebhookEvent:
             review_id=str(payload.get("review_id") or ""),
             review=review,
         )
-    if event in ("citecheck.completed", "citecheck.failed"):
+    if event in ("citecheck.completed", "citecheck.failed", "citecheck.cancelled"):
         body = payload.get("citecheck")
         try:
             check = Citecheck.model_validate(body) if isinstance(body, dict) else None
@@ -563,8 +600,8 @@ def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:
     use :meth:`LenzWebhooks.parse`, which checks the signature and the replay
     window first.
 
-    Returns a :class:`ReviewEvent` for ``review.*``, a :class:`CitecheckEvent`
-    for ``citecheck.*``, the matching verification
+    Returns a :class:`ReviewEvent` for ``review.*`` (``completed``, ``failed``,
+    ``cancelled``), a :class:`CitecheckEvent` for ``citecheck.*``, the matching verification
     or certificate event otherwise, and a plain :class:`WebhookEvent` for an
     event type this release does not know. Branch with ``isinstance`` and
     ignore events you do not handle.
@@ -690,6 +727,7 @@ __all__ = [
     "CitecheckEvent",
     "LenzWebhooks",
     "ReviewEvent",
+    "VerificationCancelled",
     "VerificationCompleted",
     "VerificationFailed",
     "VerificationNeedsInput",

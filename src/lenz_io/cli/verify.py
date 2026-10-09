@@ -188,7 +188,7 @@ def _poll(
         if st.status == "completed":
             render_verification(out, st.result)
             return
-        if st.status == "failed":
+        if st.status in ("failed", "cancelled"):  # cancelled elsewhere: the same exit as a failure
             raise CLIError(st.error or st.failure_detail or "Verification failed.", code="pipeline_failed")
         if st.status == "needs_input":
             if st.reason == "multi_claim":
@@ -371,7 +371,7 @@ def _batch_item_json(task_id: str, claim_text: str, st: TaskStatus | None) -> di
             "status": "completed",
             "verification": st.result.model_dump(mode="json"),
         }
-    if st.status == "failed":
+    if st.status in ("failed", "cancelled"):  # cancelled elsewhere: a failed row, as in the original shape
         return {"task_id": task_id, "claim": claim_text, "status": "failed", "error": st.error or st.failure_detail}
     return {"task_id": task_id, "claim": claim_text, "status": st.status or "unknown"}
 
@@ -419,7 +419,7 @@ def _resume(
         raise
     if st.status == "completed":
         render_verification(out, st.result)
-    elif st.status == "failed":
+    elif st.status in ("failed", "cancelled"):
         raise CLIError(st.error or st.failure_detail or "Verification failed.", code="pipeline_failed")
     else:  # processing / needs_input → keep polling from here, honoring --claim/--detach
         _poll(client, out, ident, timeout, selection=selection, detach=detach)
