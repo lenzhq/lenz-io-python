@@ -1,0 +1,388 @@
+"""The request bodies of the public calls, frozen.
+
+A request body is part of the contract twice over: the server reads it, and
+an ``Idempotency-Key`` replay hashes it, so a body that changes shape between
+releases turns a retried request into a 422 (``idempotency_body_mismatch``)
+instead of a replay. These tests send each public call with every option
+left out, set to its empty / zero / false value, and set to a real value,
+always under a pinned key, and compare the body that reached the wire, key
+order included, with the one this release sends.
+
+They go through the public methods (never the private submit helpers), so a
+change to a signature that forwards an option differently fails here.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+import pytest
+import respx
+
+from lenz_io import Lenz
+
+BASE = "https://lenz.io/api/v1"
+KEY = "pinned-key-1"
+FIXTURES = Path(__file__).parent / "fixtures" / "contract"
+
+
+def _load(name: str) -> dict[str, Any]:
+    return json.loads((FIXTURES / name).read_text())
+
+
+REVIEW_DONE = _load("review_completed.json")
+CHECK_DONE = _load("citecheck_completed.json")
+_COMPLETED_STATUS = {"status": "completed", "task_id": "t", "result": {"verification_id": "v1", "claim": "A."}}
+
+
+def _ordered(content: bytes) -> list[tuple[str, Any]]:
+    """The body as (key, value) pairs in wire order, nested objects too."""
+    return json.loads(content, object_pairs_hook=list)
+
+
+@pytest.fixture()
+def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+
+
+# ── verify / verify_and_wait ───────────────────────────────────────────────
+
+_VERIFY_CASES: list[tuple[str, dict[str, Any], list[tuple[str, Any]]]] = [
+    ("omitted", {}, [("text", "A."), ("source_url", "")]),
+    (
+        "empty",
+        {"language": "", "visibility": "", "depth": "", "source_url": "", "webhook_url": ""},
+        [("text", "A."), ("source_url", "")],
+    ),
+    ("blank webhook", {"webhook_url": "   "}, [("text", "A."), ("source_url", "")]),
+    (
+        "set",
+        {
+            "language": "es",
+            "visibility": "unlisted",
+            "depth": "low",
+            "source_url": "https://example.com/a",
+            "webhook_url": "https://example.com/hook",
+        },
+        [
+            ("text", "A."),
+            ("source_url", "https://example.com/a"),
+            ("webhook_url", "https://example.com/hook"),
+            ("language", "es"),
+            ("visibility", "unlisted"),
+            ("depth", "low"),
+        ],
+    ),
+]
+
+
+class TestVerify:
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _VERIFY_CASES)
+    def test_verify(self, client: Lenz, label: str, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t"})
+            client.verify("A.", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _VERIFY_CASES)
+    def test_verify_and_wait(self, client: Lenz, label: str, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t"})
+            r.get("/verify/status/t").respond(200, json=_COMPLETED_STATUS)
+            client.verify_and_wait("A.", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    def test_text_alias(self, client: Lenz) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify").respond(200, json={"task_id": "t"})
+            client.verify(text="A.", idempotency_key=KEY)
+        assert _ordered(route.calls.last.request.content) == [("text", "A."), ("source_url", "")]
+
+
+# ── verify_batch / verify_batch_and_wait ───────────────────────────────────
+
+_BATCH_CASES: list[tuple[str, dict[str, Any], list[tuple[str, Any]]]] = [
+    ("omitted", {}, [("claims", [[("text", "A.")], [("text", "B.")]])]),
+    (
+        "empty",
+        {"webhook_url": "", "language": "", "visibility": "", "depth": ""},
+        [("claims", [[("text", "A.")], [("text", "B.")]])],
+    ),
+    (
+        "set",
+        {"webhook_url": "https://example.com/hook", "language": "de", "visibility": "unlisted", "depth": "low"},
+        [
+            ("claims", [[("text", "A.")], [("text", "B.")]]),
+            ("webhook_url", "https://example.com/hook"),
+            ("language", "de"),
+            ("visibility", "unlisted"),
+            ("depth", "low"),
+        ],
+    ),
+]
+_BATCH_ACCEPTED = {"batch_id": "b", "items": [{"task_id": "t", "claim": "A."}]}
+
+
+class TestVerifyBatch:
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _BATCH_CASES)
+    def test_verify_batch(self, client: Lenz, label: str, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify/batch").respond(200, json=_BATCH_ACCEPTED)
+            client.verify_batch(claims=[{"claim": "A."}, {"text": "B."}], idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _BATCH_CASES)
+    def test_verify_batch_and_wait(self, client: Lenz, label: str, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify/batch").respond(200, json=_BATCH_ACCEPTED)
+            r.get("/verify/status/t").respond(200, json=_COMPLETED_STATUS)
+            client.verify_batch_and_wait(claims=[{"claim": "A."}, {"text": "B."}], idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    def test_item_keys_pass_through_and_a_blank_item_webhook_is_left_out(self, client: Lenz) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify/batch").respond(200, json=_BATCH_ACCEPTED)
+            client.verify_batch(
+                claims=[
+                    {"claim": "A.", "language": "fr", "depth": "low", "webhook_url": ""},
+                    {"text": "B.", "visibility": "unlisted", "webhook_url": "https://example.com/h"},
+                ],
+                idempotency_key=KEY,
+            )
+        assert _ordered(route.calls.last.request.content) == [
+            (
+                "claims",
+                [
+                    [("language", "fr"), ("depth", "low"), ("text", "A.")],
+                    [("text", "B."), ("visibility", "unlisted"), ("webhook_url", "https://example.com/h")],
+                ],
+            )
+        ]
+
+
+# ── assess / extract / select / ask.send ───────────────────────────────────
+
+
+class TestSyncCalls:
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({"claim": "A."}, [("text", "A.")]),
+            ({"text": "A.", "language": "", "suggest_rewrite": False}, [("text", "A.")]),
+            (
+                {"claim": "A.", "language": "auto", "suggest_rewrite": True},
+                [("text", "A."), ("language", "auto"), ("suggest_rewrite", True)],
+            ),
+            ({"claims": ["A.", "B."]}, [("claims", ["A.", "B."])]),
+            ({"claims": []}, [("claims", [])]),
+            ({"claims": ["A."], "language": "es"}, [("claims", ["A."]), ("language", "es")]),
+        ],
+    )
+    def test_assess(self, client: Lenz, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/assess").respond(200, json={"claims": []})
+            client.assess(idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({}, [("text", "Doc.")]),
+            ({"language": "", "focus": "", "locate": None}, [("text", "Doc.")]),
+            ({"locate": False}, [("text", "Doc."), ("locate", False)]),
+            (
+                {"language": "it", "focus": "figures", "locate": True},
+                [("text", "Doc."), ("language", "it"), ("focus", "figures"), ("locate", True)],
+            ),
+        ],
+    )
+    def test_extract(self, client: Lenz, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/extract").respond(200, json={"claims": [], "status": "ok"})
+            client.extract(text="Doc.", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [{"claims": ["A.", "B."]}, {"texts": ["A.", "B."]}, {"claims": ["A.", "B."], "texts": ["C."]}],
+    )
+    def test_select(self, client: Lenz, kwargs: dict[str, Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/verify/t/select").respond(200, json={"items": []})
+            client.select("t", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == [("texts", ["A.", "B."])]
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(
+        ("kwargs", "expected"),
+        [
+            ({}, [("message", "Why?")]),
+            ({"language": ""}, [("message", "Why?")]),
+            ({"language": "auto"}, [("message", "Why?"), ("language", "auto")]),
+        ],
+    )
+    def test_ask_send(self, client: Lenz, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/ask/v1").respond(200, json={"role": "expert", "content": "Because."})
+            client.ask.send("v1", message="Why?", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+
+# ── review / review_and_wait ───────────────────────────────────────────────
+
+_REVIEW_CASES: list[tuple[str, dict[str, Any], list[tuple[str, Any]]]] = [
+    ("omitted", {}, [("text", "Draft."), ("visibility", "private")]),
+    (
+        "empty, zero and false",
+        {
+            "verdicts": [],
+            "confidence": [],
+            "max_assessments": 0,
+            "max_verifications": 0,
+            "depth": None,
+            "max_citations": 0,
+            "suggest_edits": False,
+            "language": "",
+            "webhook_url": "",
+            "visibility": "",
+        },
+        [
+            ("text", "Draft."),
+            ("webhook_url", ""),
+            ("escalate", [("verdicts", []), ("confidence", []), ("max_assessments", 0), ("max_verifications", 0)]),
+        ],
+    ),
+    (
+        "max_citations None",
+        {"max_citations": None, "webhook_url": None},
+        [("text", "Draft."), ("visibility", "private")],
+    ),
+    (
+        "set",
+        {
+            "verdicts": ["False"],
+            "confidence": ["low", "medium"],
+            "max_assessments": 5,
+            "max_verifications": 2,
+            "depth": "low",
+            "max_citations": 3,
+            "suggest_edits": True,
+            "language": "nl",
+            "webhook_url": "https://example.com/hook",
+            "visibility": "unlisted",
+        },
+        [
+            ("text", "Draft."),
+            ("language", "nl"),
+            ("webhook_url", "https://example.com/hook"),
+            ("visibility", "unlisted"),
+            (
+                "escalate",
+                [
+                    ("verdicts", ["False"]),
+                    ("confidence", ["low", "medium"]),
+                    ("max_assessments", 5),
+                    ("max_verifications", 2),
+                    ("depth", "low"),
+                    ("max_citations", 3),
+                    ("suggest_edits", True),
+                ],
+            ),
+        ],
+    ),
+]
+
+
+class TestReview:
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _REVIEW_CASES)
+    def test_review(self, client: Lenz, label: str, kwargs: dict[str, Any], expected: list[Any]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json={"review_id": REVIEW_DONE["review_id"], "status": "queued"})
+            client.review("Draft.", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(("label", "kwargs", "expected"), _REVIEW_CASES)
+    def test_review_and_wait(
+        self, client: Lenz, no_sleep: None, label: str, kwargs: dict[str, Any], expected: list[Any]
+    ) -> None:
+        rid = REVIEW_DONE["review_id"]
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/review").respond(202, json={"review_id": rid, "status": "queued"})
+            r.get(f"/reviews/{rid}").respond(200, json=REVIEW_DONE)
+            client.review_and_wait("Draft.", idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+
+# ── citecheck / citecheck_and_wait ─────────────────────────────────────────
+
+_PAIR = {"statement": "Water boils at 100 C.", "url": "https://example.com/boil"}
+_CITECHECK_CASES: list[tuple[str, tuple[Any, ...], dict[str, Any], list[tuple[str, Any]]]] = [
+    ("text omitted", ("Draft.",), {}, [("text", "Draft.")]),
+    (
+        "text zero and empty",
+        ("Draft.",),
+        {"max_citations": 0, "language": "", "webhook_url": ""},
+        [("text", "Draft."), ("max_citations", 0), ("webhook_url", "")],
+    ),
+    (
+        "text set",
+        ("Draft.",),
+        {"max_citations": 4, "language": "fr", "webhook_url": "https://example.com/hook"},
+        [("text", "Draft."), ("max_citations", 4), ("language", "fr"), ("webhook_url", "https://example.com/hook")],
+    ),
+    (
+        "pairs",
+        (),
+        {"pairs": [_PAIR], "language": "", "webhook_url": None},
+        [("pairs", [[("statement", "Water boils at 100 C."), ("url", "https://example.com/boil")]])],
+    ),
+    (
+        "blank text with pairs",
+        ("  ",),
+        {"pairs": [_PAIR]},
+        [("pairs", [[("statement", "Water boils at 100 C."), ("url", "https://example.com/boil")]])],
+    ),
+]
+
+
+class TestCitecheck:
+    @pytest.mark.parametrize(("label", "args", "kwargs", "expected"), _CITECHECK_CASES)
+    def test_citecheck(
+        self, client: Lenz, label: str, args: tuple[Any, ...], kwargs: dict[str, Any], expected: list[Any]
+    ) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/citecheck").respond(
+                202, json={"citecheck_id": CHECK_DONE["citecheck_id"], "status": "queued"}
+            )
+            client.citecheck(*args, idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(("label", "args", "kwargs", "expected"), _CITECHECK_CASES)
+    def test_citecheck_and_wait(
+        self,
+        client: Lenz,
+        no_sleep: None,
+        label: str,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        expected: list[Any],
+    ) -> None:
+        cid = CHECK_DONE["citecheck_id"]
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/citecheck").respond(202, json={"citecheck_id": cid, "status": "queued"})
+            r.get(f"/citechecks/{cid}").respond(200, json=CHECK_DONE)
+            client.citecheck_and_wait(*args, idempotency_key=KEY, **kwargs)
+        assert _ordered(route.calls.last.request.content) == expected
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
