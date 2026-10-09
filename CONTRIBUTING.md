@@ -32,7 +32,10 @@ pytest -m smoke --no-cov          # opt-in staging smoke (needs LENZ_E2E_KEY)
 ```
 
 The unit suite is fully mocked. The smoke suite runs against `lenz.io` (or
-a staging URL via `LENZ_BASE_URL`) and is opt-in via the `smoke` marker.
+a staging URL via `LENZ_BASE_URL`) and is opt-in via the `smoke` marker
+locally. A release publishes only after it passes: `release.yml` runs it
+through `smoke.yml`, which fails when `LENZ_E2E_KEY` is not set. Run it by
+hand from Actions > Smoke.
 
 ## Coverage
 
