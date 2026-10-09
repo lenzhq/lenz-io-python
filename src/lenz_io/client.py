@@ -486,13 +486,14 @@ class _AskNamespace:
         key = _call_key(idempotency_key, idempotency)
         if key:
             headers["Idempotency-Key"] = key
-        body = self._p._request(
-            "POST",
-            f"/ask/{verification_id}",
-            json=payload,
-            headers=headers,
-        )
-        return AskReply.model_validate(body)
+        with _carrying_key(key, unreadable=True):
+            body = self._p._request(
+                "POST",
+                f"/ask/{verification_id}",
+                json=payload,
+                headers=headers,
+            )
+            return AskReply.model_validate(body)
 
     def reset(self, verification_id: str) -> bool:
         self._p._request("DELETE", f"/ask/{verification_id}")
@@ -1340,7 +1341,8 @@ class Lenz:
             ):
                 return ReviewStarted(review_id=review_id, status="queued")
             raise
-        return ReviewStarted.model_validate(body)
+        with _carrying_key(headers["Idempotency-Key"], unreadable=True):
+            return ReviewStarted.model_validate(body)
 
     @overload
     def get_review(self, review_id: str) -> ReviewFull: ...
@@ -1483,7 +1485,8 @@ class Lenz:
             if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
                 return CitecheckStarted(citecheck_id=existing, status="queued")
             raise
-        return CitecheckStarted.model_validate(body)
+        with _carrying_key(headers["Idempotency-Key"], unreadable=True):
+            return CitecheckStarted.model_validate(body)
 
     def get_citecheck(self, citecheck_id: str) -> Citecheck:
         """Read a citation check. Raises :class:`LenzGoneError` (410) once
@@ -1876,8 +1879,9 @@ class Lenz:
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        body = self._request("POST", "/verify", json=payload, headers=headers)
-        return TaskAccepted.model_validate(body)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request("POST", "/verify", json=payload, headers=headers)
+            return TaskAccepted.model_validate(body)
 
     def _verify_batch(
         self,
@@ -1908,8 +1912,9 @@ class Lenz:
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        body = self._request("POST", "/verify/batch", json=payload, headers=headers)
-        return BatchAccepted.model_validate(body)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request("POST", "/verify/batch", json=payload, headers=headers)
+            return BatchAccepted.model_validate(body)
 
     def _timeout_at_least(self, floor: float) -> float | None:
         """``floor`` seconds, or ``None`` (the client's own timeout) when that
@@ -1969,8 +1974,9 @@ class Lenz:
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
-        return _extracted(body, locate=locate)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
+            return _extracted(body, locate=locate)
 
     def _assess(
         self,
@@ -2003,15 +2009,17 @@ class Lenz:
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        body = self._request("POST", "/assess", json=payload, timeout=timeout, headers=headers)
-        return AssessResponse.model_validate(body)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request("POST", "/assess", json=payload, timeout=timeout, headers=headers)
+            return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, texts: list[str], idempotency_key: str | None = None) -> BatchAccepted:
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts}, headers=headers)
-        return BatchAccepted.model_validate(body)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts}, headers=headers)
+            return BatchAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:
         body = self._request("GET", f"/verify/status/{task_id}")

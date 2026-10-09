@@ -324,3 +324,26 @@ class TestTheWaitHelpersGoThroughTheSameMethodsAs2x:
             )
             client.verify_and_wait("A.")
         assert waited == ["t1"]
+
+
+_UNREADABLE = [
+    ("/ask/v1", {"content": None, "message_id": 5}, lambda c: c.ask.send("v1", message="Why?", idempotency_key="k")),
+    ("/verify", {"task_id": ["x"]}, lambda c: c.verify("A.", idempotency_key="k")),
+    ("/verify/batch", {"items": "x"}, lambda c: c.verify_batch(claims=[{"claim": "A."}], idempotency_key="k")),
+    ("/assess", {"claims": "x"}, lambda c: c.assess("A.", idempotency_key="k")),
+    ("/extract", {"status": ["x"]}, lambda c: c.extract(text="A.", idempotency_key="k")),
+    ("/verify/t0/select", {"items": "x"}, lambda c: c.select("t0", claims=["A."], idempotency_key="k")),
+    ("/review", {"review_id": ["x"]}, lambda c: c.review("Draft.", idempotency_key="k")),
+    ("/citecheck", {"citecheck_id": ["x"]}, lambda c: c.citecheck("Draft.", idempotency_key="k")),
+]
+
+
+@pytest.mark.parametrize(("path", "body", "call"), _UNREADABLE)
+def test_an_answer_the_model_refuses_carries_the_key(client: Lenz, path, body, call) -> None:
+    from pydantic import ValidationError
+
+    with respx.mock(base_url=BASE) as r:
+        r.post(path).respond(200, json=body)
+        with pytest.raises(ValidationError) as ei:
+            call(client)
+    assert ei.value.idempotency_key == "k"  # type: ignore[attr-defined]
