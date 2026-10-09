@@ -12,7 +12,7 @@ import contextlib
 import json
 import sys
 from datetime import datetime, timezone
-from typing import Any, NoReturn
+from typing import Any, NamedTuple, NoReturn
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -26,7 +26,6 @@ from lenz_io.models import (
     Source,
     TaskStatus,
     Usage,
-    UsageCapacity,
     Verification,
 )
 
@@ -109,15 +108,11 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
     if out.json_mode:
         out.emit_json(_model_json(result))
         return
-    # The server splits a claim set across two fields: the primary claim lands
-    # in ``claim`` and any extras in ``identified_claims``. Neither alone is the
-    # full list — the primary is usually NOT echoed into ``identified_claims`` —
-    # so render the union so the primary is never dropped (and the count is
-    # right). Single-claim input → just ``claim``.
-    primary = (getattr(result, "claim", "") or "").strip()
-    claims = [primary] if primary else []
-    for c in result.identified_claims or []:
-        c = (c or "").strip()
+    # ``claims`` is the whole list, most check-worthy first (one entry for one
+    # claim); blank and repeated entries are skipped.
+    claims: list[str] = []
+    for found in result.claims:
+        c = (found.claim or "").strip()
         if c and c not in claims:
             claims.append(c)
     if len(claims) > 1:
@@ -151,7 +146,7 @@ def _render_positions(out: Output, result: ExtractedClaims, claim: str, *, inden
     input, where there is nothing to index) and the passage itself. The
     passage is the user's own text, so it prints with ``markup=False``.
     """
-    for loc in result.locations or []:
+    for loc in result.claims:
         if (loc.claim or "").strip() != claim:
             continue
         for pos in loc.positions or []:
@@ -173,7 +168,7 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         color = _VERDICT_COLOR.get(c.verdict, "white")
         # An Error row (list form) names its cause in place of the confidence,
         # which is meaningless there.
-        detail = c.error_code if c.verdict == "Error" and c.error_code else c.confidence
+        detail = c.error_code if c.status == "failed" and c.error_code else c.confidence
         out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({detail}) — {c.claim}")
         # The reviewers' notes, as plain text: `markup=False` because the
         # words are a model's, and a stray "[bold]" in them is not ours.
@@ -181,9 +176,9 @@ def render_assess(out: Output, result: AssessResponse) -> None:
             out.console.print(f"    {c.rationale}", markup=False, highlight=False)
         if c.dissent:
             out.console.print(f"    One reviewer disagreed: {c.dissent}", markup=False, highlight=False)
-        if c.identified_claims:
+        if c.more_claims:
             out.console.print("    [dim]also found:[/dim]")
-            for other in c.identified_claims:
+            for other in c.more_claims:
                 out.console.print(f"      • {other}")
         if c.hint:
             out.console.print(f"    [dim]{c.hint}[/dim]")
@@ -395,7 +390,7 @@ def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> Non
         if st.claims:
             out.console.print("[dim]claims found:[/dim]")
             for i, claim in enumerate(st.claims, 1):
-                out.console.print(f"  {i}. {claim.text}")
+                out.console.print(f"  {i}. {claim.claim}")
         ref = task_id or "<task_id>"
         # Non-interactive resolution (agents/scripts): `--claim` picks by index
         # and `--detach` returns the spawned task_id(s) without blocking. Drop
@@ -510,7 +505,7 @@ def render_ask(out: Output, reply: Any) -> None:
 def _capacity_row(
     out: Output,
     label: str,
-    cap: UsageCapacity,
+    cap: _Projection,
     cost: int | None = None,
     *,
     price_note: str = "",
@@ -527,9 +522,9 @@ def _capacity_row(
     getting a row of its own because it is a PRICE, not a capability — there
     is no separate low-depth allowance, and printing one would imply a second
     balance."""
-    detail = f"{cap.quota_used} / {cap.quota_total} quota"
-    if cap.bonus:
-        detail += f" + {cap.bonus} extra"
+    detail = f"{cap.used} / {cap.total} quota"
+    if cap.extra:
+        detail += f" + {cap.extra} extra"
     if cost:
         detail += f" · {_count(cost, 'credit')} each"
         if price_note:
@@ -594,16 +589,16 @@ def render_usage(out: Output, u: Usage) -> None:
         assessments = _count(_equivalent(u, "assess"), "assessment")
         equivalents = f"≈ {verifications} · {assessments}"
         out.console.print(f"  [bold]{u.credits.remaining} credits left[/bold]  [dim]({equivalents})[/dim]")
-    _capacity_row(out, "Verify", u.verify, u.costs.get("verify"), price_note=_low_depth_note(u))
-    _capacity_row(out, "Ask", u.ask, u.costs.get("ask"))
-    _capacity_row(out, "Assess", u.assess, u.costs.get("assess"))
+        _capacity_row(out, "Verify", _projection(u, "verify"), u.costs.get("verify"), price_note=_low_depth_note(u))
+        _capacity_row(out, "Ask", _projection(u, "ask"), u.costs.get("ask"))
+        _capacity_row(out, "Assess", _projection(u, "assess"), u.costs.get("assess"))
     ex = u.extract
     label = f"{'Extract:':<9}"
     if ex.unlimited:
         out.console.print(f"  {label} [dim]unlimited[/dim]")
     else:
         out.console.print(f"  {label} {ex.calls_today} / {ex.daily_limit} today  [dim](free — no credit charge)[/dim]")
-    resets_at = u.credits.resets_at or u.quota_resets_at
+    resets_at = u.credits.resets_at
     if resets_at:
         out.console.print(f"  [dim]Credits reset {_humanize_reset(resets_at)}[/dim]")
 
@@ -631,17 +626,29 @@ def _has_credit_pool(u: Usage) -> bool:
     return bool(c.total or c.remaining or c.used or c.extra or u.costs)
 
 
-def _equivalent(u: Usage, capability: str) -> int:
-    """How many ``capability`` calls the remaining balance buys.
+class _Projection(NamedTuple):
+    """The credit pool in one capability's unit (calls it would buy)."""
 
-    The server already projects this per capability, so use its number; derive
-    from the price list only when the block is empty (a capability the server
-    reports a cost for but no projection — a new endpoint, say)."""
-    cap: UsageCapacity = getattr(u, capability, None) or UsageCapacity()
-    if cap.remaining or cap.quota_total:
-        return cap.remaining
-    cost = u.costs.get(capability) or 0
-    return u.credits.remaining // cost if cost > 0 else 0
+    used: int
+    total: int
+    remaining: int
+    extra: int
+
+
+#: The price each capability's row is projected at when the price list leaves it out.
+_DEFAULT_COSTS = {"verify": 10, "ask": 1, "assess": 1}
+
+
+def _projection(u: Usage, capability: str) -> _Projection:
+    """``u.credits`` divided by the capability's price (``u.costs``)."""
+    cost = u.costs.get(capability) or _DEFAULT_COSTS.get(capability, 1)
+    total, left = u.credits.total // cost, u.credits.remaining // cost
+    return _Projection(max(0, total - left), total, left, u.credits.extra // cost)
+
+
+def _equivalent(u: Usage, capability: str) -> int:
+    """How many ``capability`` calls the remaining balance buys."""
+    return _projection(u, capability).remaining
 
 
 def render_config(out: Output, payload: dict[str, Any]) -> None:

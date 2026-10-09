@@ -131,8 +131,10 @@ logger = logging.getLogger("lenz_io")
 # The API version this SDK asks for, sent as ``X-Lenz-API-Version`` on every
 # request: the server answers in that version's response shape, whatever the
 # account. Since 3.0.0 this is the current shape (one name for each field,
-# status and error code). The models still read the original ``2026-05-13``
-# shape as well, and every attribute keeps the meaning it had in 2.x.
+# status and error code), and the SDK reads only that shape from its own
+# calls (2.x asked for ``2026-05-13``). Every attribute keeps the meaning it
+# had in 2.x; the old names are deprecated aliases. Webhooks are the one
+# place both shapes are still parsed.
 API_VERSION = "2026-10-11"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
@@ -150,7 +152,7 @@ DEFAULT_TIMEOUT = 30.0
 # charged it — and a retry with no idempotency key charged again.
 ASSESS_TIMEOUT = 100.0
 #: Deprecated alias for :data:`ASSESS_TIMEOUT`, kept for callers that imported
-#: it. Same value; removed no earlier than 3.0.
+#: it. Same value; to be removed in a future major release.
 ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
 # ``extract`` reads the whole input and enumerates its claims inside one
 # synchronous request. Most calls answer in seconds, but a long input can take
@@ -231,13 +233,12 @@ def _batch_item_body(item: Any) -> Any:
 
 
 def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
-    """``/extract``'s answer. A newer-shape body (``claims``, no
-    ``identified_claims``) that located every claim away answers ``claims:
-    []``; the original field for that was ``locations=[]``, which only the
+    """``/extract``'s answer. A body that located every claim away answers
+    ``claims: []``; the 2.x field for that was ``locations=[]``, which only the
     request (``locate=True``) can tell apart from "nothing found"."""
     out = ExtractedClaims.model_validate(body)
-    newer = isinstance(body, dict) and "claims" in body and "identified_claims" not in body
-    if newer and locate and not body["claims"] and out.status == "not_a_claim" and out.locations is None:
+    answered = isinstance(body, dict) and body.get("claims") == []
+    if answered and locate and out.status == "not_a_claim" and out.locations is None:
         out.locations = []
     return out
 
@@ -1215,7 +1216,7 @@ class Lenz:
         silent.
 
         Raises :class:`ReviewFailed` when the review ends ``failed`` (its
-        ``error_code`` and ``hint`` say why), and :class:`ReviewTimeout` when
+        ``failure`` says why), and :class:`ReviewTimeout` when
         ``timeout`` seconds pass first: the review keeps running, and the
         error carries its ``review_id`` and the last body read.
         """
@@ -1560,8 +1561,7 @@ class Lenz:
                 hint=status.hint,
                 payload=status.model_dump(),
             )
-        # failed. Server sends the diagnostic under ``error``; fall back to the
-        # legacy fields for resilience.
+        # failed. ``error`` is the 2.x sentence, rebuilt from ``failure``.
         detail = status.error or status.failure_detail or status.failure_reason or "unknown"
         if status.retryable:
             fix = "Transient provider outage — retry the same request after a short wait."

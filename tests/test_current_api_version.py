@@ -221,10 +221,7 @@ def test_a_receipt_without_chain_id_reads_it_as_empty() -> None:
     from lenz_io.models import TaskAccepted
 
     current = TaskAccepted.model_validate(_canonical("verify__submit_202.json")["body"])
-    original = TaskAccepted.model_validate(load("legacy", "verify__submit_202.json")["body"])
     assert current.chain_id == ""
-    assert original.chain_id == load("legacy", "verify__submit_202.json")["body"]["chain_id"]
-    assert "chain_id" in original.model_dump()
 
 
 @pytest.mark.parametrize("blank", ["", "   ", "\t\n", None])
@@ -309,3 +306,18 @@ def test_a_batch_item_language_error_names_its_item() -> None:
     assert err.message == f"claims[1].{sentence}"
     assert err.code == ""
     assert err.errors == []
+
+
+def test_deprecated_property_aliases_are_marked_without_warning() -> None:
+    """PEP 702 markers (editors and type checkers see them); no runtime warning,
+    so code under ``-W error`` keeps working."""
+    import warnings
+
+    from lenz_io.errors import LenzQuotaExceededError
+    from lenz_io.models import TaskAccepted
+
+    for prop in (TaskAccepted.chain_id, LenzQuotaExceededError.credits_remaining):
+        assert isinstance(prop, property) and isinstance(getattr(prop.fget, "__deprecated__", None), str)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert TaskAccepted.model_validate({"task_id": "t"}).chain_id == ""

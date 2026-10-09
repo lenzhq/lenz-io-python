@@ -33,6 +33,9 @@ dependencies = [
   # unknown Field kwarg is swallowed into json_schema_extra with a warning of
   # its own and the deprecation never fires, which is worse than the bump.
   "pydantic>=2.7",
+  # `@deprecated(..., category=None)` marks the deprecated property aliases for
+  # editors and type checkers without a runtime warning. Pydantic needs it too.
+  "typing_extensions>=4.5",
 ]
 
 [project.optional-dependencies]

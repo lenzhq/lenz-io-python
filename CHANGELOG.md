@@ -9,11 +9,24 @@ All notable changes to this SDK are documented here. Format follows
 Major release (3.0.0). Every attribute, exception and CLI rendering reads
 what 2.x read, with one exception: the raw bodies (`exc.body`,
 `model_dump()`, a webhook event's `raw`, the CLI's `--json` output) show the
-API's newer response shape as sent. See the migration note below.
+API's current response shape as sent. Every 2.x name is kept as a deprecated
+alias (see Deprecated); see the migration note below.
+
+### Breaking
+
+- **3.0 reads only the API's `2026-10-11` response shape for its own calls**
+  (lenz.io serves it from 2026-10-11). Run against a server that does not
+  serve that version, it does not read the 2.x (`2026-05-13`) response
+  shape any more: stay on 2.21 until the API serves `2026-10-11`. The SDK no
+  longer detects or fills in a 2.x-shaped response body, a 2.x-shaped error
+  body, or a `/me/usage` body from before the credit pool.
+- **Webhooks of both shapes are still parsed** (`parse_webhook`,
+  `LenzWebhooks.parse` and the event models): work submitted by an older
+  client on the same account is delivered in the 2.x shape.
 
 ### Changed
 
-- **The SDK asks for the API's current response shape.** Every request sends
+- **The SDK asks for the API's current response shape, and reads only that.** Every request sends
   `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`; 2.x sent
   `2026-05-13`). In that shape each field, status and error code has one name
   across every endpoint.
@@ -56,6 +69,55 @@ API's newer response shape as sent. See the migration note below.
     429; `LenzQuotaExceededError.credit_balance` on a citation-check 402.
 - `map_response_to_error` takes an optional `endpoint=(method, path)`, which
   the client passes: an error's original `code` and wording depend on it.
+
+### Deprecated
+
+Kept in 3.x with their 2.x values, so 2.x code runs unchanged; they will be
+removed in a future major release. Move to the newer names when convenient.
+Reading them emits no new warning (the ones that already warned still do);
+the deprecated properties carry a PEP 702 `@deprecated` marker, so editors
+strike them through and type checkers report them. `typing_extensions>=4.5` is
+now a declared dependency (pydantic already installs it).
+
+| 2.x name | Use instead |
+|---|---|
+| `ExtractedClaims.claim` | `claims[0].claim` |
+| `ExtractedClaims.identified_claims` | `claims` (each `.claim`) |
+| `ExtractedClaims.locations` | `claims` (each `.positions`) |
+| `ExtractedClaims.candidate_claims`, `AssessClaim.candidate_claims`, `AssessResponse.candidate_claims`, `TaskStatus.candidates`, `TaskStatus.similar_claims` | none: always empty |
+| `AssessClaim.verdict == "Error"` (with `confidence == "low"`) | `status == "failed"` |
+| `AssessClaim.error_code` | `failure.code` (`no_checkable_claim` where it reads `no_claim`) |
+| `AssessClaim.hint` | `failure.hint`; none for the sentence on a completed row that found other claims |
+| `AssessClaim.identified_claims`, `ReviewAssessment.identified_claims` | `more_claims` |
+| `ReviewAssessment.error_code`, `ReviewAssessment.hint` | `failure.code`, `failure.hint` |
+| `AssessResponse.error`, `AssessResponse.error_code` | `status` and `failure` |
+| `CandidateClaim.text` | `claim` |
+| `TaskAccepted.claim_text`, `BatchItemResult.claim_text` | `claim` |
+| `TaskAccepted.chain_id` | none: no longer sent, reads `""` |
+| `TaskStatus.error` | `failure.detail` |
+| `TaskStatus.failure_reason` | `failure.code` (`no_checkable_claim` where it reads `not_a_claim`) |
+| `TaskStatus.failure_class`, `.retryable`, `.docs_url` | `failure.failure_class`, `.retryable`, `.docs_url` |
+| `TaskStatus.hint` on a failed run | `failure.hint` |
+| `TaskStatus.failure_detail` | none: always `""` |
+| `FailureBlock.failure_reason` | `code` |
+| `Verification.modified_at`, `VerificationListItem.modified_at`, `ReviewVerification.modified_at` | `completed_at` |
+| `ReviewSummary.claim_limit_reached` | `claim_limit_exceeded` (some claims were left out; `reached` also held at exactly the limit) |
+| `ReviewSummary.citation_limit_reached`, `CitecheckSummary.citation_limit_reached` | `citation_limit_exceeded` |
+| `Usage.verify`, `Usage.ask`, `Usage.assess` | `credits.remaining // costs[<capability>]` (and `credits.total`, `credits.extra`) |
+| `Usage.quota_resets_at` | `credits.resets_at` |
+| `UsageCredits.bonus` | `extra` (warns) |
+| `UsageCapacity.credits` | `UsageCapacity.bonus` (warns); the block itself is deprecated, see above |
+| `LenzQuotaExceededError.credits_remaining` | `remaining` (warns); `credit_balance` is the credit pool |
+| `Progress` mapping access (`p["step"]`, `p.get`, `in`, `keys()`, `values()`, `items()`) | attributes (`p.step`) |
+| `ASSESS_LIST_TIMEOUT` | `ASSESS_TIMEOUT` |
+
+`LenzQuotaExceededError.credits_remaining` and the `Progress` mapping access
+were announced for removal in 3.0: they are kept instead, with their warnings
+(where they had one), and will now be removed in a future major release, like
+the rest of this list.
+
+The status value `not_a_claim` on `/extract` reads where the API now sends
+`no_checkable_claim`; there is no other spelling to read it by.
 
 ### What reads differently
 
@@ -100,7 +162,8 @@ rebuild:
   upgrade it to 2.21 or later (which reads both shapes) before the service
   that SENDS requests moves to 3.0. Work submitted with 2.x keeps sending
   the original shape.
-- Code that reads attributes: nothing to do.
+- Code that reads attributes: nothing to do. The deprecated names above keep
+  working; the SDK needs an API that serves `2026-10-11` (see Breaking).
 - Code that reads the raw dict: the keys are the current shape's. A model's
   `model_dump()` holds what the server sent plus the 2.x fields filled in from
   it; `exc.body` and `event.raw` hold the body as sent (`failure` blocks,
@@ -112,8 +175,6 @@ rebuild:
   `review` and `citecheck`, `None` means your key's default and `""` means no
   webhook. In the current shape the API reads a missing `webhook_url` as the
   key's default and `""` as no webhook on every endpoint.
-
----
 
 ## [2.21.0] - 2026-10-09
 

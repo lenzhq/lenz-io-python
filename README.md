@@ -220,8 +220,8 @@ edited = "".join(chars)
 **Waiting.** `review_and_wait` polls on the review's own
 `poll_after_seconds`. Pass `on_update=` to see the quick verdicts as soon as
 they are in and each deep check as it lands; without it the helper is silent.
-It raises `ReviewFailed` when the review fails (`error_code` and `hint` say
-why; `review.failure.code` is the cause in the newer spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
+It raises `ReviewFailed` when the review fails (`review.failure.code` and
+`review.failure.hint` say why; the exception's `error_code` keeps its 2.x spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
 keeps running, and the error carries its `review_id` and the last body read.
 To submit without waiting, `client.review(draft)` returns a `review_id`;
 read it with `client.get_review(review_id)`, or only the issues with
@@ -471,12 +471,15 @@ Every claim-shaped response shares these fields at top level:
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
 
-### Field names: both response shapes
+### Field names: the current names, and the deprecated 2.x ones
 
-The API is adding a newer, dated response shape that gives each field one
-name across every endpoint. This SDK still asks for the original shape, and
-its models read either one. The newer names are attributes already; the
-older ones keep working, with the meaning they always had:
+The API's current response shape gives each field one name across every
+endpoint. Since 3.0 the SDK asks for it (`X-Lenz-API-Version: 2026-10-11`) and
+reads only that shape from its own calls (webhooks of both shapes are still
+parsed). The current names are attributes already. The 2.x names are
+**deprecated** and still work, with the value they had in 2.x, so 2.x code
+runs unchanged; they will be removed in a future major release. Move to the
+current names when convenient:
 
 | Read this | Instead of (deprecated, still works) |
 |---|---|
@@ -484,17 +487,18 @@ older ones keep working, with the meaning they always had:
 | `AssessClaim.status` (`"completed"` / `"failed"`) and `.failure` | `verdict == "Error"`, `error_code`, `hint` |
 | `AssessClaim.more_claims`, `ReviewAssessment.more_claims` | `identified_claims` |
 | `AssessResponse.status` and `.failure` | `error`, `error_code` |
-| `TaskStatus.failure` (`code`, `detail`, `hint`, `failure_class`, `retryable`, `docs_url`) | `error`, `failure_reason` and the flat fields |
+| `TaskStatus.failure` (`code`, `detail`, `hint`, `failure_class`, `retryable`, `docs_url`) | `error`, `failure_reason`, `failure_detail` and the flat fields |
 | `TaskAccepted.claim`, `BatchItemResult.claim`, `CandidateClaim.claim` | `claim_text`, `text` |
 | `Verification.completed_at` | `modified_at` |
 | `ReviewSummary.claim_limit_exceeded`, `citation_limit_exceeded` | `claim_limit_reached`, `citation_limit_reached` |
 | `FailureBlock.code`, `.detail` | `failure_reason` |
 | `Usage.credits` and `Usage.costs` | the `verify` / `ask` / `assess` blocks, `quota_resets_at` |
 
-"Nothing checkable" is `no_checkable_claim` in the newer names; the older
-fields keep their own spelling (`not_a_claim`, `no_claim`). The newer names
-are read-only properties, so an original-shape response parses, dumps and
-compares exactly as before.
+"Nothing checkable" is `no_checkable_claim` in the current names; the 2.x
+fields keep their own spelling (`not_a_claim`, `no_claim`). The current names
+are read-only properties, so the 2.x fields parse, dump and compare as they
+did. The full list, with the aliases that have no replacement, is in the
+[changelog](CHANGELOG.md).
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -658,14 +662,15 @@ u = client.usage()
 print(u.credits.remaining, "credits")  # the balance — the authoritative number
 print(u.costs["verify"], "credits per verification")  # the price list
 print(u.cost_options["verify"]["depth"]["low"], "at depth low")  # 5 — half price
-print(u.verify.remaining, "verifications left")  # a projection of that balance
+print(u.credits.remaining // u.costs["verify"], "verifications left")  # that balance in verifications
 print(u.credits.extra, "of them non-expiring")  # grants + top-ups
 ```
 
-The `verify` / `ask` / `assess` blocks are **projections** of the one balance
-into each capability's unit — how many of those calls the remaining credits
-would buy — not separate allowances. Spending on any one of them moves all of
-them.
+The `verify` / `ask` / `assess` blocks on `Usage` are deprecated (kept, with
+their 2.x values) **projections** of the one balance into each capability's
+unit — how many of those calls the remaining credits would buy — not separate
+allowances. Spending on any one of them moves all of them. Derive the same
+number from `credits` and `costs`, as above.
 
 `credits.extra` is the non-expiring part of the balance. Its old name,
 `credits.bonus`, is deprecated: the same number, it emits a

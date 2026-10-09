@@ -482,9 +482,7 @@ def test_extract_pretty_renders_positions():
     extracted = ExtractedClaims.model_validate(
         {
             "status": "ready",
-            "claim": "A rose 5%.",
-            "identified_claims": ["A rose 5%.", "B fell [bold]."],
-            "locations": [
+            "claims": [
                 {"claim": "A rose 5%.", "positions": [{"start": 0, "end": 11, "text": "A grew 5 %."}]},
                 {"claim": "B fell [bold].", "positions": [{"start": 12, "end": 26, "text": "B fell [bold]."}]},
             ],
@@ -500,9 +498,7 @@ def test_extract_pretty_renders_url_positions_without_a_span():
     extracted = ExtractedClaims.model_validate(
         {
             "status": "ready",
-            "claim": "A rose 5%.",
-            "identified_claims": [],
-            "locations": [{"claim": "A rose 5%.", "positions": [{"start": None, "end": None, "text": "A grew 5 %."}]}],
+            "claims": [{"claim": "A rose 5%.", "positions": [{"start": None, "end": None, "text": "A grew 5 %."}]}],
         }
     )
     text = _render_pretty(extracted)
@@ -510,7 +506,7 @@ def test_extract_pretty_renders_url_positions_without_a_span():
 
 
 def test_extract_pretty_without_locations_prints_no_positions():
-    text = _render_pretty(ExtractedClaims.model_validate({"status": "ready", "claim": "A rose 5%."}))
+    text = _render_pretty(ExtractedClaims.model_validate({"status": "ready", "claims": [{"claim": "A rose 5%."}]}))
     assert " at " not in text
 
 
@@ -558,20 +554,18 @@ def test_extract_reads_stdin(monkeypatch):
 
 
 def test_extract_pretty_renders_atomic_claim():
-    """Single-claim input fills atomic_claim, not identified_claims — the pretty
-    renderer must surface it (regression: it used to print 'no claims found')."""
+    """A single claim comes back as a list of one — the pretty renderer must
+    surface it (regression: it used to print 'no claims found')."""
     import io
 
     from rich.console import Console
 
     from lenz_io.cli.render import Output, render_extract
 
-    # The public /extract response carries the primary claim under `claim`
-    # (the server renames framing's internal `atomic_claim` → `claim`).
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "History",
-            "claim": "Einstein won the 1921 Nobel Prize in Physics.",
+            "claims": [{"claim": "Einstein won the 1921 Nobel Prize in Physics."}],
             "key_entities": [{"name": "Albert Einstein", "type": "person"}],
         }
     )
@@ -586,9 +580,9 @@ def test_extract_pretty_renders_atomic_claim():
 
 
 def test_extract_pretty_multi_claim_includes_primary():
-    """The server puts the primary claim in atomic_claim and extras in
-    identified_claims — the rendered list must include BOTH (regression: the
-    primary used to be dropped from the list and only shown in the verify hint)."""
+    """Every claim in ``claims`` is rendered, the first included (regression:
+    the primary used to be dropped from the list and only shown in the verify
+    hint)."""
     import io
 
     from rich.console import Console
@@ -598,8 +592,7 @@ def test_extract_pretty_multi_claim_includes_primary():
     extracted = ExtractedClaims.model_validate(
         {
             "domain": "Science",
-            "claim": "The Earth is flat.",
-            "identified_claims": ["Ruby is harder than diamond."],
+            "claims": [{"claim": "The Earth is flat."}, {"claim": "Ruby is harder than diamond."}],
         }
     )
     buf = io.StringIO()
@@ -741,31 +734,50 @@ def test_render_assess_list_rows_show_hint_and_also_found():
 
     out = _render(
         render_assess,
-        AssessResponse(
-            claims=[
-                AssessClaim(claim="Water boils at 100 °C at sea level.", verdict="True", confidence="high"),
-                AssessClaim(
-                    claim="Bilingual children develop stronger executive function.",
-                    verdict="Mixed",
-                    confidence="medium",
-                    identified_claims=["Bilingual children learn to read later than monolingual peers."],
-                    hint="Assessed the main claim only. Send identified_claims as their own items to check the rest.",
-                ),
-                AssessClaim(
-                    claim="this is fine",
-                    verdict="Error",
-                    confidence="low",
-                    error_code="no_claim",
-                    hint="No factual statement that can be checked against evidence was found in the input.",
-                ),
-                AssessClaim(
-                    claim="The Eiffel Tower is 330 metres tall.",
-                    verdict="Error",
-                    confidence="low",
-                    error_code="timeout",
-                    hint="This item was not processed inside the call's time budget; nothing was charged.",
-                ),
-            ]
+        AssessResponse.model_validate(
+            {
+                "status": "ok",
+                "claims": [
+                    {
+                        "claim": "Water boils at 100 °C at sea level.",
+                        "status": "completed",
+                        "verdict": "True",
+                        "confidence": "high",
+                        "failure": None,
+                        "more_claims": [],
+                    },
+                    {
+                        "claim": "Bilingual children develop stronger executive function.",
+                        "status": "completed",
+                        "verdict": "Mixed",
+                        "confidence": "medium",
+                        "failure": None,
+                        "more_claims": ["Bilingual children learn to read later than monolingual peers."],
+                    },
+                    {
+                        "claim": "this is fine",
+                        "status": "failed",
+                        "verdict": None,
+                        "confidence": None,
+                        "failure": {
+                            "code": "no_checkable_claim",
+                            "hint": "No factual statement that can be checked against evidence was found in the input.",
+                        },
+                        "more_claims": [],
+                    },
+                    {
+                        "claim": "The Eiffel Tower is 330 metres tall.",
+                        "status": "failed",
+                        "verdict": None,
+                        "confidence": None,
+                        "failure": {
+                            "code": "timeout",
+                            "hint": "This item was not processed inside the call's time budget; nothing was charged.",
+                        },
+                        "more_claims": [],
+                    },
+                ],
+            }
         ),
     )
     lines = out.splitlines()
@@ -894,7 +906,7 @@ def _pool_usage(**overrides):
     payload = {
         "plan": "pro",
         "quota_resets_at": "2026-09-01",
-        "credits": {"total": 5200, "used": 130, "remaining": 5070, "bonus": 200, "resets_at": "2026-09-01"},
+        "credits": {"total": 5200, "used": 130, "remaining": 5070, "extra": 200, "resets_at": "2026-09-01"},
         "costs": {"verify": 10, "assess": 1, "ask": 1, "extract": 0},
         "cost_options": {"verify": {"depth": {"standard": 10, "low": 5}}},
         "verify": {"quota_used": 13, "quota_total": 520, "quota_remaining": 507, "bonus": 20, "remaining": 507},
@@ -959,8 +971,8 @@ def test_usage_pretty_leads_with_the_credit_balance():
     assert "1 credit each" in text  # assess/ask are the unit — singular
     assert text.index("credits left") < text.index("Verify:")
     assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
-    # No extra-credit tail on Ask (its bonus == 0 there)
-    assert "extra" not in text.split("Ask:")[1].split("Assess:")[0]
+    # The extra credits show on every row, in that capability's unit.
+    assert "+ 200 extra" in text.split("Ask:")[1].split("Assess:")[0]
     assert "4 / 1000 today" in text
     # Humanized: absolute date always present; the relative prefix ("in N days")
     # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
@@ -1028,23 +1040,12 @@ def test_usage_pretty_never_reads_the_deprecated_alias():
     assert "20 extra" in text
 
 
-def test_usage_pretty_pre_pool_server_has_no_balance_headline():
-    """A server predating the pool sends no `credits` block. Print the rows it
-    did send rather than a confident '0 credits left'."""
-    text = _render_usage_text(
-        _usage(
-            plan="plus",
-            quota_resets_at="2026-09-01",
-            verify={"quota_used": 5, "quota_total": 100, "quota_remaining": 95, "credits": 0, "remaining": 95},
-            ask={"quota_used": 0, "quota_total": 50, "quota_remaining": 50, "remaining": 50},
-            assess={"quota_used": 0, "quota_total": 500, "quota_remaining": 500, "remaining": 500},
-            extract={"calls_today": 0, "daily_limit": 1000},
-        )
-    )
+def test_usage_pretty_without_a_pool_prints_no_balance_or_rows():
+    """A body with no `credits` block: print the plan, not a confident '0 credits left'."""
+    text = _render_usage_text(_usage(plan="plus", extract={"calls_today": 0, "daily_limit": 1000}))
     assert "credits left" not in text
-    assert "95 left" in text
-    assert "credits each" not in text  # no price list either
-    assert "Credits reset" in text  # falls back to quota_resets_at
+    assert "Verify:" not in text
+    assert "plus plan" in text and "0 / 1000 today" in text
 
 
 @pytest.mark.parametrize(

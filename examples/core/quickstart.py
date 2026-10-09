@@ -27,7 +27,7 @@ def main() -> None:
 
     # 1. extract — pull verifiable claims out of any text (free)
     out = client.extract(text="Sharks don't get cancer. The Eiffel Tower is 330m tall.")
-    claims = out.identified_claims or [out.claim]
+    claims = [c.claim for c in out.claims]
     print(f"Extracted {len(claims)} claims:")
     for c in claims:
         print(f"  - {c}")
@@ -37,17 +37,17 @@ def main() -> None:
     quick = client.assess(claims=claims).claims
     for c in quick:
         print(f"  {c.verdict:<12}  conf={c.confidence:<7}  {c.claim}")
-        if c.verdict == "Error":
-            # No verdict for this item — error_code says why, hint says what to send next.
-            print(f"    {c.error_code}: {c.hint}")
-        if c.identified_claims:
+        if c.failure:
+            # No verdict for this item — failure.code says why, failure.hint says what to send next.
+            print(f"    {c.failure.code}: {c.failure.hint}")
+        if c.more_claims:
             # A compound item: only its main claim was assessed.
-            print(f"    also found (not assessed): {c.identified_claims}")
+            print(f"    also found (not assessed): {c.more_claims}")
     print()
 
     # 3. verify — escalate the low-confidence rows to the full multi-model panel
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
-    doubtful = [{"claim": c.claim} for c in quick if c.verdict != "Error" and c.confidence == "low"][:20]
+    doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
     # Fall back to the demo claim so the walkthrough always reaches steps 3
     # and 4 even when every row came back confident.
     doubtful = doubtful or [{"claim": "Sharks don't get cancer"}]

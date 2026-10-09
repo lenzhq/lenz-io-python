@@ -2,12 +2,16 @@
   "status": 200,
   "body": {
     "status": "ready",
-    "claim": "Alpha rose 5% in 2024.",
-    "identified_claims": [
-      "Alpha rose 5% in 2024.",
-      "Beta fell 3% last year."
+    "claims": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": null
+      },
+      {
+        "claim": "Beta fell 3% last year.",
+        "positions": null
+      }
     ],
-    "candidate_claims": [],
     "domain": "Economics",
     "key_entities": [
       {
@@ -20,8 +24,7 @@
       }
     ],
     "presumed_intent": "Verify reported figures",
-    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
-    "locations": null
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year."
   },
   "headers": {
     "Content-Type": "application/json",

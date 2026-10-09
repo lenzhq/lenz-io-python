@@ -24,6 +24,8 @@ import re
 import warnings
 from typing import TYPE_CHECKING, Any
 
+from typing_extensions import deprecated
+
 if TYPE_CHECKING:
     from .models import Citecheck, ReviewFull
 
@@ -146,8 +148,9 @@ class LenzQuotaExceededError(LenzError):
     cost: int | None = None
 
     @property
+    @deprecated("Use `remaining`.", category=None)
     def credits_remaining(self) -> int:
-        """Deprecated alias for ``remaining``. Removed in 3.0.
+        """Deprecated: use `remaining`. To be removed in a future major release.
 
         Returns 0 when ``remaining`` is unknown, which is exactly the
         ambiguity ``remaining`` exists to fix — migrate to ``remaining``.
@@ -179,7 +182,7 @@ class LenzQuotaExceededError(LenzError):
     @staticmethod
     def _warn_credits_remaining() -> None:
         warnings.warn(
-            "credits_remaining is deprecated and will be removed in 3.0; "
+            "credits_remaining is deprecated and will be removed in a future major release; "
             "use `remaining`, which is None when the server didn't report a "
             "balance (credits_remaining reports that as 0). It is NOT the "
             "API's `credits_remaining` body field — that is the credit pool, "
@@ -517,13 +520,12 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
 
 # ── The original error bodies, read from a newer-shape body ─────────────
 #
-# The API's newer response shape gives every error one envelope: ``detail`` is
-# a sentence, ``code`` is always set, a 422 lists its fields in ``errors``, and
-# waits and links have one name each. The original shape differed by
-# endpoint. ``_original_error`` rebuilds the original body by endpoint (the
-# same rules as the Node SDK), so every attribute of the exception keeps its
-# 2.x value; ``exc.body`` is the body as sent. Each rule matches only what the
-# newer shape alone sends, so an original-shape body comes back unchanged.
+# The API's current response shape (what 3.0 asks for) gives every error one
+# envelope: ``detail`` is a sentence, ``code`` is always set, a 422 lists its
+# fields in ``errors``, and waits and links have one name each. The 2.x shape
+# differed by endpoint. ``_original_error`` rebuilds the 2.x body by endpoint
+# (the same rules as the Node SDK), so every attribute of the exception keeps
+# its 2.x value; ``exc.body`` is the body as sent.
 
 #: /review and /citecheck (submit and read) kept their own error envelope.
 _REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
@@ -672,10 +674,10 @@ def map_response_to_error(
     Returns an *instance* (not raised) so callers can decide whether
     to raise, log, or surface. Keep this pure — no I/O.
 
-    ``endpoint`` is the request's ``(method, path)``: with it, an error in
-    the API's newer response shape gives the exception the same attributes
-    the original shape gave (``code``, ``message``, ``errors``, waits);
-    ``exc.body`` is always the body as sent.
+    ``endpoint`` is the request's ``(method, path)``: the client passes it, and
+    the exception gets the attributes 2.x gave (``code``, ``message``,
+    ``errors``, waits), which differed by endpoint; ``exc.body`` is the body
+    as sent. Without it the body is read as it stands.
     """
     raw = _parse_body(body)
     parsed = raw
@@ -724,12 +726,9 @@ def map_response_to_error(
     if status_code == 409 and isinstance(err, (LenzVerificationNotReadyError, LenzPipelineError)):
         # The generic 4xx advice ("retry; file an issue") is wrong for both:
         # the server's own hint says what to do, with a class default behind it.
-        # A failed run states its cause flat in the original response shape
-        # and in one ``failure`` block in the newer one. The block is read only
-        # for a newer-shape body, and only where the flat key is absent.
+        # A failed run states its cause in one ``failure`` block.
         raw_failure = parsed.get("failure")
-        newer = isinstance(raw_failure, dict) and "failure_reason" not in parsed
-        failure: dict[str, Any] = raw_failure if newer and isinstance(raw_failure, dict) else {}
+        failure: dict[str, Any] = raw_failure if isinstance(raw_failure, dict) else {}
 
         def _read(key: str, block_key: str) -> Any:
             return parsed[key] if key in parsed else failure.get(block_key)
@@ -742,7 +741,7 @@ def map_response_to_error(
         else:
             reason = _opt_str(_read("failure_reason", "code"))
             # The original spelling of "nothing checkable" on a verification.
-            err.failure_reason = "not_a_claim" if newer and reason == "no_checkable_claim" else reason
+            err.failure_reason = "not_a_claim" if reason == "no_checkable_claim" else reason
             err.failure_class = _opt_str(_read("failure_class", "failure_class"))
             # Only a real boolean is a retry signal, as in the wait path.
             retryable = _read("retryable", "retryable")
@@ -784,9 +783,9 @@ def map_response_to_error(
         # sending null precisely so "unknown" stays distinguishable from
         # "zero". Collapsing that here would throw the distinction away.
         err.remaining = _opt_int(parsed.get("remaining"))
-        if "remaining" not in parsed and "requested" not in parsed and "doc_url" not in parsed and "docs_url" in parsed:
-            # A newer-shape body (``docs_url``) without the capability figure:
-            # the pool divided by this one call's price.
+        if "remaining" not in parsed and "requested" not in parsed:
+            # A body without the capability figure: the pool divided by this
+            # one call's price.
             pool, price = _opt_int(parsed.get("credits_remaining")), _opt_int(parsed.get("cost"))
             if pool is not None and price:
                 err.remaining = pool // price
@@ -796,14 +795,8 @@ def map_response_to_error(
         # NOT on the same-named deprecated property — that one aliases
         # ``remaining`` and means a different quantity (see the class docstring).
         err.credit_balance = _opt_int(parsed.get("credits_remaining"))
-        if (
-            err.credit_balance is None
-            and err.remaining is not None
-            and "remaining" in parsed
-            and "docs_url" in parsed
-            and "doc_url" not in parsed
-        ):
-            # A newer-shape body leaves the pool out where it equals
+        if err.credit_balance is None and err.remaining is not None and "remaining" in parsed:
+            # The current shape leaves the pool out where it equals
             # ``remaining`` (a citation check costs one credit).
             err.credit_balance = err.remaining
         err.cost = _opt_int(parsed.get("cost"))
@@ -825,13 +818,10 @@ def map_response_to_error(
             "reset_in_seconds" not in parsed
             and "retry_after_seconds" not in parsed
             and "retry_after" in parsed
-            and "docs_url" in parsed
-            and "doc_url" not in parsed
             and code not in _IN_FLIGHT_429_CODES
         ):
-            # A newer-shape body (``docs_url``) names every wait
-            # ``retry_after``. The in-flight refusals never carried
-            # ``reset_in_seconds``.
+            # The current shape names every wait ``retry_after``. The
+            # in-flight refusals never carried ``reset_in_seconds``.
             err.reset_in_seconds = _opt_int(parsed.get("retry_after"))
         rl_upgrade_url = parsed.get("upgrade_url")
         err.upgrade_url = rl_upgrade_url if isinstance(rl_upgrade_url, str) else ""

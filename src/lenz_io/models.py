@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from typing_extensions import deprecated
 
 
 class _Lax(BaseModel):
@@ -37,24 +38,27 @@ class _Lax(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-# ── Reading both response shapes ─────────────────────────────────────────
+# ── Reading the current response shape ───────────────────────────────────
 #
-# The API is gaining a second, dated response shape that renames a handful of
+# Since 3.0 the SDK asks for the API's 2026-10-11 response shape and reads
+# only that shape from its own calls (webhooks of both shapes are still
+# parsed; see ``webhooks.py``). The current shape renames a handful of 2.x
 # fields (``claim_text`` -> ``claim``, ``modified_at`` -> ``completed_at``, a
 # failed item's ``error`` / ``error_code`` / ``failure_reason`` -> one
-# ``failure`` block, ...). This release still asks for the original shape.
+# ``failure`` block, ...).
 #
-# Two rules keep existing code exactly as it was:
+# Every 2.x name stays as a DEPRECATED alias with its 2.x value, so 2.x code
+# runs unchanged:
 #
-# * A body is treated as the newer shape only when it carries something only
-#   that shape has. Every other body is parsed exactly as before: same fields,
-#   same values, same dump, same ``exclude_unset``.
-# * A newer-shape body gets the original fields filled in, with their original
-#   meaning, from the newer ones (only where the body does not carry them).
+# * The 2.x fields are model fields, filled from the current ones in a
+#   ``before`` validator (only where the body does not carry them).
+# * The current names are read-only properties over what the server sent.
+#   They are not model fields, so ``model_dump()`` shows the body as sent plus
+#   the 2.x fields.
 #
-# The newer names are read-only properties, computed from either shape: they
-# are not model fields, so ``repr``, ``model_dump()``, equality and pickling of
-# an original-shape object are unchanged.
+# A few models are also built from webhook payloads of the original shape
+# (a review, a citation check, a failure block, a needs-input option); those
+# keep reading it.
 
 #: The one code for "the input holds nothing that can be checked", in the
 #: newer response shape. The original shape spells it per endpoint:
@@ -73,10 +77,9 @@ def _old_code(code: Any, old: str) -> Any:
     return old if code in (NO_CHECKABLE_CLAIM, *_OLD_NO_CLAIM_CODES) else code
 
 
-def _is_newer(data: Any, has: str, lacks: str) -> bool:
-    """A dict carrying ``has`` (a key only the newer shape sends) and not
-    ``lacks`` (its original-shape counterpart)."""
-    return isinstance(data, dict) and has in data and lacks not in data
+def _is_newer(data: Any, key: str) -> bool:
+    """A dict carrying ``key`` (a key only the current response shape sends)."""
+    return isinstance(data, dict) and key in data
 
 
 def _utc_day(iso: Any) -> Any:
@@ -104,8 +107,8 @@ def _modified_at_from(created_at: Any, completed_at: Any) -> str | None:
 def _fill_modified_at(data: Any) -> Any:
     """A newer-shape verification (``completed_at``, no ``modified_at``):
     add the original ``modified_at``."""
-    if _is_newer(data, "completed_at", "modified_at"):
-        return {**data, "modified_at": _modified_at_from(data.get("created_at"), data.get("completed_at"))}
+    if _is_newer(data, "completed_at"):
+        return _fill(data, modified_at=_modified_at_from(data.get("created_at"), data.get("completed_at")))
     return data
 
 
@@ -199,19 +202,20 @@ class Audit(_Lax):
 class CandidateClaim(_Lax):
     """One of multiple distinct claims framing found in the submitted text."""
 
+    #: **Deprecated**, use :attr:`claim` (the same string).
     text: str = ""
     domain: str = ""
 
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if _is_newer(data, "claim", "text"):
+        if _is_newer(data, "claim"):
             return _fill(data, text=data["claim"])
         return data
 
     @property
     def claim(self) -> str:
-        """The option's claim (``text`` is its older name, the same string)."""
+        """The option's claim. Replaces ``text``, which is deprecated and kept."""
         sent = _sent(self, "claim")
         return sent if isinstance(sent, str) else self.text
 
@@ -334,8 +338,9 @@ class Verification(_Lax):
     endpoint, and the webhook payload.
 
     The verdict block is FLAT at top level (was nested ``Verdict`` object
-    pre-unify). ``created_at`` + ``modified_at`` are the only timestamp
-    fields on the API surface — editorial ``published_at`` is internal-only.
+    pre-unify). ``created_at`` + ``completed_at`` are the only timestamp
+    fields on the API surface (``modified_at`` is the deprecated 2.x name of
+    the second) — editorial ``published_at`` is internal-only.
 
     1.1.0: dropped ``url`` and ``visibility``. API claims are private by
     default and referenced by ``verification_id`` only. Cache-hit on
@@ -384,6 +389,8 @@ class Verification(_Lax):
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
+    # Deprecated: use ``completed_at``. Set only when the verification
+    # completed on a later UTC day than ``created_at``.
     modified_at: str | None = None
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
@@ -406,11 +413,11 @@ class Verification(_Lax):
 
     @property
     def completed_at(self) -> str | None:
-        """When the verification completed. From the original response shape it
-        is known only through ``modified_at``: set when that is, ``None`` on a
-        same-day completion."""
+        """When the verification completed. Replaces ``modified_at``, which is
+        deprecated and kept (set only when the completion fell on a later UTC
+        day than ``created_at``)."""
         sent = _sent(self, "completed_at")
-        return sent if isinstance(sent, str) else self.modified_at
+        return sent if isinstance(sent, str) else None
 
 
 class VerificationListItem(_Lax):
@@ -432,6 +439,7 @@ class VerificationListItem(_Lax):
     # A suggested rewrite of ``claim``. See ``Verification.suggested_rewrite``.
     suggested_rewrite: str | None = None
     created_at: str | None = None
+    # Deprecated: use ``completed_at``. See ``Verification.modified_at``.
     modified_at: str | None = None
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
@@ -443,11 +451,11 @@ class VerificationListItem(_Lax):
 
     @property
     def completed_at(self) -> str | None:
-        """When the verification completed. From the original response shape it
-        is known only through ``modified_at``: set when that is, ``None`` on a
-        same-day completion."""
+        """When the verification completed. Replaces ``modified_at``, which is
+        deprecated and kept (set only when the completion fell on a later UTC
+        day than ``created_at``)."""
         sent = _sent(self, "completed_at")
-        return sent if isinstance(sent, str) else self.modified_at
+        return sent if isinstance(sent, str) else None
 
 
 class VerificationList(_Lax):
@@ -505,8 +513,7 @@ class ClaimLocation(_Lax):
     """Where the submitted text makes one claim.
 
     ``claim`` is exactly as in the claim list it belongs to
-    (``ExtractedClaims.claim`` / ``identified_claims``, or a review's
-    ``more_claims``). ``positions`` lists every place the text makes it, in
+    (``ExtractedClaims.claims``, or a review's ``more_claims``). ``positions`` lists every place the text makes it, in
     text order, at most 10. It is ``None`` only when that claim could not be
     placed; on ``/extract`` every returned claim is placed.
     """
@@ -550,21 +557,25 @@ class ExtractedClaims(_Lax):
 
     ``status`` is one of ``ExtractStatus``: ``ready``, ``not_a_claim``, or —
     when a ``focus`` was given and no claim fell within it — ``no_match``.
-    ``no_match`` is a successful answer, not an error: ``identified_claims``
-    is empty and the unfocused list is never substituted for it.
+    ``no_match`` is a successful answer, not an error: ``claims`` is empty
+    and the unfocused list is never substituted for it.
 
-    ``locations`` is set only on a call made with ``locate=True``: one
-    ``ClaimLocation`` per returned claim, in the order of
-    ``identified_claims`` (one entry for a single ``claim``). It is ``[]``
-    when every claim was left out (``status`` is then ``"not_a_claim"``),
-    and ``None`` when ``locate`` was not set, when the extraction found no
-    claims, or when the
-    claims could not be located (the list is then returned unfiltered).
-    Older servers omit the key; it parses as ``None``.
+    ``claims`` lists every claim found, most check-worthy first (one entry
+    for one claim). On a call made with ``locate=True`` each carries its
+    ``positions`` (the claims that could not be placed are left out, and
+    ``status`` is ``"not_a_claim"`` when none is left); they are ``None``
+    when ``locate`` was not set or the claims could not be located (the list
+    is then returned unfiltered).
+
+    ``claim``, ``identified_claims`` and ``locations`` are the deprecated 2.x
+    fields, kept with their 2.x values: ``claims`` is their replacement.
     """
 
+    # ``"not_a_claim"`` is the 2.x spelling of the API's ``no_checkable_claim``.
     status: str = ""
+    # Deprecated: use ``claims[0].claim``.
     claim: str = ""
+    # Deprecated: use ``claims`` (this is its names, and ``[]`` for one claim).
     identified_claims: list[str] = Field(default_factory=list)
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
@@ -573,12 +584,13 @@ class ExtractedClaims(_Lax):
     key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
+    # Deprecated: use ``claims`` (each with its ``positions``).
     locations: list[ClaimLocation] | None = None
 
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not (_is_newer(data, "claims", "identified_claims") and isinstance(data["claims"], list)):
+        if not (_is_newer(data, "claims") and isinstance(data["claims"], list)):
             return data
         items = [c for c in data["claims"] if isinstance(c, dict)]
         names = [c.get("claim") if isinstance(c.get("claim"), str) else "" for c in items]
@@ -599,17 +611,10 @@ class ExtractedClaims(_Lax):
     def claims(self) -> list[ExtractedClaim]:
         """Every claim found, most check-worthy first: always a list (one entry
         for one claim, ``[]`` for none), each with its ``positions`` when the
-        call located them. Read from either response shape."""
+        call located them. Replaces ``claim``, ``identified_claims`` and
+        ``locations``, which are deprecated and kept."""
         sent = _sent(self, "claims")
-        if isinstance(sent, list):
-            return [ExtractedClaim.model_validate(c) for c in sent if isinstance(c, dict)]
-        names = list(self.identified_claims) or ([self.claim] if self.claim else [])
-        if self.claim and self.claim not in names:
-            names.insert(0, self.claim)
-        positions: dict[str, Any] = {}
-        for loc in self.locations or []:
-            positions.setdefault(loc.claim, loc.positions)
-        return [ExtractedClaim(claim=n, positions=positions.get(n)) for n in names]
+        return [ExtractedClaim.model_validate(c) for c in sent if isinstance(c, dict)] if isinstance(sent, list) else []
 
 
 #: The original shape's ``hint`` on an /assess verdict row that found other
@@ -626,16 +631,19 @@ class AssessClaim(_Lax):
     ``ClaimDetailOut`` payload at ``GET /api/v1/verifications/{id}`` for
     callers that want citations and the full audit trail.
 
-    A row with ``verdict == "Error"`` could not be given a verdict. On a
+    A row with ``status == "failed"`` could not be given a verdict. On a
     list call it stays in position (one row per item sent), is not charged,
-    and says why: ``error_code`` names the cause and ``hint`` is one
-    sentence on what to send next. ``hint`` is the field to surface to a
-    human — it is written per cause and stays correct as causes are added.
+    and says why: ``failure.code`` names the cause and ``failure.hint`` is
+    one sentence on what to send next (``error_code`` and ``hint`` are their
+    2.x names, deprecated and kept; so is reading ``verdict == "Error"``
+    instead of ``status == "failed"``). ``failure.hint`` is the field to
+    surface to a human — it is written per cause and stays correct as causes
+    are added.
+
     A vague input is assessed on its most likely reading, which ``claim``
     carries. A compound input is assessed on its main claim; the other
-    claims found in it are listed in ``identified_claims`` (also with a
-    ``hint``). These fields default empty so older servers that don't send
-    them still parse.
+    claims found in it are listed in ``more_claims`` (``identified_claims``,
+    deprecated and kept).
     """
 
     claim: str = ""
@@ -661,8 +669,9 @@ class AssessClaim(_Lax):
     # check's reasoning and not itself verified: review it, or run it through
     # ``verify``, before using it.
     suggested_rewrite: str | None = None
-    # Only on ``verdict == "Error"`` rows: 'no_claim' | 'framing_failed' |
-    # 'upstream_unavailable' | 'timeout'.
+    # Deprecated: use ``failure.code`` (``"no_checkable_claim"`` where this
+    # reads ``"no_claim"``). Only on ``verdict == "Error"`` rows:
+    # 'no_claim' | 'framing_failed' | 'upstream_unavailable' | 'timeout'.
     #
     # An OPEN set, deliberately typed ``str`` rather than a Literal: the API
     # may add a cause in a minor version, so branch on the ones you know and
@@ -678,16 +687,19 @@ class AssessClaim(_Lax):
     # Deprecated: always empty since 2026-09-12, when the ``ambiguous`` cause
     # that filled it was retired. Kept because the server still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    # Other claims found in the input that were NOT assessed; else empty.
+    # Deprecated: use ``more_claims``. Other claims found in the input that
+    # were NOT assessed; else empty.
     identified_claims: list[str] = Field(default_factory=list)
-    # One sentence on what to send next. Set on every Error row and on a row
-    # with a non-empty ``identified_claims``; ``None`` on a plain verdict row.
+    # Deprecated: use ``failure.hint`` (on a failed row; the sentence on a
+    # verdict row that found other claims has no replacement). One sentence on
+    # what to send next. Set on every Error row and on a row with a non-empty
+    # ``identified_claims``; ``None`` on a plain verdict row.
     hint: str | None = None
 
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not _is_newer(data, "failure", "error_code"):
+        if not _is_newer(data, "failure"):
             return data
         out = dict(data)
         failed = out.get("status") == "failed"
@@ -711,32 +723,27 @@ class AssessClaim(_Lax):
 
     @property
     def status(self) -> str:
-        """``"completed"`` (a verdict) or ``"failed"`` (none; see ``failure``)."""
+        """``"completed"`` (a verdict) or ``"failed"`` (none; see ``failure``).
+        Replaces ``verdict == "Error"``, which is deprecated and kept."""
         sent = _sent(self, "status")
-        if isinstance(sent, str):
-            return sent
-        if self.verdict == "Error":
-            return "failed"
-        return "completed" if self.verdict else ""
+        return sent if isinstance(sent, str) else ""
 
     @property
     def failure(self) -> FailureBlock | None:
         """Why a failed row has no verdict (``None`` on a completed row):
         ``code`` (``no_checkable_claim`` | ``framing_failed`` |
         ``upstream_unavailable`` | ``timeout`` today, an open set) and ``hint``,
-        one sentence on what to send next."""
+        one sentence on what to send next. Replaces ``error_code`` and
+        ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        if isinstance(sent, dict):
-            return FailureBlock.model_validate(sent)
-        if self.status != "failed":
-            return None
-        return FailureBlock(failure_reason=self.error_code or "", hint=self.hint)
+        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
 
     @property
     def more_claims(self) -> list[str]:
-        """Other claims found in the input that were not assessed."""
+        """Other claims found in the input that were not assessed. Replaces
+        ``identified_claims``, which is deprecated and kept."""
         sent = _sent(self, "more_claims")
-        return list(sent) if isinstance(sent, list) else list(self.identified_claims)
+        return list(sent) if isinstance(sent, list) else []
 
 
 #: The ``AssessResponse.status`` values this release knows about. A
@@ -764,14 +771,18 @@ class AssessResponse(_Lax):
     ``"Error"`` row in position (see ``AssessClaim``), never a missing one;
     the top-level ``error`` stays ``None``.
 
-    When ``claims`` is empty (single form), ``error_code`` is ``'no_claim'``:
-    the input holds no checkable claim (a vague input is assessed on its
-    most likely reading instead). It defaults empty, so older servers that
-    don't send it degrade to the plain ``error`` message.
+    When ``claims`` is empty (single form), ``status`` is
+    ``"no_checkable_claim"`` and ``failure`` says why: the input holds no
+    checkable claim (a vague input is assessed on its most likely reading
+    instead). The deprecated ``error`` and ``error_code`` (``'no_claim'``)
+    keep their 2.x values.
     """
 
     claims: list[AssessClaim] = Field(default_factory=list)
+    # Deprecated: use ``failure`` / ``status``. The 2.x sentence for an input
+    # with no claim.
     error: str | None = None
+    # Deprecated: use ``failure.code`` (``"no_checkable_claim"``).
     error_code: str = ""  # '' | 'no_claim'
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
@@ -783,7 +794,7 @@ class AssessResponse(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not _is_newer(data, "failure", "error"):
+        if not _is_newer(data, "failure"):
             return data
         failure = data.get("failure") if isinstance(data.get("failure"), dict) else None
         if failure is None:
@@ -799,54 +810,47 @@ class AssessResponse(_Lax):
     def status(self) -> str:
         """``ok`` (some row has a verdict), ``no_checkable_claim`` (the input,
         or every item, holds nothing checkable) or ``error``. See
-        ``AssessStatus``; computed from the rows when a server does not send it."""
+        ``AssessStatus``. Replaces ``error`` and ``error_code``, which are
+        deprecated and kept."""
         sent = _sent(self, "status")
-        if isinstance(sent, str):
-            return sent
-        rows = self.claims
-        if any(r.status == "completed" for r in rows):
-            return "ok"
-        if not rows:
-            return NO_CHECKABLE_CLAIM if _new_code(self.error_code) == NO_CHECKABLE_CLAIM else "error"
-        codes = {r.failure.code if r.failure else None for r in rows}
-        return NO_CHECKABLE_CLAIM if codes == {NO_CHECKABLE_CLAIM} else "error"
+        return sent if isinstance(sent, str) else ""
 
     @property
     def failure(self) -> FailureBlock | None:
-        """Why the single form has no rows; ``None`` otherwise."""
+        """Why the single form has no rows; ``None`` otherwise. Replaces
+        ``error`` and ``error_code``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        if isinstance(sent, dict):
-            return FailureBlock.model_validate(sent)
-        if not (self.error or self.error_code):
-            return None
-        return FailureBlock.model_validate({"failure_reason": self.error_code, "detail": self.error})
+        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
 
 
 class TaskAccepted(_Lax):
     """Returned by ``POST /verify`` and per item of ``POST /verify/batch``."""
 
     task_id: str = ""
+    #: **Deprecated**, use :attr:`claim`.
     claim_text: str = ""
 
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if _is_newer(data, "claim", "claim_text"):
+        if _is_newer(data, "claim"):
             return _fill(data, claim_text=data["claim"])
         return data
 
     @property
     def claim(self) -> str:
         """The item's claim on a batch or select receipt (``""`` on a single
-        ``verify`` receipt); ``claim_text`` is its older name."""
+        ``verify`` receipt). Replaces ``claim_text``, which is deprecated and
+        kept."""
         sent = _sent(self, "claim")
-        return sent if isinstance(sent, str) else self.claim_text
+        return sent if isinstance(sent, str) else ""
 
     @property
+    @deprecated("It is no longer sent; use `task_id` to poll.", category=None)
     def chain_id(self) -> str:
-        """An internal correlation id the original response shape sent on a
-        ``verify`` receipt; ``""`` when the response carries none (the current
-        shape never does). It cannot be polled: use ``task_id``."""
+        """Deprecated: no longer sent. An internal correlation id the 2.x
+        response shape sent on a ``verify`` receipt; ``""`` now. It cannot be
+        polled: use ``task_id``."""
         sent = _sent(self, "chain_id")
         return sent if isinstance(sent, str) else ""
 
@@ -875,8 +879,9 @@ class Progress(_Lax):
     passes it through.
 
     This was a plain ``dict`` up to 2.10.0. The mapping methods below keep
-    ``p["step"]``, ``"step" in p``, ``p.keys()`` and ``dict(p)`` working on a
-    2.x minor; they are deprecated and go in 3.0.0. Use attributes.
+    ``p["step"]``, ``"step" in p``, ``p.keys()`` and ``dict(p)`` working; they
+    are deprecated and will be removed in a future major release. Use
+    attributes.
     """
 
     step: str = ""
@@ -885,7 +890,7 @@ class Progress(_Lax):
     elapsed_seconds: int | None = None
     poll_after_seconds: int | None = None
 
-    # ── dict compatibility shim (deprecated, removed in 3.0.0) ──
+    # ── dict compatibility shim (deprecated, to be removed in a future major) ──
     #
     # `.get()` alone would have been the worst option available: the
     # changelog would say "minor", the shim would look like it handled
@@ -962,11 +967,12 @@ class TaskStatus(_Lax):
     # the JSON schema only, so reading them does not warn.
     candidates: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     similar_claims: list[SimilarVerification] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    # failure branches. The server's failed response is
-    # ``{"status": "failed", "error": "..."}`` — ``error`` is the live wire
-    # field. ``failure_reason`` / ``failure_detail`` are kept for forward/back
-    # compatibility and other channels; read precedence is
-    # ``error or failure_detail or failure_reason``.
+    # failure branches. Deprecated: ``error``, ``failure_reason``,
+    # ``failure_detail``, ``failure_class``, ``retryable`` and ``docs_url``
+    # below are the 2.x flat fields of a failed run; read ``failure`` instead
+    # (``failure.detail``, ``.code``, ``.failure_class``, ...). ``error`` keeps
+    # its 2.x sentence; ``failure_detail`` is always empty, with no
+    # replacement.
     error: str = ""
     failure_reason: str = ""
     failure_detail: str = ""
@@ -984,7 +990,7 @@ class TaskStatus(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not _is_newer(data, "failure", "failure_reason") or not isinstance(data["failure"], dict):
+        if not _is_newer(data, "failure") or not isinstance(data["failure"], dict):
             return data
         failure = data["failure"]
         reason = _old_code(failure.get("code"), "not_a_claim")
@@ -1004,22 +1010,12 @@ class TaskStatus(_Lax):
         """On ``failed``: why. ``code`` is the cause (an open set, e.g.
         ``research_empty``, ``no_checkable_claim``), ``detail`` one sentence on
         what happened, ``failure_class`` / ``retryable`` / ``hint`` /
-        ``docs_url`` as on the original fields. ``None`` on other statuses."""
+        ``docs_url``. ``None`` on other statuses. Replaces ``error``,
+        ``failure_reason``, ``failure_detail``, ``failure_class``,
+        ``retryable``, ``docs_url`` and ``hint`` on a failure, which are
+        deprecated and kept."""
         sent = _sent(self, "failure")
-        if isinstance(sent, dict):
-            return FailureBlock.model_validate(sent)
-        if self.status != "failed":
-            return None
-        return FailureBlock.model_validate(
-            {
-                "failure_reason": self.failure_reason,
-                "detail": self.error or self.failure_detail or None,
-                "failure_class": self.failure_class,
-                "retryable": self.retryable,
-                "hint": self.hint or None,
-                "docs_url": self.docs_url,
-            }
-        )
+        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
 
 
 class BatchItemResult(_Lax):
@@ -1039,6 +1035,7 @@ class BatchItemResult(_Lax):
     """
 
     task_id: str = ""
+    #: **Deprecated**, use :attr:`claim`.
     claim_text: str = ""
     status: Literal["completed", "needs_input", "failed", "timeout"]
     verification: Verification | None = None
@@ -1046,7 +1043,8 @@ class BatchItemResult(_Lax):
 
     @property
     def claim(self) -> str:
-        """The item's claim (``claim_text`` is its older name)."""
+        """The item's claim. Replaces ``claim_text``, which is deprecated and
+        kept."""
         return self.claim_text
 
 
@@ -1087,18 +1085,9 @@ class UsageCredits(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _mirror_extra_and_bonus(cls, data: Any) -> Any:
-        """Keep ``extra`` and its deprecated old name in step, in both directions.
-
-        A server that has not started sending ``extra`` sends only ``bonus``;
-        the newer response shape sends only ``extra``. Mirroring
-        here means both attributes read correctly either way.
-        """
-        if not isinstance(data, dict):
-            return data
-        has_extra, has_bonus = data.get("extra") is not None, data.get("bonus") is not None
-        if has_bonus and not has_extra:
-            return {**data, "extra": data["bonus"]}
-        if has_extra and not has_bonus:
+        """Fill the deprecated ``bonus`` from ``extra``, the one number the
+        current response shape sends."""
+        if isinstance(data, dict) and data.get("extra") is not None and data.get("bonus") is None:
             return {**data, "bonus": data["extra"]}
         return data
 
@@ -1160,20 +1149,10 @@ class UsageCapacity(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _mirror_bonus_and_credits(cls, data: Any) -> Any:
-        """Keep ``bonus`` and its deprecated alias in step, in both directions.
-
-        A server predating the credit pool sends only ``credits``; a block
-        computed from the pool has only ``bonus``. Mirroring here means
-        both attributes read correctly either way, so the SDK never depends on
-        which side of an API deploy it is talking to.
-        """
-        if not isinstance(data, dict):
-            return data
-        has_bonus, has_credits = data.get("bonus") is not None, data.get("credits") is not None
-        if has_bonus and not has_credits:
+        """Fill the deprecated ``credits`` alias from ``bonus``: the blocks are
+        computed from the pool, so they carry only ``bonus``."""
+        if isinstance(data, dict) and data.get("bonus") is not None and data.get("credits") is None:
             return {**data, "credits": data["bonus"]}
-        if has_credits and not has_bonus:
-            return {**data, "bonus": data["credits"]}
         return data
 
 
@@ -1219,6 +1198,7 @@ class Usage(_Lax):
     #: comparing against it will break on a rename that ought to be free.
     #: Empty on servers predating this field — fall back to :attr:`plan`.
     plan_label: str = ""
+    #: **Deprecated**, use :attr:`UsageCredits.resets_at` (``credits.resets_at``).
     quota_resets_at: str | None = None
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
@@ -1280,8 +1260,6 @@ class Usage(_Lax):
         did, and ``quota_resets_at`` from ``credits.resets_at``."""
         if not (isinstance(data, dict) and isinstance(data.get("credits"), dict)):
             return data
-        if any(k in data for k in ("verify", "ask", "assess", "quota_resets_at")):
-            return data
         credits, costs = data["credits"], data.get("costs")
 
         def _int(value: Any) -> int:
@@ -1291,8 +1269,10 @@ class Usage(_Lax):
         if not isinstance(costs, dict):
             costs = {}
         total, remaining = _int(credits.get("total")), _int(credits.get("remaining"))
-        extra = _int(credits.get("extra", credits.get("bonus")))
+        extra = _int(credits.get("extra"))
         for capability, default_cost in _BLOCK_COSTS:
+            if capability in out:
+                continue
             # At the price the body publishes; a capability it leaves out (or
             # prices at 0) at the price the blocks always used.
             cost = _int(costs.get(capability)) or default_cost
@@ -1376,14 +1356,17 @@ class ReviewStarted(_Lax):
 class FailureBlock(_Lax):
     """Why a review, or one claim's work inside it, failed.
 
-    The same fields a failed ``GET /verify/status`` carries: ``failure_reason``
-    is the specific cause (an open set, e.g. ``no_claim``,
-    ``insufficient_credits``, ``timeout``), ``failure_class`` the closed
+    The same fields a failed ``GET /verify/status`` carries: ``code``
+    is the specific cause (an open set, e.g. ``no_checkable_claim``,
+    ``insufficient_credits``, ``timeout``; ``failure_reason`` is its 2.x name,
+    deprecated and kept, spelling "nothing checkable" ``no_claim`` or
+    ``not_a_claim``), ``failure_class`` the closed
     :data:`FailureClass`, ``retryable`` whether resending the same request can
     help, ``hint`` one sentence on what to do next and ``docs_url`` where the
     class is explained.
     """
 
+    #: **Deprecated**, use :attr:`code`.
     failure_reason: str | None = ""
     failure_class: str | None = ""
     retryable: bool | None = None
@@ -1393,15 +1376,15 @@ class FailureBlock(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if _is_newer(data, "code", "failure_reason"):
+        if _is_newer(data, "code"):
             return _fill(data, failure_reason=_old_code(data["code"], "no_claim"))
         return data
 
     @property
     def code(self) -> str | None:
         """The cause, an open set (``no_checkable_claim``, ``timeout``, ...).
-        ``failure_reason`` is its older name, spelling "nothing checkable"
-        ``no_claim``."""
+        Replaces ``failure_reason``, which is deprecated and kept (it spells
+        "nothing checkable" ``no_claim``)."""
         sent = _sent(self, "code")
         return sent if isinstance(sent, str) else _new_code(self.failure_reason)
 
@@ -1417,7 +1400,7 @@ def _deep_check_failure(data: Any) -> Any:
     "nothing checkable" was ``not_a_claim`` (a quick check's and the review's
     own, ``no_claim``, which ``FailureBlock`` reads by default)."""
     failure = data.get("failure") if isinstance(data, dict) else None
-    if isinstance(failure, dict) and _is_newer(failure, "code", "failure_reason"):
+    if isinstance(failure, dict) and _is_newer(failure, "code"):
         return {**data, "failure": _fill(failure, failure_reason=_old_code(failure["code"], "not_a_claim"))}
     return data
 
@@ -1492,7 +1475,8 @@ class ReviewSummary(_Lax):
     claims_selected: int | None = None
     #: The resolved ``max_assessments``.
     claim_limit: int = 20
-    #: The draft held at least ``claim_limit`` claims: more MAY exist.
+    #: **Deprecated**, use :attr:`claim_limit_exceeded`. The draft held at
+    #: least ``claim_limit`` claims: more MAY exist.
     claim_limit_reached: bool | None = None
     #: The text was cut at 50,000 characters.
     input_truncated: bool = False
@@ -1505,6 +1489,7 @@ class ReviewSummary(_Lax):
     citations_selected: int | None = None
     #: The resolved ``max_citations``.
     citation_limit: int | None = None
+    #: **Deprecated**, use :attr:`citation_limit_exceeded`.
     #: ``citations_found`` is over ``citation_limit``.
     citation_limit_reached: bool | None = None
     citation_checks: ReviewCitationCheckCounts | None = None
@@ -1518,7 +1503,7 @@ class ReviewSummary(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not _is_newer(data, "claim_limit_exceeded", "claim_limit_reached"):
+        if not _is_newer(data, "claim_limit_exceeded"):
             return data
         found, limit = data.get("claims_found"), data.get("claim_limit", 20)
         reached = found >= limit if isinstance(found, int) and isinstance(limit, int) else None
@@ -1568,8 +1553,9 @@ class ReviewResult(_Lax):
 class ReviewAssessment(_Lax):
     """A claim's quick check. ``status``: ``pending`` | ``running`` |
     ``completed`` | ``failed``. On ``completed`` the fields mean what they
-    mean on an ``/assess`` row; on ``failed`` see ``error_code`` (an open
-    set, as on ``/assess``), ``hint`` and ``failure``."""
+    mean on an ``/assess`` row; on ``failed`` see ``failure`` (``code`` is an
+    open set, as on ``/assess``; ``error_code`` and ``hint`` are its 2.x
+    names, deprecated and kept)."""
 
     status: str = ""
     verdict: str | None = None
@@ -1577,8 +1563,12 @@ class ReviewAssessment(_Lax):
     rationale: str | None = None
     dissent: str | None = None
     verification_url: str | None = None
+    #: **Deprecated**, use ``failure.code`` (``no_checkable_claim`` where this
+    #: reads ``no_claim``).
     error_code: str | None = None
+    #: **Deprecated**, use :attr:`more_claims`.
     identified_claims: list[str] = Field(default_factory=list)
+    #: **Deprecated**, use ``failure.hint`` (on a failed quick check).
     hint: str | None = None
     #: With ``suggest_edits=True``: the claim with its wrong part corrected,
     #: from the quick check's reasoning, when it found the claim "False" or
@@ -1591,7 +1581,7 @@ class ReviewAssessment(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if not _is_newer(data, "more_claims", "identified_claims"):
+        if not _is_newer(data, "more_claims"):
             return data
         failure = data.get("failure") if isinstance(data.get("failure"), dict) else {}
         return _fill(
@@ -1602,7 +1592,8 @@ class ReviewAssessment(_Lax):
 
     @property
     def more_claims(self) -> list[str]:
-        """Other claims found in the passage that were not checked."""
+        """Other claims found in the passage that were not checked. Replaces
+        ``identified_claims``, which is deprecated and kept."""
         sent = _sent(self, "more_claims")
         return list(sent) if isinstance(sent, list) else list(self.identified_claims)
 
@@ -1646,6 +1637,8 @@ class ReviewVerification(_Lax):
     suggested_rewrite: str | None = None
     warnings: list[str] = Field(default_factory=list)
     created_at: str | None = None
+    #: **Deprecated**, use :attr:`completed_at`. Set only when the check
+    #: completed on a later UTC day than ``created_at``.
     modified_at: str | None = None
     verification_url: str | None = None
     url: str | None = None
@@ -1977,6 +1970,7 @@ class CitecheckSummary(_Lax):
     citations_found: int | None = None
     citations_selected: int | None = None
     citation_limit: int | None = None
+    #: **Deprecated**, use :attr:`citation_limit_exceeded`.
     citation_limit_reached: bool | None = None
     citation_checks: ReviewCitationCheckCounts | None = None
     citation_issues: int = 0
@@ -1984,7 +1978,7 @@ class CitecheckSummary(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if _is_newer(data, "citation_limit_exceeded", "citation_limit_reached"):
+        if _is_newer(data, "citation_limit_exceeded"):
             return _fill(data, citation_limit_reached=data["citation_limit_exceeded"])
         return data
 

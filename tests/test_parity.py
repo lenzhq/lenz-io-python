@@ -1,22 +1,21 @@
-"""Both response shapes give existing code exactly what the previous release did.
+"""The current response shape gives existing code exactly what 2.x did.
 
-The oracle in ``tests/fixtures/parity/expected/`` was produced by the code
-BEFORE this SDK read the newer response shape (see
-``tests/parity_generate.py``), from the original-shape responses in
-``tests/fixtures/parity/legacy/``. Each response has its newer-shape twin in
-``tests/fixtures/parity/canonical/`` (the same answer, as the API's newer
+The oracle in ``tests/fixtures/parity/expected/`` was produced by the 2.x code
+(see ``tests/parity_generate.py``), from the 2.x-shape responses in
+``tests/fixtures/parity/legacy/``. Each response has its current-shape twin in
+``tests/fixtures/parity/canonical/`` (the same answer, as the API's current
 version sends it).
 
-* An original-shape response must produce the frozen output byte for byte:
-  the model dump, every CLI rendering (text and ``--json``), the exception
-  ``wait`` raises, the error an HTTP error maps to, the parsed webhook.
-* Its newer-shape twin must produce the same values through every attribute
-  the previous release had, the same CLI text, the same ``wait`` outcome and
-  the same error, except for the few values the newer shape does not carry,
+* A 2.x-shape WEBHOOK payload must produce the frozen output byte for byte:
+  the parsed event. (The SDK's own calls no longer read the 2.x response
+  shape; webhooks of work submitted by older clients still arrive in it.)
+* A current-shape response must produce the same values through every
+  attribute 2.x had, the same CLI text, the same ``wait`` outcome and the
+  same error, except for the few values the current shape does not carry,
   listed one by one in ``KNOWN_GAPS`` with the reason.
 
 ``model_dump()`` and the CLI's ``--json`` show the shape the server sent, so
-they are compared for the original shape only.
+they are not compared for the current shape.
 """
 
 from __future__ import annotations
@@ -149,8 +148,8 @@ def _old_event_attrs(observed: dict[str, Any], expected: dict[str, Any]) -> dict
     return {**observed, "event": {k: v for k, v in event.items() if k in expected["event"]}}
 
 
-@pytest.mark.parametrize("name", names())
-def test_original_shape_is_unchanged(name: str) -> None:
+@pytest.mark.parametrize("name", [n for n in names() if n.startswith("webhook__")])
+def test_original_shape_webhook_is_unchanged(name: str) -> None:
     expected = _expected(name)
     assert _old_event_attrs(observe(name, load("legacy", name)), expected) == expected
 
