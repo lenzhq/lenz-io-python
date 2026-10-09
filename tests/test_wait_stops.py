@@ -145,13 +145,16 @@ class TestEachPollIsBounded:
         timeouts = [c.request.extensions["timeout"]["read"] for c in poll.calls]
         assert all(t <= 5 for t in timeouts), timeouts
 
-    def test_the_final_poll_still_runs_with_a_floor(self, slept: list[float]) -> None:
-        # Past the deadline the loop still polls once more, with at least 1s.
-        with Lenz(api_key="lenz_test") as client, respx.mock(base_url=BASE) as r:
+    def test_a_zero_timeout_still_reads_once(self, slept: list[float]) -> None:
+        # As in 2.x, ``timeout=0`` reads the status once (bounded by the
+        # client timeout, there being no deadline left to bound it), then stops.
+        with Lenz(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
             with pytest.raises(LenzTimeoutError):
                 client.wait("t", timeout=0)
-        assert poll.calls.last.request.extensions["timeout"]["read"] == 1.0
+        assert poll.call_count == 1
+        assert poll.calls.last.request.extensions["timeout"]["read"] == 20.0
+        assert slept == []
 
     def test_the_client_timeout_bounds_a_long_wait(self, slept: list[float]) -> None:
         with Lenz(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
@@ -190,3 +193,133 @@ class TestJobWaits:
             with pytest.raises(LenzError):
                 client.citecheck_and_wait("Draft.", timeout=300)
         assert poll.call_count == 2
+
+
+@pytest.fixture()
+def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """A fake clock: ``time.sleep`` moves it, requests take no time unless a
+    test moves it."""
+    now = [0.0]
+    monkeypatch.setattr("lenz_io.client.time.monotonic", lambda: now[0])
+    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: now.__setitem__(0, now[0] + s))
+    return now
+
+
+def _read_timeouts(route: respx.Route) -> list[float | None]:
+    return [c.request.extensions["timeout"]["read"] for c in route.calls]
+
+
+class TestNoPollPastTheDeadline:
+    def test_no_poll_starts_once_the_deadline_is_spent(self, clock: list[float]) -> None:
+        with Lenz(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
+            with pytest.raises(LenzTimeoutError):
+                client.wait("t", timeout=5)
+        # t=0 (5s left), sleep 2, t=2 (3s left), sleep 3, t=5: nothing left.
+        assert _read_timeouts(poll) == [5.0, 3.0]
+        assert clock[0] == 5.0
+
+    def test_a_smaller_client_timeout_bounds_every_poll(self, clock: list[float]) -> None:
+        with Lenz(api_key="lenz_test", timeout=2.5) as client, respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
+            with pytest.raises(LenzTimeoutError):
+                client.wait("t", timeout=5)
+        assert _read_timeouts(poll) == [2.5, 2.5]
+
+    def test_a_batch_marks_the_items_it_had_no_time_for_as_timed_out(self, client: Lenz, clock: list[float]) -> None:
+        polls: list[str] = []
+
+        def answer(request: httpx.Request) -> httpx.Response:
+            polls.append(request.url.path.rsplit("/", 1)[-1])
+            if len(polls) == 3:
+                clock[0] += 100.0  # the second round's first poll is slow
+            return httpx.Response(200, json=_RUNNING)
+
+        with respx.mock(base_url=BASE) as r:
+            r.post("/verify/batch").respond(
+                200, json={"batch_id": "b", "items": [{"task_id": "a", "claim": "A."}, {"task_id": "b", "claim": "B."}]}
+            )
+            r.get(url__regex=r"/verify/status/.*").mock(side_effect=answer)
+            results = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=10)
+        assert polls == ["a", "b", "a"], "b is not polled after the deadline"
+        assert [x.status for x in results] == ["timeout", "timeout"]
+
+    @pytest.mark.parametrize(
+        ("submit", "path", "body", "call"),
+        [
+            (
+                "/review",
+                "/reviews/r1",
+                {"review_id": "r1", "status": "verifying", "issues": [], "failures": [], "claims": []},
+                lambda c: c.review_and_wait("Draft.", timeout=12),
+            ),
+            (
+                "/citecheck",
+                "/citechecks/c1",
+                {
+                    "citecheck_id": "c1",
+                    "status": "checking",
+                    "citations": [],
+                    "citation_issues": [],
+                    "citation_failures": [],
+                },
+                lambda c: c.citecheck_and_wait("Draft.", timeout=12),
+            ),
+        ],
+    )
+    def test_job_waits_stop_at_the_deadline(self, clock: list[float], submit, path, body, call) -> None:
+        accepted = {"review_id": "r1", "citecheck_id": "c1", "status": "queued"}
+        with Lenz(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
+            r.post(submit).respond(202, json=accepted)
+            poll = r.get(path).respond(200, json=body)
+            with pytest.raises(LenzTimeoutError):
+                call(client)
+        # t=0 (12 left), sleep 10, t=10 (2 left), sleep 2, t=12: nothing left.
+        assert _read_timeouts(poll) == [12.0, 2.0]
+
+
+class TestTheClientTimeoutSetting:
+    """The per-poll bound reads the client's own timeout, whatever form it
+    took (2.x accepted ``None`` and an ``httpx.Timeout`` there)."""
+
+    @pytest.mark.parametrize(
+        ("timeout", "expected"),
+        [(None, 300.0), (4.0, 4.0), (httpx.Timeout(7.0), 7.0), (httpx.Timeout(10.0, read=6.0), 6.0)],
+    )
+    def test_wait(self, slept: list[float], timeout, expected) -> None:
+        with Lenz(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
+            poll = r.get("/verify/status/t").respond(200, json=_DONE)
+            client.wait("t", timeout=300)
+        assert _read_timeouts(poll) == [pytest.approx(expected, abs=1.0)]
+
+    @pytest.mark.parametrize("timeout", [None, httpx.Timeout(7.0)])
+    def test_review_and_citecheck_waits(self, slept: list[float], timeout) -> None:
+        done_review = {"review_id": "r1", "status": "completed", "issues": [], "failures": [], "claims": []}
+        done_check = {
+            "citecheck_id": "c1",
+            "status": "completed",
+            "citations": [],
+            "citation_issues": [],
+            "citation_failures": [],
+        }
+        with Lenz(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
+            r.post("/review").respond(202, json={"review_id": "r1", "status": "queued"})
+            r.get("/reviews/r1").respond(200, json=done_review)
+            r.post("/citecheck").respond(202, json={"citecheck_id": "c1", "status": "queued"})
+            r.get("/citechecks/c1").respond(200, json=done_check)
+            assert client.review_and_wait("Draft.").status == "completed"
+            assert client.citecheck_and_wait("Draft.").status == "completed"
+
+    def test_an_injected_http_client_keeps_its_own_timeout(self, slept: list[float]) -> None:
+        with httpx.Client(timeout=9.0) as http, Lenz(api_key="lenz_test", http_client=http) as client:
+            with respx.mock(base_url=BASE) as r:
+                poll = r.get("/verify/status/t").respond(200, json=_DONE)
+                client.wait("t", timeout=300)
+        assert _read_timeouts(poll) == [9.0]
+
+    def test_an_injected_unbounded_http_client(self, slept: list[float]) -> None:
+        with httpx.Client(timeout=None) as http, Lenz(api_key="lenz_test", http_client=http) as client:
+            with respx.mock(base_url=BASE) as r:
+                poll = r.get("/verify/status/t").respond(200, json=_DONE)
+                client.wait("t", timeout=300)
+        assert _read_timeouts(poll) == [pytest.approx(300.0, abs=1.0)]

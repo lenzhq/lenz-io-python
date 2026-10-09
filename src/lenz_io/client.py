@@ -643,7 +643,7 @@ class Lenz:
         *,
         api_key: str | None = None,
         base_url: str | None = None,
-        timeout: float = DEFAULT_TIMEOUT,
+        timeout: float | httpx.Timeout | None = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.Client | None = None,
         user_agent: str | None = None,
@@ -1575,15 +1575,21 @@ class Lenz:
         deadline = time.monotonic() + timeout
         last: _Job | None = None
         last_dump: dict[str, Any] | None = None
+        first = True
         while True:
             # One request per poll, bounded by what is left of the deadline:
             # the client's own retry ladder inside a poll could run minutes
             # past it. A failed poll is retried on the next round instead.
+            # Once the deadline is spent no poll starts (the first one always
+            # runs, as in 2.x).
             stated_wait: float | None = None
             job: _Job | None = None
             remaining = deadline - time.monotonic()
+            if remaining <= 0 and not first:
+                raise timed_out(last)
+            first = False
             try:
-                body = self._request("GET", path, max_retries=0, timeout=max(1.0, min(remaining, self._timeout)))
+                body = self._request("GET", path, max_retries=0, timeout=self._poll_timeout(remaining))
                 job = parse(body)
                 if job is None:
                     raise ValueError("not this job's body")
@@ -1636,14 +1642,13 @@ class Lenz:
         task has no ``TaskStatus`` — ``"timeout"`` is a client-side concept,
         never a wire status — so it lands in the second set, not the dict.
 
-        Ordering preserves the legacy ``verify_and_wait`` behavior: each round
-        polls every still-pending id once *before* the deadline check, so after
-        sleeping the remaining time we always poll once more and can succeed
-        just past the nominal deadline. Each poll is ONE request whose timeout
-        is what is left of the deadline (at least 1s, at most the client's
-        timeout): the client's own retry ladder inside a poll could run
-        minutes past it, so a failed poll is retried on the next round
-        instead. Backoff reuses the existing 2/4/8/8…s sequence; the 10s cap
+        The first round polls every id once whatever the deadline (as in
+        2.x, ``timeout=0`` reads each status once). After it no poll starts
+        once the deadline is spent: the ids left are timed out. Each poll is
+        ONE request whose timeout is what is left of the deadline, at most the
+        client's own timeout (``_poll_timeout``): the client's own retry
+        ladder inside a poll could run minutes past it, so a failed poll is
+        retried on the next round instead. Backoff reuses the existing 2/4/8/8…s sequence; the 10s cap
         is currently unreachable and kept only to preserve identical timing.
 
         A per-id poll that fails with a 5xx, a 429, a network failure or any
@@ -1672,18 +1677,23 @@ class Lenz:
         timed_out: set[str] = set()
         deadline = time.monotonic() + timeout
         backoff_idx = 0
+        first_round = True
         while pending:
             still_pending: list[str] = []
             server_hint: float | None = None
             stated_wait: float | None = None
             for task_id in pending:
                 remaining = deadline - time.monotonic()
+                if remaining <= 0 and not first_round:
+                    # The deadline is spent: no poll starts past it.
+                    still_pending.append(task_id)
+                    continue
                 try:
                     body = self._request(
                         "GET",
                         f"/verify/status/{task_id}",
                         max_retries=0,
-                        timeout=max(1.0, min(remaining, self._timeout)),
+                        timeout=self._poll_timeout(remaining),
                     )
                     status = TaskStatus.model_validate(body)
                 except (LenzGoneError, LenzAuthError, LenzNotFoundError) as exc:
@@ -1720,6 +1730,7 @@ class Lenz:
                         except Exception:
                             logger.debug("on_progress callback raised for task %s", task_id, exc_info=True)
             pending = still_pending
+            first_round = False
             if not pending:
                 break
             remaining = deadline - time.monotonic()
@@ -1872,6 +1883,20 @@ class Lenz:
         if current is None or current >= floor:
             return None
         return floor
+
+    def _poll_timeout(self, remaining: float) -> float | None:
+        """The timeout of one poll request: what is left of the wait's
+        deadline, at most the client's own read timeout (``None`` there means
+        no client cap). Past the deadline (only the first poll of a wait runs
+        then) the client's own timeout, ``None`` meaning the client default.
+
+        Reads the client actually in use, so ``Lenz(timeout=None)``, an
+        ``httpx.Timeout`` and an ``httpx.Client`` passed as ``http_client=``
+        all work."""
+        cap = self._client.timeout.read
+        if remaining <= 0:
+            return cap
+        return remaining if cap is None else min(remaining, cap)
 
     def _extract(
         self,
