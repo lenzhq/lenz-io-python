@@ -1,0 +1,160 @@
+"""A recorder for what the client puts on the wire, for the request freeze
+(``test_request_freeze.py``) and the request-option tests.
+
+Every request is recorded with its method, URL (query string as sent), raw
+body, ordered header pairs and the four ``httpx.Timeout`` components the
+client passed to httpx; every sleep with its length, under a fake clock that
+only moves when the client sleeps. Responses are scripted per (method, path).
+"""
+
+from __future__ import annotations
+
+import re
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass, field
+from typing import Any
+
+import httpx
+import pytest
+import respx
+
+from lenz_io import Lenz
+from lenz_io import client as client_module
+
+BASE = "https://lenz.io/api/v1"
+API_KEY = "lenz_" + "0" * 32
+PINNED = "pinned-key-1"
+_RANDOM_KEY = re.compile(r"^[0-9a-f]{32}$")
+
+#: A scripted answer: ``(status, json_body)``, ``(status, json_body, headers)``
+#: or an exception instance to raise from the transport.
+Answer = Any
+
+
+@dataclass
+class FakeClock:
+    now: float = 1000.0
+    sleeps: list[float] = field(default_factory=list)
+
+    def monotonic(self) -> float:
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.now += seconds
+
+
+class _FakeTime:
+    """Stands in for the ``time`` module inside ``lenz_io.client`` only."""
+
+    def __init__(self, clock: FakeClock) -> None:
+        self.monotonic = clock.monotonic
+        self.sleep = clock.sleep
+
+
+def _mask_headers(raw: list[tuple[bytes, bytes]]) -> list[list[str]]:
+    out = []
+    for name_b, value_b in raw:
+        name, value = name_b.decode("latin-1"), value_b.decode("latin-1")
+        lower = name.lower()
+        if lower == "user-agent" and value.startswith("lenz-io-python/"):
+            value = "<sdk user agent>"
+        elif lower == "accept-encoding":
+            value = "<httpx default>"  # depends on which decoders are installed
+        elif lower == "idempotency-key" and value != PINNED and _RANDOM_KEY.match(value):
+            value = "<random>"
+        out.append([name, value])
+    return out
+
+
+@dataclass
+class Recording:
+    requests: list[dict[str, Any]] = field(default_factory=list)
+    clock: FakeClock = field(default_factory=FakeClock)
+
+    def summary(self) -> list[dict[str, Any]]:
+        return self.requests
+
+
+class Script:
+    """Scripted answers per (method, path below the base URL). The last answer
+    of a list repeats."""
+
+    def __init__(self, answers: dict[tuple[str, str], list[Answer]], recording: Recording) -> None:
+        self._answers = {k: list(v) for k, v in answers.items()}
+        self._rec = recording
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path.startswith("/api/v1"):
+            path = path[len("/api/v1") :]
+        timeout = request.extensions.get("timeout") or {}
+        self._rec.requests.append(
+            {
+                "method": request.method,
+                "url": str(request.url),
+                "headers": _mask_headers(request.headers.raw),
+                "body": request.content.decode("utf-8"),
+                "timeout": {k: timeout.get(k) for k in ("connect", "read", "write", "pool")},
+                "at": round(self._rec.clock.now - 1000.0, 6),
+            }
+        )
+        queue = self._answers.get((request.method, path))
+        if not queue:
+            raise AssertionError(f"unscripted request {request.method} {path}")
+        answer = queue.pop(0) if len(queue) > 1 else queue[0]
+        if isinstance(answer, Exception):
+            raise answer
+        status, body, *rest = answer
+        headers = rest[0] if rest else {}
+        if body is None:
+            return httpx.Response(status, headers=headers)
+        return httpx.Response(status, json=body, headers=headers)
+
+
+@contextmanager
+def recording(monkeypatch: pytest.MonkeyPatch, answers: dict[tuple[str, str], list[Answer]]) -> Iterator[Recording]:
+    rec = Recording()
+    monkeypatch.setattr(client_module, "time", _FakeTime(rec.clock))
+    with respx.mock(assert_all_called=False) as router:
+        router.route().mock(side_effect=Script(answers, rec))
+        yield rec
+
+
+def outcome(call: Callable[[], Any]) -> dict[str, Any]:
+    """What a call ended with: the result's type, or the error's class and
+    the fields a caller reads."""
+    try:
+        result = call()
+    except Exception as exc:  # every outcome is recorded
+        key = getattr(exc, "idempotency_key", None)
+        if isinstance(key, str) and key != PINNED and _RANDOM_KEY.match(key):
+            key = "<random>"
+        return {
+            "error": type(exc).__name__,
+            "status_code": getattr(exc, "status_code", None),
+            "code": getattr(exc, "code", None),
+            "message": str(getattr(exc, "message", exc)),
+            "idempotency_key": key,
+        }
+    if isinstance(result, list):
+        return {"result": [type(r).__name__ for r in result]}
+    if isinstance(result, Iterator) or hasattr(result, "__next__"):
+        return {"result": [type(r).__name__ for r in result]}
+    return {"result": type(result).__name__}
+
+
+CLIENTS: dict[str, Callable[[], Lenz]] = {
+    "default": lambda: Lenz(api_key=API_KEY),
+    "keyless": lambda: Lenz(api_key="", base_url=BASE),
+    "timeout_none": lambda: Lenz(api_key=API_KEY, timeout=None),
+    "timeout_5_read_200": lambda: Lenz(api_key=API_KEY, timeout=httpx.Timeout(5, read=200)),
+    "timeout_200_read_5": lambda: Lenz(api_key=API_KEY, timeout=httpx.Timeout(200, read=5)),
+    "timeout_30_read_none": lambda: Lenz(api_key=API_KEY, timeout=httpx.Timeout(30, read=None)),
+    "timeout_120": lambda: Lenz(api_key=API_KEY, timeout=120.0),
+    "borrowed_10": lambda: Lenz(api_key=API_KEY, http_client=httpx.Client(timeout=10.0)),
+    "borrowed_300": lambda: Lenz(api_key=API_KEY, http_client=httpx.Client(timeout=300.0)),
+    "max_retries_0": lambda: Lenz(api_key=API_KEY, max_retries=0),
+    "max_retries_1": lambda: Lenz(api_key=API_KEY, max_retries=1),
+}
