@@ -88,6 +88,57 @@ class TestIter:
             next(it)
             assert route.call_count == 2
 
+    def test_it_stops_when_the_pages_read_reach_the_total(self, client: Lenz, path, walk, item_type) -> None:
+        # A full page that ends the list: no request for the empty one after it.
+        with respx.mock(base_url=BASE) as r:
+            route = r.get(path)
+            _pager(route, {1: _page(0, 2, 1, 2, total=4), 2: _page(2, 2, 2, 2, total=4)})
+            assert len(list(walk(client))) == 4
+        assert route.call_count == 2
+
+    def test_it_stops_when_the_server_answers_another_page(self, client: Lenz, path, walk, item_type) -> None:
+        # A server that clamps a page past the end to the last one would
+        # otherwise repeat that page for ever. Its items are not yielded again.
+        first, clamped = _page(0, 2, 1, 2), _page(0, 2, 1, 2)
+        del first["total"], clamped["total"]
+        with respx.mock(base_url=BASE) as r:
+            route = r.get(path)
+            _pager(route, {1: first, 2: clamped})
+            items = list(walk(client))
+        assert [i.verification_id for i in items] == ["v0", "v1"]
+        assert route.call_count == 2
+
+    @pytest.mark.parametrize("page_size", [0, -1, None])
+    def test_it_stops_without_a_usable_page_size(self, client: Lenz, path, walk, item_type, page_size) -> None:
+        page = _page(0, 2, 1, 2)
+        del page["total"]
+        if page_size is None:
+            del page["page_size"]
+        else:
+            page["page_size"] = page_size
+        with respx.mock(base_url=BASE) as r:
+            route = r.get(path)
+            _pager(route, {1: page})
+            assert len(list(walk(client))) == 2
+        assert route.call_count == 1
+
+    def test_a_missing_total_is_not_read_as_zero(self, client: Lenz, path, walk, item_type) -> None:
+        first, second = _page(0, 2, 1, 2), _page(2, 1, 2, 2)
+        del first["total"], second["total"]
+        with respx.mock(base_url=BASE) as r:
+            route = r.get(path)
+            _pager(route, {1: first, 2: second})
+            assert len(list(walk(client))) == 3
+        assert route.call_count == 2
+
+    @pytest.mark.parametrize("page", [0, -3])
+    def test_the_start_page_must_be_one_or_more(self, client: Lenz, path, walk, item_type, page) -> None:
+        with respx.mock(base_url=BASE, assert_all_called=False) as r:
+            route = r.get(path)
+            with pytest.raises(ValueError, match="page"):
+                walk(client, page=page)
+        assert route.call_count == 0
+
 
 class TestFilters:
     def test_library_filters_reach_every_page(self, unauth_client: Lenz) -> None:

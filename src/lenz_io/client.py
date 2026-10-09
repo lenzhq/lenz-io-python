@@ -329,14 +329,16 @@ class _VerificationsNamespace:
 
         Fetches a page only when the items before it have been consumed, reads
         the page size from each response, and stops after a short or empty
-        page::
+        page, once the pages read reach the response's ``total``, or when the
+        server answers another page than the one asked for. ``page`` must be
+        1 or more (``ValueError``)::
 
             for item in client.verifications.iter():
                 print(item.verification_id, item.verdict)
 
         Since 3.0. ``list(page=...)`` reads one page.
         """
-        return _walk(lambda n: self.list(page=n), page)
+        return _walk(lambda n: self.list(page=n), _first_page(page))
 
     def get(self, verification_id: str) -> Verification:
         """Fetch a single verification by id.
@@ -563,12 +565,15 @@ class _LibraryNamespace:
 
         Fetches a page only when the items before it have been consumed, reads
         the page size from each response, and stops after a short or empty
-        page. ``sort="random"`` raises ``ValueError``: a random order is drawn
+        page, once the pages read reach the response's ``total``, or when the
+        server answers another page than the one asked for. ``page`` must be
+        1 or more, and ``sort="random"`` raises ``ValueError``: a random order is drawn
         anew for every page, so walking it neither reaches every item nor
         avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
         """
         if sort == "random":
             raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
+        page = _first_page(page)
         return _walk(
             lambda n: self.list(
                 page=n, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
@@ -578,15 +583,32 @@ class _LibraryNamespace:
 
 
 def _walk(fetch: Callable[[int], VerificationList | LibraryList], page: int) -> Iterator[Any]:
-    """The items of ``fetch(page)``, ``fetch(page + 1)``, ... until a page
-    comes back shorter than its own ``page_size`` (or empty). A generator: no
-    page is fetched before its first item is asked for."""
+    """The items of ``fetch(page)``, ``fetch(page + 1)``, ... A generator: no
+    page is fetched before its first item is asked for.
+
+    Stops after a page that is short or empty, once the pages read reach the
+    response's ``total``, when a response states no usable ``page_size``, and
+    (without yielding it) when the server answers another page than the one
+    asked for, which a server clamping a page past the end would repeat."""
     while True:
         current = fetch(page)
+        sent = current.model_fields_set
+        if "page" in sent and current.page != page:
+            return
         yield from current.items
-        if not current.items or len(current.items) < current.page_size:
+        size = current.page_size if "page_size" in sent else 0
+        if not current.items or size <= 0 or len(current.items) < size:
+            return
+        if "total" in sent and page * size >= current.total:
             return
         page += 1
+
+
+def _first_page(page: int) -> int:
+    """``page`` for an iterator, refused unless it is 1 or more."""
+    if isinstance(page, bool) or not isinstance(page, int) or page < 1:
+        raise ValueError(f"iter starts at page 1 or later (got page={page!r}).")
+    return page
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
