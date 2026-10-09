@@ -84,6 +84,15 @@ def test_an_error_answered_in_another_version_raises_the_version_error(client: L
     assert info.value.body == body
 
 
+def test_a_404_delete_in_another_version_is_not_read_as_already_deleted(client: Lenz) -> None:
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        mock.delete("/verifications/v1").respond(
+            404, json={"detail": "Not found."}, headers={"X-Lenz-API-Version": OLD}
+        )
+        with pytest.raises(LenzApiVersionError):
+            client.verifications.delete("v1")
+
+
 def test_a_non_json_answer_in_another_version_still_raises(client: Lenz) -> None:
     with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
         mock.get("/me/usage").respond(200, content=b"<html>", headers={"X-Lenz-API-Version": OLD})

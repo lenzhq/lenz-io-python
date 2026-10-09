@@ -27,7 +27,7 @@ from typing import Any
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzError, LenzGoneError
+from lenz_io.errors import LenzApiVersionError, LenzError, LenzGoneError
 from lenz_io.models import TaskStatus
 
 from ._run import execute, read_text_arg
@@ -413,7 +413,7 @@ def _resume(
     try:
         st = client.get_status(ident)
     except LenzError as exc:
-        if exc.status_code == 404:
+        if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
             _resume_as_verification(client, out, ident)
             return
         raise

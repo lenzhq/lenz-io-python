@@ -364,8 +364,9 @@ class _VerificationsNamespace:
         except LenzError as exc:
             # Idempotent DELETE: if the row was already gone (e.g. previous
             # request succeeded but the network reply was lost), treat as
-            # success rather than surfacing a confusing 404.
-            if exc.status_code == 404:
+            # success rather than surfacing a confusing 404. A 404 in another
+            # API version is not read as this one's.
+            if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
                 return True
             raise
 

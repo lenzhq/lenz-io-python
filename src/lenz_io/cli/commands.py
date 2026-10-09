@@ -12,7 +12,7 @@ from urllib.parse import urlsplit, urlunsplit
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzError, LenzVerificationNotReadyError
+from lenz_io.errors import LenzApiVersionError, LenzError, LenzVerificationNotReadyError
 
 from ._run import execute, read_text_arg
 from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
@@ -100,7 +100,7 @@ def ask(
             with out.working("Thinking…"):
                 reply = client.ask.send(verification_id, message=message)
         except LenzError as exc:
-            if exc.status_code == 404:
+            if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
                 raise CLIError(
                     f"No verification found for id {verification_id!r}. "
                     "A verification_id is the 8-character id printed by `lenz verify` "
