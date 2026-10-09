@@ -159,14 +159,16 @@ def test_failed_status_failure_block(name):
 
 
 @pytest.mark.parametrize("name", ["verify__status_cancelled_live.json", "verify__status_cancelled_durable.json"])
-def test_cancelled_status_has_no_failure_block(name):
-    """A task cancelled elsewhere is its own status with no failure block; the
-    2.x fields still read what the original shape said of it."""
+def test_cancelled_status_reads_the_2x_failure_block(name):
+    """A task cancelled elsewhere is its own status, sent with no failure
+    block; ``failure`` reads the block 2.x read for it (as in Node), and the
+    2.x fields what the original shape said of it."""
     legacy_body, body = _both(name)
     assert "failure" not in body
     canonical = TaskStatus.model_validate(body)
     assert canonical.status == "cancelled"
-    assert canonical.failure is None
+    assert canonical.failure is not None
+    assert (canonical.failure.code, canonical.failure.failure_class) == ("cancelled", "cancelled")
     assert canonical.failure_reason == legacy_body["failure_reason"] == "cancelled"
     assert canonical.failure_class == legacy_body["failure_class"] == "cancelled"
     assert canonical.retryable is False

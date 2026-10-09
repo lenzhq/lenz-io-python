@@ -136,3 +136,110 @@ def test_a_cancel_schema_422_keeps_its_code_and_errors(path: str) -> None:
     err = map_response_to_error(422, json.dumps(body).encode(), {}, endpoint=("POST", path))
     assert err.code == "validation_error"
     assert err.message == "Field required"
+
+
+# ── a cancelled task status carries the failure block 2.21 built ───────────
+
+_CANCELLED_BLOCK = {
+    "code": "cancelled",
+    "detail": "Cancelled.",
+    "hint": None,
+    "failure_class": "cancelled",
+    "retryable": False,
+    "docs_url": "https://lenz.io/docs/errors#cancelled",
+    "failure_reason": "cancelled",
+}
+
+
+def _block(failure: Any) -> dict[str, Any]:
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        return {k: getattr(failure, k) for k in _CANCELLED_BLOCK}
+
+
+def test_a_cancelled_task_status_has_the_cancelled_failure_block() -> None:
+    from lenz_io import TaskStatus
+
+    status = TaskStatus.model_validate({"status": "cancelled", "task_id": "t1"})
+    assert status.failure is not None
+    assert _block(status.failure) == _CANCELLED_BLOCK
+
+
+def test_a_sent_failure_block_on_a_cancelled_status_is_read_as_sent() -> None:
+    from lenz_io import TaskStatus
+
+    status = TaskStatus.model_validate(
+        {"status": "cancelled", "task_id": "t1", "failure": {"code": "other", "detail": "x."}}
+    )
+    assert status.failure is not None and status.failure.code == "other"
+
+
+def test_other_statuses_still_have_none() -> None:
+    from lenz_io import TaskStatus
+
+    assert TaskStatus.model_validate({"status": "processing", "task_id": "t1"}).failure is None
+    assert TaskStatus.model_validate({"status": "completed", "task_id": "t1"}).failure is None
+
+
+def test_the_cancelled_webhooks_verification_carries_it_too() -> None:
+    from lenz_io import VerificationCancelled, parse_webhook
+
+    event = parse_webhook(
+        {
+            "event": "verification.cancelled",
+            "event_id": "e1",
+            "task_id": "t1",
+            "status": "cancelled",
+            "verification": {"status": "cancelled", "task_id": "t1"},
+        }
+    )
+    assert isinstance(event, VerificationCancelled)
+    assert event.verification is not None and _block(event.verification.failure) == _CANCELLED_BLOCK
+
+
+def test_a_batch_items_cancelled_status_detail_carries_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+    with respx.mock(base_url=DEFAULT_BASE_URL) as r:
+        r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": [{"task_id": "t1", "claim": "A."}]})
+        r.get("/verify/status/t1").respond(200, json={"status": "cancelled", "task_id": "t1"})
+        [item] = Lenz(api_key=KEY).verify_batch_and_wait(claims=[{"claim": "A."}])
+    assert item.status == "failed" and item.status_detail is not None
+    assert _block(item.status_detail.failure) == _CANCELLED_BLOCK
+
+
+def test_reviews_and_citation_checks_keep_the_servers_null() -> None:
+    from lenz_io import Citecheck, ReviewFull
+
+    review = ReviewFull.model_validate(
+        {"review_id": "r1", "status": "cancelled", "issues": [], "failures": [], "claims": []}
+    )
+    check = Citecheck.model_validate(
+        {"citecheck_id": "c1", "status": "cancelled", "citations": [], "citation_issues": [], "citation_failures": []}
+    )
+    assert review.failure is None and check.failure is None
+
+
+# ── the public retry_after follows the same rule as the retry ladder ───────
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "header", "expected"),
+    [
+        (503, {"detail": "busy"}, "1e300", 2_147_483),
+        (503, {"detail": "busy"}, "inf", None),
+        (503, {"detail": "busy"}, "nan", None),
+        (503, {"detail": "busy"}, "30", 30),
+        (503, {"code": "capacity", "detail": "busy", "retry_after": 1e300}, None, 2_147_483),
+        (503, {"code": "capacity", "detail": "busy", "retry_after": "inf"}, "45", 45),
+        (429, {"code": "rate_limited", "detail": "slow"}, "1e300", 2_147_483),
+        (429, {"code": "rate_limited", "detail": "slow", "reset_in_seconds": 7}, "inf", 7),
+        # A 429's retry_after is a number, 0 when nothing usable is stated (as in Node).
+        (429, {"code": "rate_limited", "detail": "slow"}, "inf", 0),
+    ],
+)
+def test_the_public_retry_after(status: int, body: dict[str, Any], header: str | None, expected: Any) -> None:
+    headers = {"Retry-After": header} if header is not None else {}
+    err = map_response_to_error(status, json.dumps(body).encode(), headers)
+    assert err.retry_after == expected

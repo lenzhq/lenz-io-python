@@ -982,6 +982,18 @@ def _original_status_error(code: Any, detail: Any) -> Any:
     return detail
 
 
+#: The failure block of a task cancelled elsewhere, which the API sends with
+#: no block: what 2.x read for a run cancelled while running.
+_CANCELLED_TASK_FAILURE: dict[str, Any] = {
+    "code": "cancelled",
+    "detail": "Cancelled.",
+    "hint": None,
+    "failure_class": "cancelled",
+    "retryable": False,
+    "docs_url": "https://lenz.io/docs/errors#cancelled",
+}
+
+
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
 
@@ -1070,8 +1082,14 @@ class TaskStatus(_Lax):
         ``docs_url``. ``None`` on other statuses. Replaces ``error``,
         ``failure_reason``, ``failure_detail``, ``failure_class``,
         ``retryable``, ``docs_url`` and ``hint`` on a failure, which are
-        deprecated and kept."""
+        deprecated and kept.
+
+        On ``cancelled`` with no block sent: the block 2.x read for a run
+        cancelled while running (``code`` and ``failure_class``
+        ``cancelled``, ``detail`` "Cancelled.", not retryable)."""
         sent = _sent(self, "failure")
+        if not isinstance(sent, dict) and self.status == "cancelled":
+            sent = _CANCELLED_TASK_FAILURE
         if not isinstance(sent, dict):
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.

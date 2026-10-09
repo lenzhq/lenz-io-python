@@ -61,7 +61,9 @@ class TestAVerificationCancelledElsewhere:
         assert isinstance(status, TaskStatus)
         assert status.status == "cancelled"
         assert status.task_id == body["task_id"]
-        assert status.result is None and status.failure is None
+        assert status.result is None
+        # The block 2.x read for a run cancelled while running, as the Node SDK fills it.
+        assert status.failure is not None and status.failure.code == "cancelled"
 
     def test_wait_raises_the_failed_error_at_once(self, client: Lenz, slept: list[float], name: str) -> None:
         body = _body(name)
@@ -427,7 +429,8 @@ def test_a_cancelled_status_with_a_null_failure_still_reads_the_2x_fields() -> N
         "cancelled",
         False,
     )
-    assert status.failure is None
+    assert status.failure is not None
+    assert (status.failure.code, status.failure.detail, status.failure.retryable) == ("cancelled", "Cancelled.", False)
 
 
 def test_the_original_shape_still_reads_as_a_failure(client: Lenz) -> None:

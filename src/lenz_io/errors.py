@@ -933,17 +933,17 @@ def map_response_to_error(
         err.fix = "Its account's retention period removed it. A certificate issued for it is still available."
 
     if isinstance(err, LenzAPIError) and not isinstance(err, LenzUpstreamUnavailableError):
-        err.retry_after = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+        err.retry_after = _opt_wait(headers.get("Retry-After") or headers.get("retry-after"))
 
     if isinstance(err, LenzUpstreamUnavailableError):
         # Body ``retry_after`` first (both 503 shapes carry it), header as
         # the fallback for any proxy that strips the body.
-        stated = _opt_int(parsed.get("retry_after"))
+        stated = _opt_wait(parsed.get("retry_after"))
         if stated is None:
             # The /review error body states its wait under this name.
-            stated = _opt_int(parsed.get("retry_after_seconds"))
+            stated = _opt_wait(parsed.get("retry_after_seconds"))
         if stated is None:
-            stated = _opt_int(headers.get("Retry-After") or headers.get("retry-after"))
+            stated = _opt_wait(headers.get("Retry-After") or headers.get("retry-after"))
         err.retry_after = stated
 
     if isinstance(err, LenzQuotaExceededError):
@@ -1014,7 +1014,7 @@ def map_response_to_error(
             parsed.get("retry_after_seconds"),
             parsed.get("retry_after"),
         ):
-            resolved = _opt_int(candidate)
+            resolved = _opt_wait(candidate)
             if resolved is not None:
                 err.retry_after = resolved
                 break
@@ -1034,6 +1034,18 @@ def map_response_to_error(
             err.retryable = stated
 
     return err
+
+
+#: The longest wait ``retry_after`` reports, in seconds (the client's
+#: ``MAX_TIMEOUT_SECONDS``): a larger stated wait reads as this.
+_MAX_STATED_WAIT = 2_147_483
+
+
+def _opt_wait(value: Any) -> int | None:
+    """A stated wait in seconds, as ``_opt_int`` reads it (a non-finite or
+    unparseable value is ``None``), at most ``_MAX_STATED_WAIT``."""
+    seconds = _opt_int(value)
+    return None if seconds is None else min(seconds, _MAX_STATED_WAIT)
 
 
 def _opt_int(value: Any) -> int | None:

@@ -59,11 +59,15 @@ Deprecated).
   is its own status, `cancelled`**, where 2.x read `failed` with
   `failure_class` `cancelled`.
   - `TaskStatus.status`, `ReviewFull.status` and `Citecheck.status` can read
-    `"cancelled"`, and `.failure` is `None` on those bodies. A hand-written
-    polling loop must treat `cancelled` as terminal or it polls until its own
-    timeout. A `TaskStatus` still carries the 2.x fields (`error`
+    `"cancelled"`. A hand-written polling loop must treat `cancelled` as
+    terminal or it polls until its own timeout. A cancelled `TaskStatus`
+    (from `get_status`, a batch item's `status_detail`, or a
+    `verification.cancelled` event's `verification`) reads the failure block
+    2.x read for it (`failure.code` and `failure_class` `"cancelled"`,
+    `detail` `"Cancelled."`, `retryable` `False`) and the 2.x fields (`error`
     `"Cancelled."`, `failure_class`, `failure_reason`, `retryable`,
-    `docs_url`).
+    `docs_url`). A cancelled review or citation check has `failure` `None`, as
+    the API sends it.
   - The wait helpers (`wait`, `verify_and_wait`, `verify_batch_and_wait`,
     `review_and_wait`, `citecheck_and_wait`) end on it at once instead of
     polling to their timeout. They raise the same error class and failure
@@ -100,9 +104,11 @@ Deprecated).
   `TaskAccepted.chain_id` attribute is kept and reads `""` (deprecated).
 - **A `Retry-After` the SDK cannot use is read safely.** A non-finite value
   (`inf`, `-inf`, `nan`, `1e999`) reads as no stated wait, so the normal
-  backoff runs, as in the Node SDK, where it raised `OverflowError`; on the
-  error's `retry_after` it reads `None` (unknown). A huge finite wait is
-  clamped to 2,147,483 seconds, still past every cap.
+  backoff runs, as in the Node SDK, where it raised `OverflowError`. A huge
+  finite wait is clamped to 2,147,483 seconds, still past every cap. The
+  error's `retry_after` follows the same rule: a non-finite or unparseable
+  value is not a stated wait (`None`; on a `LenzRateLimitError` the next
+  stated wait, else `0`, as before), and a larger one reads 2,147,483.
 - **A cancel's error body is read as sent**: its `code` (a 422's
   `validation_error` too), `detail` and `errors`.
 - **One rule for every timeout and retry count of a request, checked before
@@ -423,7 +429,7 @@ rebuild:
   `failure.retryable` are filled (2.21: `""`, `""`, `None`), and
   `failure.hint` too where the API sends one. `failure.code` reads the same.
   The 2.x attributes (`error`, `error_code`, `hint`, ...) keep their 2.x
-  values. A cancelled task's `failure` is `None` (see Breaking).
+  values.
 - Reviews: a review row stored without a failure block (a quick-check row or
   a `ReviewFailure`) reads one, where 2.x read `failure` `None`; a deep
   check's `modified_at` is computed from its completion time by the 2.x rule
