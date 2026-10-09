@@ -141,7 +141,6 @@ def test_receipt_claim():
         "verify__status_failed.json",
         "verify__status_failed_retryable.json",
         "verify__status_not_a_claim.json",
-        "verify__status_cancelled_after_a_while.json",
     ],
 )
 def test_failed_status_failure_block(name):
@@ -157,6 +156,21 @@ def test_failed_status_failure_block(name):
     # read back from storage said "Pipeline stopped: <code>." instead).
     if not legacy_body["error"].startswith("Pipeline stopped: "):
         assert canonical.error == legacy_body["error"]
+
+
+@pytest.mark.parametrize("name", ["verify__status_cancelled_live.json", "verify__status_cancelled_durable.json"])
+def test_cancelled_status_has_no_failure_block(name):
+    """A task cancelled elsewhere is its own status with no failure block; the
+    2.x fields still read what the original shape said of it."""
+    legacy_body, body = _both(name)
+    assert "failure" not in body
+    canonical = TaskStatus.model_validate(body)
+    assert canonical.status == "cancelled"
+    assert canonical.failure is None
+    assert canonical.failure_reason == legacy_body["failure_reason"] == "cancelled"
+    assert canonical.failure_class == legacy_body["failure_class"] == "cancelled"
+    assert canonical.retryable is False
+    assert canonical.docs_url == legacy_body["docs_url"]
 
 
 def test_needs_input_options():
