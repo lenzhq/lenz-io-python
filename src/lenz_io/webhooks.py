@@ -43,7 +43,9 @@ from .models import (
     Citecheck,
     FailureBlock,
     ReviewFull,
+    TaskStatus,
     _fill_modified_at,
+    _new_code,
     _old_code,
     _verification_failure,
 )
@@ -122,11 +124,66 @@ class WebhookEvent:
         return value if isinstance(value, str) else ""
 
 
+def _status_envelope(event: WebhookEvent) -> TaskStatus | None:
+    """The verification of a ``verification.*`` event as ``client.get_status``
+    returns it: the newer payload's ``verification``, else one built from the
+    original flat fields. ``None`` when the payload cannot be read as one."""
+    raw = event.raw
+    nested = raw.get("verification")
+    body: dict[str, Any]
+    if isinstance(nested, dict):
+        # A ``null`` reads as the field left out (``hint: null`` on a pause).
+        body = {k: v for k, v in nested.items() if v is not None}
+    elif event.event == "verification.completed":
+        body = {"status": "completed", "task_id": raw.get("task_id") or ""}
+        if raw.get("result") is not None:
+            body["result"] = raw["result"]
+    elif event.event == "verification.failed":
+        error = raw.get("error")
+        failure: dict[str, Any] = {
+            "code": _new_code(error) if isinstance(error, str) else "",
+            # The original payload's ``error`` is the code, never a sentence.
+            "detail": None,
+            "failure_class": raw.get("failure_class"),
+            "retryable": raw.get("retryable") if isinstance(raw.get("retryable"), bool) else None,
+        }
+        body = {
+            "status": "failed",
+            "task_id": raw.get("task_id") or "",
+            "error": "",
+            "failure_reason": error if isinstance(error, str) else "",
+            "failure": failure,
+        }
+    else:
+        needs_input = raw.get("needs_input")
+        given = needs_input if isinstance(needs_input, dict) else {}
+        body = {"status": "needs_input", "task_id": raw.get("task_id") or ""}
+        body.update({k: v for k, v in given.items() if v is not None})
+    try:
+        return TaskStatus.model_validate(body)
+    except ValidationError:
+        return None
+
+
 @dataclass
 class VerificationCompleted(WebhookEvent):
-    """``event=verification.completed`` — the pipeline produced a verdict."""
+    """``event=verification.completed`` — the pipeline produced a verdict.
+
+    Read :attr:`verification`: the verification as ``client.get_status``
+    returns it, the verdict under ``verification.result`` (a typed
+    :class:`Verification`). ``result`` (the original payload's flat dict) is
+    deprecated and kept.
+    """
 
     result: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def verification(self) -> TaskStatus | None:
+        """The verification as ``client.get_status`` returns it, from either
+        payload shape: ``status``, ``task_id`` and ``result`` (the verdict,
+        a typed :class:`Verification`; ``None`` when the payload carried
+        none). ``None`` when the payload cannot be read as one. Since 3.0."""
+        return _status_envelope(self)
 
 
 @dataclass
@@ -142,6 +199,13 @@ class VerificationFailed(WebhookEvent):
     error: str = ""
     failure_class: str = ""
     retryable: bool | None = None
+
+    @property
+    def verification(self) -> TaskStatus | None:
+        """The verification as ``client.get_status`` returns it, from either
+        payload shape: ``status``, ``task_id`` and ``failure``. ``None`` when
+        the payload cannot be read as one. Since 3.0."""
+        return _status_envelope(self)
 
     @property
     def failure(self) -> FailureBlock | None:
@@ -177,6 +241,13 @@ class VerificationNeedsInput(WebhookEvent):
 
     needs_input: dict[str, Any] = field(default_factory=dict)
     hint: str = ""
+
+    @property
+    def verification(self) -> TaskStatus | None:
+        """The verification as ``client.get_status`` returns it, from either
+        payload shape: ``status``, ``task_id``, ``reason``, ``claims`` and
+        ``hint``. ``None`` when the payload cannot be read as one. Since 3.0."""
+        return _status_envelope(self)
 
     @property
     def reason(self) -> str:
@@ -341,7 +412,7 @@ def _original_view(payload: dict[str, Any]) -> dict[str, Any]:
         view.setdefault(
             "needs_input", {"reason": body.get("reason", ""), "claims": options, "hint": body.get("hint", "")}
         )
-    view.setdefault("coverage", body.get("coverage") or (result or {}).get("coverage"))
+    view.setdefault("coverage", body.get("coverage") or (result if isinstance(result, dict) else {}).get("coverage"))
     return view
 
 
