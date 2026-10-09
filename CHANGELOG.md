@@ -28,8 +28,8 @@ Deprecated).
   an idempotent request stored before the change. It carries `api_version`,
   `status_code` and `body` (as sent), applies to success and error responses
   of client calls, and never to webhook payloads. A response without the
-  header is read as usual. Set the API version on the server side to
-  `2026-10-11`, or pin `lenz-io<3`.
+  header is read as usual. If it persists, contact support with the request
+  id; lenz-io 2.x reads both versions.
 - **Values the API no longer sends**, which no client can rebuild:
   - `TaskAccepted.chain_id` reads `""` (use `task_id`).
   - The `task_id` of a `review.*` or `citecheck.*` webhook event is the

@@ -71,7 +71,7 @@ def test_an_answer_in_another_version_raises(client: Lenz) -> None:
     assert exc.status_code == 200
     assert exc.body == body
     assert OLD in exc.message and "2026-10-11" in exc.message
-    assert "lenz-io<3" in exc.message
+    assert "lenz-io 2.x reads both versions" in exc.fix
 
 
 def test_an_error_answered_in_another_version_raises_the_version_error(client: Lenz) -> None:

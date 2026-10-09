@@ -774,9 +774,8 @@ that served it in `X-Lenz-API-Version`; lenz-io 3.x asks for `2026-10-11` and
 reads that version's shape only, so an answer in `2026-05-13` (a server still
 on the older version, or a reply replayed from an idempotent request stored
 before the change) is refused rather than misread. It carries `api_version`
-(what the response named), `status_code` and `body` as sent. Set the API
-version on the server side to `2026-10-11`, or pin `lenz-io<3` to keep reading
-the older version. A response without the header is read as usual, and webhook
+(what the response named), `status_code` and `body` as sent. If it persists,
+contact support with the request id; lenz-io 2.x reads both versions. A response without the header is read as usual, and webhook
 payloads are never refused (they are parsed in either shape).
 
 ```python

@@ -1953,12 +1953,12 @@ def _check_served_version(response: httpx.Response) -> None:
     except ValueError:
         parsed = None
     raise LenzApiVersionError(
-        message=(
-            f"The API answered in version {served}; lenz-io 3.x reads {API_VERSION} only. "
-            f"Change the API version setting on the server side to {API_VERSION}, or pin lenz-io<3."
-        ),
+        message=f"The API answered in version {served}; lenz-io 3.x reads {API_VERSION} only.",
         cause=f"The response carries {_VERSION_HEADER}: {served}.",
-        fix=(f"Set the account's API version to {API_VERSION}, or install lenz-io<3 to keep reading {served}."),
+        fix=(
+            "If this persists, contact support (https://lenz.io/contact) with the request id; "
+            "lenz-io 2.x reads both versions."
+        ),
         doc_url="https://lenz.io/docs/errors",
         request_id=response.headers.get("X-Request-ID") or "",
         status_code=response.status_code,
