@@ -141,6 +141,28 @@ FailureClass = Literal[
 ]
 
 
+#: The five verdict labels a check can return. A documentation and comparison
+#: alias, like ``FailureClass``: the ``verdict`` fields stay ``str``, so a label
+#: the API adds later still reads.
+VerdictLabel = Literal["True", "Mostly True", "Mixed", "Mostly False", "False"]
+
+#: A verdict as read on a verification or an assess row: one of the five
+#: labels, or ``"Error"`` on a failed assess row (deprecated there: read
+#: ``status == "failed"``). Fields stay ``str``::
+#:
+#:     from lenz_io import Verdict
+#:     FALSE_ISH: set[Verdict] = {"False", "Mostly False"}
+#:     if row.verdict in FALSE_ISH: ...
+Verdict = Literal["True", "Mostly True", "Mixed", "Mostly False", "False", "Error"]
+
+#: A confidence band, as read on a verification or an assess row.
+Confidence = Literal["low", "medium", "high"]
+
+#: A check's depth: ``"standard"`` (10 credits) or ``"low"`` (5 credits,
+#: fewer sources). The ``depth=`` arguments stay ``str``.
+Depth = Literal["standard", "low"]
+
+
 class Source(_Lax):
     """A single citation backing a verification."""
 
