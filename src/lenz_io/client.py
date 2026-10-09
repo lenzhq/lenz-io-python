@@ -463,8 +463,12 @@ class _AskNamespace:
         call's retries; pin your own with ``idempotency_key=`` (it wins) to
         make a retry from another process replay too, or pass
         ``idempotency=False`` to send none. A retry that arrives while the
-        first call is still running gets a 409: there is no reply to replay
-        yet. (Since 3.0; 2.x sent a key only when you passed one.)
+        first call is still running is answered 409 ``idempotency_conflict``:
+        the SDK sends the same key again within the call's retries, and if it
+        still conflicts raises it with ``retryable=True``. Every error of the
+        call carries the key (``exc.idempotency_key``): resend with it, never
+        as a plain new call, which would ask (and charge) again. (Since 3.0;
+        2.x sent a key only when you passed one.)
 
         Never derived from the message: asking the same thing again is a
         normal thing to do here, and each turn also reads the history the

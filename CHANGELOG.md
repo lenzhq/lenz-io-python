@@ -108,21 +108,43 @@ Deprecated).
   and `extract` already did), so a retried batch or question replays the
   first answer instead of being charged twice. A key you pass wins;
   `idempotency=False` sends none. Asking the same question again is a new
-  call with a new key, so it is asked again. A retry that lands while the
-  first attempt still runs gets the 409 it got before; the SDK never sends a
-  second key to get past it. 2.x sent a key there only when you passed one.
+  call with a new key, so it is asked again. 2.x sent a key there only when
+  you passed one.
+- **A 409 `idempotency_conflict` is sent again with the same key.** When a
+  call that sent an `Idempotency-Key` (its own or yours) meets the first
+  request with that key still running, it sends the same key and body again
+  after the wait the server states (at most 60s; a longer one falls back to
+  the usual backoff), within the call's retries. Still conflicting, it raises
+  the error 2.x raised (same class, `code` and message) with
+  `retryable=True`. It never mints a second key to get past it. A `review` /
+  `citecheck` conflict that names its job still returns that job at once.
+  2.x raised the first 409.
 - **`wait`, `verify_and_wait` and `verify_batch_and_wait` stop at once on a
   401, 403 or 404** (raising `LenzAuthError` / `LenzNotFoundError`; in a
   batch, that item is `failed` with no `status_detail` and the others keep
   going) instead of polling to a misleading `LenzTimeoutError`. A 5xx, a 429
-  or a network failure is still polled again, after the wait it stated. Each
-  poll is one request bounded by what is left of the deadline (at least 1s,
-  at most the client timeout); the client's own retry ladder no longer runs
-  inside a poll.
+  or a network failure is still polled again, after the wait it stated. In
+  `verify_batch_and_wait` a 404, a 410 or an answer in another API version
+  fails that item only (`failed`, no `status_detail`), while a 401 / 403
+  refuses the key itself and raises from the call; a single wait raises all
+  of them. Each poll is one request bounded by what is left of the deadline
+  and by the client's own timeout (`Lenz(timeout=)` as a number, `None` or
+  an `httpx.Timeout`, or an `http_client=`'s own); the client's own retry
+  ladder no longer runs inside a poll.
+- **No poll starts once a wait's deadline is spent** (`wait`,
+  `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`,
+  `citecheck_and_wait`): the ids left are timed out. 2.x polled once more at
+  the deadline, past it. The first poll of a wait always runs, so
+  `timeout=0` still reads the status once (bounded by the client timeout).
 - **Network failures and transport timeouts raise subclasses of the class
   they raised before**: `LenzConnectionError` and `LenzRequestTimeoutError`
   (a `LenzConnectionError`), both `LenzAPIError`s, with the same message and
-  the `httpx` exception as `__cause__`.
+  the `httpx` exception as `__cause__`. Every `httpx.TransportError` worth
+  sending again (a server that hung up mid-response, a proxy failure, a read
+  or write error) is now retried and raised this way, and a wait polls again
+  after one; 2.x let these escape as the raw `httpx` exception. A request
+  that could never be sent (`httpx.UnsupportedProtocol`,
+  `httpx.LocalProtocolError`) still raises the `httpx` exception.
 - **A 404 raises `LenzNotFoundError`** (a `LenzError`, as before) and its
   `fix` reads "Check the id or key the call names: nothing with it is
   visible to this credential. Retrying will not help." (2.x advised
@@ -135,13 +157,24 @@ Deprecated).
   `LenzRequestTimeoutError` (see Changed).
 - **`retryable` on every error**, set when the error is built: whether sending
   the same request again can succeed. `True` for a connection failure, a
-  request timeout, a 429 and a 5xx; `False` for any other 4xx and a
+  request timeout, a 429, a 5xx and a 409 `idempotency_conflict` or
+  `verification_not_ready` (read from the body as sent, so also where the 2.x
+  `code` is `""`); `False` for any other 4xx and a
   `LenzApiVersionError`; `None` when there was no HTTP status (a missing key,
   a `*_and_wait` timeout, a needs-input pause, a bad webhook signature). A
   failed verification, review or citation check keeps the server's value
   (`None` when it sent none), and a boolean `retryable` in a response's
   `failure` block, else at its top level, always wins. A
   `retryable=` passed to an error's constructor wins too.
+- **`idempotency_key` on every error**: the `Idempotency-Key` the failed call
+  sent (yours or the automatic one), `None` when it sent none; set on every
+  error of that call, the wait of a `*_and_wait` helper included, and on the
+  `json.JSONDecodeError` an unreadable answer raises. A resend is safe only
+  with the same key: pass `idempotency_key=exc.idempotency_key` back and the
+  server replays the first answer instead of running it again. A plain new
+  call sends a new key and can run (and charge) the work twice.
+- `verify_batch` and `verify_batch_and_wait` take any `Sequence` of claims
+  (a `list[dict[str, str]]` now type-checks); nothing changes at run time.
 - `ReviewFailedError`, `ReviewTimeoutError`, `CitecheckFailedError` and
   `CitecheckTimeoutError`: the job errors under the names the Node SDK uses
   (the same classes as `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed`,
@@ -149,13 +182,19 @@ Deprecated).
 - **`verifications.iter()` and `library.iter(**filters)`**: every item, page
   after page from `page`, fetched lazily (a page only when its first item is
   asked for), the page size read from each response, ending after a short or
-  empty page. `library.iter` takes `list`'s filters and refuses
+  empty page, once the pages read reach the response's `total`, when a
+  response states no positive `page_size`, or (without yielding it) when the
+  server answers another page than the one asked for. A start page below 1
+  raises `ValueError`. `library.iter` takes `list`'s filters and refuses
   `sort="random"` (`ValueError`), which is not exhaustive.
 - **`.verification` on the `verification.completed`, `verification.failed`
   and `verification.needs_input` webhook events**: the verification as
   `client.get_status` returns it (a `TaskStatus`; on a completed event the
   verdict is `.verification.result`, a typed `Verification`), built from
-  either payload shape, `None` when a payload cannot be read as one. A
+  either payload shape, `None` when a payload cannot be read as one or its
+  nested status is not the event's. A key a sparse `result` leaves out reads
+  as `event.result` reads it (`visibility` `"private"`, `depth` `"standard"`,
+  `created_at` `""`, ...). A
   property, so the events' fields and `repr` are unchanged; the dict
   `result` stays (prefer `.verification`). A recognised event whose nested
   `result` is not an object no longer crashes `parse_webhook`.

@@ -459,8 +459,10 @@ for r in results:
 ```
 
 A `failed` item with `status_detail is None` is a verification its account's
-retention period has removed (HTTP 410, see [Retention](#retention)); every
-other failure carries a `status_detail`.
+retention period has removed (HTTP 410, see [Retention](#retention)), a task
+id nothing was found under (404) or an answer in another API version; every
+other failure carries a `status_detail`. A 401 / 403 on a poll (the key
+itself refused) raises from the whole call.
 
 A verify takes ~90 seconds, so show your users where it is. `on_progress` fires
 once per poll while the run is going — it takes the `task_id` as well, because
@@ -821,18 +823,26 @@ except LenzNotFoundError as exc:
 except LenzConnectionError as exc:
     # No answer at all, after the SDK's own retries: the network, DNS, TLS,
     # or (LenzRequestTimeoutError, a subclass) one request's timeout. A
-    # LenzAPIError, as in 2.x; exc.__cause__ is the httpx exception.
+    # LenzAPIError, as in 2.x; exc.__cause__ is the httpx exception. The
+    # request may have reached the server: resend with the SAME key
+    # (idempotency_key=exc.idempotency_key), never as a plain new call.
     schedule_retry_in(30)
 ```
 
 **`retryable`** (since 3.0, on every error): whether sending the same request
-again can succeed. `True` for a connection failure, a request timeout, a 429
-and a 5xx; `False` for any other 4xx and a version error; `None` when there was no HTTP
-status (a missing key, a `*_and_wait` timeout). A failed
-verification, review or citation check carries the server's own value (`None`
-when it sent none). Calls that charge send an `Idempotency-Key`, so resending
-one the SDK raised for replays rather than runs twice when you pass the same
-key.
+again can succeed. `True` for a connection failure, a request timeout, a 429,
+a 5xx and a 409 that means "not yet" (`idempotency_conflict`: the first
+request with that key is still running; `verification_not_ready`); `False`
+for any other 4xx and a version error; `None` when there was no HTTP status
+(a missing key, a `*_and_wait` timeout). A failed verification, review or
+citation check carries the server's own value (`None` when it sent none).
+
+**`idempotency_key`** (since 3.0, on every error): the `Idempotency-Key` the
+failed call sent, or `None` when it sent none. A resend is safe only with the
+same key: pass `idempotency_key=exc.idempotency_key` back, and the server
+replays the first answer (or reports the first request still running)
+instead of running it again. A plain new call sends a new key, and can run
+(and charge) the work twice.
 
 ```python
 from lenz_io import LenzError
@@ -841,6 +851,8 @@ try:
     client.assess(claim="...")
 except LenzError as exc:
     if exc.retryable:
+        # Later, the same request with the same key:
+        # client.assess(claim="...", idempotency_key=exc.idempotency_key)
         schedule_retry_in(getattr(exc, "retry_after", None) or 30)
     else:
         raise
@@ -852,8 +864,12 @@ Local argument mistakes (an empty id, two exclusive arguments) raise
 A `*_and_wait` helper that reaches its own `timeout` raises `LenzTimeoutError`
 (`ReviewTimeout`, `CitecheckTimeout`): the job keeps running server-side, so
 read it later by its id rather than resubmitting. A poll answered 401, 403 or
-404 ends the wait at once with that error; a 5xx, a 429 or a network failure
-is polled again. `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed` and
+404 (or in another API version) ends the wait at once with that error; in
+`verify_batch_and_wait` a 404 or a version error fails that item only (the
+others keep going), while a 401 / 403 raises. A 5xx, a 429 or a network
+failure is polled again. Each poll is bounded by what is left of the
+`timeout` (at most the client timeout), and no poll starts once it is spent;
+the first poll always runs, so `timeout=0` reads the status once. `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed` and
 `CitecheckTimeout` are also importable as `ReviewFailedError`,
 `ReviewTimeoutError`, `CitecheckFailedError` and `CitecheckTimeoutError` (the
 same classes).
@@ -947,9 +963,14 @@ reply = client.ask.send(
 )
 ```
 
-A retry that arrives while the first call is still running gets a 409
-(`LenzError`) rather than the reply — there is nothing finished to replay
-yet.
+A retry that arrives while the first call with that key is still running is
+answered 409 `idempotency_conflict`. The SDK sends the same key and body
+again inside the same call, after the wait the server states (or its usual
+backoff), within the call's retries; if the first call is still running
+after them, it raises that `LenzError` with `retryable=True`. It never mints
+a second key to get past it. Every error of a call that sent a key carries
+it as `exc.idempotency_key`: resend with that key, never as a plain new call,
+which would send a new key and could run (and charge) the work twice.
 
 ## Steering extract
 
@@ -1081,7 +1102,7 @@ batch = client.verify_batch(
 Lenz(
     api_key="lenz_...",  # or set LENZ_API_KEY env var
     base_url="https://lenz.io/api/v1",  # override for staging / local
-    timeout=30.0,
+    timeout=30.0,  # seconds per request; also None or an httpx.Timeout
     max_retries=3,
 )
 ```
