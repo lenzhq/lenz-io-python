@@ -1015,7 +1015,10 @@ class TaskStatus(_Lax):
         ``retryable``, ``docs_url`` and ``hint`` on a failure, which are
         deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
+        if not isinstance(sent, dict):
+            return None
+        # A verification spelled "nothing checkable" ``not_a_claim``.
+        return FailureBlock.model_validate(_verification_failure(sent))
 
 
 class BatchItemResult(_Lax):
@@ -1393,6 +1396,14 @@ class FailureBlock(_Lax):
         """One sentence on what happened; ``None`` from the original shape."""
         sent = _sent(self, "detail")
         return sent if isinstance(sent, str) else None
+
+
+def _verification_failure(failure: Any) -> Any:
+    """A newer-shape ``failure`` block of a verification, with the original
+    spelling of "nothing checkable" (``not_a_claim``) in ``failure_reason``."""
+    if isinstance(failure, dict) and _is_newer(failure, "code"):
+        return _fill(failure, failure_reason=_old_code(failure["code"], "not_a_claim"))
+    return failure
 
 
 def _deep_check_failure(data: Any) -> Any:

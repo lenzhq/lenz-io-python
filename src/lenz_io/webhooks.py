@@ -45,6 +45,7 @@ from .models import (
     ReviewFull,
     _fill_modified_at,
     _old_code,
+    _verification_failure,
 )
 
 SIGNATURE_HEADER = "X-Lenz-Signature"
@@ -156,7 +157,7 @@ class VerificationFailed(WebhookEvent):
                 return None
             block = {"failure_reason": self.error, "failure_class": self.failure_class, "retryable": self.retryable}
         try:
-            return FailureBlock.model_validate(block)
+            return FailureBlock.model_validate(_verification_failure(block))
         except ValidationError:
             return None
 
