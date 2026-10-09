@@ -252,3 +252,75 @@ def test_the_body_sent_again_is_byte_identical(client: Lenz, slept: list[float])
     first, second = _bodies(route)
     assert first == second
     assert json.loads(first)["language"] == "de"
+
+
+class TestAnAnswerThatCannotBeRead:
+    def test_invalid_json_keeps_its_2x_class_and_carries_the_key(self, client: Lenz) -> None:
+        with respx.mock(base_url=BASE) as r:
+            r.post("/verify").respond(200, content=b"<html>not json</html>")
+            with pytest.raises(json.JSONDecodeError) as ei:
+                client.verify("A.", idempotency_key="k-4")
+        assert ei.value.idempotency_key == "k-4"  # type: ignore[attr-defined]
+
+    def test_a_body_cut_off_mid_read_carries_the_key(self, client: Lenz, slept: list[float]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            r.post("/assess").mock(side_effect=httpx.RemoteProtocolError("peer closed connection mid-body"))
+            with pytest.raises(LenzConnectionError) as ei:
+                client.assess("A.", idempotency_key="k-5")
+        assert ei.value.idempotency_key == "k-5"
+
+
+class TestTheWaitHelpersGoThroughTheSameMethodsAs2x:
+    """A subclass or test double overriding the submit keeps working."""
+
+    def test_review_and_wait_calls_review_with_the_key(self, slept: list[float]) -> None:
+        seen: list[str | None] = []
+
+        class Recording(Lenz):
+            def review(self, text, **kw):  # type: ignore[no-untyped-def, override]
+                seen.append(kw.get("idempotency_key"))
+                return super().review(text, **kw)
+
+        done = {"review_id": "r1", "status": "completed", "issues": [], "failures": [], "claims": []}
+        with Recording(api_key="lenz_test") as client, respx.mock(base_url=BASE) as r:
+            submit = r.post("/review").respond(202, json={"review_id": "r1", "status": "queued"})
+            r.get("/reviews/r1").respond(200, json=done)
+            client.review_and_wait("Draft.")
+        assert seen and seen[0] == submit.calls.last.request.headers["Idempotency-Key"]
+
+    def test_citecheck_and_wait_calls_citecheck_with_the_key(self, slept: list[float]) -> None:
+        seen: list[str | None] = []
+
+        class Recording(Lenz):
+            def citecheck(self, text=None, **kw):  # type: ignore[no-untyped-def, override]
+                seen.append(kw.get("idempotency_key"))
+                return super().citecheck(text, **kw)
+
+        done = {
+            "citecheck_id": "c1",
+            "status": "completed",
+            "citations": [],
+            "citation_issues": [],
+            "citation_failures": [],
+        }
+        with Recording(api_key="lenz_test") as client, respx.mock(base_url=BASE) as r:
+            submit = r.post("/citecheck").respond(202, json={"citecheck_id": "c1", "status": "queued"})
+            r.get("/citechecks/c1").respond(200, json=done)
+            client.citecheck_and_wait("Draft.", idempotency_key="k-6")
+        assert seen == ["k-6"] == [submit.calls.last.request.headers["Idempotency-Key"]]
+
+    def test_verify_and_wait_waits_through_wait(self) -> None:
+        waited: list[str] = []
+
+        class Recording(Lenz):
+            def wait(self, task, **kw):  # type: ignore[no-untyped-def, override]
+                waited.append(task.task_id)
+                return super().wait(task, **kw)
+
+        with Recording(api_key="lenz_test") as client, respx.mock(base_url=BASE) as r:
+            r.post("/verify").respond(200, json=_ACCEPTED)
+            r.get("/verify/status/t1").respond(
+                200, json={"status": "completed", "result": {"verification_id": "v1", "claim": "A."}}
+            )
+            client.verify_and_wait("A.")
+        assert waited == ["t1"]

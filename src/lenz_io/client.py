@@ -625,15 +625,21 @@ def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
 
 
 @contextmanager
-def _carrying_key(key: str | None) -> Iterator[None]:
+def _carrying_key(key: str | None, *, unreadable: bool = False) -> Iterator[None]:
     """Put ``key`` on any ``LenzError`` raised inside (``exc.idempotency_key``)
     that does not carry one yet: every error of a call that sent a key says
-    which, so a resend can reuse it."""
+    which, so a resend can reuse it. With ``unreadable``, also on a
+    ``ValueError`` (an answer whose body is not JSON), whose class stays the
+    one 2.x raised."""
     try:
         yield
     except LenzError as exc:
         if key and exc.idempotency_key is None:
             exc.idempotency_key = key
+        raise
+    except ValueError as exc:
+        if unreadable and key and getattr(exc, "idempotency_key", None) is None:
+            exc.idempotency_key = key  # type: ignore[attr-defined]
         raise
 
 
@@ -2019,7 +2025,7 @@ class Lenz:
         """One API call, with the retry ladder. Every ``LenzError`` it raises
         carries the ``Idempotency-Key`` it sent (``exc.idempotency_key``)."""
         key = (headers or {}).get("Idempotency-Key") or None
-        with _carrying_key(key):
+        with _carrying_key(key, unreadable=True):
             return self._send(
                 method,
                 path,
