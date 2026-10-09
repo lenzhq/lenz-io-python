@@ -93,6 +93,7 @@ from .errors import (
     CitecheckFailed,
     CitecheckTimeout,
     LenzAPIError,
+    LenzApiVersionError,
     LenzError,
     LenzGoneError,
     LenzNeedsInputError,
@@ -136,6 +137,7 @@ logger = logging.getLogger("lenz_io")
 # had in 2.x; the old names are deprecated aliases. Webhooks are the one
 # place both shapes are still parsed.
 API_VERSION = "2026-10-11"
+_VERSION_HEADER = "X-Lenz-API-Version"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
 DEFAULT_TIMEOUT = 30.0
@@ -1501,6 +1503,9 @@ class Lenz:
                     # that is still running.
                     gone[task_id] = exc
                     continue
+                except LenzApiVersionError:
+                    # Not a failed poll: every later poll would answer the same.
+                    raise
                 except LenzError:
                     # Don't let one id's poll failure abort the rest — retry it
                     # next round (bounded by the deadline below).
@@ -1789,6 +1794,9 @@ class Lenz:
         if self._api_key and (auth_required or auth_optional):
             req_headers["Authorization"] = f"Bearer {self._api_key}"
         req_headers.setdefault("Content-Type", "application/json")
+        # The version is part of the request, not of the HTTP client: a client
+        # passed as ``http_client=`` may carry no version header or a stale one.
+        req_headers[_VERSION_HEADER] = API_VERSION
         # A per-call ``timeout`` overrides the client-wide one for this request
         # only; ``None`` keeps httpx on the client default.
         req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else httpx.Timeout(timeout)
@@ -1810,6 +1818,8 @@ class Lenz:
                     ) from exc
                 time.sleep(_retry_sleep(attempt))
                 continue
+
+            _check_served_version(response)
 
             if response.status_code < 400:
                 return response.json() if response.content else {}
@@ -1926,6 +1936,34 @@ def _review_failed(review: ReviewFull) -> ReviewFailed:
         retryable=retryable,
         hint=hint,
         review=review,
+    )
+
+
+def _check_served_version(response: httpx.Response) -> None:
+    """Refuse an answer in an API version this SDK does not read.
+
+    A response without the header proceeds (a proxy or an old server may not
+    send it). Webhook payloads never pass through here.
+    """
+    served = (response.headers.get(_VERSION_HEADER) or "").strip()
+    if not served or served == API_VERSION:
+        return
+    try:
+        parsed = response.json() if response.content else None
+    except ValueError:
+        parsed = None
+    raise LenzApiVersionError(
+        message=(
+            f"The API answered in version {served}; lenz-io 3.x reads {API_VERSION} only. "
+            f"Change the API version setting on the server side to {API_VERSION}, or pin lenz-io<3."
+        ),
+        cause=f"The response carries {_VERSION_HEADER}: {served}.",
+        fix=(f"Set the account's API version to {API_VERSION}, or install lenz-io<3 to keep reading {served}."),
+        doc_url="https://lenz.io/docs/errors",
+        request_id=response.headers.get("X-Request-ID") or "",
+        status_code=response.status_code,
+        body=parsed if isinstance(parsed, dict) else None,
+        api_version=served,
     )
 
 

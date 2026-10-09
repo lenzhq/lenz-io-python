@@ -402,6 +402,29 @@ class LenzWebhookSignatureError(LenzError):
     """
 
 
+class LenzApiVersionError(LenzError):
+    """A response named an API version this SDK does not read.
+
+    Every API response names the version that served it in the
+    ``X-Lenz-API-Version`` header. lenz-io 3.x asks for ``2026-10-11`` and reads
+    that version's response shape only, so an answer in another version (in
+    practice ``2026-05-13``, which a reply replayed from before the account's
+    version changed, or a server pinned to the older version, still sends) is
+    refused instead of being misread. Applies to every response of a client
+    call, success or error; never to webhook payloads.
+
+    Fields:
+      * ``api_version`` — the version the response named.
+      * ``status_code`` — the response's HTTP status.
+      * ``body``        — the response body as sent (parsed JSON), or ``None``
+        when it was not a JSON object.
+    """
+
+    def __init__(self, *, api_version: str = "", **kwargs: Any) -> None:
+        super().__init__(api_version=api_version, **kwargs)
+        self.api_version = api_version
+
+
 # ── Mapping table ────────────────────────────────────────────────────────
 #
 # Single source of truth for HTTP status -> exception class + default
@@ -894,6 +917,7 @@ __all__ = [
     "CitecheckFailed",
     "CitecheckTimeout",
     "LenzAPIError",
+    "LenzApiVersionError",
     "LenzAuthError",
     "LenzError",
     "LenzGoneError",
