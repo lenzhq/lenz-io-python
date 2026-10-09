@@ -101,14 +101,24 @@ def test_the_current_version_and_a_missing_header_proceed(client: Lenz) -> None:
         assert client.usage().plan
 
 
-def test_a_stored_replay_in_the_old_shape_is_refused(client: Lenz) -> None:
+@pytest.mark.parametrize(
+    ("call", "name"),
+    [
+        (lambda c: c.verify("A.", idempotency_key="k"), "verify__stored_replay_202.json"),
+        (lambda c: c.assess("A.", idempotency_key="k"), "assess__stored_replay_200.json"),
+        (lambda c: c.extract(text="A.", idempotency_key="k"), "extract__stored_replay_200.json"),
+        (lambda c: c.review("A.", idempotency_key="k"), "review__stored_replay_202.json"),
+    ],
+)
+def test_a_stored_replay_in_the_old_shape_is_refused(client: Lenz, call: Any, name: str) -> None:
     """The API answers a replay of an idempotent request stored by an older
     release in the old shape, and says so in the header."""
-    fixture = load("legacy", "assess__replay_later_200.json")
+    fixture = load("legacy", name)
+    path = "/" + name.split("__", 1)[0]
     with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
-        mock.post("/assess").respond(fixture["status"], json=fixture["body"], headers={"X-Lenz-API-Version": OLD})
+        mock.post(path).respond(fixture["status"], json=fixture["body"], headers={"X-Lenz-API-Version": OLD})
         with pytest.raises(LenzApiVersionError) as info:
-            client.assess("A.", idempotency_key="k")
+            call(client)
     assert info.value.api_version == OLD
     assert info.value.body == fixture["body"]
 

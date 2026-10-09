@@ -1,0 +1,15 @@
+{
+  "event": {
+    "attempt": 2,
+    "batch_id": null,
+    "delivered_at": "2026-10-01T09:07:00.123456+00:00",
+    "error": "conclusion_failed",
+    "event": "verification.failed",
+    "failure_class": "internal",
+    "retryable": false,
+    "status": "failed",
+    "task_id": "7cff18da2d979d6370e54a160be121ad",
+    "type": "VerificationFailed",
+    "verification_id": null
+  }
+}

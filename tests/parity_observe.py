@@ -166,11 +166,15 @@ def _model_for(name: str) -> Any:
     if area == "account" and case.startswith("library"):
         return models.LibraryList
     if area == "review":
-        return models.ReviewStarted if case.startswith(("receipt", "idempotent", "replay")) else models.ReviewFull
+        return (
+            models.ReviewStarted
+            if case.startswith(("receipt", "idempotent", "replay", "stored_replay"))
+            else models.ReviewFull
+        )
     if area == "citecheck":
         return models.CitecheckStarted if case.startswith(("receipt", "idempotent")) else models.Citecheck
     if area == "verify":
-        if case.startswith("status_"):
+        if case.startswith(("status_", "stored_progress")):
             return models.TaskStatus
         if case.startswith(("batch_", "select_")):
             return models.BatchAccepted
