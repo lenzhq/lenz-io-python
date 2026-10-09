@@ -402,9 +402,9 @@ class TestCancels:
     @pytest.mark.parametrize(
         ("method", "path", "fixture"),
         [
-            ("cancel", "/verify/t1/cancel", "cancel_verify_cancelled.json"),
-            ("cancel_review", "/reviews/r1/cancel", "cancel_review_cancelled.json"),
-            ("cancel_citecheck", "/citechecks/c1/cancel", "cancel_citecheck_cancelled.json"),
+            ("cancel", "/verify/3f2a9c1e5b7d4a608c1d2e3f4a5b6c7d/cancel", "cancel_verify_cancelled.json"),
+            ("cancel_review", "/reviews/d6b2bd72/cancel", "cancel_review_cancelled.json"),
+            ("cancel_citecheck", "/citechecks/12bbbf65/cancel", "cancel_citecheck_cancelled.json"),
         ],
     )
     def test_no_body_no_key(self, client: Lenz, method: str, path: str, fixture: str) -> None:

@@ -62,17 +62,19 @@ def test_a_run_can_be_cancelled(smoke_client):
     """``cancel`` answers 200 whatever the state of the run: stopped by this
     call, or already ended. Neither is an error, so the test cannot be flaky.
 
-    A cancelled run is not charged. A cache hit (an answer the API already
-    holds) has finished by the time we cancel, which is the other branch."""
+    A cancelled verification is not charged. A cache hit (an answer the API
+    already holds) has finished by the time we cancel, which is the other
+    branch. Not the quickstart claim, so it is less likely to be one."""
     started = smoke_client.verify(claim="The Eiffel Tower is in Paris", depth="low")
     result = smoke_client.cancel(started.task_id)
     assert result.task_id == started.task_id
     if result.cancelled:
         assert result.status == "cancelled"
         # Safe to repeat: still cancelled, and a wait ends on it at once.
-        assert smoke_client.cancel(started.task_id).cancelled is True
+        again = smoke_client.cancel(started.task_id)
+        assert (again.cancelled, again.status) == (True, "cancelled")
         with pytest.raises(LenzPipelineError) as raised:
-            smoke_client.wait(started.task_id, timeout=60)
+            smoke_client.wait(started.task_id, timeout=30)
         assert raised.value.failure_class == "cancelled"
     else:
         # It finished first; nothing was left to stop.

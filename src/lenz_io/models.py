@@ -888,11 +888,13 @@ class BatchAccepted(_Lax):
 class CancelResult(_Lax):
     """Returned by ``POST /verify/{task_id}/cancel`` (``Lenz.cancel``).
 
-    ``cancelled`` is ``True`` when the run is cancelled, by this call or an
-    earlier one; ``status`` is then ``"cancelled"``. It is ``False`` when the
-    run had already ended: ``status`` says how (``"completed"``, the
-    verification exists and was charged as usual, or ``"failed"``). The call
-    answers 200 either way.
+    ``cancelled`` is ``True`` whenever the run is cancelled, by this call or an
+    earlier one (so a repeated or retried cancel answers ``True``); ``status``
+    is then ``"cancelled"``. It is ``False`` when the run is not cancelled:
+    ``status`` is its status, normally ``"completed"`` (the verification
+    exists and was charged as usual) or ``"failed"``; a task that ``select``
+    already resolved answers ``False`` with ``"needs_input"``. The call answers
+    200 either way.
     """
 
     task_id: str = ""

@@ -107,8 +107,8 @@ class TestCancel:
             route = r.post(f"/verify/{TASK}/cancel").respond(404, json=_load(name))
             with pytest.raises(LenzNotFoundError) as ei:
                 client.cancel(TASK)
-        # As for every 404 the SDK maps: ``code`` is empty, the body keeps the server's.
-        assert (ei.value.status_code, ei.value.retryable, ei.value.body["code"]) == (404, False, "not_found")
+        assert (ei.value.status_code, ei.value.code, ei.value.retryable) == (404, "not_found", False)
+        assert ei.value.body["code"] == "not_found"
         assert route.call_count == 1 and slept == []
 
     def test_a_reviews_deep_check_is_a_409_that_names_the_review_door(self, client: Lenz, slept: list[float]) -> None:
@@ -251,7 +251,8 @@ class TestCancelReview:
             route = r.post(f"/reviews/{REVIEW}/cancel").respond(404, json=_load("error_cancel_review_404.json"))
             with pytest.raises(LenzNotFoundError) as ei:
                 client.cancel_review(REVIEW)
-        assert (ei.value.status_code, ei.value.body["code"]) == (404, "not_found")
+        assert (ei.value.status_code, ei.value.code) == (404, "not_found")
+        assert ei.value.body["code"] == "not_found"
         assert route.call_count == 1 and slept == []
 
     def test_a_server_error_is_retried(self, client: Lenz, slept: list[float]) -> None:
@@ -336,7 +337,8 @@ class TestCancelCitecheck:
             route = r.post(f"/citechecks/{CHECK}/cancel").respond(404, json=_load(name))
             with pytest.raises(LenzNotFoundError) as ei:
                 client.cancel_citecheck(CHECK)
-        assert (ei.value.status_code, ei.value.body["code"]) == (404, "not_found")
+        assert (ei.value.status_code, ei.value.code) == (404, "not_found")
+        assert ei.value.body["code"] == "not_found"
         assert route.call_count == 1 and slept == []
 
     def test_a_server_error_is_retried(self, client: Lenz, slept: list[float]) -> None:
@@ -365,3 +367,94 @@ class TestCancelCitecheck:
 def test_the_cancel_result_is_lax_like_the_other_models() -> None:
     result = CancelResult.model_validate({})
     assert (result.task_id, result.cancelled, result.status) == ("", False, "")
+
+
+@pytest.mark.parametrize("path", ["/verify/t1/cancel", "/reviews/r1/cancel", "/citechecks/c1/cancel"])
+@pytest.mark.parametrize(
+    ("status", "code"), [(401, "not_authenticated"), (404, "not_found"), (422, "validation_error")]
+)
+def test_a_cancel_error_keeps_the_servers_code(path: str, status: int, code: str) -> None:
+    from lenz_io.errors import map_response_to_error
+
+    err = map_response_to_error(status, json.dumps({"detail": "x", "code": code}).encode(), {}, endpoint=("POST", path))
+    assert err.code == code
+
+
+def test_another_endpoints_404_keeps_the_empty_code_2x_had() -> None:
+    from lenz_io.errors import map_response_to_error
+
+    err = map_response_to_error(
+        404, json.dumps({"detail": "x", "code": "not_found"}).encode(), {}, endpoint=("GET", "/verify/status/t1")
+    )
+    assert err.code == ""
+
+
+# ── an answer that is not the cancel's ──
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        [],
+        "ok",
+        {"task_id": TASK},
+        {"cancelled": True, "status": "cancelled"},
+        {"task_id": "", "cancelled": True, "status": "cancelled"},
+        {"task_id": "someone-else", "cancelled": True, "status": "cancelled"},
+        {"task_id": TASK, "cancelled": "yes", "status": "cancelled"},
+        {"task_id": TASK, "cancelled": True},
+    ],
+)
+def test_a_cancel_answer_that_is_not_a_cancel_result_is_an_error(client: Lenz, body: Any) -> None:
+    from lenz_io import LenzAPIError
+
+    with respx.mock(base_url=BASE) as r:
+        r.post(f"/verify/{TASK}/cancel").respond(200, json=body)
+        with pytest.raises(LenzAPIError) as ei:
+            client.cancel(TASK)
+    assert "unexpected" in ei.value.message.lower()
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"review_id": REVIEW},
+        {"status": "cancelled"},
+        [],
+        {"review_id": "other", "status": "cancelled", "issues": [], "failures": [], "claims": []},
+    ],
+)
+def test_a_review_cancel_answer_that_is_not_the_review_is_an_error(client: Lenz, body: Any) -> None:
+    from lenz_io import LenzAPIError
+
+    with respx.mock(base_url=BASE) as r:
+        r.post(f"/reviews/{REVIEW}/cancel").respond(200, json=body)
+        with pytest.raises(LenzAPIError):
+            client.cancel_review(REVIEW)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {},
+        {"citecheck_id": CHECK},
+        {"status": "cancelled"},
+        [],
+        {
+            "citecheck_id": "other",
+            "status": "cancelled",
+            "citations": [],
+            "citation_issues": [],
+            "citation_failures": [],
+        },
+    ],
+)
+def test_a_citecheck_cancel_answer_that_is_not_the_check_is_an_error(client: Lenz, body: Any) -> None:
+    from lenz_io import LenzAPIError
+
+    with respx.mock(base_url=BASE) as r:
+        r.post(f"/citechecks/{CHECK}/cancel").respond(200, json=body)
+        with pytest.raises(LenzAPIError):
+            client.cancel_citecheck(CHECK)

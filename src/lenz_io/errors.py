@@ -670,6 +670,10 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
 #: /review and /citecheck (submit and read) kept their own error envelope.
 _REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
 
+#: The cancel calls are new in 3.0: no earlier shape to read, so the server's
+#: ``code`` stays on the error (``not_found``, ``use_review_cancel``, ...).
+_CANCEL_PATH = re.compile(r"^/(?:verify|reviews|citechecks)/[^/]+/cancel$")
+
 #: Codes the newer shape sends where the original error carried no ``code``
 #: (outside /review and /citecheck, which always sent one).
 _CODELESS = frozenset(
@@ -795,6 +799,7 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
     codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
         code == "verification_not_ready" and path.startswith("/ask/")
     )
+    codeless = codeless and not _CANCEL_PATH.match(path)
     if codeless:
         del out["code"]
     out.pop("errors", None)

@@ -86,6 +86,7 @@ import uuid
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, Literal, TypedDict, TypeVar, overload
+from urllib.parse import quote
 
 import httpx
 
@@ -361,9 +362,10 @@ class _VerificationsNamespace:
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
+        vid = _segment(verification_id, "verifications.get() needs a verification_id.")
         body = self._p._request(
             "GET",
-            f"/verifications/{verification_id}",
+            f"/verifications/{vid}",
             auth_required=False,
             auth_optional=True,  # send the key if we have one → owner sees private rows
         )
@@ -387,13 +389,15 @@ class _VerificationsNamespace:
         published open-source checker without involving Lenz. A withdrawn
         certificate is still served — it is the record of what was warranted.
         """
-        body = self._p._request("GET", f"/verifications/{verification_id}/certificate")
+        vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
+        body = self._p._request("GET", f"/verifications/{vid}/certificate")
         return Certificate.model_validate(body)
 
     def delete(self, verification_id: str) -> bool:
         """Idempotent. Retry-on-404 returns True ("already deleted")."""
+        vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
         try:
-            self._p._request("DELETE", f"/verifications/{verification_id}")
+            self._p._request("DELETE", f"/verifications/{vid}")
             return True
         except LenzError as exc:
             # Idempotent DELETE: if the row was already gone (e.g. previous
@@ -417,9 +421,10 @@ class _VerificationsNamespace:
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
+        vid = _segment(verification_id, "verifications.related() needs a verification_id.")
         body = self._p._request(
             "GET",
-            f"/verifications/{verification_id}/related",
+            f"/verifications/{vid}/related",
             params={"limit": limit},
             auth_required=False,
             auth_optional=True,  # send the key if we have one → owner sees own rows
@@ -442,7 +447,8 @@ class _AskNamespace:
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
-        body = self._p._request("GET", f"/ask/{verification_id}")
+        vid = _segment(verification_id, "ask.history() needs a verification_id.")
+        body = self._p._request("GET", f"/ask/{vid}")
         return AskHistory.model_validate(body)
 
     def send(
@@ -485,6 +491,7 @@ class _AskNamespace:
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
         """
+        vid = _segment(verification_id, "ask.send() needs a verification_id.")
         payload: dict[str, Any] = {"message": message}
         if language:
             payload["language"] = language
@@ -495,14 +502,15 @@ class _AskNamespace:
         with _carrying_key(key, unreadable=True):
             body = self._p._request(
                 "POST",
-                f"/ask/{verification_id}",
+                f"/ask/{vid}",
                 json=payload,
                 headers=headers,
             )
             return AskReply.model_validate(body)
 
     def reset(self, verification_id: str) -> bool:
-        self._p._request("DELETE", f"/ask/{verification_id}")
+        vid = _segment(verification_id, "ask.reset() needs a verification_id.")
+        self._p._request("DELETE", f"/ask/{vid}")
         return True
 
 
@@ -620,6 +628,16 @@ def _first_page(page: int) -> int:
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
         raise ValueError(f"iter starts at page 1 or later (got page={page!r}).")
     return page
+
+
+def _segment(value: Any, message: str) -> str:
+    """An id as ONE path segment: percent-encoded whole, so a ``/``, ``?``, ``#``
+    or ``%`` in it cannot leave the intended path (httpx would otherwise cut the
+    URL there). ``""``, ``"."`` and ``".."`` raise ``ValueError(message)``: a
+    path normaliser eats the dots, and an empty id names the collection."""
+    if not isinstance(value, str) or value in ("", ".", ".."):
+        raise ValueError(message)
+    return quote(value, safe="")
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
@@ -1054,10 +1072,13 @@ class Lenz:
         run, so losing a race is not an error. Read the result:
 
         - ``cancelled`` is ``True`` and ``status`` is ``"cancelled"``: the run
-          is cancelled, by this call or an earlier one.
-        - ``cancelled`` is ``False``: it had already ended. ``status`` says
-          how: ``"completed"`` (the verification exists and was charged as
-          usual) or ``"failed"``.
+          is cancelled, by this call or an earlier one, so a repeated or
+          retried cancel answers ``True`` too.
+        - ``cancelled`` is ``False``: the run is not cancelled, and ``status``
+          is its status, normally ``"completed"`` (the verification exists and
+          was charged as usual) or ``"failed"``. A task that ``select``
+          already resolved answers ``False`` with ``"needs_input"``: cancel
+          the task ids ``select`` returned.
 
         ``client.wait(task_id)`` and ``get_status`` then see ``cancelled``;
         ``wait`` raises :class:`LenzPipelineError` with
@@ -1073,9 +1094,12 @@ class Lenz:
 
         Since 3.0.
         """
-        if not task_id:
-            raise ValueError("cancel() needs a task_id.")
-        return CancelResult.model_validate(self._request("POST", f"/verify/{task_id}/cancel"))
+        tid = _segment(task_id, "cancel() needs a task_id.")
+        path = f"/verify/{tid}/cancel"
+        body = self._request("POST", path)
+        if not _is_cancel_body(body, task_id):
+            raise _unexpected_answer("POST", path)
+        return CancelResult.model_validate(body)
 
     # ── headline ergonomic ──
 
@@ -1168,8 +1192,7 @@ class Lenz:
         every error until the timeout.)
         """
         task_id = task if isinstance(task, str) else task.task_id
-        if not task_id:
-            raise ValueError("wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
+        _segment(task_id, "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
         terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress)
         if task_id in stopped:
             raise stopped[task_id]
@@ -1404,14 +1427,13 @@ class Lenz:
         Raises :class:`LenzGoneError` (410) once the account's retention
         period has removed the review.
         """
-        if not review_id:
-            raise ValueError("get_review() needs a review_id.")
+        rid = _segment(review_id, "get_review() needs a review_id.")
         if view == "issues":
-            body = self._request("GET", f"/reviews/{review_id}", params={"view": "issues"})
+            body = self._request("GET", f"/reviews/{rid}", params={"view": "issues"})
             return ReviewIssues.model_validate(body)
         if view != "full":
             raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
-        return ReviewFull.model_validate(self._request("GET", f"/reviews/{review_id}"))
+        return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}"))
 
     def cancel_review(self, review_id: str) -> ReviewFull:
         """Stop a review (``POST /reviews/{review_id}/cancel``), including the
@@ -1429,9 +1451,12 @@ class Lenz:
 
         Since 3.0.
         """
-        if not review_id:
-            raise ValueError("cancel_review() needs a review_id.")
-        return ReviewFull.model_validate(self._request("POST", f"/reviews/{review_id}/cancel"))
+        rid = _segment(review_id, "cancel_review() needs a review_id.")
+        path = f"/reviews/{rid}/cancel"
+        body = self._request("POST", path)
+        if not _is_full_review_body(body, review_id):
+            raise _unexpected_answer("POST", path)
+        return ReviewFull.model_validate(body)
 
     def review_and_wait(
         self,
@@ -1554,9 +1579,8 @@ class Lenz:
     def get_citecheck(self, citecheck_id: str) -> Citecheck:
         """Read a citation check. Raises :class:`LenzGoneError` (410) once
         the account's retention period has removed it."""
-        if not citecheck_id:
-            raise ValueError("get_citecheck() needs a citecheck_id.")
-        return Citecheck.model_validate(self._request("GET", f"/citechecks/{citecheck_id}"))
+        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
+        return Citecheck.model_validate(self._request("GET", f"/citechecks/{cid}"))
 
     def cancel_citecheck(self, citecheck_id: str) -> Citecheck:
         """Stop a citation check (``POST /citechecks/{citecheck_id}/cancel``).
@@ -1574,9 +1598,12 @@ class Lenz:
 
         Since 3.0.
         """
-        if not citecheck_id:
-            raise ValueError("cancel_citecheck() needs a citecheck_id.")
-        return Citecheck.model_validate(self._request("POST", f"/citechecks/{citecheck_id}/cancel"))
+        cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.")
+        path = f"/citechecks/{cid}/cancel"
+        body = self._request("POST", path)
+        if not _is_citecheck_body(body, citecheck_id):
+            raise _unexpected_answer("POST", path)
+        return Citecheck.model_validate(body)
 
     def citecheck_and_wait(
         self,
@@ -1636,7 +1663,7 @@ class Lenz:
             )
 
         return self._wait_job(
-            f"/citechecks/{citecheck_id}",
+            f"/citechecks/{_segment(citecheck_id, '_wait_citecheck() needs a citecheck_id.')}",
             timeout=timeout,
             on_update=on_update,
             parse=lambda body: Citecheck.model_validate(body) if _is_citecheck_body(body, citecheck_id) else None,
@@ -1664,7 +1691,7 @@ class Lenz:
             )
 
         return self._wait_job(
-            f"/reviews/{review_id}",
+            f"/reviews/{_segment(review_id, '_wait_review() needs a review_id.')}",
             timeout=timeout,
             on_update=on_update,
             parse=lambda body: ReviewFull.model_validate(body) if _is_full_review_body(body, review_id) else None,
@@ -1816,7 +1843,7 @@ class Lenz:
                 try:
                     body = self._request(
                         "GET",
-                        f"/verify/status/{task_id}",
+                        f"/verify/status/{quote(task_id, safe='')}",
                         max_retries=0,
                         timeout=self._poll_timeout(remaining),
                     )
@@ -2099,15 +2126,17 @@ class Lenz:
             return AssessResponse.model_validate(body)
 
     def _select(self, task_id: str, *, texts: list[str], idempotency_key: str | None = None) -> BatchAccepted:
+        tid = _segment(task_id, "select() needs a task_id.")
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", f"/verify/{task_id}/select", json={"texts": texts}, headers=headers)
+            body = self._request("POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers)
             return BatchAccepted.model_validate(body)
 
     def _get_status(self, task_id: str) -> TaskStatus:
-        body = self._request("GET", f"/verify/status/{task_id}")
+        tid = _segment(task_id, "get_status() needs a task_id.")
+        body = self._request("GET", f"/verify/status/{tid}")
         return TaskStatus.model_validate(body)
 
     # ── HTTP plumbing ──
@@ -2286,6 +2315,28 @@ class Lenz:
         if last_exc:
             raise LenzAPIError(message=str(last_exc), cause=str(last_exc)) from last_exc
         raise LenzAPIError(message=f"{method} {path} failed without diagnostic")
+
+
+def _unexpected_answer(method: str, path: str) -> LenzAPIError:
+    """A 200 whose body is not the thing asked for (a proxy page, another
+    task's body): an error, never a default-valued result."""
+    return LenzAPIError(
+        message=f"{method} {path} returned an unexpected response body.",
+        cause="The answer is not the shape the API documents for this call.",
+        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+        doc_url="https://lenz.io/docs/errors",
+    )
+
+
+def _is_cancel_body(body: Any, task_id: str) -> bool:
+    """Whether a 200 is this task's cancel result: its id, a boolean
+    ``cancelled`` and a status."""
+    return (
+        isinstance(body, dict)
+        and body.get("task_id") == task_id
+        and isinstance(body.get("cancelled"), bool)
+        and isinstance(body.get("status"), str)
+    )
 
 
 def _is_full_review_body(body: Any, review_id: str) -> bool:
