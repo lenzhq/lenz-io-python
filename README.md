@@ -230,9 +230,10 @@ The body carries the same rows as a review's: `citations`, `citation_issues`,
 `citation_failures`, `summary` and `more_citations` (the draft's citations past
 `max_citations`, found but not checked). `client.citecheck(...)` returns a
 `citecheck_id` at once; read it with `client.get_citecheck(citecheck_id)`.
-`citecheck_and_wait` raises `CitecheckFailed` when the check fails and
-`CitecheckTimeout` after `timeout` seconds. The `citecheck.completed` and
-`citecheck.failed` webhooks parse into a `CitecheckEvent`. A runnable version:
+`citecheck_and_wait` raises `CitecheckFailed` when the check fails (or is
+cancelled elsewhere: `failure_class` `cancelled`) and `CitecheckTimeout` after
+`timeout` seconds. The `citecheck.completed`, `citecheck.failed` and
+`citecheck.cancelled` webhooks parse into a `CitecheckEvent`. A runnable version:
 [`examples/core/citecheck_draft.py`](examples/core/citecheck_draft.py).
 
 From the terminal: `lenz citecheck draft.md` (or `--pairs pairs.json`, a JSON
@@ -675,6 +676,13 @@ if isinstance(event, CertificateTimestamped):
 It carries `coverage` instead of `result` — it reports a timestamp landing,
 not a verdict being produced.
 
+A task cancelled elsewhere (the website's Stop button, another process) sends
+`verification.cancelled`, parsed as `VerificationCancelled`
+(`event.verification.status` is `"cancelled"`), `review.cancelled` and
+`citecheck.cancelled`. These are sent for work submitted with the API version
+this SDK uses; a cancellation of work submitted by an older client keeps
+arriving as the `*.failed` event with `failure_class` `cancelled`.
+
 A review sends `review.completed` or `review.failed`, parsed as `ReviewEvent`
 with the final review on `event.review`. Deduplicate on `event.event_id`: it is
 the same on every retry of one delivery. The deep checks a review runs send no
@@ -907,7 +915,10 @@ A failed *verification* (as opposed to a failed HTTP call) raises
 `failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
 | `invalid_input` | `cancelled` | `internal`) and `retryable` — `True` means
 a transient provider-side exhaustion where resubmitting the same claim is the
-right move; older servers leave it `None`.
+right move; older servers leave it `None`. A verification cancelled elsewhere
+(the website's Stop button, another process) raises the same error with
+`failure_class == "cancelled"` and `retryable` `False`; `review_and_wait` and
+`citecheck_and_wait` do the same with `ReviewFailed` and `CitecheckFailed`.
 
 `LenzQuotaExceededError` is a **sibling** of `LenzAuthError`, not a subclass —
 "fix your key" and "top up your account" are different actions. So if you were

@@ -154,6 +154,20 @@ Deprecated).
 
 ### Added
 
+- **A task cancelled elsewhere ends a wait with the failed error.** In API
+  version `2026-10-11` a verification, review or citation check stopped
+  elsewhere (the website's Stop button, another process) is its own status,
+  `cancelled`. `wait`, `verify_and_wait`, `verify_batch_and_wait`,
+  `review_and_wait` and `citecheck_and_wait` end on it at once instead of
+  polling to their timeout, with the error 2.x raised for the original shape
+  (`LenzPipelineError`, `ReviewFailed`, `CitecheckFailed`;
+  `failure_class` `cancelled`, `retryable` `False`); a batch item is a
+  `failed` row. `get_status`, `get_review` and `get_citecheck` return the
+  cancelled status without raising. The webhook events `verification.cancelled`
+  (`VerificationCancelled`), `review.cancelled` (`ReviewEvent`) and
+  `citecheck.cancelled` (`CitecheckEvent`) are typed; they are sent only for
+  work submitted with `2026-10-11`, and a cancellation of older work keeps
+  arriving as `*.failed`. Methods to cancel come in a later release.
 - `LenzNotFoundError` (404), `LenzConnectionError` and
   `LenzRequestTimeoutError` (see Changed).
 - **`retryable` on every error**, set when the error is built: whether sending
