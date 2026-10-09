@@ -2085,7 +2085,14 @@ class Lenz:
                 response = self._client.request(
                     method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
                 )
-            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+            except (httpx.UnsupportedProtocol, httpx.LocalProtocolError):
+                # The request could never be sent (a bad URL scheme, a request
+                # httpx refuses to write): a programming error, not a network one.
+                raise
+            except httpx.TransportError as exc:
+                # Connect / read / write failures, timeouts, a server that
+                # hung up (RemoteProtocolError), a proxy failure: worth sending
+                # again.
                 last_exc = exc
                 if attempt >= retries:
                     # Subclasses of LenzAPIError, which is what 2.x raised.

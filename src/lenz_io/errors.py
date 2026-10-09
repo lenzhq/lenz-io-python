@@ -290,7 +290,8 @@ class LenzAPIError(LenzError):
 
 class LenzConnectionError(LenzAPIError):
     """The request never got an answer: the connection failed or broke
-    (DNS, refused, reset, TLS), after the SDK's own retries.
+    (DNS, refused, reset, TLS, a server or proxy that hung up), after the
+    SDK's own retries.
 
     A subclass of :class:`LenzAPIError`, which is what 2.x raised, so an
     existing ``except LenzAPIError`` keeps catching it. ``__cause__`` is the
