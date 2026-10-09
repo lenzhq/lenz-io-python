@@ -911,6 +911,24 @@ Supported codes: `en` (default), `es`, `de`, `fr`, `it`, `pt`, `nl`, `sv`, `da`,
 `no`, `fi`, `bg`. To ask for another language, contact us at
 https://lenz.io/contact.
 
+### Answer in the language of the text
+
+`language="auto"` on `assess`, `verify` / `verify_and_wait` and `ask.send` answers
+in the language of the text you submitted (on `ask.send`, the language of the claim
+being discussed). A concrete code always wins, and leaving `language` out still
+means English. The other methods (`extract`, `verify_batch`, `citecheck`, `review`)
+take the codes above, not `auto`.
+
+```python
+r = client.assess(claim="Die Erde ist flach.", language="auto")
+print(r.claims[0].verdict, r.claims[0].language)
+# False de
+```
+
+On `assess` with a `claims` list, one language is chosen for the whole request: the
+one most items are written in, otherwise English. For a list that mixes languages,
+name the code you want instead.
+
 Per-item override on `verify_batch`:
 
 ```python
