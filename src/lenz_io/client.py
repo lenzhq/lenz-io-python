@@ -5,7 +5,10 @@ Multi-language SDK convention:
   as their default. Sending an empty string means "do NOT include the
   field in the request body" — preserves byte-identical behavior for
   existing English callers. Set ``language='es'`` (or any of the 12
-  supported codes) to receive prose fields in that language.
+  supported codes) to receive prose fields in that language. ``assess``,
+  ``verify`` (and ``verify_and_wait``) and ``ask.send`` also take
+  ``language='auto'``: the answer comes back in the language of the submitted
+  text. The other methods take the codes only.
 * Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
   expose ``language`` populated by the server. Verdict / domain / status
   enum values stay English regardless of language; only free-form prose
@@ -416,7 +419,8 @@ class _AskNamespace:
 
         ``language`` (optional) overrides the claim's stored language for
         this single reply. Omit to let the server use the claim's
-        ``language`` as default — that's the typical case.
+        ``language`` as default — that's the typical case. ``'auto'`` also
+        answers in the language of the claim being discussed.
 
         ``idempotency_key`` (optional): send an ``Idempotency-Key`` so a
         retry of *this* question replays the first reply instead of asking —
@@ -597,7 +601,9 @@ class Lenz:
         (``claim`` wins if both are given).
 
         ``language`` (optional): output language for the verification's
-        prose fields. See module docstring for supported codes.
+        prose fields. See module docstring for supported codes. ``'auto'``
+        answers in the language of the submitted text; a concrete code always
+        wins.
 
         ``visibility`` (optional): ``'private'`` (default, owner-only) or
         ``'unlisted'`` (readable by verification_id / at the /c/ URL, but
@@ -779,7 +785,11 @@ class Lenz:
 
         ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
         'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg'`` to receive
-        the claim text in that language. Verdict enums always English.
+        the claim text in that language, or to ``'auto'`` to answer in the
+        language of the submitted text (with a ``claims`` list, one language is
+        chosen for the whole request: the one most items are written in, else
+        English; name a code for a mixed-language list). Verdict enums always
+        English.
         Empty string omits the field from the request body — preserves
         byte-identical behavior for existing English callers.
 

@@ -1,0 +1,50 @@
+name: Smoke
+
+# Runs the `smoke`-marked tests against the live API with a real key. The
+# release workflow calls this and publishes only when it passes. A missing key
+# is a failure, never a skip: a smoke run that checked nothing must not let a
+# release through.
+#
+# Also runs by hand (Actions > Smoke > Run workflow) and on a pull request
+# that changes the smoke tests or these workflows.
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - tests/test_smoke_*.py
+      - .github/workflows/smoke.yml
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: live API smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+      - name: Require the smoke key
+        env:
+          LENZ_E2E_KEY: ${{ secrets.LENZ_E2E_KEY }}
+        run: |
+          if [ -z "$LENZ_E2E_KEY" ]; then
+            echo "::error::LENZ_E2E_KEY is not set; the smoke run would check nothing."
+            exit 1
+          fi
+      - name: Run smoke tests against the live API
+        # --no-cov is load-bearing: pyproject's addopts carry
+        # --cov-fail-under, which a smoke subset can never reach. Coverage is
+        # measured on the full suite by ci.yml. `-rs` lists any skip.
+        env:
+          LENZ_E2E_KEY: ${{ secrets.LENZ_E2E_KEY }}
+          LENZ_BASE_URL: ${{ vars.LENZ_BASE_URL }}
+        run: pytest -m smoke -q -rs --no-cov
