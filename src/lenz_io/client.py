@@ -77,11 +77,12 @@ Design decisions:
 
 from __future__ import annotations
 
+import builtins
 import logging
 import os
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, Literal, TypedDict, TypeVar, overload
 
 import httpx
@@ -119,6 +120,7 @@ from .models import (
     Citecheck,
     CitecheckStarted,
     ExtractedClaims,
+    LibraryItem,
     LibraryList,
     Progress,
     RelatedVerifications,
@@ -130,6 +132,7 @@ from .models import (
     Usage,
     Verification,
     VerificationList,
+    VerificationListItem,
 )
 
 logger = logging.getLogger("lenz_io")
@@ -316,6 +319,21 @@ class _VerificationsNamespace:
     def list(self, *, page: int = 1) -> VerificationList:
         body = self._p._request("GET", "/verifications", params={"page": page})
         return VerificationList.model_validate(body)
+
+    def iter(self, *, page: int = 1) -> Iterator[VerificationListItem]:
+        """Every verification on your account, newest first, page after page
+        from ``page`` (default 1).
+
+        Fetches a page only when the items before it have been consumed, reads
+        the page size from each response, and stops after a short or empty
+        page::
+
+            for item in client.verifications.iter():
+                print(item.verification_id, item.verdict)
+
+        Since 3.0. ``list(page=...)`` reads one page.
+        """
+        return _walk(lambda n: self.list(page=n), page)
 
     def get(self, verification_id: str) -> Verification:
         """Fetch a single verification by id.
@@ -523,6 +541,52 @@ class _LibraryNamespace:
             auth_required=False,
         )
         return LibraryList.model_validate(body)
+
+    def iter(
+        self,
+        *,
+        page: int = 1,
+        sort: str = "recent",
+        search: str = "",
+        domain: str = "",
+        entity: str = "",
+        # ``builtins.list``: in this class body ``list`` is the method above.
+        curated: builtins.list[str] | None = None,
+        verdict: str = "",
+    ) -> Iterator[LibraryItem]:
+        """Every item of the public catalog that matches the filters (the
+        ones ``list`` takes), page after page from ``page``. Works without an
+        API key.
+
+        Fetches a page only when the items before it have been consumed, reads
+        the page size from each response, and stops after a short or empty
+        page. ``sort="random"`` raises ``ValueError``: a random order is drawn
+        anew for every page, so walking it neither reaches every item nor
+        avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
+        """
+        if sort == "random":
+            raise ValueError(
+                "library.iter() does not take sort='random': a random order is not exhaustive. "
+                "Use library.list(sort='random') for a sample."
+            )
+        return _walk(
+            lambda n: self.list(
+                page=n, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
+            ),
+            page,
+        )
+
+
+def _walk(fetch: Callable[[int], VerificationList | LibraryList], page: int) -> Iterator[Any]:
+    """The items of ``fetch(page)``, ``fetch(page + 1)``, ... until a page
+    comes back shorter than its own ``page_size`` (or empty). A generator: no
+    page is fetched before its first item is asked for."""
+    while True:
+        current = fetch(page)
+        yield from current.items
+        if not current.items or len(current.items) < current.page_size:
+            return
+        page += 1
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
