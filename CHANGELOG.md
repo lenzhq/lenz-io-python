@@ -134,8 +134,9 @@ Deprecated).
 - **No poll starts once a wait's deadline is spent** (`wait`,
   `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`,
   `citecheck_and_wait`): the ids left are timed out. 2.x polled once more at
-  the deadline, past it. The first poll of a wait always runs, so
-  `timeout=0` still reads the status once (bounded by the client timeout).
+  the deadline, past it. A `timeout=0` (or below) still reads each status
+  once, as in 2.x. Each poll keeps the client's connect, read, write and
+  pool timeouts, each capped by what is left of the deadline.
 - **Network failures and transport timeouts raise subclasses of the class
   they raised before**: `LenzConnectionError` and `LenzRequestTimeoutError`
   (a `LenzConnectionError`), both `LenzAPIError`s, with the same message and
@@ -169,7 +170,8 @@ Deprecated).
 - **`idempotency_key` on every error**: the `Idempotency-Key` the failed call
   sent (yours or the automatic one), `None` when it sent none; set on every
   error of that call, the wait of a `*_and_wait` helper included, and on the
-  `json.JSONDecodeError` an unreadable answer raises. A resend is safe only
+  `json.JSONDecodeError` or pydantic `ValidationError` an unreadable answer
+  raises (their classes unchanged). A resend is safe only
   with the same key: pass `idempotency_key=exc.idempotency_key` back and the
   server replays the first answer instead of running it again. A plain new
   call sends a new key and can run (and charge) the work twice.

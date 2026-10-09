@@ -868,8 +868,8 @@ read it later by its id rather than resubmitting. A poll answered 401, 403 or
 `verify_batch_and_wait` a 404 or a version error fails that item only (the
 others keep going), while a 401 / 403 raises. A 5xx, a 429 or a network
 failure is polled again. Each poll is bounded by what is left of the
-`timeout` (at most the client timeout), and no poll starts once it is spent;
-the first poll always runs, so `timeout=0` reads the status once. `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed` and
+`timeout` (each phase at most the client's own), and no poll starts once it
+is spent; `timeout=0` reads each status once, as in 2.x. `ReviewFailed`, `ReviewTimeout`, `CitecheckFailed` and
 `CitecheckTimeout` are also importable as `ReviewFailedError`,
 `ReviewTimeoutError`, `CitecheckFailedError` and `CitecheckTimeoutError` (the
 same classes).
