@@ -169,11 +169,15 @@ def _status_envelope(event: WebhookEvent) -> TaskStatus | None:
             "failure_reason": error if isinstance(error, str) else "",
             "failure": failure,
         }
-    else:
+    elif event.event == "verification.cancelled":
+        body = {"status": "cancelled", "task_id": raw.get("task_id") or ""}
+    elif event.event == "verification.needs_input":
         needs_input = raw.get("needs_input")
         given = needs_input if isinstance(needs_input, dict) else {}
         body = {"status": "needs_input", "task_id": raw.get("task_id") or ""}
         body.update({k: v for k, v in given.items() if v is not None})
+    else:
+        return None
     if isinstance(body.get("result"), dict):
         # A key the payload left out reads as ``event.result`` reads it (the
         # original payload's default: ``visibility`` "private", ``depth``

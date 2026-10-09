@@ -280,6 +280,22 @@ class TestCancelledWebhooks:
         event = parse_webhook(raw)
         assert event.verification is None  # a failed event carrying a cancelled run
 
+    @pytest.mark.parametrize("nested", [None, "absent"])
+    def test_a_cancelled_event_without_a_nested_verification_is_a_cancelled_status(self, nested: Any) -> None:
+        raw = {k: v for k, v in _body("webhook__verification_cancelled.json").items() if k != "verification"}
+        if nested is None:
+            raw["verification"] = None
+        event = parse_webhook(raw)
+        assert isinstance(event, VerificationCancelled)
+        assert event.verification is not None
+        assert (event.verification.status, event.verification.task_id) == ("cancelled", raw["task_id"])
+
+    def test_an_event_that_names_no_known_kind_has_no_verification(self) -> None:
+        from lenz_io.webhooks import VerificationFailed
+
+        event = VerificationFailed(event="verification.paused", task_id="t", raw={"event": "verification.paused"})
+        assert event.verification is None
+
     def test_review_cancelled(self) -> None:
         raw = _body("webhook__review_cancelled.json")
         event = parse_webhook(raw)
@@ -352,11 +368,6 @@ class TestTheCli:
         assert json.loads(result.stdout)["error"]["code"] == "pipeline_failed"
         assert "Unexpected status" not in result.output
 
-    def test_status_says_cancelled(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        body = _body("verify__status_cancelled_durable.json")
-        result = self._run(monkeypatch, ["status", body["task_id"]], {f"/verify/status/{body['task_id']}": body})
-        assert result.exit_code == 0 and "cancelled" in result.output
-
     def test_review_resume_says_cancelled(self, monkeypatch: pytest.MonkeyPatch) -> None:
         body = _body("review__get_cancelled.json")
         result = self._run(
@@ -373,6 +384,50 @@ class TestTheCli:
         )
         assert json.loads(result.stdout)["status"] == "cancelled"
         assert result.exit_code == 2
+
+
+def _styled(fn: Any, *args: Any) -> str:
+    """What a render prints to a terminal: the escape codes keep its styling."""
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=False)
+    out.json_mode = False
+    out.console = Console(file=buf, force_terminal=True, color_system="standard", width=100)
+    fn(out, *args)
+    return buf.getvalue()
+
+
+class TestTheCliRenders:
+    def test_status_is_red_cancelled(self) -> None:
+        from lenz_io.cli.render import render_task_status
+
+        text = _styled(render_task_status, TaskStatus.model_validate(_body("verify__status_cancelled_durable.json")))
+        assert "\x1b[31mcancelled\x1b[0m" in text
+
+    def test_a_batch_cell_and_its_details_say_cancelled(self) -> None:
+        from lenz_io.cli.render import _batch_status_cell, render_batch_details
+
+        status = TaskStatus.model_validate(_body("verify__status_cancelled_durable.json"))
+        cell = _batch_status_cell(status)
+        assert cell.plain == "cancelled" and cell.style == "red"
+        text = _styled(render_batch_details, [(status.task_id, "A claim.")], {status.task_id: status})
+        assert "Cancelled." in text and "Failed:" not in text and "resume:" not in text
+
+
+def test_a_cancelled_status_with_a_null_failure_still_reads_the_2x_fields() -> None:
+    status = TaskStatus.model_validate({"status": "cancelled", "task_id": "t", "failure": None})
+    assert (status.error, status.failure_class, status.failure_reason, status.retryable) == (
+        "Cancelled.",
+        "cancelled",
+        "cancelled",
+        False,
+    )
+    assert status.failure is None
 
 
 def test_the_original_shape_still_reads_as_a_failure(client: Lenz) -> None:

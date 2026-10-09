@@ -1019,7 +1019,7 @@ class TaskStatus(_Lax):
     @model_validator(mode="before")
     @classmethod
     def _read_newer_shape(cls, data: Any) -> Any:
-        if isinstance(data, dict) and data.get("status") == "cancelled" and "failure" not in data:
+        if isinstance(data, dict) and data.get("status") == "cancelled" and not isinstance(data.get("failure"), dict):
             # A task cancelled elsewhere: its own status, with no failure
             # block. The 2.x fields read what the original shape said of it.
             return _fill(

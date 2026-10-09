@@ -485,7 +485,9 @@ def render_batch_details(out: Output, picks: list[tuple[str, str]], statuses: di
         st = statuses.get(tid)
         if st is not None and st.status == "completed" and st.result is not None:
             _batch_verdict_block(out, st.result)
-        elif st is not None and st.status in ("failed", "cancelled"):
+        elif st is not None and st.status == "cancelled":
+            out.console.print("[red]Cancelled.[/red]")
+        elif st is not None and st.status == "failed":
             out.console.print(f"[red]Failed:[/red] {st.error or st.failure_detail or 'pipeline error'}")
         else:
             label = "timed out" if st is None else (st.status or "unknown")

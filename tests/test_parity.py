@@ -75,7 +75,8 @@ def _cancelled_gap(name: str, path: str) -> str | None:
     last = path.rsplit(".", 1)[-1]
     if path in ("dump.status", "event.status", "event.event", "event.review.status", "event.citecheck.status"):
         return "a cancelled task is its own status in the current version; the original said `failed`"
-    if ".failure." in path and last in ("docs_url", "failure_class", "failure_reason", "hint", "retryable"):
+    top_level_block = path.startswith(("dump.failure.", "event.review.failure.", "event.citecheck.failure."))
+    if top_level_block and last in ("docs_url", "failure_class", "failure_reason", "hint", "retryable"):
         return "the current version sends no failure block for a cancelled task"
     if name == "webhook__verification_cancelled.json" and path in (
         "event.type",
@@ -84,11 +85,27 @@ def _cancelled_gap(name: str, path: str) -> str | None:
         "event.retryable",
     ):
         return "`verification.cancelled` is its own event (`VerificationCancelled`), with no failure fields"
-    if path in ("render", "render_issues"):
-        return "the CLI says `Cancelled.` for a cancelled task"
     if name == "verify__status_cancelled_live.json" and path in _CANCELLED_SENTENCE_PATHS:
         return "a running task's original sentence was `Pipeline stopped at: cancelled`; the status reads `Cancelled.`"
     return None
+
+
+#: The lines the CLI prints for a cancelled task's status, in the original
+#: shape and now: the rest of the text must be the same.
+_CANCELLED_RENDER_LINES = {
+    "failed  — Cancelled.": "cancelled",
+    "failed  — Pipeline stopped at: cancelled": "cancelled",
+    "Failed: cancelled": "Cancelled.",
+}
+
+
+def _cancelled_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a `render` text differs only by the line the CLI words anew for
+    a cancelled task."""
+    if path not in ("render", "render_issues") or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    lines = [_CANCELLED_RENDER_LINES.get(line, line) for line in old.splitlines()]
+    return lines == new.splitlines()
 
 
 def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, Any]) -> str | None:
@@ -251,7 +268,9 @@ def test_newer_shape_reads_the_same(name: str) -> None:
     gaps = [
         (path, old, new)
         for path, old, new in _diff(expected, got)
-        if _allowed(name, path, legacy, canonical) is None and _intended(path, old, new, legacy) is None
+        if _allowed(name, path, legacy, canonical) is None
+        and _intended(path, old, new, legacy) is None
+        and not (canonical["body"].get("status") == "cancelled" and _cancelled_render_gap(path, old, new))
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 

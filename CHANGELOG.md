@@ -7,7 +7,9 @@ All notable changes to this SDK are documented here. Format follows
 ## [Unreleased]
 
 > **Upgrading from 2.x.** Must do: (1) upgrade every service that *receives*
-> your webhooks to lenz-io 2.21+ before the sending service moves to 3.0;
+> your webhooks to lenz-io 2.21+ before the sending service moves to 3.0 (a
+> 2.21 receiver sees the `*.cancelled` events of 3.0-submitted work as a plain
+> `WebhookEvent`: branch on `event.event` there);
 > (2) code reading raw bodies (`exc.body`, `event.raw`) reads the current
 > shape; (3) re-record tests that replay recorded 2.x response bodies; (4) an
 > idempotent request first sent before the switch and replayed after it raises
@@ -50,6 +52,29 @@ Deprecated).
   - An `/extract` on an input the API first read as not a claim and then
     found a claim in says `status == "ready"` (2.x: `"not_a_claim"`); branch
     on `claims`.
+- **A task cancelled elsewhere (the website's Stop button, another process)
+  is its own status, `cancelled`**, where 2.x read `failed` with
+  `failure_class` `cancelled`.
+  - `TaskStatus.status`, `ReviewFull.status` and `Citecheck.status` can read
+    `"cancelled"`, and `.failure` is `None` on those bodies. A hand-written
+    polling loop must treat `cancelled` as terminal or it polls until its own
+    timeout. A `TaskStatus` still carries the 2.x fields (`error`
+    `"Cancelled."`, `failure_class`, `failure_reason`, `retryable`,
+    `docs_url`).
+  - The wait helpers (`wait`, `verify_and_wait`, `verify_batch_and_wait`,
+    `review_and_wait`, `citecheck_and_wait`) end on it at once instead of
+    polling to their timeout. They raise the same error class and failure
+    fields (`failure_class`, `failure_reason`, `retryable`, doc URL) as 2.x did
+    for the original shape: `LenzPipelineError`, `ReviewFailed`,
+    `CitecheckFailed`. For a task cancelled while running the message reads
+    "Cancelled." (2.x said "Pipeline stopped at: cancelled"). A batch item is
+    a `failed` row; `get_status`, `get_review` and `get_citecheck` return the
+    cancelled status without raising.
+  - Webhooks for work submitted with this release arrive as
+    `verification.cancelled` (`VerificationCancelled`), `review.cancelled` and
+    `citecheck.cancelled`, not `*.failed`. A receiver that branches only on
+    `*.failed` misses them. A 2.21 receiver reads them as a plain
+    `WebhookEvent`: branch on `event.event` there.
 - **Webhooks of both shapes are still parsed** (`parse_webhook`,
   `LenzWebhooks.parse` and the event models): work submitted by an older
   client on the same account is delivered in the 2.x shape.
@@ -60,7 +85,8 @@ Deprecated).
   `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`; 2.x sent
   `2026-05-13`). In that shape each field, status and error code has one name
   across every endpoint.
-- **Every attribute keeps the value it had in 2.x**, computed from the
+- **Every attribute keeps the value it had in 2.x** (except the `status` of a
+  cancelled task, see Breaking), computed from the
   current shape where the server now sends it under another name or not at
   all. Among them:
   - A failed `/assess` row still reads `verdict == "Error"` and
@@ -154,20 +180,10 @@ Deprecated).
 
 ### Added
 
-- **A task cancelled elsewhere ends a wait with the failed error.** In API
-  version `2026-10-11` a verification, review or citation check stopped
-  elsewhere (the website's Stop button, another process) is its own status,
-  `cancelled`. `wait`, `verify_and_wait`, `verify_batch_and_wait`,
-  `review_and_wait` and `citecheck_and_wait` end on it at once instead of
-  polling to their timeout, with the error 2.x raised for the original shape
-  (`LenzPipelineError`, `ReviewFailed`, `CitecheckFailed`;
-  `failure_class` `cancelled`, `retryable` `False`); a batch item is a
-  `failed` row. `get_status`, `get_review` and `get_citecheck` return the
-  cancelled status without raising. The webhook events `verification.cancelled`
-  (`VerificationCancelled`), `review.cancelled` (`ReviewEvent`) and
-  `citecheck.cancelled` (`CitecheckEvent`) are typed; they are sent only for
-  work submitted with `2026-10-11`, and a cancellation of older work keeps
-  arriving as `*.failed`. Methods to cancel come in a later release.
+- **`VerificationCancelled`** (new webhook event class, `verification.cancelled`),
+  and `review.cancelled` / `citecheck.cancelled` typed as `ReviewEvent` /
+  `CitecheckEvent`. They are sent only for work submitted with `2026-10-11`;
+  a cancellation of older work keeps arriving as `*.failed`. See Breaking.
 - `LenzNotFoundError` (404), `LenzConnectionError` and
   `LenzRequestTimeoutError` (see Changed).
 - **`retryable` on every error**, set when the error is built: whether sending

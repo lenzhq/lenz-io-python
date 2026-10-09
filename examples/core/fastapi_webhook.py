@@ -27,6 +27,7 @@ from lenz_io import (
     LenzWebhooks,
     LenzWebhookSignatureError,
     ReviewEvent,
+    VerificationCancelled,
     VerificationCompleted,
     VerificationFailed,
     VerificationNeedsInput,
@@ -70,8 +71,14 @@ async def lenz_webhook(request: Request) -> dict[str, str]:
     elif isinstance(event, VerificationFailed):
         failure = event.failure
         logger.warning("Verification failed: %s (%s)", event.task_id, failure.code if failure else "unknown")
+    elif isinstance(event, VerificationCancelled):
+        # Stopped elsewhere (the website's Stop button, another process).
+        # Work submitted by an older client reports this as verification.failed
+        # with failure_class "cancelled" instead.
+        logger.info("Verification cancelled: %s", event.task_id)
     elif isinstance(event, ReviewEvent):
-        # review.completed / review.failed: the final review, as get_review returns it.
+        # review.completed / review.failed / review.cancelled: the final review,
+        # as get_review returns it (event.status says which).
         if event.review is not None:
             logger.info(
                 "Review %s %s: outcome %s, %d issue(s)",
@@ -81,7 +88,8 @@ async def lenz_webhook(request: Request) -> dict[str, str]:
                 len(event.review.issues),
             )
     elif isinstance(event, CitecheckEvent):
-        # citecheck.completed / citecheck.failed: the final check.
+        # citecheck.completed / citecheck.failed / citecheck.cancelled: the final
+        # check (event.status says which).
         if event.citecheck is not None:
             logger.info(
                 "Citation check %s %s: outcome %s, %d issue(s)",
