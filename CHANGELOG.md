@@ -81,6 +81,13 @@ Deprecated).
 
 ### Changed
 
+- **An id goes into the URL path as one segment.** Every method that puts an
+  id in a path (`get_status`, `select`, `get_review`, `get_citecheck`, the
+  cancels, `verifications.*`, `ask.*`, the waits) percent-encodes it whole, so
+  an id holding `/`, `?`, `#` or `..` can no longer send the request to another
+  path. An ordinary id is on the wire byte for byte as before. An empty id, `"."`
+  and `".."` raise `ValueError` before any request (the methods that took an
+  empty id now raise as `get_review` and `wait` already did).
 - **The SDK asks for the API's current response shape, and reads only that.** Every request sends
   `X-Lenz-API-Version: 2026-10-11` (`lenz_io.API_VERSION`; 2.x sent
   `2026-05-13`). In that shape each field, status and error code has one name
@@ -186,16 +193,22 @@ Deprecated).
   review, its deep checks and its citation checks, and returns the full
   `ReviewFull` (what `get_review` returns); `client.cancel_citecheck(citecheck_id)`
   returns the `Citecheck`. All three answer 200 whatever the state of the run:
-  `cancelled=False` on a `cancel` means the run had already ended, and
-  `status` says how (`completed` or `failed`); a review or check that had
-  ended comes back unchanged. They send no body and no `Idempotency-Key`
+  `cancelled=True` whenever the run is cancelled, by this call or an earlier
+  one, so a repeated or retried cancel answers True; `cancelled=False` means
+  the run is not cancelled and `status` is its status, normally `completed`
+  or `failed`. A task that `select` already resolved answers `cancelled=False`
+  with `needs_input`: cancel the task ids `select` returned. A review or check
+  that had ended comes back unchanged. They send no body and no `Idempotency-Key`
   (cancelling twice is safe), and are retried on a 5xx or a dropped
   connection like any call that is safe to repeat. An unknown id, another
   account's, or (for `cancel`) a task started on the website raises
   `LenzNotFoundError`. A task that is a review's deep check raises a
   `LenzError` with `code == "use_review_cancel"` (409): cancel the review
-  instead; it is sent once, never waited on or resent. A cancelled run is not
-  charged; a `wait` on it raises the failed error with
+  instead; it is sent once, never waited on or resent. A cancelled
+  verification is not charged and saves nothing; a cancelled review or citation
+  check keeps charged what it delivered before the cancel (quick checks served,
+  deep checks that finished, citations checked) and the rest is refunded or
+  never charged. A `wait` on a cancelled run raises the failed error with
   `failure_class == "cancelled"`. Needs the API to serve version `2026-10-11`.
 - **`VerificationCancelled`** (new webhook event class, `verification.cancelled`),
   and `review.cancelled` / `citecheck.cancelled` typed as `ReviewEvent` /

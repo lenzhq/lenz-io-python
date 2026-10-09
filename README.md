@@ -971,9 +971,12 @@ print(check.status, check.credits.charged)
 
 - `cancel(task_id)` returns a `CancelResult`. `cancelled=True` with
   `status == "cancelled"` means the run is cancelled, by this call or an
-  earlier one. `cancelled=False` means it had already ended: `status` is
-  `"completed"` (the verification exists and was charged as usual) or
-  `"failed"`. A run waiting on `select` is cancelled too.
+  earlier one, so a repeated or retried cancel answers `True` too.
+  `cancelled=False` means it is not cancelled, and `status` is the run's
+  status, normally `"completed"` (the verification exists and was charged as
+  usual) or `"failed"`. A run waiting on `select` is cancelled too. A task that
+  `select` already resolved answers `cancelled=False` with `needs_input`: cancel
+  the task ids `select` returned.
 - `cancel_review(review_id)` stops the review and everything in it: its quick
   checks, its deep checks and its citation checks. It returns the review as it
   stands, `status == "cancelled"`; a review that had already ended is returned
