@@ -79,13 +79,16 @@ Design decisions:
 from __future__ import annotations
 
 import builtins
+import copy
 import logging
+import math
 import os
 import time
 import uuid
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from typing import Any, Literal, TypedDict, TypeVar, overload
+from dataclasses import dataclass
+from typing import Any, Final, Literal, TypedDict, TypeVar, overload
 from urllib.parse import quote
 
 import httpx
@@ -202,6 +205,180 @@ REVIEW_POLL_FLOOR = 5.0
 REVIEW_POLL_DEFAULT = 10.0
 
 
+class NotGiven:
+    """The type of :data:`NOT_GIVEN`: "this option was not passed", as opposed
+    to ``None``, which ``Lenz.with_options(timeout=None)`` reads as "no
+    timeout". Only for type annotations; callers never need to pass it."""
+
+    _instance: NotGiven | None = None
+
+    def __new__(cls) -> NotGiven:
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+        return cls._instance
+
+    def __bool__(self) -> Literal[False]:
+        return False
+
+    def __repr__(self) -> str:
+        return "NOT_GIVEN"
+
+    def __copy__(self) -> NotGiven:
+        return self
+
+    def __deepcopy__(self, memo: Any) -> NotGiven:
+        return self
+
+
+#: The default of ``Lenz.with_options``' parameters: keep what the client has.
+NOT_GIVEN: Final = NotGiven()
+
+#: Headers the request options refuse, in any casing: the SDK sets them
+#: itself (``idempotency_key=`` and ``api_key=`` are the way to choose the
+#: first two), or httpx computes them.
+_RESERVED_HEADERS = frozenset(
+    {
+        "x-lenz-api-version",
+        "idempotency-key",
+        "authorization",
+        "content-type",
+        "content-length",
+        "host",
+        "transfer-encoding",
+    }
+)
+
+
+def _check_timeout(value: Any, where: str) -> None:
+    """A per-request timeout: a finite number of seconds greater than 0, an
+    ``httpx.Timeout`` (taken as given) or ``None``. ``ValueError`` otherwise,
+    before any request is made."""
+    if value is None or isinstance(value, httpx.Timeout):
+        return
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        raise ValueError(
+            f"{where}: timeout must be a number of seconds greater than 0, None or an httpx.Timeout (got {value!r})."
+        )
+
+
+def _check_retries(value: Any, where: str) -> None:
+    """A retry count: a whole number, 0 or more. ``ValueError`` otherwise."""
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
+
+
+def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]:
+    """``extra_headers`` as (name, value) pairs in the order given: names
+    strings outside ``_RESERVED_HEADERS``, values strings or ``None``
+    (removes the header a ``with_options`` copy added). ``ValueError``
+    otherwise."""
+    if value is None:
+        return ()
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
+    pairs: list[tuple[str, str | None]] = []
+    for name, header in value.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{where}: a header name must be a non-empty string (got {name!r}).")
+        if name.lower() in _RESERVED_HEADERS:
+            raise ValueError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
+        if header is not None and not isinstance(header, str):
+            raise ValueError(f"{where}: the value of header {name} must be a string or None (got {header!r}).")
+        pairs.append((name, header))
+    return tuple(pairs)
+
+
+def _merge_headers(
+    lower: Sequence[tuple[str, str]], upper: Sequence[tuple[str, str | None]]
+) -> tuple[tuple[str, str], ...]:
+    """``upper`` over ``lower``, names compared case-insensitively: the last
+    spelling of a name and its value win, and a ``None`` value removes the
+    name from ``lower``."""
+    merged: dict[str, tuple[str, str]] = {name.lower(): (name, value) for name, value in lower}
+    for name, value in upper:
+        if value is None:
+            merged.pop(name.lower(), None)
+        else:
+            merged[name.lower()] = (name, value)
+    return tuple(merged.values())
+
+
+@dataclass(frozen=True)
+class _CallOptions:
+    """The request options one call was given (its ``timeout``,
+    ``max_retries`` and ``extra_headers`` keywords); ``None`` inherits."""
+
+    timeout: float | httpx.Timeout | None = None
+    max_retries: int | None = None
+    headers: tuple[tuple[str, str | None], ...] = ()
+
+
+_NO_OPTIONS = _CallOptions()
+
+
+def _call_options(
+    timeout: float | httpx.Timeout | None,
+    max_retries: int | None,
+    extra_headers: Mapping[str, str | None] | None,
+    where: str,
+) -> _CallOptions:
+    """One call's request options, checked: raises ``ValueError`` before the
+    call mints a key or makes a request."""
+    _check_timeout(timeout, where)
+    if max_retries is not None:
+        _check_retries(max_retries, where)
+    return _CallOptions(timeout=timeout, max_retries=max_retries, headers=_check_headers(extra_headers, where))
+
+
+@dataclass(frozen=True)
+class _ClientOptions:
+    """What ``Lenz.with_options`` set on a copy, already flattened over the
+    copy it was made from. ``NOT_GIVEN`` inherits from the ``httpx.Client`` in
+    use (timeout) or the constructor (retries)."""
+
+    timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN
+    max_retries: int | NotGiven = NOT_GIVEN
+    headers: tuple[tuple[str, str], ...] = ()
+
+
+def _resolve(
+    call: _CallOptions,
+    layer: _ClientOptions,
+    client_timeout: httpx.Timeout,
+    client_retries: int,
+    floor: float | None,
+) -> tuple[httpx.Timeout | None, int, tuple[tuple[str, str], ...]]:
+    """The timeout, retry count and option headers of one request. Pure: no
+    I/O, no clock.
+
+    Per field, the first that is set wins: the call's option, the copy's
+    (``with_options``), the client's (the ``httpx.Client`` in use for the
+    timeout, the constructor for retries). Headers merge, the call's over the
+    copy's. A ``floor`` (``extract`` / ``assess``) applies to an inherited
+    timeout only, as it always did: when its ``read`` is bounded and shorter
+    than the floor, the floor replaces the whole timeout; otherwise the
+    inherited timeout is kept as it is. A timeout of ``None`` means "the
+    ``httpx.Client``'s own" (httpx's ``USE_CLIENT_DEFAULT``).
+    """
+    timeout: httpx.Timeout | None
+    if call.timeout is not None:
+        timeout = httpx.Timeout(call.timeout)
+    else:
+        own = None if isinstance(layer.timeout, NotGiven) else httpx.Timeout(layer.timeout)
+        inherited = client_timeout if own is None else own
+        if floor is not None and inherited.read is not None and inherited.read < floor:
+            timeout = httpx.Timeout(floor)
+        else:
+            timeout = own
+    if call.max_retries is not None:
+        retries = call.max_retries
+    elif not isinstance(layer.max_retries, NotGiven):
+        retries = layer.max_retries
+    else:
+        retries = client_retries
+    return timeout, retries, _merge_headers(layer.headers, call.headers)
+
+
 def _poll_hint(progress: Any) -> float | None:
     """The server's suggested wait before the next poll, or None.
 
@@ -261,6 +438,9 @@ def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
         out.locations = []
     return out
 
+
+#: ``Lenz`` or a subclass, for ``with_options``' return type.
+_Client = TypeVar("_Client", bound="Lenz")
 
 #: An async job the poll loop waits on: a review or a citation check.
 _Job = TypeVar("_Job", ReviewFull, Citecheck)
@@ -326,11 +506,31 @@ class _VerificationsNamespace:
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
 
-    def list(self, *, page: int = 1) -> VerificationList:
-        body = self._p._request("GET", "/verifications", params={"page": page})
+    def list(
+        self,
+        *,
+        page: int = 1,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> VerificationList:
+        """One page of your verifications, newest first.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.list()")
+        body = self._p._request("GET", "/verifications", params={"page": page}, options=options)
         return VerificationList.model_validate(body)
 
-    def iter(self, *, page: int = 1) -> Iterator[VerificationListItem]:
+    def iter(
+        self,
+        *,
+        page: int = 1,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Iterator[VerificationListItem]:
         """Every verification on your account, newest first, page after page
         from ``page`` (default 1).
 
@@ -344,10 +544,25 @@ class _VerificationsNamespace:
                 print(item.verification_id, item.verdict)
 
         Since 3.0. ``list(page=...)`` reads one page.
-        """
-        return _walk(lambda n: self.list(page=n), _first_page(page))
 
-    def get(self, verification_id: str) -> Verification:
+        Request options (``timeout``, ``max_retries``, ``extra_headers``)
+        apply to every page request, and a bad one raises here, before the
+        first page: see :meth:`Lenz.with_options`.
+        """
+        _call_options(timeout, max_retries, extra_headers, "verifications.iter()")
+        return _walk(
+            lambda n: self.list(page=n, timeout=timeout, max_retries=max_retries, extra_headers=extra_headers),
+            _first_page(page),
+        )
+
+    def get(
+        self,
+        verification_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Verification:
         """Fetch a single verification by id.
 
         Works without an API key — the server accepts optional Bearer:
@@ -361,17 +576,29 @@ class _VerificationsNamespace:
         wait for a run, use ``client.wait(task_id)``.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.get()")
         vid = _segment(verification_id, "verifications.get() needs a verification_id.")
         body = self._p._request(
             "GET",
             f"/verifications/{vid}",
             auth_required=False,
             auth_optional=True,  # send the key if we have one → owner sees private rows
+            options=options,
         )
         return Verification.model_validate(body)
 
-    def get_certificate(self, verification_id: str) -> Certificate:
+    def get_certificate(
+        self,
+        verification_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Certificate:
         """Download the warranty certificate for a covered verification.
 
         Resolved by (verification, ACCOUNT), not by verification alone: one
@@ -388,16 +615,32 @@ class _VerificationsNamespace:
         ``/certificate/<certificate_id>.json``, so it verifies with the
         published open-source checker without involving Lenz. A withdrawn
         certificate is still served — it is the record of what was warranted.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.get_certificate()")
         vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
-        body = self._p._request("GET", f"/verifications/{vid}/certificate")
+        body = self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
         return Certificate.model_validate(body)
 
-    def delete(self, verification_id: str) -> bool:
-        """Idempotent. Retry-on-404 returns True ("already deleted")."""
+    def delete(
+        self,
+        verification_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> bool:
+        """Idempotent. Retry-on-404 returns True ("already deleted").
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.delete()")
         vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
         try:
-            self._p._request("DELETE", f"/verifications/{vid}")
+            self._p._request("DELETE", f"/verifications/{vid}", options=options)
             return True
         except LenzError as exc:
             # Idempotent DELETE: if the row was already gone (e.g. previous
@@ -408,7 +651,15 @@ class _VerificationsNamespace:
                 return True
             raise
 
-    def related(self, verification_id: str, *, limit: int = 5) -> RelatedVerifications:
+    def related(
+        self,
+        verification_id: str,
+        *,
+        limit: int = 5,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> RelatedVerifications:
         """Return public verifications semantically related to this one.
 
         Server caps ``limit`` to 10. Empty list when the verification has
@@ -420,7 +671,11 @@ class _VerificationsNamespace:
         library item.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
         vid = _segment(verification_id, "verifications.related() needs a verification_id.")
         body = self._p._request(
             "GET",
@@ -428,6 +683,7 @@ class _VerificationsNamespace:
             params={"limit": limit},
             auth_required=False,
             auth_optional=True,  # send the key if we have one → owner sees own rows
+            options=options,
         )
         return RelatedVerifications.model_validate(body)
 
@@ -442,13 +698,24 @@ class _AskNamespace:
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
 
-    def history(self, verification_id: str) -> AskHistory:
+    def history(
+        self,
+        verification_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> AskHistory:
         """The follow-up conversation on a verification.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
         vid = _segment(verification_id, "ask.history() needs a verification_id.")
-        body = self._p._request("GET", f"/ask/{vid}")
+        body = self._p._request("GET", f"/ask/{vid}", options=options)
         return AskHistory.model_validate(body)
 
     def send(
@@ -459,6 +726,9 @@ class _AskNamespace:
         language: str = "",
         idempotency_key: str | None = None,
         idempotency: bool = True,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> AskReply:
         """Send a follow-up question on an existing verification.
 
@@ -490,7 +760,11 @@ class _AskNamespace:
         Paid — see ``client.usage()``.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
         vid = _segment(verification_id, "ask.send() needs a verification_id.")
         payload: dict[str, Any] = {"message": message}
         if language:
@@ -505,12 +779,26 @@ class _AskNamespace:
                 f"/ask/{vid}",
                 json=payload,
                 headers=headers,
+                options=options,
             )
             return AskReply.model_validate(body)
 
-    def reset(self, verification_id: str) -> bool:
+    def reset(
+        self,
+        verification_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> bool:
+        """Clear the follow-up conversation on a verification.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
         vid = _segment(verification_id, "ask.reset() needs a verification_id.")
-        self._p._request("DELETE", f"/ask/{vid}")
+        self._p._request("DELETE", f"/ask/{vid}", options=options)
         return True
 
 
@@ -537,6 +825,9 @@ class _LibraryNamespace:
         entity: str = "",
         curated: list[str] | None = None,
         verdict: str = "",
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> LibraryList:
         """List the public verification catalog. Works without an API key.
 
@@ -545,7 +836,11 @@ class _LibraryNamespace:
         filters by comma-separated labels, e.g. ``"True,False"``. ``sort`` also
         accepts ``"random"`` alongside ``recent`` / ``most_true`` /
         ``most_untrue`` / ``relevance``.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "library.list()")
         params: dict[str, Any] = {
             "page": page,
             "sort": sort,
@@ -563,6 +858,7 @@ class _LibraryNamespace:
             "/library",
             params=params,
             auth_required=False,
+            options=options,
         )
         return LibraryList.model_validate(body)
 
@@ -577,6 +873,9 @@ class _LibraryNamespace:
         # ``builtins.list``: in this class body ``list`` is the method above.
         curated: builtins.list[str] | None = None,
         verdict: str = "",
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> Iterator[LibraryItem]:
         """Every item of the public catalog that matches the filters (the
         ones ``list`` takes), page after page from ``page``. Works without an
@@ -589,13 +888,27 @@ class _LibraryNamespace:
         1 or more, and ``sort="random"`` raises ``ValueError``: a random order is drawn
         anew for every page, so walking it neither reaches every item nor
         avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``)
+        apply to every page request, and a bad one raises here, before the
+        first page: see :meth:`Lenz.with_options`.
         """
+        _call_options(timeout, max_retries, extra_headers, "library.iter()")
         if sort == "random":
             raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
         page = _first_page(page)
         return _walk(
             lambda n: self.list(
-                page=n, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
+                page=n,
+                sort=sort,
+                search=search,
+                domain=domain,
+                entity=entity,
+                curated=curated,
+                verdict=verdict,
+                timeout=timeout,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             ),
             page,
         )
@@ -705,11 +1018,16 @@ class Lenz:
         http_client: httpx.Client | None = None,
         user_agent: str | None = None,
     ) -> None:
+        # The same rule as every request option: refused here, before the
+        # client exists, rather than failing (or retrying forever) later.
+        _check_timeout(timeout, "Lenz()")
+        _check_retries(max_retries, "Lenz()")
         self._api_key = api_key or os.environ.get("LENZ_API_KEY") or ""
         self._base_url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
+        self._options = _ClientOptions()
         # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
         # the SDK keeps ownership of every other default header — so a new
         # default header can't be silently dropped by a hand-copied client.
@@ -731,8 +1049,80 @@ class Lenz:
     # ── lifecycle ──
 
     def close(self) -> None:
+        """Close the connection pool, if this client created it. A client
+        given ``http_client=`` leaves it open (it is yours), and a copy made
+        by :meth:`with_options` never closes the pool it shares: close the
+        client you made the copies from."""
         if self._owns_client:
             self._client.close()
+
+    def with_options(
+        self: _Client,
+        *,
+        timeout: float | httpx.Timeout | None | NotGiven = NOT_GIVEN,
+        max_retries: int | NotGiven = NOT_GIVEN,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> _Client:
+        """A copy of this client with other request options, sharing its
+        connection pool, key and base URL. Cheap: make one per request if you
+        like. The client it was made from is not changed::
+
+            fast = client.with_options(timeout=10, max_retries=0)
+            fast.usage()
+
+            traced = client.with_options(extra_headers={"X-Trace-Id": trace_id})
+            traced.assess(claim="...")
+
+        Every method also takes the same three options as keywords, for one
+        call: ``client.assess(claim="...", timeout=20)``.
+
+        * ``timeout``: one HTTP attempt, in seconds (a number greater than 0)
+          or an ``httpx.Timeout``. httpx applies it per phase (connect, read,
+          write, pool) and the read limit to each chunk, so it is an
+          inactivity limit, not a bound on the whole call, and retries each get
+          their own. Here ``None`` means no timeout, as on ``Lenz(timeout=None)``;
+          on a single call ``timeout=None`` keeps the client's (pass
+          ``httpx.Timeout(None)`` for no timeout on one call). ``extract`` and
+          ``assess`` take at least 150 s / 100 s when the timeout is inherited
+          from a copy or the client, as they always did; a timeout passed to the
+          call itself is used as given, even below that (a shorter one can time
+          out a call the server is still running: retry it with the same
+          ``idempotency_key`` to get the answer).
+        * ``max_retries``: how often a request that failed in a way worth
+          retrying (a 5xx, a 429, a dropped connection) is sent again: a whole
+          number, 0 or more.
+        * ``extra_headers``: headers added to every request, merged over the
+          copy's own by name, case-insensitively. ``None`` as a value removes a
+          header a copy added. The SDK's own headers (``X-Lenz-API-Version``,
+          ``Idempotency-Key``, ``Authorization``, ``Content-Type``,
+          ``Content-Length``, ``Host``, ``Transfer-Encoding``) are refused.
+
+        Per option, a call's keyword wins over the copy, and the copy over the
+        client. A bad value raises ``ValueError`` here, before any request.
+        The wait helpers keep their own ``timeout`` (how long to wait); the
+        timeout of each of their requests comes from the copy or the client.
+
+        The copy shares the pool: ``close()`` and ``with`` on a copy do
+        nothing, closing the original closes the pool for every copy, and a
+        copy is as safe to share across threads as the client.
+        """
+        if not isinstance(timeout, NotGiven):
+            _check_timeout(timeout, "with_options()")
+        if not isinstance(max_retries, NotGiven):
+            _check_retries(max_retries, "with_options()")
+        headers = _check_headers(extra_headers, "with_options()")
+        layer = self._options
+        clone = copy.copy(self)
+        clone._owns_client = False
+        clone._options = _ClientOptions(
+            timeout=layer.timeout if isinstance(timeout, NotGiven) else timeout,
+            max_retries=layer.max_retries if isinstance(max_retries, NotGiven) else max_retries,
+            headers=_merge_headers(layer.headers, headers),
+        )
+        clone.verifications = _VerificationsNamespace(clone)
+        clone.ask = _AskNamespace(clone)
+        clone.library = _LibraryNamespace(clone)
+        return clone
 
     def __enter__(self) -> Lenz:
         return self
@@ -754,6 +1144,9 @@ class Lenz:
         idempotency_key: str | None = None,
         source_url: str = "",
         webhook_url: str = "",
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> TaskAccepted:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
@@ -788,7 +1181,11 @@ class Lenz:
         verification. ``webhook_url`` (optional): where to send this
         verification's ``verification.*`` events; leave it out (or blank) for
         your key's default webhook URL.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        _call_options(timeout, max_retries, extra_headers, "verify()")
         return self._verify_submit(
             claim=claim,
             text=text,
@@ -798,6 +1195,9 @@ class Lenz:
             visibility=visibility,
             depth=depth,
             idempotency_key=_call_key(idempotency_key, idempotency),
+            timeout=timeout,
+            max_retries=max_retries,
+            extra_headers=extra_headers,
         )
 
     def verify_batch(
@@ -810,6 +1210,9 @@ class Lenz:
         depth: str = "",
         idempotency_key: str | None = None,
         idempotency: bool = True,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
         per-claim ``task_id``s. Each item has its own lifecycle and webhook.
@@ -834,7 +1237,11 @@ class Lenz:
         pin your own with ``idempotency_key=`` (it wins), or pass
         ``idempotency=False`` to send none. (Since 3.0; 2.x sent a key only
         when you passed one.)
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        _call_options(timeout, max_retries, extra_headers, "verify_batch()")
         return self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
@@ -842,6 +1249,9 @@ class Lenz:
             visibility=visibility,
             depth=depth,
             idempotency_key=_call_key(idempotency_key, idempotency),
+            timeout=timeout,
+            max_retries=max_retries,
+            extra_headers=extra_headers,
         )
 
     def extract(
@@ -851,9 +1261,11 @@ class Lenz:
         language: str = "",
         focus: str = "",
         locate: bool | None = None,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         idempotency: bool = True,
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> ExtractedClaims:
         """Pull the verifiable claims out of any text. Sync, free, capped at
         1000 calls/account/day (shared across your API keys).
@@ -886,10 +1298,12 @@ class Lenz:
         unfiltered. Leave it ``None`` to use the server default (currently
         off); an explicit ``False`` is sent as such.
 
-        ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
-        the client default for this one request. Otherwise ``extract`` uses
+        ``timeout`` (optional): per-call HTTP timeout in seconds (or an
+        ``httpx.Timeout``), overriding the client default for this one
+        request, used as given. Otherwise ``extract`` uses
         ``EXTRACT_TIMEOUT`` (150s), or your client timeout when you configured
         a longer one: a long input can take more than a minute to extract.
+        ``max_retries`` and ``extra_headers``: see :meth:`Lenz.with_options`.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
         SDK's own retry after a timeout or network drop replays the first
@@ -898,6 +1312,7 @@ class Lenz:
         retries; pin your own with ``idempotency_key=``, or pass
         ``idempotency=False`` to send none. Never derived from the text.
         """
+        _call_options(timeout, max_retries, extra_headers, "extract()")
         return self._extract(
             text=text,
             language=language,
@@ -905,6 +1320,8 @@ class Lenz:
             locate=locate,
             timeout=timeout,
             idempotency_key=_call_key(idempotency_key, idempotency),
+            max_retries=max_retries,
+            extra_headers=extra_headers,
         )
 
     def assess(
@@ -915,9 +1332,11 @@ class Lenz:
         claims: list[str] | None = None,
         language: str = "",
         suggest_rewrite: bool = False,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         idempotency: bool = True,
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> AssessResponse:
         """Fast verdict via a 3-model frontier panel. Sync, typically ~15s.
 
@@ -978,11 +1397,13 @@ class Lenz:
         and is not itself verified: review it, or run it through ``verify``,
         before using it. ``False`` sends nothing.
 
-        ``timeout`` (optional): per-call HTTP timeout in seconds, overriding
-        the client default for this one request. Both forms otherwise use
+        ``timeout`` (optional): per-call HTTP timeout in seconds (or an
+        ``httpx.Timeout``), overriding the client default for this one
+        request, used as given. Both forms otherwise use
         ``ASSESS_TIMEOUT`` (100s), or your client timeout when you configured a
         longer one — the server runs framing and a 3-model panel inside one
         request, and a long text can use the server's whole 90s budget.
+        ``max_retries`` and ``extra_headers``: see :meth:`Lenz.with_options`.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
         retry after a network drop replays the first response instead of
@@ -1000,16 +1421,19 @@ class Lenz:
         single-string input read as N claims (up to 20) costs N; ``Error``
         rows are free.
         """
+        _call_options(timeout, max_retries, extra_headers, "assess()")
+        if claims is not None and (claim or text):
+            raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
         key = _call_key(idempotency_key, idempotency)
         if claims is not None:
-            if claim or text:
-                raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
             return self._assess(
                 claims=claims,
                 language=language,
                 suggest_rewrite=suggest_rewrite,
                 timeout=timeout,
                 idempotency_key=key,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             )
         return self._assess(
             text=claim or text,
@@ -1017,6 +1441,8 @@ class Lenz:
             suggest_rewrite=suggest_rewrite,
             timeout=timeout,
             idempotency_key=key,
+            max_retries=max_retries,
+            extra_headers=extra_headers,
         )
 
     def select(
@@ -1027,6 +1453,9 @@ class Lenz:
         texts: list[str] | None = None,
         idempotency: bool = True,
         idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
         """Resolve a needs-input interrupt by selecting one or more claims.
 
@@ -1046,22 +1475,50 @@ class Lenz:
         instead of starting a second set. Random per call and reused across
         this SDK's own retries; pin your own with ``idempotency_key=``, or pass
         ``idempotency=False`` to send none.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        _call_options(timeout, max_retries, extra_headers, "select()")
         chosen = claims or texts
         if not chosen:
             raise ValueError("select requires a non-empty claims=[...]")
-        return self._select(task_id, texts=chosen, idempotency_key=_call_key(idempotency_key, idempotency))
+        return self._select(
+            task_id,
+            texts=chosen,
+            idempotency_key=_call_key(idempotency_key, idempotency),
+            timeout=timeout,
+            max_retries=max_retries,
+            extra_headers=extra_headers,
+        )
 
-    def get_status(self, task_id: str) -> TaskStatus:
+    def get_status(
+        self,
+        task_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> TaskStatus:
         """Poll the pipeline status. Use ``verify_and_wait`` for sync ergonomics.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the task completed and the
         account's retention period has since removed its verification; a task
         that is still running never answers 410.
-        """
-        return self._get_status(task_id)
 
-    def cancel(self, task_id: str) -> CancelResult:
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        return self._get_status(task_id, timeout=timeout, max_retries=max_retries, extra_headers=extra_headers)
+
+    def cancel(
+        self,
+        task_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> CancelResult:
         """Stop a verification that has not finished (``POST /verify/{task_id}/cancel``).
 
         A cancelled run is not charged and saves nothing; work already under
@@ -1092,11 +1549,15 @@ class Lenz:
         a dropped connection is retried, as for every call that is safe to
         send twice.
 
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+
         Since 3.0.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "cancel()")
         tid = _segment(task_id, "cancel() needs a task_id.")
         path = f"/verify/{tid}/cancel"
-        body = self._request("POST", path)
+        body = self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
             raise _unexpected_answer("POST", path)
         return CancelResult.model_validate(body)
@@ -1117,6 +1578,8 @@ class Lenz:
         idempotency: bool = True,
         idempotency_key: str | None = None,
         on_progress: Callable[[str, Progress], None] | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> Verification:
         """Submit + poll until the pipeline terminates.
 
@@ -1146,8 +1609,16 @@ class Lenz:
         Equivalent to ``wait(verify(claim, ...))``, with the same
         idempotency-key handling (auto-generate / pin / disable).
 
-        ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s).
+        ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s). The clock starts
+        once the submit is accepted.
+
+        ``max_retries``: the submit's retries (each poll is one request and a
+        failed poll is read again on the next round). ``extra_headers``: added
+        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        timeout of each request comes from the copy or the client, since
+        ``timeout`` here is how long to wait.
         """
+        _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
             accepted = self._verify_submit(
@@ -1159,9 +1630,14 @@ class Lenz:
                 visibility=visibility,
                 depth=depth,
                 idempotency_key=key,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             )
             logger.info("Submitted task: %s", accepted.task_id)
-            return self.wait(accepted, timeout=timeout, on_progress=on_progress)
+            if extra_headers is None:
+                # Called as in 2.x, so a subclass overriding ``wait`` is still called.
+                return self.wait(accepted, timeout=timeout, on_progress=on_progress)
+            return self.wait(accepted, timeout=timeout, on_progress=on_progress, extra_headers=extra_headers)
 
     def wait(
         self,
@@ -1169,6 +1645,7 @@ class Lenz:
         *,
         timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> Verification:
         """Block until an already-submitted task terminates, then return its
         ``Verification``.
@@ -1190,10 +1667,16 @@ class Lenz:
         later poll would answer otherwise. A 5xx, a 429 or a network failure
         is polled again on the next round. (Since 3.0; 2.x polled through
         every error until the timeout.)
+
+        ``extra_headers``: added to every poll (see :meth:`Lenz.with_options`).
+        Each poll is one request, so there is no ``max_retries`` here; its
+        timeout comes from the copy or the client, capped by what is left of
+        the wait.
         """
+        options = _call_options(None, None, extra_headers, "wait()")
         task_id = task if isinstance(task, str) else task.task_id
         _segment(task_id, "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
-        terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress)
+        terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress, options=options)
         if task_id in stopped:
             raise stopped[task_id]
         if task_id in timed_out:
@@ -1218,6 +1701,8 @@ class Lenz:
         timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
         idempotency: bool = True,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> list[BatchItemResult]:
         """Submit a batch and poll every item to a terminal state.
 
@@ -1239,7 +1724,14 @@ class Lenz:
         ``task_id``.
 
         ``idempotency`` / ``idempotency_key``: as on ``verify_batch``.
+
+        ``max_retries``: the submit's retries (each poll is one request and a
+        failed poll is read again on the next round). ``extra_headers``: added
+        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        timeout of each request comes from the copy or the client, since
+        ``timeout`` here is how long to wait.
         """
+        options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
             accepted = self._verify_batch(
@@ -1249,9 +1741,13 @@ class Lenz:
                 visibility=visibility,
                 depth=depth,
                 idempotency_key=key,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             )
             ids = [it.task_id for it in accepted.items if it.task_id]
-            terminal, timed_out, stopped = self._poll_to_terminal(ids, timeout, on_progress)
+            terminal, timed_out, stopped = self._poll_to_terminal(
+                ids, timeout, on_progress, options=_CallOptions(headers=options.headers)
+            )
 
         results: list[BatchItemResult] = []
         for it in accepted.items:  # preserve input order
@@ -1303,6 +1799,9 @@ class Lenz:
         webhook_url: str | None = None,
         visibility: str = "private",
         idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewStarted:
         """Start a review of a draft. Returns at once with a ``review_id``;
         the review takes two to four minutes. Use ``review_and_wait`` to
@@ -1355,7 +1854,11 @@ class Lenz:
         submit cannot start a second review; a resend with the same key
         within 24 hours returns the same review, and a new key is a new
         review.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "review()")
         if not text or not text.strip():
             raise ValueError("review() needs the draft text, or one public http(s) URL.")
         payload: dict[str, Any] = {"text": text}
@@ -1391,7 +1894,12 @@ class Lenz:
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         try:
             body = self._request(
-                "POST", "/review", json=payload, headers=headers, conflict_settles=_names_the_job("review_id")
+                "POST",
+                "/review",
+                json=payload,
+                headers=headers,
+                conflict_settles=_names_the_job("review_id"),
+                options=options,
             )
         except LenzError as exc:
             # A retried submit (same key) that lands while the first attempt's
@@ -1411,31 +1919,73 @@ class Lenz:
             return ReviewStarted.model_validate(body)
 
     @overload
-    def get_review(self, review_id: str) -> ReviewFull: ...
+    def get_review(
+        self,
+        review_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewFull: ...
 
     @overload
-    def get_review(self, review_id: str, *, view: Literal["full"]) -> ReviewFull: ...
+    def get_review(
+        self,
+        review_id: str,
+        *,
+        view: Literal["full"],
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewFull: ...
 
     @overload
-    def get_review(self, review_id: str, *, view: Literal["issues"]) -> ReviewIssues: ...
+    def get_review(
+        self,
+        review_id: str,
+        *,
+        view: Literal["issues"],
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewIssues: ...
 
-    def get_review(self, review_id: str, *, view: str = "full") -> ReviewFull | ReviewIssues:
+    def get_review(
+        self,
+        review_id: str,
+        *,
+        view: str = "full",
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewFull | ReviewIssues:
         """Read a review. ``view="issues"`` returns just the issues and the
         failures (``ReviewIssues``, no ``claims``); the default returns every
         claim (``ReviewFull``).
 
         Raises :class:`LenzGoneError` (410) once the account's retention
         period has removed the review.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "get_review()")
         rid = _segment(review_id, "get_review() needs a review_id.")
         if view == "issues":
-            body = self._request("GET", f"/reviews/{rid}", params={"view": "issues"})
+            body = self._request("GET", f"/reviews/{rid}", params={"view": "issues"}, options=options)
             return ReviewIssues.model_validate(body)
         if view != "full":
             raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
-        return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}"))
+        return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}", options=options))
 
-    def cancel_review(self, review_id: str) -> ReviewFull:
+    def cancel_review(
+        self,
+        review_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewFull:
         """Stop a review (``POST /reviews/{review_id}/cancel``), including the
         deep checks it started. Returns the review as it stands afterwards, the
         full view: ``status`` is ``"cancelled"``.
@@ -1449,11 +1999,15 @@ class Lenz:
         another account's, and :class:`LenzGoneError` (410) once the account's
         retention period has removed it.
 
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+
         Since 3.0.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "cancel_review()")
         rid = _segment(review_id, "cancel_review() needs a review_id.")
         path = f"/reviews/{rid}/cancel"
-        body = self._request("POST", path)
+        body = self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
             raise _unexpected_answer("POST", path)
         return ReviewFull.model_validate(body)
@@ -1475,6 +2029,8 @@ class Lenz:
         webhook_url: str | None = None,
         visibility: str = "private",
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewFull:
         """Start a review (``review(text, ...)``, which documents every option
         but ``timeout`` and ``on_update``) and poll it until it ends.
@@ -1489,8 +2045,16 @@ class Lenz:
         Raises :class:`ReviewFailed` when the review ends ``failed`` (its
         ``failure`` says why), and :class:`ReviewTimeout` when
         ``timeout`` seconds pass first: the review keeps running, and the
-        error carries its ``review_id`` and the last body read.
+        error carries its ``review_id`` and the last body read. The clock
+        starts once the submit is accepted.
+
+        ``max_retries``: the submit's retries (each poll is one request and a
+        failed poll is read again on the next round). ``extra_headers``: added
+        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        timeout of each request comes from the copy or the client, since
+        ``timeout`` here is how long to wait.
         """
+        _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
         key = idempotency_key or uuid.uuid4().hex
         with _carrying_key(key):
@@ -1507,9 +2071,13 @@ class Lenz:
                 webhook_url=webhook_url,
                 visibility=visibility,
                 idempotency_key=key,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             )
             logger.info("Submitted review: %s", started.review_id)
-            return self._wait_review(started.review_id, timeout=timeout, on_update=on_update)
+            return self._wait_review(
+                started.review_id, timeout=timeout, on_update=on_update, extra_headers=extra_headers
+            )
 
     # ── /citecheck: the citation check on its own ──
 
@@ -1522,6 +2090,9 @@ class Lenz:
         language: str = "",
         webhook_url: str | None = None,
         idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> CitecheckStarted:
         """Start a citation check. Returns at once with a ``citecheck_id``;
         use ``citecheck_and_wait`` to block until it ends, or
@@ -1546,7 +2117,11 @@ class Lenz:
         default webhook URL, ``""`` sends none, a URL sends them there. An
         ``Idempotency-Key`` is generated when you pass none: a resend with the
         same key within 24 hours returns the same check.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "citecheck()")
         has_text = bool(text and text.strip())
         if has_text == (pairs is not None):
             raise ValueError("citecheck() needs exactly one of text and pairs.")
@@ -1562,7 +2137,12 @@ class Lenz:
         headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
         try:
             body = self._request(
-                "POST", "/citecheck", json=payload, headers=headers, conflict_settles=_names_the_job("citecheck_id")
+                "POST",
+                "/citecheck",
+                json=payload,
+                headers=headers,
+                conflict_settles=_names_the_job("citecheck_id"),
+                options=options,
             )
         except LenzError as exc:
             # A retried submit (same key) that lands while the first attempt's
@@ -1576,13 +2156,32 @@ class Lenz:
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
             return CitecheckStarted.model_validate(body)
 
-    def get_citecheck(self, citecheck_id: str) -> Citecheck:
+    def get_citecheck(
+        self,
+        citecheck_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Citecheck:
         """Read a citation check. Raises :class:`LenzGoneError` (410) once
-        the account's retention period has removed it."""
-        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
-        return Citecheck.model_validate(self._request("GET", f"/citechecks/{cid}"))
+        the account's retention period has removed it.
 
-    def cancel_citecheck(self, citecheck_id: str) -> Citecheck:
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "get_citecheck()")
+        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
+        return Citecheck.model_validate(self._request("GET", f"/citechecks/{cid}", options=options))
+
+    def cancel_citecheck(
+        self,
+        citecheck_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Citecheck:
         """Stop a citation check (``POST /citechecks/{citecheck_id}/cancel``).
         Returns the check as it stands afterwards: ``status`` is
         ``"cancelled"``.
@@ -1596,11 +2195,15 @@ class Lenz:
         account's, or the id of a review, and :class:`LenzGoneError` (410) once
         the account's retention period has removed it.
 
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+
         Since 3.0.
         """
+        options = _call_options(timeout, max_retries, extra_headers, "cancel_citecheck()")
         cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.")
         path = f"/citechecks/{cid}/cancel"
-        body = self._request("POST", path)
+        body = self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
             raise _unexpected_answer("POST", path)
         return Citecheck.model_validate(body)
@@ -1616,6 +2219,8 @@ class Lenz:
         language: str = "",
         webhook_url: str | None = None,
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> Citecheck:
         """Start a citation check (``citecheck(text, ...)``, which documents
         every option but ``timeout`` and ``on_update``) and poll it until
@@ -1627,8 +2232,16 @@ class Lenz:
         changed. Raises :class:`CitecheckFailed` when the check ends
         ``failed``, and :class:`CitecheckTimeout` when ``timeout`` seconds pass
         first: the check keeps running, and the error carries its
-        ``citecheck_id`` and the last body read.
+        ``citecheck_id`` and the last body read. The clock starts once the
+        submit is accepted.
+
+        ``max_retries``: the submit's retries (each poll is one request and a
+        failed poll is read again on the next round). ``extra_headers``: added
+        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        timeout of each request comes from the copy or the client, since
+        ``timeout`` here is how long to wait.
         """
+        _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
         key = idempotency_key or uuid.uuid4().hex
         with _carrying_key(key):
@@ -1639,9 +2252,13 @@ class Lenz:
                 language=language,
                 webhook_url=webhook_url,
                 idempotency_key=key,
+                max_retries=max_retries,
+                extra_headers=extra_headers,
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
-            return self._wait_citecheck(started.citecheck_id, timeout=timeout, on_update=on_update)
+            return self._wait_citecheck(
+                started.citecheck_id, timeout=timeout, on_update=on_update, extra_headers=extra_headers
+            )
 
     def _wait_citecheck(
         self,
@@ -1649,6 +2266,7 @@ class Lenz:
         *,
         timeout: float,
         on_update: Callable[[Citecheck], None] | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> Citecheck:
         """The poll loop behind ``citecheck_and_wait`` (and ``lenz citecheck --resume``)."""
 
@@ -1669,6 +2287,7 @@ class Lenz:
             parse=lambda body: Citecheck.model_validate(body) if _is_citecheck_body(body, citecheck_id) else None,
             failed=_citecheck_failed,
             timed_out=timed_out,
+            options=_call_options(None, None, extra_headers, "citecheck_and_wait()"),
         )
 
     def _wait_review(
@@ -1677,6 +2296,7 @@ class Lenz:
         *,
         timeout: float,
         on_update: Callable[[ReviewFull], None] | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewFull:
         """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``)."""
 
@@ -1697,6 +2317,7 @@ class Lenz:
             parse=lambda body: ReviewFull.model_validate(body) if _is_full_review_body(body, review_id) else None,
             failed=_review_failed,
             timed_out=timed_out,
+            options=_call_options(None, None, extra_headers, "review_and_wait()"),
         )
 
     def _wait_job(
@@ -1708,6 +2329,7 @@ class Lenz:
         parse: Callable[[Any], _Job | None],
         failed: Callable[[_Job], Exception],
         timed_out: Callable[[_Job | None], Exception],
+        options: _CallOptions = _NO_OPTIONS,
     ) -> _Job:
         """The poll loop behind every ``*_and_wait`` of an async job (a review,
         a citation check).
@@ -1736,7 +2358,7 @@ class Lenz:
                 raise timed_out(last)
             first = False
             try:
-                body = self._request("GET", path, max_retries=0, timeout=self._poll_timeout(remaining))
+                body = self._request("GET", path, max_retries=0, timeout=self._poll_timeout(remaining), options=options)
                 job = parse(body)
                 if job is None:
                     raise ValueError("not this job's body")
@@ -1781,6 +2403,8 @@ class Lenz:
         task_ids: list[str],
         timeout: float,
         on_progress: Callable[[str, Progress], None] | None = None,
+        *,
+        options: _CallOptions = _NO_OPTIONS,
     ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzError]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
         (completed / needs_input / failed / cancelled) or the deadline elapses.
@@ -1846,6 +2470,7 @@ class Lenz:
                         f"/verify/status/{quote(task_id, safe='')}",
                         max_retries=0,
                         timeout=self._poll_timeout(remaining),
+                        options=options,
                     )
                     status = TaskStatus.model_validate(body)
                 except LenzAuthError:
@@ -1951,8 +2576,20 @@ class Lenz:
 
     # ── account ──
 
-    def usage(self) -> Usage:
-        body = self._request("GET", "/me/usage")
+    def usage(
+        self,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Usage:
+        """The account's plan, credits and per-capability usage.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "usage()")
+        body = self._request("GET", "/me/usage", options=options)
         return Usage.model_validate(body)
 
     # ── verb-level submit helpers (used by the verify namespace) ──
@@ -1968,7 +2605,11 @@ class Lenz:
         visibility: str = "",
         depth: str = "",
         idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> TaskAccepted:
+        options = _call_options(timeout, max_retries, extra_headers, "verify()")
         payload: dict[str, Any] = {
             "text": claim or text,
             "source_url": source_url,
@@ -1992,7 +2633,7 @@ class Lenz:
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/verify", json=payload, headers=headers)
+            body = self._request("POST", "/verify", json=payload, headers=headers, options=options)
             return TaskAccepted.model_validate(body)
 
     def _verify_batch(
@@ -2004,7 +2645,11 @@ class Lenz:
         visibility: str = "",
         depth: str = "",
         idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
+        options = _call_options(timeout, max_retries, extra_headers, "verify_batch()")
         # ``webhook_url`` and ``language`` are batch-wide defaults; any
         # per-item value on a claim dict overrides them server-side.
         # Per-item items are validated as plain dicts at runtime — the
@@ -2025,35 +2670,22 @@ class Lenz:
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/verify/batch", json=payload, headers=headers)
+            body = self._request("POST", "/verify/batch", json=payload, headers=headers, options=options)
             return BatchAccepted.model_validate(body)
-
-    def _timeout_at_least(self, floor: float) -> float | None:
-        """``floor`` seconds, or ``None`` (the client's own timeout) when that
-        is already at least as long, or unbounded.
-
-        Never a flat assignment: a caller who configured a longer timeout asked
-        for it, and shortening it would be this SDK quietly overruling them. It
-        reads the client actually in use, so an ``httpx.Client`` passed as
-        ``http_client=`` keeps its own setting too.
-        """
-        current = self._client.timeout.read
-        if current is None or current >= floor:
-            return None
-        return floor
 
     def _poll_timeout(self, remaining: float) -> httpx.Timeout | None:
         """The timeouts of one poll request: each phase (connect, read, write,
-        pool) the client in use configured, capped by what is left of the
+        pool) the copy or the client in use configured, capped by what is left of the
         wait's deadline (an unbounded phase gets just that). Past the deadline
-        (only a ``timeout <= 0`` wait polls then) ``None``: the client's own.
+        (only a ``timeout <= 0`` wait polls then) ``None``: the copy's or the client's own.
 
         Reads the client actually in use, so ``Lenz(timeout=None)``, an
         ``httpx.Timeout`` and an ``httpx.Client`` passed as ``http_client=``
-        all work."""
+        all work, and so does a copy's timeout (``with_options``)."""
         if remaining <= 0:
             return None
-        own = self._client.timeout
+        layer = self._options.timeout
+        own = self._client.timeout if isinstance(layer, NotGiven) else httpx.Timeout(layer)
 
         def cap(phase: float | None) -> float:
             return remaining if phase is None else min(phase, remaining)
@@ -2067,9 +2699,12 @@ class Lenz:
         language: str = "",
         focus: str = "",
         locate: bool | None = None,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> ExtractedClaims:
+        options = _call_options(timeout, max_retries, extra_headers, "extract()")
         payload: dict[str, Any] = {"text": text}
         if language:
             payload["language"] = language
@@ -2081,13 +2716,13 @@ class Lenz:
         # omitted value leaves the server default in charge.
         if locate is not None:
             payload["locate"] = locate
-        if timeout is None:
-            timeout = self._timeout_at_least(EXTRACT_TIMEOUT)
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/extract", json=payload, timeout=timeout, headers=headers)
+            body = self._request(
+                "POST", "/extract", json=payload, headers=headers, options=options, floor=EXTRACT_TIMEOUT
+            )
             return _extracted(body, locate=locate)
 
     def _assess(
@@ -2097,9 +2732,12 @@ class Lenz:
         claims: list[str] | None = None,
         language: str = "",
         suggest_rewrite: bool = False,
-        timeout: float | None = None,
+        timeout: float | httpx.Timeout | None = None,
         idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
     ) -> AssessResponse:
+        options = _call_options(timeout, max_retries, extra_headers, "assess()")
         # The single form keeps its historical wire body (`text`). The list
         # form sends `claims` and never `text` — the server rejects a body
         # carrying both with a 422. No client-side count / length checks on
@@ -2116,27 +2754,47 @@ class Lenz:
         # idempotency body) is exactly what it was before.
         if suggest_rewrite:
             payload["suggest_rewrite"] = True
-        if timeout is None:
-            timeout = self._timeout_at_least(ASSESS_TIMEOUT)
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/assess", json=payload, timeout=timeout, headers=headers)
+            body = self._request(
+                "POST", "/assess", json=payload, headers=headers, options=options, floor=ASSESS_TIMEOUT
+            )
             return AssessResponse.model_validate(body)
 
-    def _select(self, task_id: str, *, texts: list[str], idempotency_key: str | None = None) -> BatchAccepted:
+    def _select(
+        self,
+        task_id: str,
+        *,
+        texts: list[str],
+        idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> BatchAccepted:
+        options = _call_options(timeout, max_retries, extra_headers, "select()")
         tid = _segment(task_id, "select() needs a task_id.")
         headers = {}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers)
+            body = self._request(
+                "POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers, options=options
+            )
             return BatchAccepted.model_validate(body)
 
-    def _get_status(self, task_id: str) -> TaskStatus:
+    def _get_status(
+        self,
+        task_id: str,
+        *,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> TaskStatus:
+        options = _call_options(timeout, max_retries, extra_headers, "get_status()")
         tid = _segment(task_id, "get_status() needs a task_id.")
-        body = self._request("GET", f"/verify/status/{tid}")
+        body = self._request("GET", f"/verify/status/{tid}", options=options)
         return TaskStatus.model_validate(body)
 
     # ── HTTP plumbing ──
@@ -2154,10 +2812,24 @@ class Lenz:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         conflict_settles: Callable[[Any], bool] | None = None,
+        options: _CallOptions = _NO_OPTIONS,
+        floor: float | None = None,
     ) -> dict[str, Any]:
         """One API call, with the retry ladder. Every ``LenzError`` it raises
-        carries the ``Idempotency-Key`` it sent (``exc.idempotency_key``)."""
+        carries the ``Idempotency-Key`` it sent (``exc.idempotency_key``).
+
+        ``options`` are the call's request options and ``floor`` the minimum
+        an inherited timeout gets (``_resolve``). ``timeout`` and
+        ``max_retries`` are the SDK's own settings for one request (a wait's
+        polls): when set they win over every option."""
         key = (headers or {}).get("Idempotency-Key") or None
+        resolved, retries, option_headers = _resolve(
+            options, self._options, self._client.timeout, self._max_retries, floor
+        )
+        if timeout is not None:
+            resolved = httpx.Timeout(timeout)
+        if max_retries is not None:
+            retries = max_retries
         with _carrying_key(key, unreadable=True):
             return self._send(
                 method,
@@ -2165,10 +2837,11 @@ class Lenz:
                 json=json,
                 params=params,
                 headers=headers,
+                option_headers=option_headers,
                 auth_required=auth_required,
                 auth_optional=auth_optional,
-                timeout=timeout,
-                max_retries=max_retries,
+                timeout=resolved,
+                retries=retries,
                 conflict_settles=conflict_settles,
             )
 
@@ -2180,15 +2853,13 @@ class Lenz:
         json: dict[str, Any] | None,
         params: dict[str, Any] | None,
         headers: dict[str, str] | None,
+        option_headers: Sequence[tuple[str, str]],
         auth_required: bool,
         auth_optional: bool,
-        timeout: float | httpx.Timeout | None,
-        max_retries: int | None,
+        timeout: httpx.Timeout | None,
+        retries: int,
         conflict_settles: Callable[[Any], bool] | None,
     ) -> dict[str, Any]:
-        # ``max_retries`` overrides the client's retry count for this request
-        # only (the review wait polls with 0 and does its own pacing).
-        retries = self._max_retries if max_retries is None else max_retries
         if auth_required and not self._api_key:
             raise LenzAuthError(
                 message="API key required",
@@ -2202,6 +2873,14 @@ class Lenz:
 
         url = f"{self._base_url}{path}"
         req_headers = dict(headers or {})
+        # The request options' headers, over the method's own (case-insensitive;
+        # none is added when no option was given). httpx then puts the
+        # ``httpx.Client``'s own headers under them, so an option header also
+        # replaces a default one like ``User-Agent``.
+        for name, value in option_headers:
+            for same in [k for k in req_headers if k.lower() == name.lower()]:
+                del req_headers[same]
+            req_headers[name] = value
         # Attach the bearer on authed endpoints AND on opt-in optional-auth ones
         # (`auth_optional=True`). The server returns a caller's own private/hidden
         # rows only to the owning bearer, so `verifications.get` must send a key it
@@ -2214,9 +2893,8 @@ class Lenz:
         # The version is part of the request, not of the HTTP client: a client
         # passed as ``http_client=`` may carry no version header or a stale one.
         req_headers[_VERSION_HEADER] = API_VERSION
-        # A per-call ``timeout`` overrides the client-wide one for this request
-        # only; ``None`` keeps httpx on the client default.
-        req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else httpx.Timeout(timeout)
+        # ``None``: the ``httpx.Client``'s own timeout.
+        req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else timeout
 
         last_exc: Exception | None = None
         for attempt in range(retries + 1):
@@ -2526,4 +3204,4 @@ def _retry_sleep(attempt: int) -> float:
     return RETRY_BACKOFF[-1]
 
 
-__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "Lenz", "VerifyBatchItem"]
+__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "NOT_GIVEN", "Lenz", "NotGiven", "VerifyBatchItem"]

@@ -414,8 +414,13 @@ class TestCancels:
         request = route.calls.last.request
         assert request.content == b""
         assert "Idempotency-Key" not in request.headers
-        # The id is the only parameter: no option can reach the wire.
-        assert list(inspect.signature(getattr(Lenz, method)).parameters) == ["self", _ID[method]]
+        # The id is the only parameter besides the request options, which are
+        # keyword-only and reach the wire only as the headers asked for.
+        params = inspect.signature(getattr(Lenz, method)).parameters
+        assert list(params) == ["self", _ID[method], "timeout", "max_retries", "extra_headers"]
+        assert all(
+            params[n].kind is inspect.Parameter.KEYWORD_ONLY for n in ("timeout", "max_retries", "extra_headers")
+        )
 
 
 # ── 3.0: every forwarded option is a named, keyword-only parameter ─────────

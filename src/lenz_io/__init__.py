@@ -54,7 +54,7 @@ except ImportError:
     __version__ = "0.0.0+local"
 
 # Public surface
-from .client import API_VERSION, DEFAULT_BASE_URL, CitationPair, Lenz, VerifyBatchItem
+from .client import API_VERSION, DEFAULT_BASE_URL, NOT_GIVEN, CitationPair, Lenz, NotGiven, VerifyBatchItem
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
     CitecheckFailed,
@@ -163,6 +163,7 @@ __all__ = [
     "API_VERSION",
     "DEFAULT_BASE_URL",
     "MAX_RETRY_AFTER_SLEEP",
+    "NOT_GIVEN",
     "AskHistory",
     "AskMessage",
     "AskReply",
@@ -222,6 +223,7 @@ __all__ = [
     "LenzWebhooks",
     "LibraryItem",
     "LibraryList",
+    "NotGiven",
     "Position",
     "Progress",
     "RelatedVerifications",

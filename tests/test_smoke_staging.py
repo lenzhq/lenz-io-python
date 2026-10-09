@@ -11,6 +11,7 @@ These exercise the SDK against the live API across the four primitives:
      cheap run (~60s); a cache hit is a bonus, never assumed
   4. ``ask.history`` — read-only follow-up surface (no exchange burned)
   5. ``cancel`` — a ``depth="low"`` run stopped right after it starts
+  6. request options — ``with_options`` and a per-call ``timeout`` on ``assess``
 
 Plus webhook signature roundtrip + ``/me/usage`` shape.
 
@@ -89,6 +90,15 @@ def test_assess_returns_typed_claims(smoke_client):
     assert first.claim
     assert first.verdict
     assert first.confidence in ("high", "medium", "low")
+
+
+def test_request_options_reach_the_live_api(smoke_client):
+    """The request options on a real call: a copy with its own retries and an
+    extra header, and a per-call timeout (the same claim as above, so the
+    API's verdict memo usually answers it)."""
+    copy = smoke_client.with_options(max_retries=1, extra_headers={"X-Smoke-Check": "request-options"})
+    out = copy.assess(claim="Sharks don't get cancer", timeout=120)
+    assert out.claims and out.claims[0].verdict
 
 
 def test_webhook_signature_roundtrip():
