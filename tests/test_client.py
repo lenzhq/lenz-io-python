@@ -858,6 +858,120 @@ class TestAutoIdempotencyKeys:
             assert "Idempotency-Key" not in route.calls.last.request.headers
 
 
+_ASK_REPLY = {"role": "expert", "content": "Because.", "created_at": "2026-05-22T12:00:05Z"}
+_BATCH_REPLY = {"batch_id": "b", "items": [{"task_id": "t1", "claim": "A."}]}
+
+#: The 3.0 additions to the automatic key: batch submit (both helpers) and
+#: ask.send. (path, call, success body)
+_NEW_AUTO_KEY_CALLS = [
+    ("/verify/batch", lambda c, **kw: c.verify_batch(claims=[{"claim": "A."}], **kw), _BATCH_REPLY),
+    (
+        "/verify/batch",
+        lambda c, **kw: c.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=0, **kw),
+        {"batch_id": "b", "items": []},
+    ),
+    ("/ask/v1", lambda c, **kw: c.ask.send("v1", message="Why?", **kw), _ASK_REPLY),
+]
+
+
+class TestBatchAndAskIdempotency:
+    """Since 3.0 ``verify_batch``, ``verify_batch_and_wait`` and ``ask.send``
+    send a random ``Idempotency-Key`` per call, reused across that call's own
+    retries: a retried batch or question replays the first answer instead of
+    being charged twice."""
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_a_random_key_per_call(self, client, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path).respond(200, json=body)
+            call(client)
+            call(client)
+        keys = [c.request.headers["Idempotency-Key"] for c in route.calls]
+        assert all(re.match(r"^[0-9a-f]{32}$", k) for k in keys), keys
+        assert keys[0] != keys[1]
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_the_same_key_on_every_retry_attempt(self, client, path, call, body, monkeypatch):
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path)
+            route.side_effect = [
+                httpx.Response(502, json={"detail": "bad gateway"}),
+                httpx.ReadTimeout("slow"),
+                httpx.Response(503, json={"detail": "unavailable"}),
+                httpx.Response(200, json=body),
+            ]
+            call(client)
+        assert len(route.calls) == 4
+        assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_a_retry_after_a_lost_reply_gets_the_replayed_answer(self, client, path, call, body, monkeypatch):
+        # The first attempt reached the server and its reply was lost; the
+        # retry carries the same key and body, so the server answers with the
+        # replay.
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path)
+            route.side_effect = [httpx.ReadTimeout("reply lost"), httpx.Response(200, json=body)]
+            out = call(client)
+        assert len(route.calls) == 2
+        first, second = (c.request.headers["Idempotency-Key"] for c in route.calls)
+        assert first == second
+        assert route.calls[0].request.content == route.calls[1].request.content
+        assert out is not None
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_an_in_flight_409_is_never_passed_with_a_second_key(self, client, path, call, body, monkeypatch):
+        # The retry lands while the first attempt still runs: the server
+        # answers 409 ``idempotency_conflict``. The SDK raises it, as it does
+        # for ``verify``; it never mints a new key to get past it, which would
+        # run (and charge) the request twice.
+        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+        conflict = {"detail": "A request with this key is still running.", "code": "idempotency_conflict"}
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path)
+            route.side_effect = [httpx.ReadTimeout("slow"), httpx.Response(409, json=conflict)]
+            with pytest.raises(LenzError) as ei:
+                call(client)
+        assert ei.value.status_code == 409
+        # ``code`` keeps its 2.x value (none, on this 409); the body has it.
+        assert ei.value.body == conflict
+        assert len(route.calls) == 2
+        assert len({c.request.headers["Idempotency-Key"] for c in route.calls}) == 1
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_a_pinned_key_answers_409_then_the_result(self, client, path, call, body):
+        # With a key of its own the caller resends the same request after the
+        # 409 and gets the first call's answer.
+        conflict = {"detail": "A request with this key is still running.", "code": "idempotency_conflict"}
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path)
+            route.side_effect = [httpx.Response(409, json=conflict), httpx.Response(200, json=body)]
+            with pytest.raises(LenzError):
+                call(client, idempotency_key="mine-1")
+            call(client, idempotency_key="mine-1")
+        assert [c.request.headers["Idempotency-Key"] for c in route.calls] == ["mine-1", "mine-1"]
+
+    @pytest.mark.parametrize(("path", "call", "body"), _NEW_AUTO_KEY_CALLS)
+    def test_the_caller_key_wins_and_opting_out_sends_none(self, client, path, call, body):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post(path).respond(200, json=body)
+            call(client, idempotency_key="pinned-1")
+            assert route.calls.last.request.headers["Idempotency-Key"] == "pinned-1"
+            call(client, idempotency_key="pinned-2", idempotency=False)
+            assert route.calls.last.request.headers["Idempotency-Key"] == "pinned-2"
+            call(client, idempotency=False)
+            assert "Idempotency-Key" not in route.calls.last.request.headers
+
+    @pytest.mark.parametrize("name", ["verify_batch", "verify_batch_and_wait"])
+    def test_the_opt_out_is_named_like_verify(self, name):
+        param = inspect.signature(getattr(Lenz, name)).parameters["idempotency"]
+        assert param.default is True
+        assert param.kind is inspect.Parameter.KEYWORD_ONLY
+        assert inspect.signature(Lenz(api_key="k").ask.send).parameters["idempotency"].default is True
+
+
 class TestWaitDefaults:
     """The polling helpers wait 300s by default; a timeout still leaves the
     task resumable."""
@@ -1544,10 +1658,10 @@ class TestAsk:
             client.ask.send("vid_1", message="why?", idempotency_key="ask-key-1")
         assert route.calls.last.request.headers["Idempotency-Key"] == "ask-key-1"
 
-    def test_send_sends_no_idempotency_key_by_default(self, client):
-        # Never auto-generated and never derived from the message: re-asking
-        # the same question is normal here, so a key the caller did not
-        # choose would replay an old answer instead of asking again.
+    def test_send_sends_a_new_random_key_per_call(self, client):
+        # 3.0: one key per call, so the SDK's own retry replays the first
+        # reply. Never derived from the message: asking the same question
+        # again is a new call with a new key, so it is asked again.
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/ask/vid_1").respond(
                 200,
@@ -1555,7 +1669,9 @@ class TestAsk:
             )
             client.ask.send("vid_1", message="why?")
             client.ask.send("vid_1", message="why?")
-        assert all("Idempotency-Key" not in c.request.headers for c in route.calls)
+        keys = [c.request.headers["Idempotency-Key"] for c in route.calls]
+        assert all(re.match(r"^[0-9a-f]{32}$", k) for k in keys), keys
+        assert keys[0] != keys[1]
 
     def test_send_legacy_reply_attr_gone(self):
         # REGRESSION: pre-1.0.2 `AskReply.reply` always returned `""`

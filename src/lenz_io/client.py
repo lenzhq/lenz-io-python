@@ -63,11 +63,12 @@ Design decisions:
 * Exponential backoff on transient errors (5xx, 429). 3 retry attempts
   by default. ``Retry-After`` honored on 429s.
 * ``Idempotency-Key`` auto-generated per call for ``verify``,
-  ``verify_and_wait``, ``select``, ``assess`` and ``extract`` (random, reused
+  ``verify_and_wait``, ``verify_batch``, ``verify_batch_and_wait``,
+  ``select``, ``assess``, ``extract`` and ``ask.send`` (random, reused
   across that call's own retries) so a network drop doesn't run the request
   twice. Customer can override with explicit ``idempotency_key=...`` or opt
-  out with ``idempotency=False``. ``ask.send`` takes the same argument but
-  never generates one — see its docstring.
+  out with ``idempotency=False``. (2.x sent a key on ``verify_batch``,
+  ``verify_batch_and_wait`` and ``ask.send`` only when you passed one.)
 * ``X-Lenz-API-Version`` header pinned per SDK release (``API_VERSION``), so
   the server answers every release in the response shape it was built for.
 * ``X-Request-ID`` is captured from every response onto the typed error
@@ -418,6 +419,7 @@ class _AskNamespace:
         message: str,
         language: str = "",
         idempotency_key: str | None = None,
+        idempotency: bool = True,
     ) -> AskReply:
         """Send a follow-up question on an existing verification.
 
@@ -426,18 +428,21 @@ class _AskNamespace:
         ``language`` as default — that's the typical case. ``'auto'`` also
         answers in the language of the claim being discussed.
 
-        ``idempotency_key`` (optional): send an ``Idempotency-Key`` so a
-        retry of *this* question replays the first reply instead of asking —
-        and paying for — it twice, and without appending the question and a
-        second answer to the conversation. A retry that arrives while the
-        first call is still running gets a 409 instead: there is no reply to
-        replay yet.
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
+        SDK's own retry after a timeout or network drop replays the first
+        reply instead of asking, and paying for, the question twice, and
+        without appending the question and a second answer to the
+        conversation. The key is random per call and reused across that
+        call's retries; pin your own with ``idempotency_key=`` (it wins) to
+        make a retry from another process replay too, or pass
+        ``idempotency=False`` to send none. A retry that arrives while the
+        first call is still running gets a 409: there is no reply to replay
+        yet. (Since 3.0; 2.x sent a key only when you passed one.)
 
-        Unlike ``assess``, no key is generated for you, and none is derived
-        from the message: asking the same thing again is a normal thing to do
-        here, and each turn also reads the history the previous one wrote, so
-        an implied key would replay a stale answer. Pass your own key when
-        your retry means "the same question, once".
+        Never derived from the message: asking the same thing again is a
+        normal thing to do here, and each turn also reads the history the
+        previous one wrote, so a key derived from the text would replay a
+        stale answer. A new call is a new key, so it is asked again.
 
         Paid — see ``client.usage()``.
 
@@ -447,8 +452,9 @@ class _AskNamespace:
         if language:
             payload["language"] = language
         headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        key = _call_key(idempotency_key, idempotency)
+        if key:
+            headers["Idempotency-Key"] = key
         body = self._p._request(
             "POST",
             f"/ask/{verification_id}",
@@ -646,6 +652,7 @@ class Lenz:
         visibility: str = "",
         depth: str = "",
         idempotency_key: str | None = None,
+        idempotency: bool = True,
     ) -> BatchAccepted:
         """Submit multiple claims in one call. Returns a ``batch_id`` and
         per-claim ``task_id``s. Each item has its own lifecycle and webhook.
@@ -661,6 +668,14 @@ class Lenz:
         ``depth`` (optional): batch-wide default, ``'standard'`` or ``'low'``
         (shallower check — fewer sources, faster). Each item dict may set its
         own ``depth`` key to override the batch-wide value.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` for
+        the whole batch, so a retry after a network drop returns the tasks the
+        first attempt started instead of starting, and paying for, them again.
+        The key is random per call and reused across this SDK's own retries;
+        pin your own with ``idempotency_key=`` (it wins), or pass
+        ``idempotency=False`` to send none. (Since 3.0; 2.x sent a key only
+        when you passed one.)
         """
         return self._verify_batch(
             claims=claims,
@@ -668,7 +683,7 @@ class Lenz:
             language=language,
             visibility=visibility,
             depth=depth,
-            idempotency_key=idempotency_key,
+            idempotency_key=_call_key(idempotency_key, idempotency),
         )
 
     def extract(
@@ -995,6 +1010,7 @@ class Lenz:
         idempotency_key: str | None = None,
         timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
+        idempotency: bool = True,
     ) -> list[BatchItemResult]:
         """Submit a batch and poll every item to a terminal state.
 
@@ -1010,6 +1026,8 @@ class Lenz:
         ``timeout`` defaults to ``WAIT_TIMEOUT`` (300s); items still running
         then come back with ``status="timeout"`` and stay resumable by
         ``task_id``.
+
+        ``idempotency`` / ``idempotency_key``: as on ``verify_batch``.
         """
         accepted = self._verify_batch(
             claims=claims,
@@ -1017,7 +1035,7 @@ class Lenz:
             language=language,
             visibility=visibility,
             depth=depth,
-            idempotency_key=idempotency_key,
+            idempotency_key=_call_key(idempotency_key, idempotency),
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
         terminal, timed_out, gone = self._poll_to_terminal(ids, timeout, on_progress)
