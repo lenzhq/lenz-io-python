@@ -83,7 +83,7 @@ import logging
 import os
 import time
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from typing import Any, Literal, TypedDict, TypeVar, overload
 
@@ -768,7 +768,7 @@ class Lenz:
     def verify_batch(
         self,
         *,
-        claims: list[VerifyBatchItem | dict[str, Any]],
+        claims: Sequence[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
@@ -1132,7 +1132,7 @@ class Lenz:
     def verify_batch_and_wait(
         self,
         *,
-        claims: list[VerifyBatchItem | dict[str, Any]],
+        claims: Sequence[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",
@@ -1869,7 +1869,7 @@ class Lenz:
     def _verify_batch(
         self,
         *,
-        claims: list[VerifyBatchItem | dict[str, Any]],
+        claims: Sequence[VerifyBatchItem | dict[str, Any]],
         webhook_url: str = "",
         language: str = "",
         visibility: str = "",

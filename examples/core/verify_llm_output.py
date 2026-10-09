@@ -15,9 +15,8 @@ Run:
 from __future__ import annotations
 
 import os
-from typing import Any
 
-from lenz_io import Lenz, VerifyBatchItem
+from lenz_io import Lenz
 
 LLM_OUTPUT = """
 The Eiffel Tower was completed in 1889 and stands 330 meters tall.
@@ -56,7 +55,7 @@ def main() -> None:
     # via ``verification_url`` and you can skip the escalation.
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
     low = [c for c in quick if c.status == "completed" and c.confidence == "low"]
-    doubtful: list[VerifyBatchItem | dict[str, Any]] = [{"claim": c.claim} for c in low[:20]]
+    doubtful = [{"claim": c.claim} for c in low[:20]]
     print(f"Escalating {len(doubtful)} low-confidence claims to full verification:\n")
     results = client.verify_batch_and_wait(claims=doubtful, timeout=180) if doubtful else []
     for r in results:

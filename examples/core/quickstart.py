@@ -18,9 +18,8 @@ verify call can come back in seconds; otherwise it runs the full pipeline
 from __future__ import annotations
 
 import os
-from typing import Any
 
-from lenz_io import Lenz, VerifyBatchItem
+from lenz_io import Lenz
 
 
 def main() -> None:
@@ -49,7 +48,7 @@ def main() -> None:
     # 3. verify — escalate the low-confidence rows to the full multi-model panel
     # verify_batch_and_wait takes up to 20 claims a call: the first 20 here
     low = [row for row in quick if row.status == "completed" and row.confidence == "low"]
-    doubtful: list[VerifyBatchItem | dict[str, Any]] = [{"claim": row.claim} for row in low[:20]]
+    doubtful = [{"claim": row.claim} for row in low[:20]]
     # Fall back to the demo claim so the walkthrough always reaches steps 3
     # and 4 even when every row came back confident.
     doubtful = doubtful or [{"claim": "Sharks don't get cancer"}]
