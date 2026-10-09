@@ -492,7 +492,7 @@ class TestTimeoutPrecedence:
         ("constructor", "build", "expected"),
         [
             (30.0, lambda c: c.extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
-            (30.0, lambda c: c.extract(text="Doc.", timeout=5), _all(5)),  # explicit: below the floor (D6)
+            (30.0, lambda c: c.extract(text="Doc.", timeout=5), _all(5)),  # explicit: used as given, below the floor
             (30.0, lambda c: c.with_options(timeout=200).extract(text="Doc."), _all(200)),
             (30.0, lambda c: c.with_options(timeout=20).extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
             (30.0, lambda c: c.with_options(timeout=None).extract(text="Doc."), _all(None)),
