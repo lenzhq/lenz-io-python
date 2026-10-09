@@ -124,8 +124,9 @@ Deprecated).
   (a `LenzConnectionError`), both `LenzAPIError`s, with the same message and
   the `httpx` exception as `__cause__`.
 - **A 404 raises `LenzNotFoundError`** (a `LenzError`, as before) and its
-  `fix` reads "Check the id the request names and the API key it was sent
-  with: retrying will not find it." (2.x advised retrying). The message, the
+  `fix` reads "Check the id or key the call names: nothing with it is
+  visible to this credential. Retrying will not help." (2.x advised
+  retrying). The message, the
   other fields and every other error's text are unchanged.
 
 ### Added
@@ -134,12 +135,12 @@ Deprecated).
   `LenzRequestTimeoutError` (see Changed).
 - **`retryable` on every error**, set when the error is built: whether sending
   the same request again can succeed. `True` for a connection failure, a
-  request timeout, a 429 and a 5xx; `False` for any other 4xx, a
-  `LenzApiVersionError` and the client-side errors a resend cannot fix (a
-  missing key, a `*_and_wait` timeout, a needs-input pause, a bad webhook
-  signature); `None` when the SDK cannot say. A failed verification, review
-  or citation check keeps the server's value (`None` when it sent none), and a
-  boolean `retryable` in a response's `failure` block always wins. A
+  request timeout, a 429 and a 5xx; `False` for any other 4xx and a
+  `LenzApiVersionError`; `None` when there was no HTTP status (a missing key,
+  a `*_and_wait` timeout, a needs-input pause, a bad webhook signature). A
+  failed verification, review or citation check keeps the server's value
+  (`None` when it sent none), and a boolean `retryable` in a response's
+  `failure` block, else at its top level, always wins. A
   `retryable=` passed to an error's constructor wins too.
 - `ReviewFailedError`, `ReviewTimeoutError`, `CitecheckFailedError` and
   `CitecheckTimeoutError`: the job errors under the names the Node SDK uses

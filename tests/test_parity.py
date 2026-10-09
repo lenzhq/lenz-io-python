@@ -114,7 +114,9 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
 
 
 #: The fix line 3.0 gives a 404 (CHANGELOG "Changed"): 2.x said to retry.
-_NOT_FOUND_FIX = "Check the id the request names and the API key it was sent with: retrying will not find it."
+_NOT_FOUND_FIX = (
+    "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+)
 
 
 def _intended(path: str, old: Any, new: Any, legacy: dict[str, Any]) -> str | None:

@@ -827,8 +827,8 @@ except LenzConnectionError as exc:
 
 **`retryable`** (since 3.0, on every error): whether sending the same request
 again can succeed. `True` for a connection failure, a request timeout, a 429
-and a 5xx; `False` for any other 4xx, a version error and the client-side
-errors a resend cannot fix; `None` when the SDK cannot say. A failed
+and a 5xx; `False` for any other 4xx and a version error; `None` when there was no HTTP
+status (a missing key, a `*_and_wait` timeout). A failed
 verification, review or citation check carries the server's own value (`None`
 when it sent none). Calls that charge send an `Idempotency-Key`, so resending
 one the SDK raised for replays rather than runs twice when you pass the same

@@ -567,10 +567,7 @@ class _LibraryNamespace:
         avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
         """
         if sort == "random":
-            raise ValueError(
-                "library.iter() does not take sort='random': a random order is not exhaustive. "
-                "Use library.list(sort='random') for a sample."
-            )
+            raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
         return _walk(
             lambda n: self.list(
                 page=n, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict

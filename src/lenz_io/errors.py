@@ -51,8 +51,9 @@ class LenzError(Exception):
       * ``body``       — parsed JSON response body if available
       * ``retryable``  — whether sending the same request again can succeed:
         ``True`` for a network failure, a transport timeout, a 429 and a 5xx;
-        ``False`` for any other 4xx, a version error and the client-side
-        errors a resend cannot fix; ``None`` when the SDK cannot say. A failed
+        ``False`` for any other 4xx and a version error; ``None`` when there
+        was no HTTP status (a missing key, a ``*_and_wait`` timeout, a
+        needs-input pause, a bad webhook signature). A failed
         verification, review or citation check carries the server's value
         (``None`` when it sent none), and a boolean ``retryable`` in the
         response's ``failure`` block always wins. Since 3.0; set on every
@@ -123,10 +124,6 @@ class LenzAuthError(LenzError):
     error instead. The two do not share a parent on purpose: "fix your key"
     and "top up your account" are different actions.
     """
-
-    def _derived_retryable(self) -> bool | None:
-        # Also the client-side "API key required" (status 0).
-        return False
 
 
 class LenzQuotaExceededError(LenzError):
@@ -316,15 +313,12 @@ class LenzTimeoutError(LenzError):
     """``verify_and_wait`` exceeded the configured timeout.
 
     ``task_id`` is set so callers can resume via ``client.get_status(task_id)``.
-    The job keeps running server-side: read it later rather than resubmit, so
-    ``retryable`` is ``False``. A single HTTP request that timed out is
+    The job keeps running server-side: read it later by its id rather than
+    resubmit (``retryable`` is ``None``: no request failed). A single HTTP request that timed out is
     :class:`LenzRequestTimeoutError` instead.
     """
 
     task_id: str = ""
-
-    def _derived_retryable(self) -> bool | None:
-        return False
 
 
 class LenzNeedsInputError(LenzError):
@@ -340,10 +334,6 @@ class LenzNeedsInputError(LenzError):
     kind: str = ""
     hint: str = ""
     payload: dict[str, Any] = {}  # noqa: RUF012 — overridden per-instance
-
-    def _derived_retryable(self) -> bool | None:
-        # A resend pauses the same way: resolve it with ``select``.
-        return False
 
 
 class LenzPipelineError(LenzError):
@@ -482,9 +472,6 @@ class LenzWebhookSignatureError(LenzError):
     Possible reasons: tampered body (HMAC mismatch), missing
     ``X-Lenz-Signature`` header, replay window exceeded, malformed body.
     """
-
-    def _derived_retryable(self) -> bool | None:
-        return False
 
 
 class LenzApiVersionError(LenzError):
@@ -971,14 +958,17 @@ def map_response_to_error(
         else:
             err.retry_after = 0
 
-    # A boolean ``retryable`` in the body's failure block is the server's own
-    # word and wins over the status. (A failed verification's 409 read it
-    # above, with the flat field first.)
+    # A boolean ``retryable`` in the body's failure block, else at its top
+    # level, is the server's own word and wins over the status. (A failed
+    # verification's 409 read it above.)
     if not isinstance(err, LenzPipelineError):
-        for block in (raw.get("failure"), parsed.get("failure")):
-            if isinstance(block, dict) and isinstance(block.get("retryable"), bool):
-                err.retryable = block["retryable"]
-                break
+        candidates = [
+            block.get("retryable") for block in (raw.get("failure"), parsed.get("failure")) if isinstance(block, dict)
+        ]
+        candidates += [raw.get("retryable"), parsed.get("retryable")]
+        stated = next((c for c in candidates if isinstance(c, bool)), None)
+        if stated is not None:
+            err.retryable = stated
 
     return err
 
@@ -1013,7 +1003,9 @@ def _fix_hint_for(status_code: int) -> str:
         401: "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
         403: "This key doesn't have access to that resource.",
         402: "Top up or upgrade at https://lenz.io/plans, or wait for the period reset.",
-        404: "Check the id the request names and the API key it was sent with: retrying will not find it.",
+        404: (
+            "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+        ),
         422: "Check the request body against the OpenAPI spec.",
         429: "Wait Retry-After seconds and retry.",
     }.get(status_code, "Retry; if the error persists, file an issue with the Request ID.")

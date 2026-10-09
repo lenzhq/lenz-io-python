@@ -479,7 +479,9 @@ def test_errors_all_lists_every_public_error_class_and_constant():
 
 # ── 3.0: not found, connection failures, ``retryable`` ─────────────────────
 
-NOT_FOUND_FIX = "Check the id the request names and the API key it was sent with: retrying will not find it."
+NOT_FOUND_FIX = (
+    "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help."
+)
 
 
 class TestNotFound:
@@ -588,6 +590,11 @@ class TestRetryable:
         e = map_response_to_error(status, _body({"detail": "x", "failure": {"retryable": flag}}), {})
         assert e.retryable is flag
 
+    def test_a_top_level_boolean_wins_after_the_failure_block(self):
+        assert map_response_to_error(503, _body({"retryable": False}), {}).retryable is False
+        both = {"retryable": True, "failure": {"retryable": False}}
+        assert map_response_to_error(400, _body(both), {}).retryable is False
+
     def test_a_non_boolean_in_the_failure_block_is_ignored(self):
         e = map_response_to_error(503, _body({"failure": {"retryable": "yes"}}), {})
         assert e.retryable is True
@@ -615,11 +622,12 @@ class TestRetryable:
         assert LenzError().retryable is None
         assert LenzPipelineError().retryable is None
         assert ReviewFailed().retryable is None
-        assert LenzAuthError(message="API key required").retryable is False
-        assert LenzTimeoutError().retryable is False
-        assert ReviewTimeout().retryable is False
-        assert LenzNeedsInputError().retryable is False
-        assert LenzWebhookSignatureError().retryable is False
+        # No HTTP status: unknown.
+        assert LenzAuthError(message="API key required").retryable is None
+        assert LenzTimeoutError().retryable is None
+        assert ReviewTimeout().retryable is None
+        assert LenzNeedsInputError().retryable is None
+        assert LenzWebhookSignatureError().retryable is None
         assert LenzAPIError().retryable is True
         assert LenzRateLimitError().retryable is True
 
