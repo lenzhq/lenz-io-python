@@ -65,8 +65,8 @@ def test_the_limit_itself_is_accepted() -> None:
 # ── 6. an infinite stated wait ─────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("header", ["1e999", "inf", "-1e999"])
-def test_an_infinite_retry_after_is_a_long_wait_not_a_crash(header: str, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("header", ["1e999", "inf", "-inf", "-1e999", "nan"])
+def test_a_non_finite_retry_after_is_no_stated_wait(header: str, monkeypatch: pytest.MonkeyPatch) -> None:
     slept: list[float] = []
     monkeypatch.setattr("lenz_io.client.time.sleep", slept.append)
     with respx.mock(base_url=DEFAULT_BASE_URL) as r:
@@ -75,8 +75,20 @@ def test_an_infinite_retry_after_is_a_long_wait_not_a_crash(header: str, monkeyp
         )
         with pytest.raises(LenzRateLimitError):
             Lenz(api_key=KEY).usage()
-    # A wait past the cap on a 429 raises at once (a negative one is zero and retried).
-    assert route.call_count == (4 if header.startswith("-") else 1)
+    # As in Node: no stated wait, so the normal backoff ladder runs.
+    assert route.call_count == 4
+    assert slept == [1.0, 2.0, 4.0]
+
+
+def test_a_huge_finite_retry_after_is_clamped_and_raises_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+    with respx.mock(base_url=DEFAULT_BASE_URL) as r:
+        route = r.get("/me/usage").respond(
+            429, json={"code": "rate_limited", "detail": "slow"}, headers={"Retry-After": "1e300"}
+        )
+        with pytest.raises(LenzRateLimitError):
+            Lenz(api_key=KEY).usage()
+    assert route.call_count == 1
 
 
 def test_an_infinite_retry_after_in_an_error_body_reads_as_unknown() -> None:

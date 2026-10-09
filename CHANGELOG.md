@@ -98,10 +98,11 @@ Deprecated).
 - **`TaskAccepted.model_dump()` has no `chain_id` key**: 2.x carried it only
   because the API sent it, and the API no longer does. The
   `TaskAccepted.chain_id` attribute is kept and reads `""` (deprecated).
-- **A `Retry-After` the SDK cannot use is read safely.** An infinite wait
-  (`Retry-After: 1e999`) is read as the longest wait, past every cap (a 429
-  then raises at once), where it raised `OverflowError`; on the error's
-  `retry_after` it reads `None` (unknown).
+- **A `Retry-After` the SDK cannot use is read safely.** A non-finite value
+  (`inf`, `-inf`, `nan`, `1e999`) reads as no stated wait, so the normal
+  backoff runs, as in the Node SDK, where it raised `OverflowError`; on the
+  error's `retry_after` it reads `None` (unknown). A huge finite wait is
+  clamped to 2,147,483 seconds, still past every cap.
 - **A cancel's error body is read as sent**: its `code` (a 422's
   `validation_error` too), `detail` and `errors`.
 - **One rule for every timeout and retry count of a request, checked before

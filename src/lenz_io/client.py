@@ -255,7 +255,7 @@ _RESERVED_HEADERS = frozenset(
 
 #: The longest timeout a request can take, in seconds (the Node SDK's limit,
 #: 2^31 - 1 ms): past it the socket layer overflows on every request. Also the
-#: longest wait a ``Retry-After`` is read as.
+#: longest finite wait a ``Retry-After`` is read as.
 MAX_TIMEOUT_SECONDS = 2_147_483
 
 
@@ -3238,10 +3238,11 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
         # raises ValueError on a negative — which would escape the retry
         # ladder as a bare ValueError, defeating the typed-exception contract.
         seconds = float(raw)
-        if math.isnan(seconds):
+        if not math.isfinite(seconds):
+            # ``inf``, ``nan``, ``1e999``: no stated wait (the backoff ladder
+            # runs), as in the Node SDK; never an OverflowError.
             return None
-        # ``Retry-After: 1e999`` is infinity: read as the longest wait, which
-        # is past any cap (so a 429 raises), never an OverflowError.
+        # A huge finite wait is clamped (still past every cap).
         return int(min(max(seconds, 0.0), MAX_TIMEOUT_SECONDS))
     except (TypeError, ValueError):
         return None
