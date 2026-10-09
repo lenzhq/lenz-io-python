@@ -1253,12 +1253,13 @@ client.verify("...", extra_headers={"X-Trace-Id": trace})  # added to the reques
 - `max_retries`: how often a request that failed in a way worth retrying (a
   5xx, a 429, a dropped connection) is sent again: a whole number, 0 or more.
 - `extra_headers`: headers added to the request. Names are header tokens and
-  values visible ASCII (spaces and tabs allowed); anything else raises
-  `ValueError`. The SDK's own headers are
+  values visible ASCII, with spaces and tabs allowed inside but not at either
+  end (an empty value is fine); anything else raises `ValueError`. The SDK's own headers are
   refused (`X-Lenz-API-Version`, `Idempotency-Key`, `Authorization`,
   `Content-Type`, `Content-Length`, `Host`, `Transfer-Encoding`): use
   `idempotency_key=` and `api_key=` for the first two. A header with the name
-  of a default one (`User-Agent`, `Accept`) replaces it.
+  of a default one (`User-Agent`, `Accept`), in any casing, replaces the
+  default instead of being sent next to it.
 
 What each option reaches:
 
@@ -1268,7 +1269,7 @@ What each option reaches:
 | `extract`, `assess` | the attempt, used as given | the call's retries | every request |
 | Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
 | `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
-| `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default | added to every request of the copy |
+| `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default for plain calls and submits; never a wait's polls, which are one attempt each | added to every request of the copy |
 
 A bad value raises `ValueError` before anything is sent (for the iterators,
 when the iterator is created). Precedence, per option: the call's keyword, then
@@ -1305,7 +1306,8 @@ for job in jobs:
     scoped.review_and_wait(job.draft)
 ```
 
-A copy of a copy starts from the copy's options. The pool belongs to the
+A copy of a copy starts from the copy's options (timeout, retries and
+headers), and changes only what it is given. The pool belongs to the
 client that created it: `close()` and `with` on a copy do nothing, closing the
 original closes the pool for every copy (a copy then raises httpx's
 closed-client error), and a client given `http_client=` never closes it. A

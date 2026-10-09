@@ -1027,8 +1027,21 @@ class TestHeaderSyntax:
 
     def test_tab_and_space_are_allowed_in_a_value(self) -> None:
         with recorded(_USAGE) as rec:
-            Lenz(api_key=API_KEY).usage(extra_headers={"X-A": "a b\tc"})
+            Lenz(api_key=API_KEY).usage(extra_headers={"X-A": "a b\tc", "X-Empty": ""})
         assert _headers(rec.requests[0])["x-a"] == "a b\tc"
+        assert _headers(rec.requests[0])["x-empty"] == ""
+
+    @pytest.mark.parametrize("value", ["trace ", " trace", "\ttrace", "trace\t", " ", "\t"])
+    def test_whitespace_at_either_end_of_a_value_is_refused(self, value: str, no_key_minted: None) -> None:
+        client = Lenz(api_key=API_KEY)
+        with httpx_refused():
+            for call in (
+                lambda: client.verify("A.", extra_headers={"X-A": value}),
+                lambda: client.usage(extra_headers={"X-A": value}),
+                lambda: client.with_options(extra_headers={"X-A": value}),
+            ):
+                with pytest.raises(ValueError, match="header"):
+                    call()
 
     def test_a_poll_that_cannot_be_sent_is_not_read_as_an_unreadable_body(
         self, monkeypatch: pytest.MonkeyPatch

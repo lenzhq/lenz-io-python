@@ -297,9 +297,10 @@ def _check_retries(value: Any, where: str) -> int:
 
 
 #: A header name is an RFC 7230 token; a value is visible ASCII, spaces and
-#: tabs (no CR, LF or NUL: those would end the header or the request).
+#: tabs (no CR, LF or NUL: those would end the header or the request), or empty.
 _HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
-_HEADER_VALUE = re.compile(r"[\t\x20-\x7e]*")
+#: Spaces and tabs only inside the value: at either end httpx refuses it.
+_HEADER_VALUE = re.compile(r"(?:[\x21-\x7e](?:[\t\x20-\x7e]*[\x21-\x7e])?)?")
 
 
 def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]:
@@ -323,8 +324,8 @@ def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]
             raise ValueError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
         if header is not None and (not isinstance(header, str) or not _HEADER_VALUE.fullmatch(header)):
             raise ValueError(
-                f"{where}: the value of header {name} must be a string of visible ASCII characters, spaces "
-                f"and tabs, or None."
+                f"{where}: the value of header {name} must be a string of visible ASCII characters, with "
+                f"spaces and tabs only between them (not at either end), or None."
             )
         pairs.append((name, header))
     return tuple(pairs)
