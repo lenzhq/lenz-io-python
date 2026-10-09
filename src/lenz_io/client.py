@@ -100,6 +100,7 @@ from .errors import (
     LenzError,
     LenzGoneError,
     LenzNeedsInputError,
+    LenzNotFoundError,
     LenzPipelineError,
     LenzRateLimitError,
     LenzRequestTimeoutError,
@@ -985,13 +986,19 @@ class Lenz:
         removed the verification, and ``LenzTimeoutError`` if ``timeout``
         (default ``WAIT_TIMEOUT``, 300s) elapses (the task may still finish
         server-side — resume via ``get_status``).
+
+        A poll answered 401 / 403 (``LenzAuthError``) or 404
+        (``LenzNotFoundError``) ends the wait at once with that error: no
+        later poll would answer otherwise. A 5xx, a 429 or a network failure
+        is polled again on the next round. (Since 3.0; 2.x polled through
+        every error until the timeout.)
         """
         task_id = task if isinstance(task, str) else task.task_id
         if not task_id:
             raise ValueError("wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
-        terminal, timed_out, gone = self._poll_to_terminal([task_id], timeout, on_progress)
-        if task_id in gone:
-            raise gone[task_id]
+        terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress)
+        if task_id in stopped:
+            raise stopped[task_id]
         if task_id in timed_out:
             raise LenzTimeoutError(
                 message=f"wait timed out after {timeout}s",
@@ -1021,7 +1028,9 @@ class Lenz:
         order**. Never raises on a per-item outcome — a claim that fails, pauses
         for input, or times out becomes a ``BatchItemResult`` with the matching
         ``status`` rather than an exception. (Transport/auth errors on the
-        initial submit still raise.)
+        initial submit still raise.) An item whose poll is answered 401 / 403 /
+        404 or 410 is ``failed`` at once, with no ``status_detail``; the other
+        items keep being polled.
 
         ``on_progress(task_id, progress)`` fires per still-running item per
         round; the ``task_id`` is what tells you which claim moved.
@@ -1041,14 +1050,15 @@ class Lenz:
             idempotency_key=_call_key(idempotency_key, idempotency),
         )
         ids = [it.task_id for it in accepted.items if it.task_id]
-        terminal, timed_out, gone = self._poll_to_terminal(ids, timeout, on_progress)
+        terminal, timed_out, stopped = self._poll_to_terminal(ids, timeout, on_progress)
 
         results: list[BatchItemResult] = []
         for it in accepted.items:  # preserve input order
             status = terminal.get(it.task_id)
-            if it.task_id in gone:
-                # Removed by the account's retention period (410): terminal,
-                # with no status to carry.
+            if it.task_id in stopped:
+                # An error no later poll could change: removed by the
+                # account's retention period (410), a refused key (401 / 403)
+                # or an unknown task (404). Terminal, with no status to carry.
                 results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
             elif not it.task_id or it.task_id in timed_out or status is None:
                 results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
@@ -1472,29 +1482,32 @@ class Lenz:
         task_ids: list[str],
         timeout: float,
         on_progress: Callable[[str, Progress], None] | None = None,
-    ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzGoneError]]:
+    ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzError]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
         (completed / needs_input / failed) or the deadline elapses.
 
-        Returns ``(terminal_by_id, timed_out_ids, gone_by_id)``. A timed-out task has no
-        ``TaskStatus`` — ``"timeout"`` is a client-side concept, never a wire
-        status — so it lands in the second set, not the dict.
+        Returns ``(terminal_by_id, timed_out_ids, stopped_by_id)``. A timed-out
+        task has no ``TaskStatus`` — ``"timeout"`` is a client-side concept,
+        never a wire status — so it lands in the second set, not the dict.
 
         Ordering preserves the legacy ``verify_and_wait`` behavior: each round
         polls every still-pending id once *before* the deadline check, so after
         sleeping the remaining time we always poll once more and can succeed
-        just past the nominal deadline. The timeout is therefore approximate:
-        the final round finishes polling every pending id (bounded by the
-        per-request timeout + retries) before any still-pending ids are marked
-        timed out. Backoff reuses the existing 2/4/8/8…s sequence; the 10s cap
+        just past the nominal deadline. Each poll is ONE request whose timeout
+        is what is left of the deadline (at least 1s, at most the client's
+        timeout): the client's own retry ladder inside a poll could run
+        minutes past it, so a failed poll is retried on the next round
+        instead. Backoff reuses the existing 2/4/8/8…s sequence; the 10s cap
         is currently unreachable and kept only to preserve identical timing.
 
-        A per-id poll that raises ``LenzError`` (e.g. a transport blip that
-        outlived ``_request``'s own retries) does not abort the other ids: that
-        id stays pending and is retried next round. A persistent error
-        therefore surfaces as a timeout once the deadline passes. The one
-        exception is ``LenzGoneError`` (410): it is terminal, so that id stops
-        being polled and its error lands in ``gone_by_id``.
+        A per-id poll that fails with a 5xx, a 429, a network failure or any
+        other error a later poll can change does not abort the other ids: that
+        id stays pending and is polled next round (after the wait the server
+        stated, if it stated one), so a persistent one surfaces as a timeout
+        once the deadline passes. An error no later poll can change stops that
+        id at once and lands in ``stopped_by_id``: a 410 (``LenzGoneError``,
+        retention removed it), a 401 / 403 (``LenzAuthError``) and a 404
+        (``LenzNotFoundError``). A version error is raised for the whole wait.
 
         ``on_progress(task_id, progress)`` fires once per still-running poll.
         It takes the id as well as the object because this loop round-robins a
@@ -1508,7 +1521,7 @@ class Lenz:
         ladder when it is present and sane; garbage falls back to the ladder.
         """
         pending = list(task_ids)
-        gone: dict[str, LenzGoneError] = {}
+        stopped: dict[str, LenzError] = {}
         terminal: dict[str, TaskStatus] = {}
         timed_out: set[str] = set()
         deadline = time.monotonic() + timeout
@@ -1516,21 +1529,33 @@ class Lenz:
         while pending:
             still_pending: list[str] = []
             server_hint: float | None = None
+            stated_wait: float | None = None
             for task_id in pending:
+                remaining = deadline - time.monotonic()
                 try:
-                    status = self._get_status(task_id)
-                except LenzGoneError as exc:
-                    # Terminal: retention removed it, and no later poll will
-                    # say otherwise. The API never answers 410 for a task
-                    # that is still running.
-                    gone[task_id] = exc
+                    body = self._request(
+                        "GET",
+                        f"/verify/status/{task_id}",
+                        max_retries=0,
+                        timeout=max(1.0, min(remaining, self._timeout)),
+                    )
+                    status = TaskStatus.model_validate(body)
+                except (LenzGoneError, LenzAuthError, LenzNotFoundError) as exc:
+                    # Terminal: no later poll will say otherwise. (The API
+                    # never answers 410 for a task that is still running.)
+                    stopped[task_id] = exc
                     continue
                 except LenzApiVersionError:
                     # Not a failed poll: every later poll would answer the same.
                     raise
-                except LenzError:
+                except LenzError as exc:
                     # Don't let one id's poll failure abort the rest — retry it
-                    # next round (bounded by the deadline below).
+                    # next round (bounded by the deadline below), after the
+                    # wait it stated, capped like the retry ladder caps it.
+                    wait = getattr(exc, "retry_after", None)
+                    if isinstance(wait, int) and not isinstance(wait, bool) and wait > 0:
+                        wait_s = float(min(wait, MAX_RETRY_AFTER_SLEEP))
+                        stated_wait = wait_s if stated_wait is None else max(stated_wait, wait_s)
                     still_pending.append(task_id)
                     continue
                 if status.status in ("completed", "needs_input", "failed"):
@@ -1559,10 +1584,12 @@ class Lenz:
                 sleep_for = server_hint
             else:
                 sleep_for = min(POLL_BACKOFF[min(backoff_idx, len(POLL_BACKOFF) - 1)], POLL_BACKOFF_CAP)
+            if stated_wait is not None:
+                sleep_for = max(sleep_for, stated_wait)
             sleep_for = min(sleep_for, remaining)
             time.sleep(sleep_for)
             backoff_idx += 1
-        return terminal, timed_out, gone
+        return terminal, timed_out, stopped
 
     def _verification_from_terminal(self, status: TaskStatus, task_id: str) -> Verification:
         """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
