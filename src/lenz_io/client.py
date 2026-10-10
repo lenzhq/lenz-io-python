@@ -1739,7 +1739,7 @@ class Lenz:
                 idempotency_key=key,
                 # Only the options given, so a 2.21 ``review`` override is still called.
                 **_given(options),
-                **_no_key(idempotency),
+                **_no_key(key is not None),
             )
             logger.info("Submitted review: %s", started.review_id)
             return self._wait_review(
@@ -1920,7 +1920,7 @@ class Lenz:
                 idempotency_key=key,
                 # Only the options given, so a 2.21 ``citecheck`` override is still called.
                 **_given(options),
-                **_no_key(idempotency),
+                **_no_key(key is not None),
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
             return self._wait_citecheck(

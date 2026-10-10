@@ -546,3 +546,21 @@ def test_an_explicit_default_timeout_counts_with_a_borrowed_client() -> None:
         Lenz(api_key=KEY, http_client=borrowed).usage()
     timeouts = [c.request.extensions["timeout"]["read"] for c in route.calls]
     assert timeouts == [30.0, 300.0]
+
+
+def test_an_empty_key_on_a_wait_helper_sends_none(client: Any) -> None:
+    review = json.loads(
+        (__import__("pathlib").Path(__file__).parent / "fixtures" / "contract" / "review_completed.json").read_text()
+    )
+    check = json.loads(
+        (__import__("pathlib").Path(__file__).parent / "fixtures" / "contract" / "citecheck_completed.json").read_text()
+    )
+    with respx.mock(base_url=BASE) as r:
+        rs = r.post("/review").respond(202, json={"review_id": review["review_id"], "status": "queued"})
+        r.get(f"/reviews/{review['review_id']}").respond(200, json=review)
+        cs = r.post("/citecheck").respond(202, json={"citecheck_id": check["citecheck_id"], "status": "queued"})
+        r.get(f"/citechecks/{check['citecheck_id']}").respond(200, json=check)
+        client.review_and_wait("Draft.", idempotency_key="")
+        client.citecheck_and_wait("Draft.", idempotency_key="")
+    assert "Idempotency-Key" not in rs.calls.last.request.headers
+    assert "Idempotency-Key" not in cs.calls.last.request.headers
