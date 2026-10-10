@@ -78,7 +78,9 @@ _NESTED_FIELDS: dict[type, tuple[tuple[str, str], ...]] = {}
 
 
 def _holds_a_model(annotation: Any) -> bool:
-    if isinstance(annotation, type):
+    # ``list[X]`` is an instance of ``type`` on Python 3.10: check the
+    # origin first.
+    if typing.get_origin(annotation) is None and isinstance(annotation, type):
         return issubclass(annotation, BaseModel)
     return any(_holds_a_model(arg) for arg in typing.get_args(annotation))
 
