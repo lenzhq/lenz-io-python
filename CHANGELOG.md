@@ -6,6 +6,25 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-10
+
+### What's new in 3.0
+
+- **Stop a run**: `cancel(task_id)`, `cancel_review(review_id)` and
+  `cancel_citecheck(citecheck_id)`. A stopped verification is not charged;
+  a stopped review or citation check refunds what it had not delivered.
+- **`cancelled` is a status of its own**, with a `verification.cancelled`
+  webhook event (`VerificationCancelled`); a polling loop must treat it as final.
+- **Per-call options**: `timeout`, `max_retries` and `extra_headers` on every
+  method, and `client.with_options(...)` for a copy with other defaults.
+- **Errors say whether a retry can help** (`retryable`) and carry the
+  `idempotency_key` the call sent.
+- **The SDK reads the API's `2026-10-11` response shape.** Every 2.x name
+  keeps working as a deprecated alias.
+- **`dissent` on assess rows is deprecated** and always `None`.
+- **Before you upgrade**, see the box below: move webhook receivers to
+  2.21+ first, and re-record tests that replay 2.x response bodies.
+
 > **Upgrading from 2.x.** Must do: (1) upgrade every service that *receives*
 > your webhooks to lenz-io 2.21+ before the sending service moves to 3.0 (a
 > 2.21 receiver sees the `*.cancelled` events of 3.0-submitted work as a plain
