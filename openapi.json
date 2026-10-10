@@ -4101,6 +4101,18 @@
             "title": "Snippet",
             "type": "string"
           },
+          "snippet_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The language of `snippet` (the source page's own language) as an ISO 639-1 code (e.g. `uk`, `pt`), when it is not English; null for English or when unknown. The verdict's own language is `language`.",
+            "title": "Snippet Language"
+          },
           "date": {
             "default": "",
             "title": "Date",
@@ -5302,6 +5314,7 @@
                 "type": "null"
               }
             ],
+            "description": "The language of the page that was read, as an ISO 639-1 code (e.g. `en`, `uk`); null when unknown.",
             "title": "Page Language"
           },
           "source_url": {
@@ -12238,6 +12251,7 @@
                 "type": "null"
               }
             ],
+            "description": "The language of the page that was read, as an ISO 639-1 code (e.g. `en`, `uk`); null when unknown.",
             "title": "Page Language"
           },
           "source_url": {
