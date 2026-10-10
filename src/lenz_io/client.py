@@ -81,495 +81,173 @@ from __future__ import annotations
 import builtins
 import copy
 import logging
-import math
-import numbers
-import operator
-import os
-import re
 import time
-import uuid
+import uuid  # noqa: F401  (tests patch ``lenz_io.client.uuid.uuid4``)
 from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Any, Final, Literal, TypedDict, TypeVar, overload
-from urllib.parse import quote
+from contextlib import contextmanager  # noqa: F401  (importable from here before the core existed)
+from dataclasses import dataclass  # noqa: F401  (likewise)
+from typing import Any, Final, Literal, TypedDict, TypeVar, overload  # noqa: F401  (likewise)
+from urllib.parse import quote  # noqa: F401  (likewise)
 
 import httpx
 from typing_extensions import Self
 
-from . import __version__
+# Every name below lived in this module before the shared core existed and
+# stays importable from it (callers, the CLI and the tests import them here).
+from ._core import (
+    _CANCELLED_FAILURE as _CANCELLED_FAILURE,
+    _HEADER_NAME as _HEADER_NAME,
+    _HEADER_VALUE as _HEADER_VALUE,
+    _NO_OPTIONS as _NO_OPTIONS,
+    _RESERVED_HEADERS as _RESERVED_HEADERS,
+    _TERMINAL_STATUSES as _TERMINAL_STATUSES,
+    _VERSION_HEADER as _VERSION_HEADER,
+    API_VERSION as API_VERSION,
+    ASSESS_LIST_TIMEOUT as ASSESS_LIST_TIMEOUT,
+    ASSESS_TIMEOUT as ASSESS_TIMEOUT,
+    DEFAULT_BASE_URL as DEFAULT_BASE_URL,
+    DEFAULT_MAX_RETRIES as DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,
+    EXTRACT_TIMEOUT as EXTRACT_TIMEOUT,
+    MAX_TIMEOUT_SECONDS as MAX_TIMEOUT_SECONDS,
+    NOT_GIVEN as NOT_GIVEN,
+    POLL_BACKOFF as POLL_BACKOFF,
+    POLL_BACKOFF_CAP as POLL_BACKOFF_CAP,
+    POLL_HINT_MAX as POLL_HINT_MAX,
+    POLL_HINT_MIN as POLL_HINT_MIN,
+    RETRY_BACKOFF as RETRY_BACKOFF,
+    REVIEW_POLL_DEFAULT as REVIEW_POLL_DEFAULT,
+    REVIEW_POLL_FLOOR as REVIEW_POLL_FLOOR,
+    WAIT_TIMEOUT as WAIT_TIMEOUT,
+    CitationPair as CitationPair,
+    NotGiven as NotGiven,
+    VerifyBatchItem as VerifyBatchItem,
+    _aborts_on_long_stated_wait as _aborts_on_long_stated_wait,
+    _after_response as _after_response,
+    _after_transport_error as _after_transport_error,
+    _already_deleted as _already_deleted,
+    _ask_payload as _ask_payload,
+    _assess_payload as _assess_payload,
+    _batch_item_body as _batch_item_body,
+    _batch_payload as _batch_payload,
+    _batch_results as _batch_results,
+    _blank_webhook_url as _blank_webhook_url,
+    _body_error_code as _body_error_code,
+    _call_key as _call_key,
+    _call_options as _call_options,
+    _CallOptions as _CallOptions,
+    _carrying_key as _carrying_key,
+    _check_assess_forms as _check_assess_forms,
+    _check_headers as _check_headers,
+    _check_library_iter_sort as _check_library_iter_sort,
+    _check_retries as _check_retries,
+    _check_served_version as _check_served_version,
+    _check_timeout as _check_timeout,
+    _citecheck_failed as _citecheck_failed,
+    _citecheck_job as _citecheck_job,
+    _citecheck_payload as _citecheck_payload,
+    _citecheck_started_by_conflict as _citecheck_started_by_conflict,
+    _client_settings as _client_settings,
+    _ClientOptions as _ClientOptions,
+    _default_headers as _default_headers,
+    _exhausted as _exhausted,
+    _extract_payload as _extract_payload,
+    _extracted as _extracted,
+    _failure_of as _failure_of,
+    _first_page as _first_page,
+    _given as _given,
+    _is_cancel_body as _is_cancel_body,
+    _is_citecheck_body as _is_citecheck_body,
+    _is_full_review_body as _is_full_review_body,
+    _job_key as _job_key,
+    _json_or_none as _json_or_none,
+    _key_header as _key_header,
+    _library_params as _library_params,
+    _merge_headers as _merge_headers,
+    _names_the_job as _names_the_job,
+    _poll_hint as _poll_hint,
+    _poll_timeout as _core_poll_timeout,
+    _prepare as _prepare,
+    _request_settings as _request_settings,
+    _resolve as _resolve,
+    _retry_sleep as _retry_sleep,
+    _review_failed as _review_failed,
+    _review_job as _review_job,
+    _review_params as _review_params,
+    _review_payload as _review_payload,
+    _review_started_by_conflict as _review_started_by_conflict,
+    _seconds as _seconds,
+    _segment as _segment,
+    _select_texts as _select_texts,
+    _snapshot as _snapshot,
+    _stated_retry_after as _stated_retry_after,
+    _status_path as _status_path,
+    _unexpected_answer as _unexpected_answer,
+    _user_agent as _user_agent,
+    _verification_from_terminal as _verification_from_terminal,
+    _verify_payload as _verify_payload,
+    _wait_result as _wait_result,
+    _wait_task_id as _wait_task_id,
+    _walk as _walk,
+    _with_options_layer as _with_options_layer,
+)
+from ._polling import JobPoll, TaskPoll, _progress_copy
 from .errors import (
-    MAX_RETRY_AFTER_SLEEP,
-    NO_RETRY_429_CODES,
-    UPSTREAM_503_CODES,
-    CitecheckFailed,
-    CitecheckTimeout,
-    LenzAPIError,
-    LenzApiVersionError,
-    LenzAuthError,
-    LenzConnectionError,
-    LenzError,
-    LenzGoneError,
-    LenzNeedsInputError,
-    LenzNotFoundError,
-    LenzPipelineError,
-    LenzRateLimitError,
-    LenzRequestTimeoutError,
-    LenzTimeoutError,
-    ReviewFailed,
-    ReviewTimeout,
-    map_response_to_error,
+    MAX_RETRY_AFTER_SLEEP as MAX_RETRY_AFTER_SLEEP,
+    NO_RETRY_429_CODES as NO_RETRY_429_CODES,
+    UPSTREAM_503_CODES as UPSTREAM_503_CODES,
+    CitecheckFailed as CitecheckFailed,
+    CitecheckTimeout as CitecheckTimeout,
+    LenzAPIError as LenzAPIError,
+    LenzApiVersionError as LenzApiVersionError,
+    LenzAuthError as LenzAuthError,
+    LenzConnectionError as LenzConnectionError,
+    LenzError as LenzError,
+    LenzGoneError as LenzGoneError,
+    LenzNeedsInputError as LenzNeedsInputError,
+    LenzNotFoundError as LenzNotFoundError,
+    LenzPipelineError as LenzPipelineError,
+    LenzRateLimitError as LenzRateLimitError,
+    LenzRequestTimeoutError as LenzRequestTimeoutError,
+    LenzTimeoutError as LenzTimeoutError,
+    ReviewFailed as ReviewFailed,
+    ReviewTimeout as ReviewTimeout,
+    map_response_to_error as map_response_to_error,
 )
 from .models import (
-    AskHistory,
-    AskReply,
-    AssessResponse,
-    BatchAccepted,
-    BatchItemResult,
-    CancelResult,
-    Certificate,
-    Citecheck,
-    CitecheckStarted,
-    ExtractedClaims,
-    FailureBlock,
-    LibraryItem,
-    LibraryList,
-    Progress,
-    RelatedVerifications,
-    ReviewFull,
-    ReviewIssues,
-    ReviewStarted,
-    TaskAccepted,
-    TaskStatus,
-    Usage,
-    Verification,
-    VerificationList,
-    VerificationListItem,
+    AskHistory as AskHistory,
+    AskReply as AskReply,
+    AssessResponse as AssessResponse,
+    BatchAccepted as BatchAccepted,
+    BatchItemResult as BatchItemResult,
+    CancelResult as CancelResult,
+    Certificate as Certificate,
+    Citecheck as Citecheck,
+    CitecheckStarted as CitecheckStarted,
+    ExtractedClaims as ExtractedClaims,
+    FailureBlock as FailureBlock,
+    LibraryItem as LibraryItem,
+    LibraryList as LibraryList,
+    Progress as Progress,
+    RelatedVerifications as RelatedVerifications,
+    ReviewFull as ReviewFull,
+    ReviewIssues as ReviewIssues,
+    ReviewStarted as ReviewStarted,
+    TaskAccepted as TaskAccepted,
+    TaskStatus as TaskStatus,
+    Usage as Usage,
+    Verification as Verification,
+    VerificationList as VerificationList,
+    VerificationListItem as VerificationListItem,
 )
 
 logger = logging.getLogger("lenz_io")
-
-# The API version this SDK asks for, sent as ``X-Lenz-API-Version`` on every
-# request: the server answers in that version's response shape, whatever the
-# account. Since 3.0.0 this is the current shape (one name for each field,
-# status and error code), and the SDK reads only that shape from its own
-# calls (2.x asked for ``2026-05-13``). Every attribute keeps the meaning it
-# had in 2.x; the old names are deprecated aliases. Webhooks are the one
-# place both shapes are still parsed.
-API_VERSION = "2026-10-11"
-_VERSION_HEADER = "X-Lenz-API-Version"
-
-DEFAULT_BASE_URL = "https://lenz.io/api/v1"
-DEFAULT_TIMEOUT = 30.0
-# ``assess`` runs framing and then a 3-model panel inside one synchronous
-# request, and the server divides a single budget between them — so BOTH
-# forms get the same room, not just the list one. Typical calls answer in
-# ~15s, but a long text can take up to the server's 90s budget. The SDK
-# waits 10s longer than that, so the server always answers (or refuses)
-# before the client gives up.
-#
-# Applies to ``assess(claim=...)`` as well as ``assess(claims=[...])`` since
-# 2.12.0. Before that the single form used the 30s client default, and a call
-# whose framing was slow could time out client-side AFTER the server had
-# charged it — and a retry with no idempotency key charged again.
-ASSESS_TIMEOUT = 100.0
-#: Deprecated alias for :data:`ASSESS_TIMEOUT`, kept for callers that imported
-#: it. Same value; to be removed in a future major release.
-ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
-# ``extract`` reads the whole input and enumerates its claims inside one
-# synchronous request. Most calls answer in seconds, but a long input can take
-# well over a minute, past the 30s client default. A client timeout makes the
-# SDK re-send the call; the per-call idempotency key makes that re-send replay
-# the first answer rather than run the extraction again. 150s leaves room
-# above the slowest.
-EXTRACT_TIMEOUT = 150.0
-# Default ``timeout`` for the helpers that poll a verification to its end
-# (``wait``, ``verify_and_wait``, ``verify_batch_and_wait``). A check usually
-# finishes in ~90s; a slow one under load can take several minutes. A
-# timeout never loses the task: it stays resumable by ``task_id``.
-WAIT_TIMEOUT = 300.0
-DEFAULT_MAX_RETRIES = 3
-RETRY_BACKOFF = (1.0, 2.0, 4.0)
-POLL_BACKOFF = (2.0, 4.0, 8.0)
-POLL_BACKOFF_CAP = 10.0
-# The statuses a verification poll ends on. ``cancelled`` is a task stopped
-# elsewhere (the website's Stop button, another process): its own status in
-# API version 2026-10-11, where 2026-05-13 said ``failed``.
-_TERMINAL_STATUSES = ("completed", "needs_input", "failed", "cancelled")
-# Bounds on the server's ``progress.poll_after_seconds``. A hint outside
-# them is treated as garbage and the local ladder is used instead — the
-# floor stops a bad value turning the poll loop into a hot loop, the
-# ceiling stops it stalling a wait well inside its own timeout.
-POLL_HINT_MIN = 1.0
-POLL_HINT_MAX = 30.0
-# ``review_and_wait`` reads the review's own ``poll_after_seconds`` (10 s while
-# assessing, 15 s while deep-checking). A review takes minutes, so nothing is
-# gained by polling faster than this floor, whatever the body says.
-REVIEW_POLL_FLOOR = 5.0
-REVIEW_POLL_DEFAULT = 10.0
-
-
-class NotGiven:
-    """The type of :data:`NOT_GIVEN`: "this option was not passed", as opposed
-    to ``None``, which ``Lenz.with_options(timeout=None)`` reads as "no
-    timeout". Only for type annotations; callers never need to pass it."""
-
-    _instance: NotGiven | None = None
-
-    def __new__(cls) -> NotGiven:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
-
-    def __bool__(self) -> Literal[False]:
-        return False
-
-    def __repr__(self) -> str:
-        return "NOT_GIVEN"
-
-    def __copy__(self) -> NotGiven:
-        return self
-
-    def __deepcopy__(self, memo: Any) -> NotGiven:
-        return self
-
-
-#: The default of ``Lenz.with_options``' parameters: keep what the client has.
-NOT_GIVEN: Final = NotGiven()
-
-#: Headers the request options refuse, in any casing: the SDK sets them
-#: itself (``idempotency_key=`` and ``api_key=`` are the way to choose the
-#: first two), or httpx computes them.
-_RESERVED_HEADERS = frozenset(
-    {
-        "x-lenz-api-version",
-        "idempotency-key",
-        "authorization",
-        "content-type",
-        "content-length",
-        "host",
-        "transfer-encoding",
-    }
-)
-
-
-#: The longest timeout a request can take, in seconds (the Node SDK's limit,
-#: 2^31 - 1 ms): past it the socket layer overflows on every request. Also the
-#: longest finite wait a ``Retry-After`` is read as.
-MAX_TIMEOUT_SECONDS = 2_147_483
-
-
-def _seconds(value: Any) -> bool:
-    """A finite real number of seconds greater than 0 and at most
-    :data:`MAX_TIMEOUT_SECONDS` (``bool`` is not one)."""
-    return (
-        not isinstance(value, bool)
-        and isinstance(value, numbers.Real)
-        and math.isfinite(value)
-        and 0 < float(value) <= MAX_TIMEOUT_SECONDS
-    )
-
-
-def _snapshot(value: Any) -> Any:
-    """A copy of an ``httpx.Timeout`` (they are mutable); anything else as is."""
-    return httpx.Timeout(value) if isinstance(value, httpx.Timeout) else value
-
-
-def _check_timeout(value: Any, where: str) -> float | httpx.Timeout | None:
-    """A per-request timeout, checked and snapshotted: ``None``, a finite real
-    number of seconds greater than 0, httpx's 4-tuple ``(connect, read, write,
-    pool)`` whose parts are each ``None`` or such a number, or an
-    ``httpx.Timeout`` (taken as given). An ``httpx.Timeout`` or a tuple comes
-    back as a new ``httpx.Timeout``, so changing the caller's object later
-    changes nothing here. ``ValueError`` otherwise, before any request."""
-    if value is None or _seconds(value):
-        return value  # type: ignore[no-any-return]
-    if isinstance(value, httpx.Timeout):
-        parts = (value.connect, value.read, value.write, value.pool)
-        if not any(isinstance(p, (int, float)) and p > MAX_TIMEOUT_SECONDS for p in parts):
-            return httpx.Timeout(value)
-    elif isinstance(value, tuple) and len(value) == 4 and all(part is None or _seconds(part) for part in value):
-        return httpx.Timeout(value)
-    raise ValueError(
-        f"{where}: timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an "
-        f"httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got {value!r})."
-    )
-
-
-def _check_retries(value: Any, where: str) -> int:
-    """A retry count: a whole number (anything ``operator.index`` takes, but
-    not ``bool``), 0 or more, returned as an ``int``. ``ValueError`` otherwise."""
-    count: int | None = None
-    if not isinstance(value, bool):
-        try:
-            count = operator.index(value)
-        except TypeError:
-            count = None
-    if count is None or count < 0:
-        raise ValueError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
-    return count
-
-
-#: A header name is an RFC 7230 token; a value is visible ASCII, spaces and
-#: tabs (no CR, LF or NUL: those would end the header or the request), or empty.
-_HEADER_NAME = re.compile(r"[!#$%&'*+\-.^_`|~0-9A-Za-z]+")
-#: Spaces and tabs only inside the value: at either end httpx refuses it.
-_HEADER_VALUE = re.compile(r"(?:[\x21-\x7e](?:[\t\x20-\x7e]*[\x21-\x7e])?)?")
-
-
-def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]:
-    """``extra_headers`` as (name, value) pairs in the order given: names
-    RFC 7230 tokens outside ``_RESERVED_HEADERS``, values visible-ASCII
-    strings or ``None`` (removes the header a ``with_options`` copy added).
-    ``ValueError`` otherwise. The pairs are a snapshot: changing the caller's
-    mapping later changes nothing here."""
-    if value is None:
-        return ()
-    if not isinstance(value, Mapping):
-        raise ValueError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
-    pairs: list[tuple[str, str | None]] = []
-    for name, header in value.items():
-        if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
-            raise ValueError(
-                f"{where}: a header name must be a non-empty token of ASCII letters, digits and "
-                f"!#$%&'*+-.^_`|~ (got {name!r})."
-            )
-        if name.lower() in _RESERVED_HEADERS:
-            raise ValueError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
-        if header is not None and (not isinstance(header, str) or not _HEADER_VALUE.fullmatch(header)):
-            raise ValueError(
-                f"{where}: the value of header {name} must be a string of visible ASCII characters, with "
-                f"spaces and tabs only between them (not at either end), or None."
-            )
-        pairs.append((name, header))
-    return tuple(pairs)
-
-
-def _merge_headers(
-    lower: Sequence[tuple[str, str]], upper: Sequence[tuple[str, str | None]]
-) -> tuple[tuple[str, str], ...]:
-    """``upper`` over ``lower``, names compared case-insensitively: the last
-    spelling of a name and its value win, and a ``None`` value removes the
-    name from ``lower``."""
-    merged: dict[str, tuple[str, str]] = {name.lower(): (name, value) for name, value in lower}
-    for name, value in upper:
-        if value is None:
-            merged.pop(name.lower(), None)
-        else:
-            merged[name.lower()] = (name, value)
-    return tuple(merged.values())
-
-
-@dataclass(frozen=True)
-class _CallOptions:
-    """The request options one call was given (its ``timeout``,
-    ``max_retries`` and ``extra_headers`` keywords); ``None`` inherits."""
-
-    timeout: float | httpx.Timeout | None = None
-    max_retries: int | None = None
-    headers: tuple[tuple[str, str | None], ...] = ()
-
-
-_NO_OPTIONS = _CallOptions()
-
-
-def _call_options(
-    timeout: float | httpx.Timeout | None,
-    max_retries: int | None,
-    extra_headers: Mapping[str, str | None] | None,
-    where: str,
-) -> _CallOptions:
-    """One call's request options, checked and snapshotted: raises
-    ``ValueError`` before the call mints a key or makes a request."""
-    return _CallOptions(
-        timeout=_check_timeout(timeout, where),
-        max_retries=None if max_retries is None else _check_retries(max_retries, where),
-        headers=_check_headers(extra_headers, where),
-    )
-
-
-def _given(options: _CallOptions) -> dict[str, Any]:
-    """``options`` as keywords for another public method, only those that were
-    given: a method overridden with a 2.21 signature (which knows none of
-    them) is still called the way 2.21 called it when there are none."""
-    out: dict[str, Any] = {}
-    if options.timeout is not None:
-        out["timeout"] = options.timeout
-    if options.max_retries is not None:
-        out["max_retries"] = options.max_retries
-    if options.headers:
-        out["extra_headers"] = dict(options.headers)
-    return out
-
-
-@dataclass(frozen=True)
-class _ClientOptions:
-    """What ``Lenz.with_options`` set on a copy, already flattened over the
-    copy it was made from. ``NOT_GIVEN`` inherits from the ``httpx.Client`` in
-    use (timeout) or the constructor (retries)."""
-
-    timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN
-    max_retries: int | NotGiven = NOT_GIVEN
-    headers: tuple[tuple[str, str], ...] = ()
-
-
-def _resolve(
-    call: _CallOptions,
-    layer: _ClientOptions,
-    client_timeout: httpx.Timeout,
-    client_retries: int,
-    floor: float | None,
-) -> tuple[httpx.Timeout | None, int, tuple[tuple[str, str], ...]]:
-    """The timeout, retry count and option headers of one request. Pure: no
-    I/O, no clock.
-
-    Per field, the first that is set wins: the call's option, the copy's
-    (``with_options``), the client's (the ``httpx.Client`` in use for the
-    timeout, the constructor for retries). Headers merge, the call's over the
-    copy's. A ``floor`` (``extract`` / ``assess``) applies to an inherited
-    timeout only, as it always did: when its ``read`` is bounded and shorter
-    than the floor, the floor replaces the whole timeout; otherwise the
-    inherited timeout is kept as it is. A timeout of ``None`` means "the
-    ``httpx.Client``'s own" (httpx's ``USE_CLIENT_DEFAULT``).
-    """
-    timeout: httpx.Timeout | None
-    if call.timeout is not None:
-        timeout = httpx.Timeout(call.timeout)
-    else:
-        own = None if isinstance(layer.timeout, NotGiven) else httpx.Timeout(layer.timeout)
-        inherited = client_timeout if own is None else own
-        if floor is not None and inherited.read is not None and inherited.read < floor:
-            timeout = httpx.Timeout(floor)
-        else:
-            timeout = own
-    if call.max_retries is not None:
-        retries = call.max_retries
-    elif not isinstance(layer.max_retries, NotGiven):
-        retries = layer.max_retries
-    else:
-        retries = client_retries
-    return timeout, retries, _merge_headers(layer.headers, call.headers)
-
-
-def _poll_hint(progress: Any) -> float | None:
-    """The server's suggested wait before the next poll, or None.
-
-    Distinct from ``_retry_after_seconds``, which is the error-retry ladder's
-    "you errored, back off". This one means "you are fine, look again shortly"
-    and rides in the body rather than a header — ``Retry-After`` on a 200 is
-    off-spec enough that a proxy may drop it, and a header never appears in
-    the OpenAPI schema.
-    """
-    value = getattr(progress, "poll_after_seconds", None)
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    if not POLL_HINT_MIN <= value <= POLL_HINT_MAX:
-        return None
-    return float(value)
-
-
-def _user_agent() -> str:
-    return f"lenz-io-python/{__version__} (httpx {httpx.__version__})"
-
-
-def _blank_webhook_url(value: Any) -> bool:
-    """An empty or whitespace-only ``webhook_url`` on ``verify`` /
-    ``verify_batch``: it always meant the key's default webhook (the API read
-    it as left out), so it is left out, which keeps that meaning on every API
-    version (the current one reads a blank value as "no webhook"). ``None``
-    is left out too."""
-    return value is None or (isinstance(value, str) and not value.strip())
-
-
-def _batch_item_body(item: Any) -> Any:
-    """The wire shape of one batch item.
-
-    An item without ``claim`` is forwarded verbatim, so every existing caller
-    keeps a byte-identical request body. An item with ``claim`` is sent as
-    ``text`` — the wire key the server has always accepted. An empty
-    ``webhook_url`` is left out, as on the batch itself: it has always meant
-    the key's default, and leaving it out keeps that meaning on every API
-    version.
-    """
-    if isinstance(item, dict) and _blank_webhook_url(item.get("webhook_url")):
-        item = {k: v for k, v in item.items() if k != "webhook_url"}
-    if "claim" not in item:
-        return item
-    body = {k: v for k, v in item.items() if k != "claim"}
-    body["text"] = item["claim"] or item.get("text", "")
-    return body
-
-
-def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
-    """``/extract``'s answer. A body that located every claim away answers
-    ``claims: []``; the 2.x field for that was ``locations=[]``, which only the
-    request (``locate=True``) can tell apart from "nothing found"."""
-    out = ExtractedClaims.model_validate(body)
-    answered = isinstance(body, dict) and body.get("claims") == []
-    if answered and locate and out.status == "not_a_claim" and out.locations is None:
-        out.locations = []
-    return out
-
 
 #: ``Lenz`` or a subclass, for ``with_options``' return type.
 _Client = TypeVar("_Client", bound="Lenz")
 
 #: An async job the poll loop waits on: a review or a citation check.
 _Job = TypeVar("_Job", ReviewFull, Citecheck)
-
-
-class CitationPair(TypedDict, total=False):
-    """One statement and the source it cites, for ``citecheck(pairs=...)``.
-
-    ``statement`` (1 to 1,000 characters) and exactly one of ``url`` (http or
-    https) and ``doi`` (the DOI alone, like ``10.1038/nature12373``).
-    ``quotes``: up to 3 excerpts the statement quotes from the source, each
-    15 to 500 characters and words of the statement. With a ``doi``, what the
-    reference gives: ``cited_title``, ``cited_authors`` (family names),
-    ``cited_year`` (four digits), ``cited_journal``. Type-only: plain dicts
-    are sent as they are.
-    """
-
-    statement: str
-    url: str
-    doi: str
-    quotes: list[str]
-    cited_title: str
-    cited_authors: list[str]
-    cited_year: str
-    cited_journal: str
-
-
-class VerifyBatchItem(TypedDict, total=False):
-    """Per-item shape for ``verify_batch``.
-
-    All fields optional — callers can pass any subset. Type-only:
-    the SDK accepts plain dicts at runtime and does no Pydantic
-    coercion. The TypedDict exists purely so IDEs autocomplete the
-    per-item keys (``claim``, ``language``, …).
-
-    ``claim`` is the item's claim; ``text`` is accepted as an alias
-    (``claim`` wins if both are given).
-
-    Precedence on conflicting language: per-item ``language`` overrides
-    the batch-wide ``language`` kwarg on ``verify_batch``, which overrides
-    the implicit English default. The SDK forwards both verbatim; the
-    server is authoritative on the merge.
-    """
-
-    claim: str
-    text: str
-    language: str
-    source_url: str
-    webhook_url: str
-    idempotency_key: str
-    # 'private' (default) or 'unlisted' (link-readable, never listed).
-    # Per-item value overrides the batch-wide ``visibility`` default.
-    visibility: str
-    # 'standard' (default, 10 credits) or 'low' (shallower check — fewer
-    # sources, faster, 5 credits). Per-item value overrides the batch-wide
-    # ``depth`` default.
-    depth: str
 
 
 class _VerificationsNamespace:
@@ -709,17 +387,10 @@ class _VerificationsNamespace:
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.delete()")
         vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
-        try:
-            self._p._request("DELETE", f"/verifications/{vid}", options=options)
-            return True
-        except LenzError as exc:
-            # Idempotent DELETE: if the row was already gone (e.g. previous
-            # request succeeded but the network reply was lost), treat as
-            # success rather than surfacing a confusing 404. A 404 in another
-            # API version is not read as this one's.
-            if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
-                return True
-            raise
+        # Idempotent DELETE: a 404 (the row already gone, e.g. the reply to an
+        # earlier delete was lost) is a success (``_already_deleted``).
+        self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
+        return True
 
     def related(
         self,
@@ -836,13 +507,9 @@ class _AskNamespace:
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
         vid = _segment(verification_id, "ask.send() needs a verification_id.")
-        payload: dict[str, Any] = {"message": message}
-        if language:
-            payload["language"] = language
-        headers = {}
+        payload = _ask_payload(message, language)
         key = _call_key(idempotency_key, idempotency)
-        if key:
-            headers["Idempotency-Key"] = key
+        headers = _key_header(key)
         with _carrying_key(key, unreadable=True):
             body = self._p._request(
                 "POST",
@@ -911,18 +578,9 @@ class _LibraryNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "library.list()")
-        params: dict[str, Any] = {
-            "page": page,
-            "sort": sort,
-            "search": search,
-            "domain": domain,
-            "entity": entity,
-        }
-        # Omit when default so existing callers keep byte-identical query strings.
-        if curated:
-            params["curated"] = ",".join(curated)
-        if verdict:
-            params["verdict"] = verdict
+        params = _library_params(
+            page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
+        )
         body = self._p._request(
             "GET",
             "/library",
@@ -965,8 +623,7 @@ class _LibraryNamespace:
         """
         # Checked and snapshotted now: every page is read with these.
         options = _call_options(timeout, max_retries, extra_headers, "library.iter()")
-        if sort == "random":
-            raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
+        _check_library_iter_sort(sort)
         page = _first_page(page)
         return _walk(
             lambda n: self.list(
@@ -981,89 +638,6 @@ class _LibraryNamespace:
             ),
             page,
         )
-
-
-def _walk(fetch: Callable[[int], VerificationList | LibraryList], page: int) -> Iterator[Any]:
-    """The items of ``fetch(page)``, ``fetch(page + 1)``, ... A generator: no
-    page is fetched before its first item is asked for.
-
-    Stops after a page that is short or empty, once the pages read reach the
-    response's ``total``, when a response states no usable ``page_size``, and
-    (without yielding it) when the server answers another page than the one
-    asked for, which a server clamping a page past the end would repeat."""
-    while True:
-        current = fetch(page)
-        sent = current.model_fields_set
-        if "page" in sent and current.page != page:
-            return
-        yield from current.items
-        size = current.page_size if "page_size" in sent else 0
-        if not current.items or size <= 0 or len(current.items) < size:
-            return
-        if "total" in sent and page * size >= current.total:
-            return
-        page += 1
-
-
-def _first_page(page: int) -> int:
-    """``page`` for an iterator, refused unless it is 1 or more."""
-    if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-        raise ValueError(f"iter starts at page 1 or later (got page={page!r}).")
-    return page
-
-
-def _segment(value: Any, message: str) -> str:
-    """An id as ONE path segment: percent-encoded whole, so a ``/``, ``?``, ``#``
-    or ``%`` in it cannot leave the intended path (httpx would otherwise cut the
-    URL there). ``""``, ``"."`` and ``".."`` raise ``ValueError(message)``: a
-    path normaliser eats the dots, and an empty id names the collection."""
-    if not isinstance(value, str) or value in ("", ".", ".."):
-        raise ValueError(message)
-    return quote(value, safe="")
-
-
-def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
-    """The ``Idempotency-Key`` for one call: the caller's own, else a random
-    one generated once per call (so every retry of that call carries it), else
-    none when the caller opted out.
-
-    Never derived from the request body: the same body sent again later is a
-    new request, and a body-derived key would replay the first answer.
-    """
-    if idempotency_key is not None:
-        return idempotency_key
-    return uuid.uuid4().hex if idempotency else None
-
-
-@contextmanager
-def _carrying_key(key: str | None, *, unreadable: bool = False) -> Iterator[None]:
-    """Put ``key`` on any ``LenzError`` raised inside (``exc.idempotency_key``)
-    that does not carry one yet: every error of a call that sent a key says
-    which, so a resend can reuse it. With ``unreadable``, also on a
-    ``ValueError`` (an answer whose body is not JSON), whose class stays the
-    one 2.x raised."""
-    try:
-        yield
-    except LenzError as exc:
-        if key and exc.idempotency_key is None:
-            exc.idempotency_key = key
-        raise
-    except ValueError as exc:
-        if unreadable and key and getattr(exc, "idempotency_key", None) is None:
-            exc.idempotency_key = key  # type: ignore[attr-defined]
-        raise
-
-
-def _names_the_job(field: str) -> Callable[[Any], bool]:
-    """Whether a 409 ``idempotency_conflict`` body names the job the first
-    request created (``review_id`` / ``citecheck_id``): that answer settles the
-    call, so it is not sent again."""
-
-    def check(body: Any) -> bool:
-        value = body.get(field) if isinstance(body, dict) else None
-        return isinstance(value, str) and bool(value)
-
-    return check
 
 
 class Lenz:
@@ -1087,12 +661,9 @@ class Lenz:
         http_client: httpx.Client | None = None,
         user_agent: str | None = None,
     ) -> None:
-        # The same rule as every request option: refused here, before the
-        # client exists, rather than failing (or retrying forever) later.
-        timeout = _check_timeout(timeout, "Lenz()")
-        max_retries = _check_retries(max_retries, "Lenz()")
-        self._api_key = api_key or os.environ.get("LENZ_API_KEY") or ""
-        self._base_url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+        self._api_key, self._base_url, timeout, max_retries = _client_settings(
+            api_key, base_url, timeout, max_retries, "Lenz()"
+        )
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
@@ -1101,12 +672,7 @@ class Lenz:
         # the SDK keeps ownership of every other default header — so a new
         # default header can't be silently dropped by a hand-copied client.
         self._client = http_client or httpx.Client(
-            timeout=httpx.Timeout(timeout),
-            headers={
-                "User-Agent": user_agent or _user_agent(),
-                "X-Lenz-API-Version": API_VERSION,
-                "Accept": "application/json",
-            },
+            timeout=httpx.Timeout(timeout), headers=_default_headers(user_agent or _user_agent())
         )
 
         # Resource namespaces (Stripe pattern for CRUD on past verifications,
@@ -1175,20 +741,10 @@ class Lenz:
         nothing, closing the original closes the pool for every copy, and a
         copy is as safe to share across threads as the client.
         """
-        if not isinstance(timeout, NotGiven):
-            timeout = _check_timeout(timeout, "with_options()")
-        if not isinstance(max_retries, NotGiven):
-            max_retries = _check_retries(max_retries, "with_options()")
-        headers = _check_headers(extra_headers, "with_options()")
-        layer = self._options
+        layer = _with_options_layer(self._options, timeout, max_retries, extra_headers)
         clone = copy.copy(self)
         clone._owns_client = False
-        clone._options = _ClientOptions(
-            # A snapshot: each copy holds its own ``httpx.Timeout``.
-            timeout=_snapshot(layer.timeout) if isinstance(timeout, NotGiven) else timeout,
-            max_retries=layer.max_retries if isinstance(max_retries, NotGiven) else max_retries,
-            headers=_merge_headers(layer.headers, headers),
-        )
+        clone._options = layer
         clone.verifications = _VerificationsNamespace(clone)
         clone.ask = _AskNamespace(clone)
         clone.library = _LibraryNamespace(clone)
@@ -1492,8 +1048,7 @@ class Lenz:
         rows are free.
         """
         _call_options(timeout, max_retries, extra_headers, "assess()")
-        if claims is not None and (claim or text):
-            raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
+        _check_assess_forms(claim, text, claims)
         key = _call_key(idempotency_key, idempotency)
         if claims is not None:
             return self._assess(
@@ -1550,9 +1105,7 @@ class Lenz:
         see :meth:`Lenz.with_options`.
         """
         _call_options(timeout, max_retries, extra_headers, "select()")
-        chosen = claims or texts
-        if not chosen:
-            raise ValueError("select requires a non-empty claims=[...]")
+        chosen = _select_texts(claims, texts)
         return self._select(
             task_id,
             texts=chosen,
@@ -1747,20 +1300,10 @@ class Lenz:
         the wait.
         """
         options = _call_options(None, None, extra_headers, "wait()")
-        task_id = task if isinstance(task, str) else task.task_id
-        _segment(task_id, "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
+        task_id = _wait_task_id(task)
         terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress, options=options)
-        if task_id in stopped:
-            raise stopped[task_id]
-        if task_id in timed_out:
-            raise LenzTimeoutError(
-                message=f"wait timed out after {timeout}s",
-                cause="Pipeline still running server-side.",
-                fix=f"Resume via client.get_status('{task_id}') later.",
-                doc_url="https://lenz.io/docs/verify#timeout",
-                task_id=task_id,
-            )
-        return self._verification_from_terminal(terminal[task_id], task_id)
+        status = _wait_result(task_id, timeout, terminal, timed_out, stopped)
+        return self._verification_from_terminal(status, task_id)
 
     def verify_batch_and_wait(
         self,
@@ -1823,38 +1366,7 @@ class Lenz:
                 ids, timeout, on_progress, options=_CallOptions(headers=options.headers)
             )
 
-        results: list[BatchItemResult] = []
-        for it in accepted.items:  # preserve input order
-            status = terminal.get(it.task_id)
-            if it.task_id in stopped:
-                # An error no later poll could change: removed by the
-                # account's retention period (410), an unknown task (404) or
-                # an answer in another API version. Terminal, with no status.
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
-            elif not it.task_id or it.task_id in timed_out or status is None:
-                results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
-            elif status.status == "completed" and status.result is not None:
-                results.append(
-                    BatchItemResult(
-                        task_id=it.task_id,
-                        claim_text=it.claim_text,
-                        status="completed",
-                        verification=status.result,
-                        status_detail=status,
-                    )
-                )
-            elif status.status == "needs_input":
-                results.append(
-                    BatchItemResult(
-                        task_id=it.task_id, claim_text=it.claim_text, status="needs_input", status_detail=status
-                    )
-                )
-            else:
-                # failed, or completed-without-result (treated as failed).
-                results.append(
-                    BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed", status_detail=status)
-                )
-        return results
+        return _batch_results(accepted, terminal, timed_out, stopped)
 
     # ── /review: the whole recipe in one call ──
 
@@ -1933,62 +1445,33 @@ class Lenz:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "review()")
-        if not text or not text.strip():
-            raise ValueError("review() needs the draft text, or one public http(s) URL.")
-        payload: dict[str, Any] = {"text": text}
-        if language:
-            payload["language"] = language
-        if webhook_url is not None:
-            payload["webhook_url"] = webhook_url
-        if visibility:
-            payload["visibility"] = visibility
-        escalate: dict[str, Any] = {}
-        for name, selector in (("verdicts", verdicts), ("confidence", confidence)):
-            if selector is None:
-                continue
-            if isinstance(selector, str):
-                raise ValueError(f"{name} is a list of strings, e.g. {name}=[{selector!r}].")
-            escalate[name] = list(selector)
-        for name, value in (
-            ("max_assessments", max_assessments),
-            ("max_verifications", max_verifications),
-            ("depth", depth),
-        ):
-            if value is not None:
-                escalate[name] = value
-        # 0 means no citation check, the server default: sent as nothing, so
-        # the body (and its idempotency hash) is what it is without the option.
-        if max_citations:
-            escalate["max_citations"] = max_citations
-        # Sent only when asked, for the same reason.
-        if suggest_edits:
-            escalate["suggest_edits"] = True
-        if escalate:
-            payload["escalate"] = escalate
-        headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
-        try:
-            body = self._request(
-                "POST",
-                "/review",
-                json=payload,
-                headers=headers,
-                conflict_settles=_names_the_job("review_id"),
-                options=options,
-            )
-        except LenzError as exc:
-            # A retried submit (same key) that lands while the first attempt's
-            # review is still being created answers 409 with that review's id:
-            # it exists, so this call started it.
-            conflict = exc.body if isinstance(exc.body, dict) else {}
-            review_id = conflict.get("review_id")
-            if (
-                exc.status_code == 409
-                and exc.code == "idempotency_conflict"
-                and isinstance(review_id, str)
-                and review_id
-            ):
-                return ReviewStarted(review_id=review_id, status="queued")
-            raise
+        payload = _review_payload(
+            text=text,
+            verdicts=verdicts,
+            confidence=confidence,
+            max_assessments=max_assessments,
+            max_verifications=max_verifications,
+            depth=depth,
+            max_citations=max_citations,
+            suggest_edits=suggest_edits,
+            language=language,
+            webhook_url=webhook_url,
+            visibility=visibility,
+        )
+        headers = {"Idempotency-Key": _job_key(idempotency_key)}
+        # A 409 naming the review a resend started settles the call
+        # (``_review_started_by_conflict``).
+        body = self._recovering(
+            _review_started_by_conflict,
+            "POST",
+            "/review",
+            json=payload,
+            headers=headers,
+            conflict_settles=_names_the_job("review_id"),
+            options=options,
+        )
+        if isinstance(body, ReviewStarted):
+            return body
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
             return ReviewStarted.model_validate(body)
 
@@ -2045,11 +1528,9 @@ class Lenz:
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_review()")
         rid = _segment(review_id, "get_review() needs a review_id.")
-        if view == "issues":
-            body = self._request("GET", f"/reviews/{rid}", params={"view": "issues"}, options=options)
-            return ReviewIssues.model_validate(body)
-        if view != "full":
-            raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
+        params = _review_params(view)
+        if params is not None:
+            return ReviewIssues.model_validate(self._request("GET", f"/reviews/{rid}", params=params, options=options))
         return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}", options=options))
 
     def cancel_review(
@@ -2131,7 +1612,7 @@ class Lenz:
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
-        key = idempotency_key or uuid.uuid4().hex
+        key = _job_key(idempotency_key)
         with _carrying_key(key):
             started = self.review(
                 text,
@@ -2197,37 +1678,23 @@ class Lenz:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "citecheck()")
-        has_text = bool(text and text.strip())
-        if has_text == (pairs is not None):
-            raise ValueError("citecheck() needs exactly one of text and pairs.")
-        if pairs is not None and max_citations is not None:
-            raise ValueError("max_citations goes with text: every pair is checked.")
-        payload: dict[str, Any] = {"text": text} if has_text else {"pairs": [dict(p) for p in pairs or []]}
-        if max_citations is not None:
-            payload["max_citations"] = max_citations
-        if language:
-            payload["language"] = language
-        if webhook_url is not None:
-            payload["webhook_url"] = webhook_url
-        headers = {"Idempotency-Key": idempotency_key or uuid.uuid4().hex}
-        try:
-            body = self._request(
-                "POST",
-                "/citecheck",
-                json=payload,
-                headers=headers,
-                conflict_settles=_names_the_job("citecheck_id"),
-                options=options,
-            )
-        except LenzError as exc:
-            # A retried submit (same key) that lands while the first attempt's
-            # check is still being created answers 409 naming that check: it
-            # exists, so this call started it.
-            conflict = exc.body if isinstance(exc.body, dict) else {}
-            existing = conflict.get("citecheck_id")
-            if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
-                return CitecheckStarted(citecheck_id=existing, status="queued")
-            raise
+        payload = _citecheck_payload(
+            text=text, pairs=pairs, max_citations=max_citations, language=language, webhook_url=webhook_url
+        )
+        headers = {"Idempotency-Key": _job_key(idempotency_key)}
+        # A 409 naming the check a resend started settles the call
+        # (``_citecheck_started_by_conflict``).
+        body = self._recovering(
+            _citecheck_started_by_conflict,
+            "POST",
+            "/citecheck",
+            json=payload,
+            headers=headers,
+            conflict_settles=_names_the_job("citecheck_id"),
+            options=options,
+        )
+        if isinstance(body, CitecheckStarted):
+            return body
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
             return CitecheckStarted.model_validate(body)
 
@@ -2319,7 +1786,7 @@ class Lenz:
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
-        key = idempotency_key or uuid.uuid4().hex
+        key = _job_key(idempotency_key)
         with _carrying_key(key):
             started = self.citecheck(
                 text,
@@ -2345,22 +1812,12 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> Citecheck:
         """The poll loop behind ``citecheck_and_wait`` (and ``lenz citecheck --resume``)."""
-
-        def timed_out(last: Citecheck | None) -> Exception:
-            return CitecheckTimeout(
-                message=f"citecheck_and_wait timed out after {timeout}s",
-                cause="The citation check is still running server-side.",
-                fix=f"Read it later with client.get_citecheck('{citecheck_id}').",
-                doc_url="https://lenz.io/docs/citations",
-                citecheck_id=citecheck_id,
-                partial=last,
-            )
-
+        path, parse, timed_out = _citecheck_job(citecheck_id, timeout)
         return self._wait_job(
-            f"/citechecks/{_segment(citecheck_id, '_wait_citecheck() needs a citecheck_id.')}",
+            path,
             timeout=timeout,
             on_update=on_update,
-            parse=lambda body: Citecheck.model_validate(body) if _is_citecheck_body(body, citecheck_id) else None,
+            parse=parse,
             failed=_citecheck_failed,
             timed_out=timed_out,
             options=_call_options(None, None, extra_headers, "citecheck_and_wait()"),
@@ -2375,22 +1832,12 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewFull:
         """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``)."""
-
-        def timed_out(last: ReviewFull | None) -> Exception:
-            return ReviewTimeout(
-                message=f"review_and_wait timed out after {timeout}s",
-                cause="The review is still running server-side.",
-                fix=f"Read it later with client.get_review('{review_id}').",
-                doc_url="https://lenz.io/docs/quickstart",
-                review_id=review_id,
-                partial=last,
-            )
-
+        path, parse, timed_out = _review_job(review_id, timeout)
         return self._wait_job(
-            f"/reviews/{_segment(review_id, '_wait_review() needs a review_id.')}",
+            path,
             timeout=timeout,
             on_update=on_update,
-            parse=lambda body: ReviewFull.model_validate(body) if _is_full_review_body(body, review_id) else None,
+            parse=parse,
             failed=_review_failed,
             timed_out=timed_out,
             options=_call_options(None, None, extra_headers, "review_and_wait()"),
@@ -2417,64 +1864,29 @@ class Lenz:
         ``parse`` returns the job's model, or ``None`` for a 200 that is not
         this job's body (a failed poll).
         """
-        deadline = time.monotonic() + timeout
-        last: _Job | None = None
-        last_dump: dict[str, Any] | None = None
-        first = timeout <= 0  # ``timeout <= 0`` reads once, as in 2.x
+        poll = JobPoll(path, timeout, time.monotonic(), parse=parse, failed=failed, timed_out=timed_out)
         while True:
             # One request per poll, bounded by what is left of the deadline:
             # the client's own retry ladder inside a poll could run minutes
             # past it. A failed poll is retried on the next round instead.
-            # Once the deadline is spent no poll starts (``timeout <= 0``
-            # still reads once, as in 2.x).
-            stated_wait: float | None = None
-            job: _Job | None = None
-            remaining = deadline - time.monotonic()
-            if remaining <= 0 and not first:
-                raise timed_out(last)
-            first = False
+            remaining = poll.before_poll(time.monotonic())
+            job: _Job | None
             try:
                 body = self._request("GET", path, max_retries=0, timeout=self._poll_timeout(remaining), options=options)
-                job = parse(body)
-                if job is None:
-                    raise ValueError("not this job's body")
-            except UnicodeEncodeError:
-                # The request could not be built (nothing was sent): no later
-                # poll would do better, so it is not read as an unreadable body.
-                raise
-            except ValueError:
-                # A body this release cannot read (pydantic's ValidationError
-                # is a ValueError): read again next round, as for a 5xx.
-                logger.debug("unreadable body for %s", path, exc_info=True)
+                job = poll.read(body)
+            except Exception as exc:
+                if poll.failed(exc):
+                    raise
                 job = None
-            except (LenzAPIError, LenzRateLimitError) as exc:
-                # A stated wait paces the next poll, capped like the retry
-                # ladder caps it: an untyped proxy 503 can state an hour.
-                wait = getattr(exc, "retry_after", None)
-                stated_wait = float(min(wait, MAX_RETRY_AFTER_SLEEP)) if isinstance(wait, int) and wait > 0 else None
             if job is not None:
-                dump = job.model_dump()
-                if dump != last_dump:
-                    last_dump = dump
-                    if on_update is not None:
-                        try:
-                            on_update(job.model_copy(deep=True))
-                        except Exception:
-                            logger.debug("on_update callback raised for %s", path, exc_info=True)
-                last = job
-                if job.status == "completed":
+                if poll.changed(job) and on_update is not None:
+                    try:
+                        on_update(job.model_copy(deep=True))
+                    except Exception:
+                        logger.debug("on_update callback raised for %s", path, exc_info=True)
+                if poll.settle(job):
                     return job
-                if job.status in ("failed", "cancelled"):
-                    raise failed(job)
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise timed_out(last)
-            if stated_wait is not None:
-                sleep_for = max(REVIEW_POLL_FLOOR, stated_wait)
-            else:
-                hint = last.poll_after_seconds if last is not None else None
-                sleep_for = REVIEW_POLL_DEFAULT if hint is None else max(REVIEW_POLL_FLOOR, float(hint))
-            time.sleep(min(sleep_for, remaining))
+            time.sleep(poll.next_sleep(time.monotonic()))
 
     # ── poll engine (shared by wait + verify_batch_and_wait) ──
 
@@ -2524,135 +1936,43 @@ class Lenz:
         The server's ``progress.poll_after_seconds`` replaces the fixed 2/4/8…
         ladder when it is present and sane; garbage falls back to the ladder.
         """
-        pending = list(task_ids)
-        stopped: dict[str, LenzError] = {}
-        terminal: dict[str, TaskStatus] = {}
-        timed_out: set[str] = set()
-        deadline = time.monotonic() + timeout
-        backoff_idx = 0
-        # ``timeout <= 0`` reads every id once, as in 2.x; otherwise no poll
-        # starts once the deadline is spent.
-        one_shot = timeout <= 0
-        first_round = True
-        while pending:
-            still_pending: list[str] = []
-            server_hint: float | None = None
-            stated_wait: float | None = None
-            for task_id in pending:
-                remaining = deadline - time.monotonic()
-                if remaining <= 0 and not (one_shot and first_round):
-                    # The deadline is spent: no poll starts past it.
-                    still_pending.append(task_id)
+        poll = TaskPoll(task_ids, timeout, time.monotonic())
+        while poll.pending:
+            for task_id in poll.start_round():
+                remaining = poll.may_poll(task_id, time.monotonic())
+                if remaining is None:
                     continue
                 try:
                     body = self._request(
                         "GET",
-                        f"/verify/status/{quote(task_id, safe='')}",
+                        _status_path(task_id),
                         max_retries=0,
                         timeout=self._poll_timeout(remaining),
                         options=options,
                     )
                     status = TaskStatus.model_validate(body)
-                except LenzAuthError:
-                    # The key itself is refused: every other id would answer
-                    # the same, so the whole wait ends with it.
-                    raise
-                except (LenzGoneError, LenzNotFoundError, LenzApiVersionError) as exc:
-                    # Terminal for this id: no later poll will say otherwise.
-                    # (The API never answers 410 for a task that is still
-                    # running; a version error answers the same again.)
-                    stopped[task_id] = exc
-                    continue
                 except LenzError as exc:
-                    # Don't let one id's poll failure abort the rest — retry it
-                    # next round (bounded by the deadline below), after the
-                    # wait it stated, capped like the retry ladder caps it.
-                    wait = getattr(exc, "retry_after", None)
-                    if isinstance(wait, int) and not isinstance(wait, bool) and wait > 0:
-                        wait_s = float(min(wait, MAX_RETRY_AFTER_SLEEP))
-                        stated_wait = wait_s if stated_wait is None else max(stated_wait, wait_s)
-                    still_pending.append(task_id)
+                    if poll.failed(task_id, exc):
+                        raise
                     continue
-                if status.status in _TERMINAL_STATUSES:
-                    terminal[task_id] = status
-                else:
-                    still_pending.append(task_id)
-                    hint = _poll_hint(status.progress)
-                    # The shortest hint wins: with a batch in flight, waiting
-                    # the longest one would starve the fastest claim.
-                    if hint is not None and (server_hint is None or hint < server_hint):
-                        server_hint = hint
-                    if on_progress is not None:
-                        try:
-                            # A copy — a caller must not be able to mutate our state.
-                            on_progress(task_id, status.progress.model_copy(deep=True))
-                        except Exception:
-                            logger.debug("on_progress callback raised for task %s", task_id, exc_info=True)
-            pending = still_pending
-            first_round = False
-            if not pending:
+                if poll.answered(task_id, status) and on_progress is not None:
+                    try:
+                        # A copy — a caller must not be able to mutate our state.
+                        on_progress(task_id, _progress_copy(status))
+                    except Exception:
+                        logger.debug("on_progress callback raised for task %s", task_id, exc_info=True)
+            if poll.round_done():
                 break
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                timed_out.update(pending)
+            sleep_for = poll.next_sleep(time.monotonic())
+            if sleep_for is None:
                 break
-            if server_hint is not None:
-                sleep_for = server_hint
-            else:
-                sleep_for = min(POLL_BACKOFF[min(backoff_idx, len(POLL_BACKOFF) - 1)], POLL_BACKOFF_CAP)
-            if stated_wait is not None:
-                sleep_for = max(sleep_for, stated_wait)
-            sleep_for = min(sleep_for, remaining)
             time.sleep(sleep_for)
-            backoff_idx += 1
-        return terminal, timed_out, stopped
+        return poll.results()
 
     def _verification_from_terminal(self, status: TaskStatus, task_id: str) -> Verification:
         """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
         matching typed error. Shared by ``wait`` (and thus ``verify_and_wait``)."""
-        if status.status == "completed":
-            if status.result is None:
-                raise LenzPipelineError(
-                    message="Pipeline completed but the result is empty.",
-                    cause="Server reported status=completed without a result block.",
-                    fix="File an issue at https://github.com/lenzhq/lenz-io-python/issues with the Request ID.",
-                    doc_url="https://lenz.io/docs/errors",
-                    task_id=task_id,
-                )
-            return status.result
-        if status.status == "needs_input":
-            raise LenzNeedsInputError(
-                message=f"Pipeline paused: {status.reason}",
-                cause="The verification needs caller input to proceed.",
-                fix="Inspect the payload, then call client.select(task_id, texts=[...]) with the chosen claim(s).",
-                doc_url="https://lenz.io/docs/verify#needs-input",
-                task_id=task_id,
-                kind=status.reason,
-                hint=status.hint,
-                payload=status.model_dump(),
-            )
-        # failed, or cancelled elsewhere (the same outcome, as in 2.x, where the
-        # original shape said ``failed`` with ``failure_class`` ``cancelled``).
-        # ``error`` is the 2.x sentence, rebuilt from ``failure``.
-        detail = status.error or status.failure_detail or status.failure_reason or "unknown"
-        if status.retryable:
-            fix = "Transient provider outage — retry the same request after a short wait."
-        else:
-            fix = "Retry with a different claim, or check status.error for the diagnostic."
-        raise LenzPipelineError(
-            message=f"Pipeline failed: {detail}",
-            cause=detail,
-            fix=fix,
-            doc_url="https://lenz.io/docs/errors",
-            task_id=task_id,
-            failure_reason=status.failure_reason,
-            failure_class=status.failure_class,
-            # Coerce like the Node SDK: only a real boolean is a retry signal;
-            # anything else (a stringy "true", a future enum) reads as unknown.
-            retryable=status.retryable if isinstance(status.retryable, bool) else None,
-            # Parity with the Node SDK, which has always carried it.
-            hint=status.hint or "",
-        )
+        return _verification_from_terminal(status, task_id)
 
     # ── account ──
 
@@ -2690,28 +2010,16 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> TaskAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "verify()")
-        payload: dict[str, Any] = {
-            "text": claim or text,
-            "source_url": source_url,
-        }
-        # Omit-when-empty: no ``webhook_url`` means the key's default webhook.
-        # An empty string is never sent, so a request keeps that meaning on
-        # every API version (a newer one reads ``""`` as "no webhook").
-        if not _blank_webhook_url(webhook_url):
-            payload["webhook_url"] = webhook_url
-        # Omit-when-empty so existing English callers keep byte-identical
-        # request bodies (no extra "language": "" key).
-        if language:
-            payload["language"] = language
-        # Omit-when-empty: the server defaults to 'private'.
-        if visibility:
-            payload["visibility"] = visibility
-        # Omit-when-empty: the server defaults to 'standard'.
-        if depth:
-            payload["depth"] = depth
-        headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        payload = _verify_payload(
+            claim=claim,
+            text=text,
+            source_url=source_url,
+            webhook_url=webhook_url,
+            language=language,
+            visibility=visibility,
+            depth=depth,
+        )
+        headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request("POST", "/verify", json=payload, headers=headers, options=options)
             return TaskAccepted.model_validate(body)
@@ -2730,25 +2038,10 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "verify_batch()")
-        # ``webhook_url`` and ``language`` are batch-wide defaults; any
-        # per-item value on a claim dict overrides them server-side.
-        # Per-item items are validated as plain dicts at runtime — the
-        # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
-        # (revised SDK plan decision 1C — no Pydantic coercion, keep the
-        # runtime contract a plain dict).
-        payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims]}
-        # Omit-when-empty, as on ``verify``: no ``webhook_url`` means the key's default.
-        if not _blank_webhook_url(webhook_url):
-            payload["webhook_url"] = webhook_url
-        if language:
-            payload["language"] = language
-        if visibility:
-            payload["visibility"] = visibility
-        if depth:
-            payload["depth"] = depth
-        headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        payload = _batch_payload(
+            claims=claims, webhook_url=webhook_url, language=language, visibility=visibility, depth=depth
+        )
+        headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request("POST", "/verify/batch", json=payload, headers=headers, options=options)
             return BatchAccepted.model_validate(body)
@@ -2762,15 +2055,7 @@ class Lenz:
         Reads the client actually in use, so ``Lenz(timeout=None)``, an
         ``httpx.Timeout`` and an ``httpx.Client`` passed as ``http_client=``
         all work, and so does a copy's timeout (``with_options``)."""
-        if remaining <= 0:
-            return None
-        layer = self._options.timeout
-        own = self._client.timeout if isinstance(layer, NotGiven) else httpx.Timeout(layer)
-
-        def cap(phase: float | None) -> float:
-            return remaining if phase is None else min(phase, remaining)
-
-        return httpx.Timeout(connect=cap(own.connect), read=cap(own.read), write=cap(own.write), pool=cap(own.pool))
+        return _core_poll_timeout(self._options.timeout, self._client.timeout, remaining)
 
     def _extract(
         self,
@@ -2785,20 +2070,8 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> ExtractedClaims:
         options = _call_options(timeout, max_retries, extra_headers, "extract()")
-        payload: dict[str, Any] = {"text": text}
-        if language:
-            payload["language"] = language
-        # No client-side length check on `focus`: the server's 422 is the
-        # contract, and a cap duplicated here would drift from it.
-        if focus:
-            payload["focus"] = focus
-        # Sent only when set, so an explicit False reaches the server and an
-        # omitted value leaves the server default in charge.
-        if locate is not None:
-            payload["locate"] = locate
-        headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        payload = _extract_payload(text=text, language=language, focus=focus, locate=locate)
+        headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request(
                 "POST", "/extract", json=payload, headers=headers, options=options, floor=EXTRACT_TIMEOUT
@@ -2818,25 +2091,8 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> AssessResponse:
         options = _call_options(timeout, max_retries, extra_headers, "assess()")
-        # The single form keeps its historical wire body (`text`). The list
-        # form sends `claims` and never `text` — the server rejects a body
-        # carrying both with a 422. No client-side count / length checks on
-        # the list: the server's 422 is the contract, and a cap duplicated
-        # here would drift from it.
-        payload: dict[str, Any]
-        if claims is not None:
-            payload = {"claims": list(claims)}
-        else:
-            payload = {"text": text}
-        if language:
-            payload["language"] = language
-        # Sent only when asked, so a request without the option (and its
-        # idempotency body) is exactly what it was before.
-        if suggest_rewrite:
-            payload["suggest_rewrite"] = True
-        headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        payload = _assess_payload(text=text, claims=claims, language=language, suggest_rewrite=suggest_rewrite)
+        headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request(
                 "POST", "/assess", json=payload, headers=headers, options=options, floor=ASSESS_TIMEOUT
@@ -2855,9 +2111,7 @@ class Lenz:
     ) -> BatchAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "select()")
         tid = _segment(task_id, "select() needs a task_id.")
-        headers = {}
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
+        headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request(
                 "POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers, options=options
@@ -2903,13 +2157,9 @@ class Lenz:
         ``max_retries`` are the SDK's own settings for one request (a wait's
         polls): when set they win over every option."""
         key = (headers or {}).get("Idempotency-Key") or None
-        resolved, retries, option_headers = _resolve(
-            options, self._options, self._client.timeout, self._max_retries, floor
+        resolved, retries, option_headers = _request_settings(
+            options, self._options, self._client.timeout, self._max_retries, floor, timeout, max_retries
         )
-        if timeout is not None:
-            resolved = httpx.Timeout(timeout)
-        if max_retries is not None:
-            retries = max_retries
         with _carrying_key(key, unreadable=True):
             return self._send(
                 method,
@@ -2940,42 +2190,16 @@ class Lenz:
         retries: int,
         conflict_settles: Callable[[Any], bool] | None,
     ) -> dict[str, Any]:
-        if auth_required and not self._api_key:
-            raise LenzAuthError(
-                message="API key required",
-                cause="This method requires authentication; no API key was provided.",
-                fix=(
-                    "Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at "
-                    "https://lenz.io/api-credentials. Library endpoints work without a key."
-                ),
-                doc_url="https://lenz.io/docs/auth",
-            )
-
-        url = f"{self._base_url}{path}"
-        req_headers = dict(headers or {})
-        # The request options' headers, over the method's own (case-insensitive;
-        # none is added when no option was given). httpx then puts the
-        # ``httpx.Client``'s own headers under them, so an option header also
-        # replaces a default one like ``User-Agent``.
-        for name, value in option_headers:
-            for same in [k for k in req_headers if k.lower() == name.lower()]:
-                del req_headers[same]
-            req_headers[name] = value
-        # Attach the bearer on authed endpoints AND on opt-in optional-auth ones
-        # (`auth_optional=True`). The server returns a caller's own private/hidden
-        # rows only to the owning bearer, so `verifications.get` must send a key it
-        # has (→ `lenz show` on a fresh private API claim). Purely public reads
-        # (`library.list`) stay anonymous — no `auth_optional`, no key on the wire —
-        # so a key never reaches an endpoint that doesn't need it.
-        if self._api_key and (auth_required or auth_optional):
-            req_headers["Authorization"] = f"Bearer {self._api_key}"
-        req_headers.setdefault("Content-Type", "application/json")
-        # The version is part of the request, not of the HTTP client: a client
-        # passed as ``http_client=`` may carry no version header or a stale one.
-        req_headers[_VERSION_HEADER] = API_VERSION
-        # ``None``: the ``httpx.Client``'s own timeout.
-        req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else timeout
-
+        url, req_headers, req_timeout = _prepare(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            path=path,
+            headers=headers,
+            option_headers=option_headers,
+            auth_required=auth_required,
+            auth_optional=auth_optional,
+            timeout=timeout,
+        )
         last_exc: Exception | None = None
         for attempt in range(retries + 1):
             try:
@@ -2987,307 +2211,28 @@ class Lenz:
                 # httpx refuses to write): a programming error, not a network one.
                 raise
             except httpx.TransportError as exc:
-                # Connect / read / write failures, timeouts, a server that
-                # hung up (RemoteProtocolError), a proxy failure: worth sending
-                # again.
+                # Worth sending again, unless this was the last attempt.
                 last_exc = exc
-                if attempt >= retries:
-                    # Subclasses of LenzAPIError, which is what 2.x raised.
-                    cls = LenzRequestTimeoutError if isinstance(exc, httpx.TimeoutException) else LenzConnectionError
-                    raise cls(
-                        message=f"{method} {path} failed after {attempt + 1} attempts: {exc}",
-                        cause=str(exc),
-                        fix="Check your network connection; verify base_url is reachable.",
-                        doc_url="https://lenz.io/docs/errors",
-                    ) from exc
-                time.sleep(_retry_sleep(attempt))
+                time.sleep(_after_transport_error(exc, attempt, retries, method, path))
                 continue
+            done, value = _after_response(response, attempt, retries, method, path, req_headers, conflict_settles)
+            if done:
+                return value  # type: ignore[return-value]
+            time.sleep(value)
+        raise _exhausted(last_exc, method, path)
 
-            _check_served_version(response)
-
-            if response.status_code < 400:
-                return response.json() if response.content else {}
-
-            # A 409 ``idempotency_conflict``: the first request with this key is
-            # still running. Send the SAME key and body again after the stated
-            # wait (capped) or the backoff, inside this call's retry budget; a
-            # new key would run the work twice. A conflict that names the job
-            # the first request created settles the call (``conflict_settles``).
-            if (
-                attempt < retries
-                and response.status_code == 409
-                and req_headers.get("Idempotency-Key")
-                and _body_error_code(response) == "idempotency_conflict"
-                and not (conflict_settles is not None and conflict_settles(_json_or_none(response)))
-            ):
-                stated = _stated_retry_after(response)
-                time.sleep(stated if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP else _retry_sleep(attempt))
-                continue
-
-            # Error path. Retry on 5xx and 429; otherwise raise immediately.
-            #
-            # A stated wait is honored only up to MAX_RETRY_AFTER_SLEEP. Past
-            # that, whether we abort or keep retrying is decided by the typed
-            # body ``code`` — NOT by the status number:
-            #
-            #  * 429 — raise. The /extract daily cap sends
-            #    seconds-until-UTC-midnight, so sleeping it blocks the call for
-            #    most of a day, three times over. The caller gets the true
-            #    retry_after and can schedule the work.
-            #  * 503 carrying a Lenz code in UPSTREAM_503_CODES
-            #    (``upstream_unavailable`` / ``capacity``) — raise, same
-            #    reasoning. These are the server's own shed/exhaustion
-            #    responses; they state an honest 90-120s and burning the
-            #    1/2/4s ladder against them is the opposite of what the header
-            #    asks (map_response_to_error types them
-            #    LenzUpstreamUnavailableError, carrying the true retry_after).
-            #  * every other 5xx, including an UNTYPED 503 — keep retrying on
-            #    our own backoff. A Cloud Run / CDN / load-balancer
-            #    maintenance-or-overload 503 states a long wait and carries no
-            #    Lenz code; the server is down, not pacing us, so an hour-long
-            #    Retry-After must become backoff — not an hour-long sleep, and
-            #    not an abort of a request our ladder might still satisfy.
-            #  * a 429 whose code is in NO_RETRY_429_CODES — raise at once,
-            #    whatever the wait (see its definition).
-            if (
-                attempt < retries
-                and (response.status_code >= 500 or response.status_code == 429)
-                and not (response.status_code == 429 and _body_error_code(response) in NO_RETRY_429_CODES)
-            ):
-                stated = _stated_retry_after(response)
-                if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
-                    time.sleep(stated)
-                    continue
-                if stated is None or not _aborts_on_long_stated_wait(response):
-                    time.sleep(_retry_sleep(attempt))
-                    continue
-
-            raise map_response_to_error(
-                response.status_code,
-                response.content,
-                dict(response.headers),
-                endpoint=(method, path),
-            )
-
-        # Shouldn't reach here, but guard.
-        if last_exc:
-            raise LenzAPIError(message=str(last_exc), cause=str(last_exc)) from last_exc
-        raise LenzAPIError(message=f"{method} {path} failed without diagnostic")
-
-
-def _unexpected_answer(method: str, path: str) -> LenzAPIError:
-    """A 200 whose body is not the thing asked for (a proxy page, another
-    task's body): an error, never a default-valued result."""
-    return LenzAPIError(
-        message=f"{method} {path} returned an unexpected response body.",
-        cause="The answer is not the shape the API documents for this call.",
-        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
-        doc_url="https://lenz.io/docs/errors",
-    )
-
-
-def _is_cancel_body(body: Any, task_id: str) -> bool:
-    """Whether a 200 is this task's cancel result: its id, a boolean
-    ``cancelled`` and a status."""
-    return (
-        isinstance(body, dict)
-        and body.get("task_id") == task_id
-        and isinstance(body.get("cancelled"), bool)
-        and isinstance(body.get("status"), str)
-    )
-
-
-def _is_full_review_body(body: Any, review_id: str) -> bool:
-    """Whether a 200 is this review's full view: its id, a status, and the
-    three lists. A proxy page or another review's body is a failed poll, never
-    a result (an empty ``{"status": "completed"}`` would otherwise end the
-    wait with no issues)."""
-    return (
-        isinstance(body, dict)
-        and body.get("review_id") == review_id
-        and isinstance(body.get("status"), str)
-        and all(isinstance(body.get(k), list) for k in ("issues", "failures", "claims"))
-    )
-
-
-def _is_citecheck_body(body: Any, citecheck_id: str) -> bool:
-    """Whether a 200 is this citation check: its id, a status and the three
-    lists. Anything else is a failed poll, never a result."""
-    return (
-        isinstance(body, dict)
-        and body.get("citecheck_id") == citecheck_id
-        and isinstance(body.get("status"), str)
-        and all(isinstance(body.get(k), list) for k in ("citations", "citation_issues", "citation_failures"))
-    )
-
-
-#: What the original response shape said of a task cancelled elsewhere, which
-#: the current one states as the status ``cancelled`` and no failure block.
-_CANCELLED_FAILURE = {
-    "failure_reason": "cancelled",
-    "failure_class": "cancelled",
-    "retryable": False,
-    "docs_url": "https://lenz.io/docs/errors#cancelled",
-}
-
-
-def _failure_of(job: Citecheck | ReviewFull) -> FailureBlock | None:
-    """Why a job ended without a result: its failure block, or the cancelled
-    one for a job cancelled elsewhere."""
-    if job.failure is None and job.status == "cancelled":
-        return FailureBlock.model_validate(_CANCELLED_FAILURE)
-    return job.failure
-
-
-def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
-    failure = _failure_of(check)
-    reason = (failure.failure_reason if failure else None) or ""
-    hint = (failure.hint if failure else None) or ""
-    retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
-    return CitecheckFailed(
-        message=f"Citation check failed: {reason or 'the server sent no failure block'}",
-        cause=hint or reason or "No failure block on the failed check.",
-        fix=hint or ("Retry the same request after a short wait." if retryable else "Check the request and resubmit."),
-        doc_url=(failure.docs_url if failure else "") or "https://lenz.io/docs/errors",
-        citecheck_id=check.citecheck_id,
-        error_code=reason,
-        failure_reason=reason,
-        failure_class=(failure.failure_class if failure else "") or "",
-        retryable=retryable,
-        hint=hint,
-        citecheck=check,
-    )
-
-
-def _review_failed(review: ReviewFull) -> ReviewFailed:
-    failure = _failure_of(review)
-    reason = (failure.failure_reason if failure else None) or ""
-    hint = (failure.hint if failure else None) or ""
-    retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
-    return ReviewFailed(
-        message=f"Review failed: {reason or 'the server sent no failure block'}",
-        cause=hint or reason or "No failure block on the failed review.",
-        fix=hint or ("Retry the same draft after a short wait." if retryable else "Check the draft and resubmit."),
-        doc_url=(failure.docs_url if failure else "") or "https://lenz.io/docs/errors",
-        review_id=review.review_id,
-        error_code=reason,
-        failure_reason=reason,
-        failure_class=(failure.failure_class if failure else "") or "",
-        retryable=retryable,
-        hint=hint,
-        review=review,
-    )
-
-
-def _check_served_version(response: httpx.Response) -> None:
-    """Refuse an answer in an API version this SDK does not read.
-
-    A response without the header proceeds (a proxy or an old server may not
-    send it). Webhook payloads never pass through here.
-    """
-    served = (response.headers.get(_VERSION_HEADER) or "").strip()
-    if not served or served == API_VERSION:
-        return
-    try:
-        parsed = response.json() if response.content else None
-    except ValueError:
-        parsed = None
-    raise LenzApiVersionError(
-        message=f"The API answered in version {served}; lenz-io 3.x reads {API_VERSION} only.",
-        cause=f"The response carries {_VERSION_HEADER}: {served}.",
-        fix=(
-            "If this persists, contact support (https://lenz.io/contact) with the request id; "
-            "lenz-io 2.x reads both versions."
-        ),
-        doc_url="https://lenz.io/docs/errors",
-        request_id=response.headers.get("X-Request-ID") or "",
-        status_code=response.status_code,
-        body=parsed if isinstance(parsed, dict) else None,
-        api_version=served,
-    )
-
-
-def _stated_retry_after(response: httpx.Response) -> int | None:
-    """Seconds the server says to wait, or None if it didn't say.
-
-    Reads the ``Retry-After`` header first, then the body's
-    ``reset_in_seconds`` (429 shapes), then the body's ``retry_after``
-    (the 503 shapes carry the wait under that key). Returns None (rather
-    than 0) on an absent or unparseable value so the caller can tell
-    "server stated no wait" apart from "server said wait 0 seconds" and
-    fall back to its own backoff.
-    """
-    raw = response.headers.get("Retry-After")
-    if raw is None or str(raw).strip() == "":
+    def _recovering(self, recover: Callable[[LenzError], Any], method: str, path: str, **kwargs: Any) -> Any:
+        """``_request``, where an error ``recover`` reads as an answer (not
+        ``None``) settles the call with that answer: the per-operation
+        recoveries of ``_core`` (an already-deleted verification, a 409 naming
+        the job a resend started)."""
         try:
-            body = response.json()
-        except Exception:
-            # A non-JSON body is not exceptional — fall back to backoff.
-            return None
-        if not isinstance(body, dict):
-            return None
-        raw = body.get("reset_in_seconds")
-        if raw is None or str(raw).strip() == "":
-            raw = body.get("retry_after")
-        if raw is None or str(raw).strip() == "":
-            raw = body.get("retry_after_seconds")
-    if raw is None or str(raw).strip() == "":
-        return None
-    try:
-        # Floored at zero: `Retry-After: -5` is malformed, and time.sleep()
-        # raises ValueError on a negative — which would escape the retry
-        # ladder as a bare ValueError, defeating the typed-exception contract.
-        seconds = float(raw)
-        if not math.isfinite(seconds):
-            # ``inf``, ``nan``, ``1e999``: no stated wait (the backoff ladder
-            # runs), as in the Node SDK; never an OverflowError.
-            return None
-        # A huge finite wait is clamped (still past every cap).
-        return int(min(max(seconds, 0.0), MAX_TIMEOUT_SECONDS))
-    except (TypeError, ValueError):
-        return None
-
-
-def _json_or_none(response: httpx.Response) -> Any:
-    try:
-        return response.json()
-    except Exception:
-        return None
-
-
-def _body_error_code(response: httpx.Response) -> str:
-    """The server's machine-readable ``code`` from the body, or ``""``.
-
-    Reads it exactly the way ``map_response_to_error`` does — string-typed
-    only, so a malformed ``code: 42`` reads as ``""`` rather than ``"42"``
-    and nothing branches on a value the server never meant as a code.
-    """
-    try:
-        body = response.json()
-    except Exception:
-        return ""
-    if not isinstance(body, dict):
-        return ""
-    code = body.get("code")
-    return code if isinstance(code, str) else ""
-
-
-def _aborts_on_long_stated_wait(response: httpx.Response) -> bool:
-    """Whether a stated wait past the cap should abort instead of back off.
-
-    True for 429 (always) and for a 503 the server typed as its own
-    shed/exhaustion response. An untyped 503 — the ordinary proxy /
-    maintenance shape — is deliberately False: it keeps the ladder.
-    """
-    if response.status_code == 429:
-        return True
-    return response.status_code == 503 and _body_error_code(response) in UPSTREAM_503_CODES
-
-
-def _retry_sleep(attempt: int) -> float:
-    if attempt < len(RETRY_BACKOFF):
-        return RETRY_BACKOFF[attempt]
-    return RETRY_BACKOFF[-1]
+            return self._request(method, path, **kwargs)
+        except LenzError as exc:
+            settled = recover(exc)
+            if settled is None:
+                raise
+            return settled
 
 
 __all__ = ["API_VERSION", "DEFAULT_BASE_URL", "NOT_GIVEN", "Lenz", "NotGiven", "VerifyBatchItem"]

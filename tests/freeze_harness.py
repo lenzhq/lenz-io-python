@@ -19,8 +19,7 @@ import httpx
 import pytest
 import respx
 
-from lenz_io import Lenz, LenzError
-from lenz_io import client as client_module
+from lenz_io import Lenz, LenzError, client as client_module
 
 BASE = "https://lenz.io/api/v1"
 API_KEY = "lenz_" + "0" * 32

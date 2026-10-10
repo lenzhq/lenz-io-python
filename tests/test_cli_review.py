@@ -19,9 +19,7 @@ from rich.console import Console
 from typer.testing import CliRunner
 
 from lenz_io import Lenz, ReviewFull
-from lenz_io.cli import _run, normalize_argv
-from lenz_io.cli import app as app_mod
-from lenz_io.cli import config as cfg
+from lenz_io.cli import _run, app as app_mod, config as cfg, normalize_argv
 from lenz_io.cli.app import app
 from lenz_io.cli.render import Output
 from lenz_io.cli.review import exit_code_for_review, render_review

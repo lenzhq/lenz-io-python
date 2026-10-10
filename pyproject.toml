@@ -103,6 +103,11 @@ quote-style = "double"
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "RUF"]
 
+[tool.ruff.lint.isort]
+# ``client.py`` re-exports, as ``name as name``, every name that lived in it
+# before the sync and async clients shared a core: kept as one import block.
+combine-as-imports = true
+
 [tool.mypy]
 # mypy uses 3.10 as the typing baseline (built-in generics, PEP 604),
 # which is also the runtime floor since `requires-python` dropped 3.9
