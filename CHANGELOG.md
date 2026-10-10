@@ -25,7 +25,6 @@ All notable changes to this SDK are documented here. Format follows
 ### Fixed
 
 - A lone UTF-16 surrogate (half of a pair, `"\ud800"`) in any request string, dict keys and query values included, now goes out as U+FFFD instead of raising `UnicodeEncodeError` before the request. A pair written as two surrogates goes out as its one character. Both SDKs now send the same bytes. Valid text is sent unchanged.
-
 - `user_agent=` now reaches the wire when the client is given `http_client=` (it was ignored there), and such a client sends the SDK's `lenz-io-python/...` User-Agent instead of httpx's default `python-httpx/...`. It is set on each request, so the client you passed is not changed; a User-Agent you set on that client yourself is kept unless you pass `user_agent=`, and a per-call `extra_headers={"User-Agent": ...}` still wins over both.
 
 ## [3.1.0] - 2026-10-10
