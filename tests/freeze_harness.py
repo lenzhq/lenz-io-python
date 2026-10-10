@@ -136,9 +136,22 @@ class Script:
 
 
 @contextmanager
-def recording(monkeypatch: pytest.MonkeyPatch, answers: dict[tuple[str, str], list[Answer]]) -> Iterator[Recording]:
+def recording(
+    monkeypatch: pytest.MonkeyPatch, answers: dict[tuple[str, str], list[Answer]], *, async_client: bool = False
+) -> Iterator[Recording]:
+    """Record a case. ``async_client``: the fake clock drives ``AsyncLenz``'s
+    sleep and clock seams instead of the sync client's ``time``."""
     rec = Recording()
-    monkeypatch.setattr(client_module, "time", _FakeTime(rec.clock))
+    if async_client:
+        from lenz_io import async_client as async_module
+
+        async def sleep(seconds: float) -> None:
+            rec.clock.sleep(seconds)
+
+        monkeypatch.setattr(async_module, "_sleep", sleep)
+        monkeypatch.setattr(async_module, "_monotonic", rec.clock.monotonic)
+    else:
+        monkeypatch.setattr(client_module, "time", _FakeTime(rec.clock))
     with respx.mock(assert_all_called=False) as router:
         router.route().mock(side_effect=Script(answers, rec))
         yield rec
@@ -208,13 +221,14 @@ def outcome_detail(call: Callable[[], Any]) -> dict[str, Any]:
         }
     if isinstance(result, Iterator) or hasattr(result, "__next__"):
         result = list(result)
+    values: Any
     if isinstance(result, list):
-        return {
-            "result": [_plain(r.model_dump(mode="json")) if hasattr(r, "model_dump") else _plain(r) for r in result]
-        }
-    if hasattr(result, "model_dump"):
-        return {"result": _plain(result.model_dump(mode="json"))}
-    return {"result": _plain(result)}
+        values = [_plain(r.model_dump(mode="json")) if hasattr(r, "model_dump") else _plain(r) for r in result]
+    elif hasattr(result, "model_dump"):
+        values = _plain(result.model_dump(mode="json"))
+    else:
+        values = _plain(result)
+    return {"result": values, "repr": repr(result)}
 
 
 CLIENTS: dict[str, Callable[[], Lenz]] = {
@@ -230,3 +244,23 @@ CLIENTS: dict[str, Callable[[], Lenz]] = {
     "max_retries_0": lambda: Lenz(api_key=API_KEY, max_retries=0),
     "max_retries_1": lambda: Lenz(api_key=API_KEY, max_retries=1),
 }
+
+
+def async_clients() -> dict[str, Callable[[], Any]]:
+    """``CLIENTS`` for ``AsyncLenz``: the same configurations, made from an
+    ``httpx.AsyncClient`` where the sync one is borrowed."""
+    from lenz_io import AsyncLenz
+
+    return {
+        "default": lambda: AsyncLenz(api_key=API_KEY),
+        "keyless": lambda: AsyncLenz(api_key="", base_url=BASE),
+        "timeout_none": lambda: AsyncLenz(api_key=API_KEY, timeout=None),
+        "timeout_5_read_200": lambda: AsyncLenz(api_key=API_KEY, timeout=httpx.Timeout(5, read=200)),
+        "timeout_200_read_5": lambda: AsyncLenz(api_key=API_KEY, timeout=httpx.Timeout(200, read=5)),
+        "timeout_30_read_none": lambda: AsyncLenz(api_key=API_KEY, timeout=httpx.Timeout(30, read=None)),
+        "timeout_120": lambda: AsyncLenz(api_key=API_KEY, timeout=120.0),
+        "borrowed_10": lambda: AsyncLenz(api_key=API_KEY, http_client=httpx.AsyncClient(timeout=10.0)),
+        "borrowed_300": lambda: AsyncLenz(api_key=API_KEY, http_client=httpx.AsyncClient(timeout=300.0)),
+        "max_retries_0": lambda: AsyncLenz(api_key=API_KEY, max_retries=0),
+        "max_retries_1": lambda: AsyncLenz(api_key=API_KEY, max_retries=1),
+    }
