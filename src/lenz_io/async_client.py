@@ -697,7 +697,7 @@ class AsyncLenz:
         timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN,
         max_retries: int | NotGiven = NOT_GIVEN,
         extra_headers: Mapping[str, str | None] | None = None,
-        api_key: str | None | NotGiven = NOT_GIVEN,
+        api_key: str | NotGiven | None = NOT_GIVEN,
     ) -> _Client:
         """A copy of this client with other request options, sharing its
         connection pool, key and base URL. A plain method (not a coroutine):
