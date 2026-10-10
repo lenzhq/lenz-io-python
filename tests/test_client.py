@@ -20,6 +20,7 @@ from lenz_io import (
     LenzAuthError,
     LenzError,
     LenzGoneError,
+    LenzInvalidResponseError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRateLimitError,
@@ -1232,8 +1233,11 @@ class TestWait:
     def test_completed_without_result_raises(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.get("/verify/status/t").respond(200, json={"status": "completed"})
-            with pytest.raises(LenzPipelineError):
+            # Since 3.2: the run ended, but there is nothing to read.
+            with pytest.raises(LenzInvalidResponseError) as ei:
                 client.wait("t", timeout=5)
+        assert ei.value.status_code == 200
+        assert "no result" in ei.value.message
 
     def test_timeout_raises(self, client, monkeypatch):
         monkeypatch.setattr("lenz_io.client.time.sleep", lambda _: None)

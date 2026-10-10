@@ -97,7 +97,9 @@ def test_a_nested_result_and_a_built_one_have_none(client: Any) -> None:
     assert status.result is not None and status.result.http_status is None
     assert BatchItemResult(task_id="t", status="timeout").http_status is None
     assert TaskAccepted(task_id="t").headers is None
-    assert AssessResponse.model_validate(body).http_status is None
+    # A ``Result`` not read from an answer: 0 and empty headers, never None.
+    assert AssessResponse.model_validate(body).http_status == 0
+    assert AssessResponse.model_validate(body).headers == ResponseHeaders()
 
 
 def test_metadata_survives_pickling_and_copying(client: Any) -> None:

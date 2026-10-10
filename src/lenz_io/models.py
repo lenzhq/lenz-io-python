@@ -29,6 +29,7 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    TypeAdapter,
     ValidationError,
     ValidationInfo,
     ValidatorFunctionWrapHandler,
@@ -170,6 +171,31 @@ def _unreadable_in(model: Any, exc: ValidationError, prefix: tuple[int | str, ..
         what=f"The API answered HTTP {status}" if status else "",
         prefix=prefix,
     )
+
+
+def _no_result(status: Any) -> LenzInvalidResponseError:
+    """``LenzInvalidResponseError`` for a ``completed`` status poll that
+    carries no ``result`` (absent or ``null``): the run ended, but its
+    verification cannot be read."""
+    body = _body_of(status)
+    sent = isinstance(body, dict) and body.get("result") is not None
+    line: Any = (
+        {"type": "model_type", "loc": ("result",), "input": body.get("result"), "ctx": {"class_name": "Verification"}}
+        if sent and isinstance(body, dict)
+        else {"type": "missing", "loc": ("result",), "input": body}
+    )
+    exc = ValidationError.from_exception_data(type(status).__name__, [line])
+    err = _unreadable_in(status, exc)
+    err.message = (
+        f"The API answered HTTP {err.status_code} with status completed and no result: "
+        "the run ended, but its verification cannot be read."
+        if err.status_code
+        else "A status completed with no result: the run ended, but its verification cannot be read."
+    )
+    err.cause = "A completed status carries the verification in result; this answer has none."
+    err.args = (err.message,)
+    err.__cause__ = exc
+    return err
 
 
 def _read_block(
@@ -388,6 +414,45 @@ class _Lax(BaseModel):
         return self
 
 
+class Result(_Lax):
+    """The base of every result a call returns: ``http_status`` and
+    ``headers`` are always set on it (an ``int`` and a ``ResponseHeaders``,
+    never ``None``), so code handling any call's result can read them
+    without a check: ``def log(result: Result) -> None: ...``.
+
+    Every method returning a top-level result is annotated with a subclass
+    (``AssessResponse``, ``TaskStatus``, ``ReviewFull``, ...). ``verify``
+    returns a ``TaskAcceptedResult`` and ``verifications.get`` a
+    ``VerificationResult``: ``TaskAccepted`` and ``Verification`` are also
+    nested in other results (``BatchAccepted.items``,
+    ``TaskStatus.result``), where ``http_status`` stays ``None``. Models
+    nested in a result (an ``AssessResponse.claims`` row, ...) and results
+    the SDK builds (``BatchItemResult``, ``verify_and_wait``'s
+    ``Verification``) are not ``Result`` instances.
+
+    A ``Result`` not read from an answer (one you validate yourself, a
+    webhook's) has ``http_status`` 0 and empty ``headers``. Since 3.2."""
+
+    @property
+    def http_status(self) -> int:
+        """The HTTP status of the answer this result was read from (``200``,
+        ``202`` for a receipt, ``409`` for a ``ReviewStarted`` /
+        ``CitecheckStarted`` a 409 naming the job settled); 0 when it was not
+        read from an answer. Not part of ``model_dump()``. Since 3.2."""
+        meta = _meta_of(self)
+        return meta.http_status if meta is not None and meta.top else 0
+
+    @property
+    def headers(self) -> ResponseHeaders:
+        """The headers of the answer this result was read from, as a
+        read-only mapping whose lookups ignore case
+        (``result.headers["x-request-id"]``, a receipt's ``Location``); empty
+        when it was not read from an answer. Not part of ``model_dump()``.
+        Since 3.2."""
+        meta = _meta_of(self)
+        return meta.headers if meta is not None and meta.top else ResponseHeaders()
+
+
 # ── Reading the current response shape ───────────────────────────────────
 #
 # Since 3.0 the SDK asks for the API's 2026-10-11 response shape and reads
@@ -529,6 +594,31 @@ def _sent(model: BaseModel, key: str) -> Any:
     return extra.get(key)
 
 
+_T = TypeVar("_T")
+
+#: The types a property reads a newer-shape key as (strict: ``1`` is not a
+#: ``bool``, ``True`` not an ``int``).
+_STR: TypeAdapter[str] = TypeAdapter(str)
+_INT: TypeAdapter[int] = TypeAdapter(int)
+_BOOL: TypeAdapter[bool] = TypeAdapter(bool)
+_STRS: TypeAdapter[list[str]] = TypeAdapter(list[str])
+_LIST: TypeAdapter[list[Any]] = TypeAdapter(list[Any])
+
+
+def _sent_as(model: BaseModel, key: str, kind: TypeAdapter[_T]) -> _T | None:
+    """``_sent(model, key)`` read as ``kind``: ``None`` when not sent (or
+    ``null``); a value of another type raises ``LenzInvalidResponseError``
+    (as a field of the wrong type does on the read itself), never read as
+    not sent."""
+    sent = _sent(model, key)
+    if sent is None:
+        return None
+    try:
+        return kind.validate_python(sent, strict=True)
+    except ValidationError as exc:
+        raise _unreadable_in(model, exc, (key,)) from exc
+
+
 #: Closed set of failure causes on a ``failed`` verification, mirroring the
 #: Node SDK's ``FailureClass`` union. Exported for callers who want exhaustive
 #: matching:
@@ -651,8 +741,8 @@ class CandidateClaim(_Lax):
     @property
     def claim(self) -> str:
         """The option's claim. Replaces ``text``, which is deprecated and kept."""
-        sent = _sent(self, "claim")
-        return sent if isinstance(sent, str) else self.text
+        sent = _sent_as(self, "claim", _STR)
+        return sent if sent is not None else self.text
 
 
 class EntityRef(_Lax):
@@ -736,7 +826,7 @@ class Coverage(_Lax):
     terms_version: str = ""
 
 
-class Certificate(_Lax):
+class Certificate(Result):
     """The signed warranty certificate, byte-identical to the public document.
 
     Everything needed to verify the record **without Lenz**: ``leaf`` is the
@@ -855,8 +945,34 @@ class Verification(_Lax):
         """When the verification completed. Replaces ``modified_at``, which is
         deprecated and kept (set only when the completion fell on a later UTC
         day than ``created_at``)."""
-        sent = _sent(self, "completed_at")
-        return sent if isinstance(sent, str) else None
+        return _sent_as(self, "completed_at", _STR)
+
+
+def _equal_to_base(model: BaseModel, other: object, base: type[BaseModel]) -> bool | None:
+    """Whether ``model`` (a top-level subclass of ``base``) equals ``other``,
+    a ``base`` of another class read from the same body; ``None`` when
+    ``other`` is not one (pydantic's own comparison decides)."""
+    if not isinstance(other, base) or type(other) is type(model):
+        return None
+    return (
+        model.__dict__ == other.__dict__
+        and (model.__pydantic_extra__ or {}) == (other.__pydantic_extra__ or {})
+        and getattr(model, "__pydantic_private__", None) == getattr(other, "__pydantic_private__", None)
+    )
+
+
+class VerificationResult(Verification, Result):
+    """A ``Verification`` a call returned (``verifications.get``): its
+    ``http_status`` and ``headers`` are always set. Everything else is
+    ``Verification``'s, and it equals a ``Verification`` read from the same
+    body (``isinstance(v, Verification)`` holds; ``type(v) is Verification``
+    does not). Since 3.2."""
+
+    def __eq__(self, other: object) -> bool:
+        same = _equal_to_base(self, other, Verification)
+        return super().__eq__(other) if same is None else same
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 class VerificationListItem(_Lax):
@@ -895,18 +1011,17 @@ class VerificationListItem(_Lax):
         """When the verification completed. Replaces ``modified_at``, which is
         deprecated and kept (set only when the completion fell on a later UTC
         day than ``created_at``)."""
-        sent = _sent(self, "completed_at")
-        return sent if isinstance(sent, str) else None
+        return _sent_as(self, "completed_at", _STR)
 
 
-class VerificationList(_Lax):
+class VerificationList(Result):
     items: list[VerificationListItem] = Field(default_factory=list)
     total: int = 0
     page: int = 1
     page_size: int = 20
 
 
-class RelatedVerifications(_Lax):
+class RelatedVerifications(Result):
     """Wrapper for ``GET /verifications/{id}/related``."""
 
     items: list[SimilarVerification] = Field(default_factory=list)
@@ -916,7 +1031,7 @@ class LibraryItem(VerificationListItem):
     """Same shape as VerificationListItem on the public Library list."""
 
 
-class LibraryList(_Lax):
+class LibraryList(Result):
     items: list[LibraryItem] = Field(default_factory=list)
     total: int = 0
     page: int = 1
@@ -993,7 +1108,7 @@ class ExtractedClaim(ClaimLocation):
     claims could not be located). Returned by ``ExtractedClaims.claims``."""
 
 
-class ExtractedClaims(_Lax):
+class ExtractedClaims(Result):
     """Output of ``POST /extract``.
 
     ``status`` is one of ``ExtractStatus``: ``ready``, ``not_a_claim``, or —
@@ -1062,16 +1177,11 @@ class ExtractedClaims(_Lax):
         for one claim, ``[]`` for none), each with its ``positions`` when the
         call located them. Replaces ``claim``, ``identified_claims`` and
         ``locations``, which are deprecated and kept."""
-        sent = _sent(self, "claims")
-        return (
-            [
-                _as_received(_read_block(self, ExtractedClaim, c, ("claims", i), _context(self)), self, "claims", i)
-                for i, c in enumerate(sent)
-                if isinstance(c, dict)
-            ]
-            if isinstance(sent, list)
-            else []
-        )
+        sent = _sent_as(self, "claims", _LIST)
+        return [
+            _as_received(_read_block(self, ExtractedClaim, c, ("claims", i), _context(self)), self, "claims", i)
+            for i, c in enumerate(sent or [])
+        ]
 
 
 #: The original shape's ``hint`` on an /assess verdict row that found other
@@ -1200,8 +1310,7 @@ class AssessClaim(_Lax):
     def status(self) -> str:
         """``"completed"`` (a verdict) or ``"failed"`` (none; see ``failure``).
         Replaces ``verdict == "Error"``, which is deprecated and kept."""
-        sent = _sent(self, "status")
-        return sent if isinstance(sent, str) else ""
+        return _sent_as(self, "status", _STR) or ""
 
     @property
     def failure(self) -> FailureBlock | None:
@@ -1211,7 +1320,7 @@ class AssessClaim(_Lax):
         one sentence on what to send next. Replaces ``error_code`` and
         ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        if not isinstance(sent, dict):
+        if sent is None:
             return None
         return _as_received(_read_block(self, FailureBlock, sent, ("failure",), _context(self)), self, "failure")
 
@@ -1219,8 +1328,8 @@ class AssessClaim(_Lax):
     def more_claims(self) -> list[str]:
         """Other claims found in the input that were not assessed. Replaces
         ``identified_claims``, which is deprecated and kept."""
-        sent = _sent(self, "more_claims")
-        return list(sent) if isinstance(sent, list) else []
+        sent = _sent_as(self, "more_claims", _STRS)
+        return sent if sent is not None else []
 
 
 #: The ``AssessResponse.status`` values this release knows about. A
@@ -1233,7 +1342,7 @@ class AssessClaim(_Lax):
 AssessStatus = Literal["ok", "no_checkable_claim", "error"]
 
 
-class AssessResponse(_Lax):
+class AssessResponse(Result):
     """Output of ``POST /assess``.
 
     Single form (``assess(claim=...)``): ``claims`` is one entry per claim
@@ -1293,15 +1402,14 @@ class AssessResponse(_Lax):
         or every item, holds nothing checkable) or ``error``. See
         ``AssessStatus``. Replaces ``error`` and ``error_code``, which are
         deprecated and kept."""
-        sent = _sent(self, "status")
-        return sent if isinstance(sent, str) else ""
+        return _sent_as(self, "status", _STR) or ""
 
     @property
     def failure(self) -> FailureBlock | None:
         """Why the single form has no rows; ``None`` otherwise. Replaces
         ``error`` and ``error_code``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        if not isinstance(sent, dict):
+        if sent is None:
             return None
         return _as_received(_read_block(self, FailureBlock, sent, ("failure",), _context(self)), self, "failure")
 
@@ -1327,8 +1435,7 @@ class TaskAccepted(_Lax):
         """The item's claim on a batch or select receipt (``""`` on a single
         ``verify`` receipt). Replaces ``claim_text``, which is deprecated and
         kept."""
-        sent = _sent(self, "claim")
-        return sent if isinstance(sent, str) else ""
+        return _sent_as(self, "claim", _STR) or ""
 
     @property
     @deprecated("It is no longer sent; use `task_id` to poll.", category=None)
@@ -1336,16 +1443,29 @@ class TaskAccepted(_Lax):
         """Deprecated: no longer sent. An internal correlation id the 2.x
         response shape sent on a ``verify`` receipt; ``""`` now. It cannot be
         polled: use ``task_id``."""
-        sent = _sent(self, "chain_id")
-        return sent if isinstance(sent, str) else ""
+        return _sent_as(self, "chain_id", _STR) or ""
 
 
-class BatchAccepted(_Lax):
+class TaskAcceptedResult(TaskAccepted, Result):
+    """The ``TaskAccepted`` receipt ``verify`` returns: its ``http_status``
+    and ``headers`` are always set. Everything else is ``TaskAccepted``'s,
+    and it equals a ``TaskAccepted`` read from the same body
+    (``isinstance`` holds; ``type(r) is TaskAccepted`` does not). Since
+    3.2."""
+
+    def __eq__(self, other: object) -> bool:
+        same = _equal_to_base(self, other, TaskAccepted)
+        return super().__eq__(other) if same is None else same
+
+    __hash__ = None  # type: ignore[assignment]
+
+
+class BatchAccepted(Result):
     batch_id: str = ""
     items: list[TaskAccepted] = Field(default_factory=list)
 
 
-class CancelResult(_Lax):
+class CancelResult(Result):
     """Returned by ``POST /verify/{task_id}/cancel`` (``Lenz.cancel``).
 
     ``cancelled`` is ``True`` whenever the run is cancelled, by this call or an
@@ -1454,7 +1574,7 @@ _CANCELLED_TASK_FAILURE: dict[str, Any] = {
 }
 
 
-class TaskStatus(_Lax):
+class TaskStatus(Result):
     """Returned by ``GET /verify/status/{task_id}``."""
 
     _null_ok = field_validator(
@@ -1554,9 +1674,9 @@ class TaskStatus(_Lax):
         cancelled while running (``code`` and ``failure_class``
         ``cancelled``, ``detail`` "Cancelled.", not retryable)."""
         sent = _sent(self, "failure")
-        if not isinstance(sent, dict) and self.status == "cancelled" and self._legacy_aliases:
+        if sent is None and self.status == "cancelled" and self._legacy_aliases:
             sent = _CANCELLED_TASK_FAILURE
-        if not isinstance(sent, dict):
+        if sent is None:
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.
         if not self._legacy_aliases:
@@ -1611,8 +1731,11 @@ class BatchItemResult(_Lax):
     def error(self) -> Exception | None:
         """On a ``failed`` item with no ``status_detail``: the error its poll
         ended with (a ``LenzGoneError``, a ``LenzNotFoundError``, a
-        ``LenzApiVersionError`` or a ``LenzInvalidResponseError``); ``None``
-        otherwise. Not part of ``model_dump()``. Since 3.2."""
+        ``LenzApiVersionError`` or a ``LenzInvalidResponseError``). On a
+        ``failed`` item whose poll said ``completed`` with no ``result``
+        (``status_detail`` is that poll): a ``LenzInvalidResponseError``, the
+        run ended but its result cannot be read. ``None`` otherwise. Not part
+        of ``model_dump()``. Since 3.2."""
         return self._error
 
 
@@ -1756,7 +1879,7 @@ class UsageExtract(_Lax):
 _BLOCK_COSTS = (("verify", 10), ("ask", 1), ("assess", 1))
 
 
-class Usage(_Lax):
+class Usage(Result):
     """Returned by ``GET /me/usage`` — the account's balance and what it buys.
 
     ``credits`` is the balance and ``costs`` is the price list (credits per
@@ -1895,7 +2018,7 @@ class AskMessage(_Lax):
     created_at: str = ""
 
 
-class AskHistory(_Lax):
+class AskHistory(Result):
     """Returned by ``GET /ask/{verification_id}``."""
 
     messages: list[AskMessage] = Field(default_factory=list)
@@ -1904,7 +2027,7 @@ class AskHistory(_Lax):
     can_send: bool = False
 
 
-class AskReply(_Lax):
+class AskReply(Result):
     """Returned by ``POST /ask/{verification_id}``.
 
     ``content`` is the assistant's reply text in a small markdown
@@ -1942,7 +2065,7 @@ class AskReply(_Lax):
 # released SDK must pass it through rather than reject the whole review.
 
 
-class ReviewStarted(_Lax):
+class ReviewStarted(Result):
     """Returned by ``POST /review`` (HTTP 202).
 
     ``status`` is always ``"queued"``: the acceptance receipt, not the current
@@ -1999,14 +2122,13 @@ class FailureBlock(_Lax):
         """The cause, an open set (``no_checkable_claim``, ``timeout``, ...).
         Replaces ``failure_reason``, which is deprecated and kept (it spells
         "nothing checkable" ``no_claim``)."""
-        sent = _sent(self, "code")
-        return sent if isinstance(sent, str) else _new_code(self.failure_reason)
+        sent = _sent_as(self, "code", _STR)
+        return sent if sent is not None else _new_code(self.failure_reason)
 
     @property
     def detail(self) -> str | None:
         """One sentence on what happened; ``None`` from the original shape."""
-        sent = _sent(self, "detail")
-        return sent if isinstance(sent, str) else None
+        return _sent_as(self, "detail", _STR)
 
 
 def _verification_failure(failure: Any) -> Any:
@@ -2137,22 +2259,20 @@ class ReviewSummary(_Lax):
     def claims_found(self) -> int | None:
         """How many claims the draft holds; ``None`` until read, and from the
         original response shape, which does not send it."""
-        sent = _sent(self, "claims_found")
-        return sent if isinstance(sent, int) else None
+        return _sent_as(self, "claims_found", _INT)
 
     @property
     def claim_limit_exceeded(self) -> bool | None:
         """Some of the draft's claims were left out (they are in
         ``more_claims``). ``None`` from the original response shape, which
         says only that the limit was reached: read ``more_claims`` there."""
-        sent = _sent(self, "claim_limit_exceeded")
-        return sent if isinstance(sent, bool) else None
+        return _sent_as(self, "claim_limit_exceeded", _BOOL)
 
     @property
     def citation_limit_exceeded(self) -> bool | None:
         """``citations_found`` is over ``citation_limit``: some were left out."""
-        sent = _sent(self, "citation_limit_exceeded")
-        return sent if isinstance(sent, bool) else self.citation_limit_reached
+        sent = _sent_as(self, "citation_limit_exceeded", _BOOL)
+        return sent if sent is not None else self.citation_limit_reached
 
 
 class ReviewCredits(_Lax):
@@ -2224,8 +2344,8 @@ class ReviewAssessment(_Lax):
     def more_claims(self) -> list[str]:
         """Other claims found in the passage that were not checked. Replaces
         ``identified_claims``, which is deprecated and kept."""
-        sent = _sent(self, "more_claims")
-        return list(sent) if isinstance(sent, list) else list(self.identified_claims)
+        sent = _sent_as(self, "more_claims", _STRS)
+        return sent if sent is not None else list(self.identified_claims)
 
 
 class ReviewEntity(_Lax):
@@ -2286,8 +2406,8 @@ class ReviewVerification(_Lax):
         """When the verification completed. From the original response shape it
         is known only through ``modified_at``: set when that is, ``None`` on a
         same-day completion."""
-        sent = _sent(self, "completed_at")
-        return sent if isinstance(sent, str) else self.modified_at
+        sent = _sent_as(self, "completed_at", _STR)
+        return sent if sent is not None else self.modified_at
 
 
 class SuggestedEdit(_Lax):
@@ -2584,7 +2704,7 @@ class ReviewCitationFailure(_Lax):
 # failures are the review's own models.
 
 
-class CitecheckStarted(_Lax):
+class CitecheckStarted(Result):
     """Returned by ``POST /citecheck`` (HTTP 202). ``status`` is always
     ``"queued"``: the receipt, not the current state."""
 
@@ -2635,11 +2755,11 @@ class CitecheckSummary(_Lax):
     @property
     def citation_limit_exceeded(self) -> bool | None:
         """``citations_found`` is over ``citation_limit``: some were left out."""
-        sent = _sent(self, "citation_limit_exceeded")
-        return sent if isinstance(sent, bool) else self.citation_limit_reached
+        sent = _sent_as(self, "citation_limit_exceeded", _BOOL)
+        return sent if sent is not None else self.citation_limit_reached
 
 
-class Citecheck(_Lax):
+class Citecheck(Result):
     """``GET /citechecks/{citecheck_id}``: a citation check as it stands.
 
     ``status``: ``queued`` → ``checking`` → ``completed``, or ``failed``, or
@@ -2718,7 +2838,7 @@ class ReviewEnvelope(_Lax):
     failure: FailureBlock | None = None
 
 
-class ReviewFull(ReviewEnvelope):
+class ReviewFull(ReviewEnvelope, Result):
     """``GET /reviews/{review_id}``: the envelope plus every claim."""
 
     view: str = "full"
@@ -2726,7 +2846,7 @@ class ReviewFull(ReviewEnvelope):
     citations: list[ReviewCitation] = Field(default_factory=list)
 
 
-class ReviewIssues(ReviewEnvelope):
+class ReviewIssues(ReviewEnvelope, Result):
     """``GET /reviews/{review_id}?view=issues``: the envelope, no ``claims``."""
 
     view: str = "issues"
@@ -2764,6 +2884,7 @@ __all__ = [
     "LibraryList",
     "Position",
     "RelatedVerifications",
+    "Result",
     "ReviewAssessment",
     "ReviewAssessmentCounts",
     "ReviewCitation",
@@ -2791,6 +2912,7 @@ __all__ = [
     "SimilarVerification",
     "Source",
     "TaskAccepted",
+    "TaskAcceptedResult",
     "TaskStatus",
     "Usage",
     "UsageCapacity",
@@ -2799,4 +2921,5 @@ __all__ = [
     "Verification",
     "VerificationList",
     "VerificationListItem",
+    "VerificationResult",
 ]

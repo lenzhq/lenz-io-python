@@ -246,15 +246,18 @@ from .models import (
     LibraryList as LibraryList,
     Progress as Progress,
     RelatedVerifications as RelatedVerifications,
+    Result as Result,
     ReviewFull as ReviewFull,
     ReviewIssues as ReviewIssues,
     ReviewStarted as ReviewStarted,
     TaskAccepted as TaskAccepted,
+    TaskAcceptedResult as TaskAcceptedResult,
     TaskStatus as TaskStatus,
     Usage as Usage,
     Verification as Verification,
     VerificationList as VerificationList,
     VerificationListItem as VerificationListItem,
+    VerificationResult as VerificationResult,
 )
 
 logger = logging.getLogger("lenz_io")
@@ -337,7 +340,7 @@ class _VerificationsNamespace:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
-    ) -> Verification:
+    ) -> VerificationResult:
         """Fetch a single verification by id.
 
         Works without an API key — the server accepts optional Bearer:
@@ -364,7 +367,7 @@ class _VerificationsNamespace:
             auth_optional=True,  # send the key if we have one → owner sees private rows
             options=options,
         )
-        return Verification.model_validate(body, context=self._p._results)
+        return VerificationResult.model_validate(body, context=self._p._results)
 
     def get_certificate(
         self,
@@ -499,6 +502,9 @@ class _AskNamespace:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> AskReply:
         """Send a follow-up question on an existing verification.
+
+        A blank ``message`` raises ``LenzUsageError`` (``blank_input``)
+        before sending (since 3.2).
 
         ``language`` (optional) overrides the claim's stored language for
         this single reply. Omit to let the server use the claim's
@@ -675,11 +681,12 @@ class Lenz:
     The constructor accepts ``api_key=None`` so library endpoints work
     without authentication (sandbox path for developers exploring before
     sign-up). Auth-required methods on an un-keyed client raise
-    ``LenzAuthError`` with a link to ``/api-credentials``.
+    ``LenzMissingKeyError`` (a ``LenzAuthError``, since 3.2) with a link to
+    ``/api-credentials``, before sending.
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
     empty or whitespace-only ``api_key`` is no key and never reads the
-    environment (auth-required methods raise ``LenzAuthError``). ASCII
+    environment (auth-required methods raise ``LenzMissingKeyError``). ASCII
     whitespace around a key (a trailing newline from a file or an
     environment variable, say) is dropped silently, with no warning (since
     3.2); what is left must be printable ASCII without spaces (a space, a
@@ -813,7 +820,7 @@ class Lenz:
           dropped silently; a key with a space, a control or a non-ASCII
           character inside it raises ``LenzInvalidKeyError`` (a
           ``LenzAuthError``) here (since 3.2). An empty or whitespace-only key, or ``None``, gives a copy
-          with no key (a call that needs one raises ``LenzAuthError`` before
+          with no key (a call that needs one raises ``LenzMissingKeyError`` before
           sending). A copy never reads ``LENZ_API_KEY``. Left out, the copy
           keeps the key it was made from.
 
@@ -865,7 +872,7 @@ class Lenz:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
-    ) -> TaskAccepted:
+    ) -> TaskAcceptedResult:
         """Submit a claim for verification. Returns a ``task_id``; the
         pipeline runs async. For sync ergonomics use ``verify_and_wait``.
 
@@ -1196,7 +1203,9 @@ class Lenz:
 
         Selection is by text, not index. Every claim must match one that was
         offered in the prior interrupt — the server rejects anything else with
-        a 422. To resolve a single claim, pass a one-element list.
+        a 422. To resolve a single claim, pass a one-element list. An empty
+        list, or a blank item, raises ``LenzUsageError`` before sending
+        (``empty_list`` / ``blank_item``; a blank item since 3.2).
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
         retry after a network drop returns the tasks the first attempt started
@@ -2145,7 +2154,7 @@ class Lenz:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
-    ) -> TaskAccepted:
+    ) -> TaskAcceptedResult:
         options = _call_options(timeout, max_retries, extra_headers, "verify()")
         payload = _verify_payload(
             claim=claim,
@@ -2159,7 +2168,7 @@ class Lenz:
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request("POST", "/verify", json=payload, headers=headers, options=options)
-            return TaskAccepted.model_validate(body, context=self._results)
+            return TaskAcceptedResult.model_validate(body, context=self._results)
 
     def _verify_batch(
         self,

@@ -597,24 +597,54 @@ the same read-only, case-insensitive mapping errors carry (`exc.headers`):
 ```python
 started = client.review("The Eiffel Tower is in Paris. It opened in 1889.")
 print(started.http_status)  # 202
-if started.headers is not None:  # None only on a result not read from an answer
-    print(started.headers.get("location"))  # where to read the review
-    print(started.headers.get("retry-after"))  # None when it states no wait
-    print(started.headers.get("x-request-id"))  # quote it to support
+print(started.headers.get("location"))  # where to read the review
+print(started.headers.get("retry-after"))  # None when it states no wait
+print(started.headers.get("x-request-id"))  # quote it to support
 ```
 
 Use `.get()`: which headers an answer carries depends on the endpoint (a
 review's or citation check's receipt names its `Location`; a `verify`
 receipt does not).
 
-`headers` is a `lenz_io.errors.ResponseHeaders` (or `None`). Only the
-top-level result has them: a model nested in it (`TaskStatus.result`, an
-`AssessResponse.claims` row, the items an `iter()` yields, each of which sits
-in a page, ...), a result the SDK builds (`BatchItemResult`), a webhook's
-models and a model you validate yourself have `None` for both. A result a wait helper returns carries its last poll's
-(`review_and_wait`, `citecheck_and_wait`); `verify_and_wait` returns the
-poll's nested `result`, so its `Verification` has `None`. Like `raw`, they are
-not part of `model_dump()` or `--json`.
+**The `Result` type** (since 3.2). Every call that returns a result read from
+one answer returns a subclass of `lenz_io.Result`, on which `http_status` is
+an `int` and `headers` a `lenz_io.errors.ResponseHeaders`, never `None`, so
+code handling any call's result can be typed once, with no check:
+
+```python
+from lenz_io import Result
+
+
+def log_answer(result: Result) -> None:
+    print(result.http_status, result.headers.get("x-request-id"))
+
+
+log_answer(client.assess("Water boils at 100 C at sea level."))
+log_answer(client.verify("The Eiffel Tower is in Paris."))
+```
+
+The calls are annotated with these subclasses: `AssessResponse`,
+`ExtractedClaims`, `TaskStatus`, `BatchAccepted`, `CancelResult`,
+`ReviewStarted`, `ReviewFull`, `ReviewIssues`, `CitecheckStarted`,
+`Citecheck`, `Usage`, `VerificationList`, `Certificate`,
+`RelatedVerifications`, `AskHistory`, `AskReply` and `LibraryList`. Two
+models are also nested in other results, so the calls returning them at the
+top level return a subclass of their own: `verify` returns a
+`TaskAcceptedResult` (a `TaskAccepted`) and `verifications.get` a
+`VerificationResult` (a `Verification`). Each compares equal to the base
+model read from the same body (`client.verifications.get(v) ==
+status.result`), and `isinstance(r, Verification)` holds, but
+`type(r) is Verification` no longer does. A `Result` not read from an answer
+(one you validate yourself, a webhook's `review` or `citecheck`) has
+`http_status` `0` and empty `headers`.
+
+Only the top-level result has them: a model nested in it (`TaskStatus.result`,
+an `AssessResponse.claims` row, the items an `iter()` yields, each of which
+sits in a page, ...) and a result the SDK builds (`BatchItemResult`) are not
+`Result`s and have `None` for both. A result a wait helper returns carries its
+last poll's (`review_and_wait`, `citecheck_and_wait`); `verify_and_wait`
+returns the poll's nested `result`, a plain `Verification` with `None`. Like
+`raw`, they are not part of `model_dump()` or `--json`.
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -938,9 +968,10 @@ a bad `page_size`, `timeout`, `max_retries`, `extra_headers` or `user_agent`)
 raise `LenzUsageError` before anything is sent (since 3.2). It is a
 `ValueError`, which 3.1 raised, and deliberately not a `LenzError`: an
 `except LenzError` that handles API answers never catches a bug in the call.
-A blank claim is refused with the API's own sentence (`claim is required.`,
-`claims[1] is blank.`); "blank" is what `str.strip()` removes, the API's rule.
-When both `claim=` and `text=` are given, the one with content is sent.
+A blank input or an empty list is refused with the sentence the API's 422
+gives for the same request (`str(exc)`, table below); "blank" is what
+`str.strip()` removes, the API's rule. When both `claim=` and `text=` are
+given, the one with content is sent.
 
 `LenzUsageError` carries `code` (what is wrong, typed `lenz_io.UsageErrorCode`;
 `lenz_io.USAGE_ERROR_CODES` lists them) and `param` (the argument at fault, or
@@ -953,8 +984,8 @@ string:
 
 | `code` | When | `param`, e.g. |
 |---|---|---|
-| `blank_input` | a blank claim or text (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs) | `"claim"`, `"text"` |
-| `blank_item` | a blank item in a list | `"claims[2]"` |
+| `blank_input` | a blank claim, text or message (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs, `ask.send`) | `"claim"`, `"text"`, `"message"` |
+| `blank_item` | a blank item in a list (`assess(claims=[...])`, `select`) | `"claims[2]"` |
 | `empty_list` | an empty list (`assess(claims=[])`, `select`) | `"claims"` |
 | `invalid_page_size` | `page_size` outside 1 to 100 | `"page_size"` |
 | `invalid_page` | an iterator's `page` below 1 | `"page"` |
@@ -963,6 +994,28 @@ string:
 | `invalid_option` | a client or `with_options` option, or a call's `timeout` / `max_retries` | `"timeout"`, `"max_retries"`, `"api_key"`, `"legacy_aliases"` |
 | `conflicting_input` | two arguments that exclude each other | `"claims"`, `"text"`, `"max_citations"` |
 | `invalid_argument` | anything else (an `assess` list item that is not a string, ...) | `"claims[0]"`, `"view"`, `"sort"`, `"verdicts"` |
+
+For the codes that mirror the API's (`blank_input`, `blank_item`,
+`empty_list`), the message is the API's own sentence for the same request, so
+it reads the same whether the SDK or the API refused it:
+
+| Call | `code` | Message |
+|---|---|---|
+| `verify("")`, `verify_and_wait("")`, `assess("")` | `blank_input` | `claim is required.` |
+| `assess(claims=[])` | `empty_list` | `claim: Field required` (the API reads an empty list as no input) |
+| `assess(claims=["A.", " "])`, `select(task_id, claims=["A.", " "])` (a list or a tuple) | `blank_item` | `claims[1] is blank.` |
+| `select(task_id, claims=[])` | `empty_list` | `claims is required.` |
+| `review("")`, `review_and_wait("")` | `blank_input` | `text: send the draft, or one public http(s) URL.` |
+| `citecheck("")` (no pairs) | `blank_input` | `payload: Value error, send exactly one of text and pairs` |
+| `ask.send(id, message="")` | `blank_input` | `Message cannot be empty.` |
+
+The other codes carry the SDK's own message. A blank `select` item is refused
+since 3.2 (the API drops it silently). Called with `texts=` (the alias), `select`
+names it: `texts is required.`, `texts[i] is blank.`, `param` `"texts[i]"`.
+
+Not every blank input is refused locally: `verify_batch` / `verify_batch_and_wait`
+with an empty list or a blank item, and `citecheck(pairs=[])`, are sent, and the
+API's 422 answers them (a `LenzValidationError`).
 
 ```python
 from lenz_io import LenzUsageError
@@ -974,10 +1027,14 @@ except LenzUsageError as exc:
         print(f"{exc.param} is empty")  # claims[2] is empty
 ```
 
-An API key that cannot be sent (see [Configuration](#configuration)) raises
-`LenzInvalidKeyError` before any request (since 3.2): a `LenzAuthError`, so
-an `except LenzAuthError` catches it too, with `status_code` `0`. A key the
-server refuses (401 / 403) is a plain `LenzAuthError`.
+Three authentication errors, all `LenzAuthError`s (so an
+`except LenzAuthError` catches each):
+
+| Error | When | `status_code` |
+|---|---|---|
+| `LenzMissingKeyError` (since 3.2) | no key is configured and the call needs one (`api_key=None` with no `LENZ_API_KEY`, an empty key, a `with_options(api_key=None)` copy); raised before sending | `0` |
+| `LenzInvalidKeyError` (since 3.2) | the key cannot be sent (see [Configuration](#configuration)); raised when the client or copy is built | `0` |
+| `LenzAuthError` | the server refused the key (401 / 403) | `401` / `403` |
 
 A request that could not be built or sent at all (a `base_url` that is not
 http(s), a request httpx refuses to write), or whose answer could not be
@@ -1090,9 +1147,20 @@ It is also raised for a JSON object with a field of the wrong type
 object as parsed, `body_text` its text, and the message names every field at
 fault by its path in the body as sent. Its `fix` suggests upgrading lenz-io:
 a newer API may send a shape an older release cannot read. A `null` the SDK
-tolerates (see the changelog) is still read as unsent first. A block a result
-reads only when you ask for it (`ExtractedClaims.claims`, a `failure`) raises
-the same error on that read, with the answer's status and headers. In a wait
+tolerates (see the changelog) is still read as unsent first. Every property a
+result reads only when you ask for it (`ExtractedClaims.claims`, a `failure`
+on a status, an `assess` response or row, `status`, `more_claims`,
+`completed_at`, `claim`, `code`, `detail`, a review summary's counts, ...)
+raises the same error on that read for a value of the wrong type (`"failure":
+"x"`, `"status": 1`), with the answer's status and headers. Its message names
+the field by its path in the model read (a top-level result's `failure`, or
+`failure` for an `assess` row's, not `claims[0].failure`), and its `body` is
+that model's part of the answer (`row.raw` for a row). Since 3.2 none
+reads such a value as not sent (`null` and an absent key still read as not
+sent). A `completed` poll with no `result` (absent or `null`) is a run that
+ended but cannot be read: `wait` / `verify_and_wait` raise this error for it
+(3.1 raised `LenzPipelineError`), and in `verify_batch_and_wait` that item is
+`failed` with the poll on `status_detail` and the error on `error`. In a wait
 helper, an unreadable poll whose `status` says the run ended (completed,
 failed, cancelled, needs input; for a review or a citation check, only a body
 carrying that job's id) raises it at once (in `verify_batch_and_wait` only
@@ -1538,7 +1606,7 @@ Valid text is sent unchanged.
 
 Environment variables:
 
-- `LENZ_API_KEY` — read if `api_key=` is not passed (an explicit `api_key=""` or whitespace is no key and never reads it: calls that need a key raise `LenzAuthError`)
+- `LENZ_API_KEY` — read if `api_key=` is not passed (an explicit `api_key=""` or whitespace is no key and never reads it: calls that need a key raise `LenzMissingKeyError`, a `LenzAuthError`)
 - `LENZ_BASE_URL` — read if `base_url=` is not passed
 
 So `api_key=None` (or leaving it out) is for scripts: the key comes from the
@@ -1733,7 +1801,7 @@ def handle(request):
 ```
 
 Any string is sent as given. An empty or whitespace-only key, or `None`, gives
-a copy with no key: a call that needs one raises `LenzAuthError` before
+a copy with no key: a call that needs one raises `LenzMissingKeyError` (a `LenzAuthError`) before
 anything is sent. A copy never reads `LENZ_API_KEY`, and leaving `api_key` out
 keeps the key the copy was made from. Copies with different keys can run at
 the same time on one pool (threads, or tasks on `AsyncLenz`). `legacy_aliases`
@@ -1769,7 +1837,7 @@ def handle(user, text):
 
 - **Per-user keys**: `with_options(api_key=...)` per request, on the shared
   pool. A copy never reads `LENZ_API_KEY`; an empty key, or `None`, gives a
-  copy with no key, and a call that needs one raises `LenzAuthError` before
+  copy with no key, and a call that needs one raises `LenzMissingKeyError` (a `LenzAuthError`) before
   sending. ASCII whitespace around a key is dropped silently; a key with a
   space, a control or a non-ASCII character inside it raises
   `LenzInvalidKeyError` (a `LenzAuthError`) there, before sending. Copies with different keys can run
