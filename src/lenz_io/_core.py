@@ -25,10 +25,11 @@ import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Final, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict, TypeVar
 from urllib.parse import quote
 
 import httpx
+from pydantic import ValidationError
 
 from . import __version__
 from .errors import (
@@ -43,6 +44,7 @@ from .errors import (
     LenzAuthError,
     LenzConnectionError,
     LenzError,
+    LenzInvalidKeyError,
     LenzInvalidResponseError,
     LenzNeedsInputError,
     LenzPipelineError,
@@ -53,6 +55,7 @@ from .errors import (
     ReviewFailed,
     ReviewTimeout,
     map_response_to_error,
+    unreadable_fields_error,
 )
 from .models import (
     LEGACY_ALIASES,
@@ -68,10 +71,15 @@ from .models import (
     TaskStatus,
     Verification,
     VerificationList,
+    _Body,
     _legacy_view,
+    _Meta,
+    _set_raw,
 )
 
 logger = logging.getLogger("lenz_io")
+
+_E = TypeVar("_E", bound=LenzError)
 
 # The API version this SDK asks for, sent as ``X-Lenz-API-Version`` on every
 # request: the server answers in that version's response shape, whatever the
@@ -216,7 +224,9 @@ def _check_timeout(value: Any, where: str) -> float | httpx.Timeout | None:
         return httpx.Timeout(value)
     raise LenzUsageError(
         f"{where}: timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an "
-        f"httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got {value!r})."
+        f"httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got {value!r}).",
+        code="invalid_option",
+        param="timeout",
     )
 
 
@@ -230,7 +240,11 @@ def _check_retries(value: Any, where: str) -> int:
         except TypeError:
             count = None
     if count is None or count < 0:
-        raise LenzUsageError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
+        raise LenzUsageError(
+            f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).",
+            code="invalid_option",
+            param="max_retries",
+        )
     return count
 
 
@@ -250,20 +264,32 @@ def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]
     if value is None:
         return ()
     if not isinstance(value, Mapping):
-        raise LenzUsageError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
+        raise LenzUsageError(
+            f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).",
+            code="invalid_header",
+            param="extra_headers",
+        )
     pairs: list[tuple[str, str | None]] = []
     for name, header in value.items():
         if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
             raise LenzUsageError(
                 f"{where}: a header name must be a non-empty token of ASCII letters, digits and "
-                f"!#$%&'*+-.^_`|~ (got {name!r})."
+                f"!#$%&'*+-.^_`|~ (got {name!r}).",
+                code="invalid_header",
+                param="extra_headers",
             )
         if name.lower() in _RESERVED_HEADERS:
-            raise LenzUsageError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
+            raise LenzUsageError(
+                f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.",
+                code="invalid_header",
+                param="extra_headers",
+            )
         if header is not None and (not isinstance(header, str) or not _HEADER_VALUE.fullmatch(header)):
             raise LenzUsageError(
                 f"{where}: the value of header {name} must be a string of visible ASCII characters, with "
-                f"spaces and tabs only between them (not at either end), or None."
+                f"spaces and tabs only between them (not at either end), or None.",
+                code="invalid_header",
+                param="extra_headers",
             )
         pairs.append((name, header))
     return tuple(pairs)
@@ -542,7 +568,9 @@ def _check_page_size(page_size: int | None) -> int | None:
         return None
     if isinstance(page_size, bool) or not isinstance(page_size, int) or not PAGE_SIZE_MIN <= page_size <= PAGE_SIZE_MAX:
         raise LenzUsageError(
-            f"page_size must be a whole number from {PAGE_SIZE_MIN} to {PAGE_SIZE_MAX} (got page_size={page_size!r})."
+            f"page_size must be a whole number from {PAGE_SIZE_MIN} to {PAGE_SIZE_MAX} (got page_size={page_size!r}).",
+            code="invalid_page_size",
+            param="page_size",
         )
     return page_size
 
@@ -569,22 +597,22 @@ def _verifications_params(page: int, page_size: int | None) -> dict[str, Any]:
 def _first_page(page: int) -> int:
     """``page`` for an iterator, refused unless it is 1 or more."""
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-        raise LenzUsageError(f"iter starts at page 1 or later (got page={page!r}).")
+        raise LenzUsageError(f"iter starts at page 1 or later (got page={page!r}).", code="invalid_page", param="page")
     return page
 
 
-def _segment(value: Any, message: str) -> str:
+def _segment(value: Any, message: str, param: str | None = None) -> str:
     """An id as ONE path segment: percent-encoded whole, so a ``/``, ``?``, ``#``
     or ``%`` in it cannot leave the intended path (httpx would otherwise cut the
     URL there). ``""``, ``"."`` and ``".."`` raise ``ValueError(message)``: a
     path normaliser eats the dots, and an empty id names the collection."""
     if not isinstance(value, str) or value in ("", ".", ".."):
-        raise LenzUsageError(message)
+        raise LenzUsageError(message, code="invalid_id", param=param)
     try:
         return quote(value, safe="")
     except UnicodeEncodeError:
         # A lone surrogate cannot be sent: the id cannot name anything.
-        raise LenzUsageError(message) from None
+        raise LenzUsageError(message, code="invalid_id", param=param) from None
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
@@ -631,15 +659,48 @@ def _names_the_job(field: str) -> Callable[[Any], bool]:
     return check
 
 
-def _unexpected_answer(method: str, path: str) -> LenzAPIError:
+def _unexpected_answer(method: str, path: str, body: Any = None) -> LenzInvalidResponseError:
     """A 200 whose body is not the thing asked for (a proxy page, another
-    task's body): an error, never a default-valued result."""
-    return LenzAPIError(
+    task's body): ``LenzInvalidResponseError`` with the answer (its status,
+    request id, headers and body), never a default-valued result."""
+    status = body.http_status if isinstance(body, _Body) else 0
+    headers = body.headers if isinstance(body, _Body) else ResponseHeaders()
+    parsed = dict(body) if isinstance(body, dict) else None
+    text = json.dumps(parsed, ensure_ascii=False) if parsed is not None else ""
+    err = LenzInvalidResponseError(
         message=f"{method} {path} returned an unexpected response body.",
-        cause="The answer is not the shape the API documents for this call.",
-        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+        cause="The answer is not the shape the API documents for this call (another job's body, or a proxy's).",
+        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request id.",
         doc_url="https://lenz.io/docs/errors",
+        request_id=headers.get("X-Request-ID") or "",
+        status_code=status,
+        body=parsed,
+        body_text=text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026",
+        headers=headers,
+        served_version=(headers.get(_VERSION_HEADER) or "").strip() or None,
     )
+    err.msg = "Expecting this call's answer"
+    err.doc = text
+    err.pos = 0
+    err.lineno = 1
+    err.colno = 1
+    return err
+
+
+def _wait_budget(value: Any, default: float, where: str) -> float:
+    """A wait helper's ``timeout`` (how long to wait): ``None`` (the default
+    wait) or a finite number of seconds, else ``LenzUsageError`` before any
+    request (``nan`` would poll in a tight loop, ``inf`` forever). A number
+    ``<= 0`` keeps meaning "read once", as in 2.x."""
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, numbers.Real) or not math.isfinite(value):
+        raise LenzUsageError(
+            f"{where}: timeout must be a finite number of seconds, or None (got {value!r}).",
+            code="invalid_option",
+            param="timeout",
+        )
+    return value  # type: ignore[return-value]  # as given: messages print it as passed
 
 
 def _is_cancel_body(body: Any, task_id: str) -> bool:
@@ -930,7 +991,9 @@ def _check_user_agent(value: Any, where: str) -> str | None:
     if not isinstance(value, str) or not _HEADER_VALUE.fullmatch(value):
         raise LenzUsageError(
             f"{where}: user_agent must be a string of visible ASCII characters, with spaces and tabs only "
-            f"between them (got {value!r})."
+            f"between them (got {value!r}).",
+            code="invalid_header",
+            param="user_agent",
         )
     return value
 
@@ -938,7 +1001,11 @@ def _check_user_agent(value: Any, where: str) -> str | None:
 def _check_legacy_aliases(value: Any, where: str) -> bool:
     """``legacy_aliases``: ``True`` or ``False``, else ``ValueError``."""
     if not isinstance(value, bool):
-        raise LenzUsageError(f"{where}: legacy_aliases must be True or False (got {value!r}).")
+        raise LenzUsageError(
+            f"{where}: legacy_aliases must be True or False (got {value!r}).",
+            code="invalid_option",
+            param="legacy_aliases",
+        )
     return value
 
 
@@ -953,14 +1020,15 @@ _API_KEY = re.compile(r"[\x21-\x7e]+")
 def _check_api_key(key: str, where: str, *, from_env: bool = False) -> None:
     """Refuse a key (already stripped of surrounding whitespace) that cannot
     be sent as a bearer token (a non-ASCII character, a space, a newline or
-    any other control character inside it) with ``LenzAuthError``, before
+    any other control character inside it) with ``LenzInvalidKeyError`` (a
+    ``LenzAuthError``), before
     any request: httpx would otherwise fail to encode it, or refuse the
     header, on every call. ``""`` (no key) passes. The key itself is never
     put in the message."""
     if not key or _API_KEY.fullmatch(key):
         return
     source = "The LENZ_API_KEY environment variable" if from_env else "The api_key"
-    raise LenzAuthError(
+    raise LenzInvalidKeyError(
         message=f"{where}: the API key is not valid.",
         cause=(
             f"{source} contains a character a key never has (a space, a line break, another control "
@@ -981,7 +1049,11 @@ def _copy_api_key(value: Any) -> str:
     if value is None:
         return ""
     if not isinstance(value, str):
-        raise LenzUsageError(f"with_options(): api_key must be a string or None (got {type(value).__name__}).")
+        raise LenzUsageError(
+            f"with_options(): api_key must be a string or None (got {type(value).__name__}).",
+            code="invalid_option",
+            param="api_key",
+        )
     key = value.strip(_ASCII_SPACE)
     _check_api_key(key, "with_options()")
     return key
@@ -1070,7 +1142,7 @@ def _verify_payload(
 ) -> dict[str, Any]:
     chosen = _one_input(claim, text)
     if not chosen or _blank(chosen):
-        raise LenzUsageError("claim is required.")
+        raise LenzUsageError("claim is required.", code="blank_input", param="claim")
     payload: dict[str, Any] = {"text": chosen}
     # Omit-when-empty (since 3.2; earlier releases sent ``"source_url": ""``):
     # an empty value means no source, which is what leaving it out says.
@@ -1156,17 +1228,27 @@ def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None
     blank claim, an empty list and a blank item raise here, as on ``select``,
     instead of a 422 from the server)."""
     if claims is not None and (claim or text):
-        raise LenzUsageError("assess takes either one claim (claim=) or a list (claims=), not both")
+        raise LenzUsageError(
+            "assess takes either one claim (claim=) or a list (claims=), not both",
+            code="conflicting_input",
+            param="claims",
+        )
     if claims is not None:
         if not claims:
-            raise LenzUsageError("claims is required.")
+            raise LenzUsageError("claims is required.", code="empty_list", param="claims")
         for index, item in enumerate(claims):
+            if not isinstance(item, str):
+                raise LenzUsageError(
+                    f"claims[{index}] must be a string (got {type(item).__name__}).",
+                    code="invalid_argument",
+                    param=f"claims[{index}]",
+                )
             if _blank(item):
-                raise LenzUsageError(f"claims[{index}] is blank.")
+                raise LenzUsageError(f"claims[{index}] is blank.", code="blank_item", param=f"claims[{index}]")
         return
     chosen = _one_input(claim, text)
     if not chosen or _blank(chosen):
-        raise LenzUsageError("claim is required.")
+        raise LenzUsageError("claim is required.", code="blank_input", param="claim")
 
 
 def _assess_payload(*, text: str, claims: list[str] | None, language: str, suggest_rewrite: bool) -> dict[str, Any]:
@@ -1192,7 +1274,7 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
     chosen = claims or texts
     if not chosen:
-        raise LenzUsageError("select requires a non-empty claims=[...]")
+        raise LenzUsageError("select requires a non-empty claims=[...]", code="empty_list", param="claims")
     return chosen
 
 
@@ -1230,7 +1312,11 @@ def _library_params(
 
 def _check_library_iter_sort(sort: str) -> None:
     if sort == "random":
-        raise LenzUsageError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
+        raise LenzUsageError(
+            'iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.',
+            code="invalid_argument",
+            param="sort",
+        )
 
 
 def _review_payload(
@@ -1248,7 +1334,9 @@ def _review_payload(
     visibility: str,
 ) -> dict[str, Any]:
     if not text or not text.strip():
-        raise LenzUsageError("review() needs the draft text, or one public http(s) URL.")
+        raise LenzUsageError(
+            "review() needs the draft text, or one public http(s) URL.", code="blank_input", param="text"
+        )
     payload: dict[str, Any] = {"text": text}
     if language:
         payload["language"] = language
@@ -1261,7 +1349,9 @@ def _review_payload(
         if selector is None:
             continue
         if isinstance(selector, str):
-            raise LenzUsageError(f"{name} is a list of strings, e.g. {name}=[{selector!r}].")
+            raise LenzUsageError(
+                f"{name} is a list of strings, e.g. {name}=[{selector!r}].", code="invalid_argument", param=name
+            )
         escalate[name] = list(selector)
     for name, value in (
         ("max_assessments", max_assessments),
@@ -1292,9 +1382,15 @@ def _citecheck_payload(
 ) -> dict[str, Any]:
     has_text = bool(text and text.strip())
     if has_text == (pairs is not None):
-        raise LenzUsageError("citecheck() needs exactly one of text and pairs.")
+        raise LenzUsageError(
+            "citecheck() needs exactly one of text and pairs.",
+            code="conflicting_input" if has_text else "blank_input",
+            param="text",
+        )
     if pairs is not None and max_citations is not None:
-        raise LenzUsageError("max_citations goes with text: every pair is checked.")
+        raise LenzUsageError(
+            "max_citations goes with text: every pair is checked.", code="conflicting_input", param="max_citations"
+        )
     payload: dict[str, Any] = {"text": text} if has_text else {"pairs": [dict(p) for p in pairs or []]}
     if max_citations is not None:
         payload["max_citations"] = max_citations
@@ -1328,7 +1424,7 @@ def _review_params(view: str) -> dict[str, Any] | None:
     if view == "issues":
         return {"view": "issues"}
     if view != "full":
-        raise LenzUsageError(f"view must be 'full' or 'issues' (got {view!r}).")
+        raise LenzUsageError(f"view must be 'full' or 'issues' (got {view!r}).", code="invalid_argument", param="view")
     return None
 
 
@@ -1348,7 +1444,7 @@ def _review_started_by_conflict(exc: LenzError) -> ReviewStarted | None:
     review_id = conflict.get("review_id")
     if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(review_id, str) and review_id:
         started = ReviewStarted(review_id=review_id, status="queued")
-        started._raw = conflict  # ``raw``: the answer that settled the call
+        _settled_by(started, exc, conflict)
         return started
     return None
 
@@ -1361,9 +1457,17 @@ def _citecheck_started_by_conflict(exc: LenzError) -> CitecheckStarted | None:
     existing = conflict.get("citecheck_id")
     if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
         check = CitecheckStarted(citecheck_id=existing, status="queued")
-        check._raw = conflict  # ``raw``: the answer that settled the call
+        _settled_by(check, exc, conflict)
         return check
     return None
+
+
+def _settled_by(started: ReviewStarted | CitecheckStarted, exc: LenzError, conflict: dict[str, Any]) -> None:
+    """``started`` as the 409 that settled the call: its ``raw`` is that
+    answer's body, ``http_status`` 409, ``headers`` its headers, and
+    ``settled_by_conflict`` ``True``."""
+    _set_raw(started, conflict, _Meta(exc.status_code, ResponseHeaders(exc.headers)))
+    started._settled_by_conflict = True
 
 
 def _already_deleted(exc: LenzError) -> bool | None:
@@ -1585,7 +1689,29 @@ def _success_body(response: httpx.Response, method: str, path: str) -> Any:
             "The answer is not the JSON object the API documents for this call.",
             "Expecting a JSON object",
         )
-    return parsed
+    return _Body(
+        parsed,
+        http_status=response.status_code,
+        headers=ResponseHeaders(dict(response.headers)),
+        unreadable=lambda exc: _unreadable_fields(response, method, path, parsed, exc),
+    )
+
+
+def _unreadable_fields(
+    response: httpx.Response, method: str, path: str, parsed: dict[str, Any], exc: ValidationError
+) -> LenzInvalidResponseError:
+    """``LenzInvalidResponseError`` for a JSON object whose fields this
+    release cannot read (``{"claims": "x"}``, ``{"claims": [42]}``): what the
+    null-tolerance rules leave unreadable. ``body`` is the object as parsed;
+    the pydantic error is the ``__cause__``."""
+    return unreadable_fields_error(
+        exc,
+        body=parsed,
+        status_code=response.status_code,
+        headers=ResponseHeaders(dict(response.headers)),
+        what=f"{method} {path} answered HTTP {response.status_code}",
+        text=response.text,
+    )
 
 
 #: What ``_after_response`` says: the answer's body (the call is done) or the
@@ -1762,7 +1888,7 @@ def _verification_from_terminal(status: TaskStatus, task_id: str) -> Verificatio
 def _wait_task_id(task: str | Any) -> str:
     """The id ``wait`` polls, checked (``ValueError`` for an empty one)."""
     task_id: str = task if isinstance(task, str) else task.task_id
-    _segment(task_id, "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).")
+    _segment(task_id, "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).", "task_id")
     return task_id
 
 
@@ -1784,12 +1910,39 @@ def _wait_result(
     stopped: dict[str, LenzError],
 ) -> TaskStatus:
     """The terminal status ``wait`` maps to its result; a stopped id's error
-    or the timeout is raised."""
+    or the timeout is raised (told when the last polls could not be read:
+    ``timed_out`` is then a ``TimedOut`` carrying the last such answer)."""
     if task_id in stopped:
         raise stopped[task_id]
     if task_id in timed_out:
-        raise _wait_timed_out(timeout, task_id)
+        unreadable: Mapping[str, LenzInvalidResponseError] = getattr(timed_out, "unreadable", {})
+        raise _note_unreadable(_wait_timed_out(timeout, task_id), unreadable.get(task_id))
     return terminal[task_id]
+
+
+class TimedOut(set[str]):
+    """The ids a verification poll timed out on, with ``unreadable``: per id,
+    the last poll answer that could not be read, when no readable one came
+    after it."""
+
+    def __init__(self, ids: set[str], unreadable: Mapping[str, LenzInvalidResponseError]) -> None:
+        super().__init__(ids)
+        self.unreadable = dict(unreadable)
+
+
+def _note_unreadable(err: _E, unreadable: LenzInvalidResponseError | None) -> _E:
+    """``err`` (a wait's timeout) told that the last polls could not be read:
+    ``unreadable`` (the last such answer) becomes its ``__cause__``, and the
+    message and cause say so instead of "still running"."""
+    if unreadable is None:
+        return err
+    err.message = f"{err.message}; the last poll's answer could not be read"
+    err.cause = (
+        "The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown."
+    )
+    err.args = (err.message,)
+    err.__cause__ = unreadable
+    return err
 
 
 def _batch_results(
@@ -1804,9 +1957,13 @@ def _batch_results(
         status = terminal.get(it.task_id)
         if it.task_id in stopped:
             # An error no later poll could change: removed by the
-            # account's retention period (410), an unknown task (404) or
-            # an answer in another API version. Terminal, with no status.
-            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed"))
+            # account's retention period (410), an unknown task (404), an
+            # answer in another API version, or an unreadable answer whose
+            # status says the run ended. Terminal, with no status; the
+            # error is the item's ``error``.
+            item = BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed")
+            item._error = stopped[it.task_id]
+            results.append(item)
         elif not it.task_id or it.task_id in timed_out or status is None:
             results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="timeout"))
         elif status.status == "completed" and status.result is not None:
@@ -1851,7 +2008,7 @@ def _review_job(
         )
 
     return (
-        f"/reviews/{_segment(review_id, '_wait_review() needs a review_id.')}",
+        f"/reviews/{_segment(review_id, '_wait_review() needs a review_id.', 'review_id')}",
         lambda body: (
             ReviewFull.model_validate(body, context=context) if _is_full_review_body(body, review_id) else None
         ),
@@ -1875,7 +2032,7 @@ def _citecheck_job(
         )
 
     return (
-        f"/citechecks/{_segment(citecheck_id, '_wait_citecheck() needs a citecheck_id.')}",
+        f"/citechecks/{_segment(citecheck_id, '_wait_citecheck() needs a citecheck_id.', 'citecheck_id')}",
         lambda body: (
             Citecheck.model_validate(body, context=context) if _is_citecheck_body(body, citecheck_id) else None
         ),

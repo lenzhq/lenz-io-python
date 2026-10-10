@@ -1210,20 +1210,30 @@
  },
  "cancel_citecheck_unexpected_body": {
   "attrs": {
-   "body": null,
-   "cause": "The answer is not the shape the API documents for this call.",
+   "body": {
+    "status": "cancelled"
+   },
+   "body_text": "{\"status\": \"cancelled\"}",
+   "cause": "The answer is not the shape the API documents for this call (another job's body, or a proxy's).",
    "code": "",
+   "colno": 1,
+   "doc": "{\"status\": \"cancelled\"}",
    "doc_url": "https://lenz.io/docs/errors",
-   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request id.",
+   "headers": "<ResponseHeaders>",
+   "lineno": 1,
    "message": "POST /citechecks/12bbbf65/cancel returned an unexpected response body.",
+   "msg": "Expecting this call's answer",
+   "pos": 0,
    "request_id": "",
    "retryable": null,
-   "status_code": 0
+   "served_version": null,
+   "status_code": 200
   },
   "cause": null,
   "context": null,
-  "error": "LenzAPIError",
-  "str": "POST /citechecks/12bbbf65/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call.\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request.\n  Docs:   https://lenz.io/docs/errors",
+  "error": "LenzInvalidResponseError",
+  "str": "POST /citechecks/12bbbf65/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call (another job's body, or a proxy's).\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request id.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "cancel_review": {
@@ -1424,38 +1434,60 @@
  },
  "cancel_review_unexpected_body": {
   "attrs": {
-   "body": null,
-   "cause": "The answer is not the shape the API documents for this call.",
+   "body": {
+    "status": "cancelled"
+   },
+   "body_text": "{\"status\": \"cancelled\"}",
+   "cause": "The answer is not the shape the API documents for this call (another job's body, or a proxy's).",
    "code": "",
+   "colno": 1,
+   "doc": "{\"status\": \"cancelled\"}",
    "doc_url": "https://lenz.io/docs/errors",
-   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request id.",
+   "headers": "<ResponseHeaders>",
+   "lineno": 1,
    "message": "POST /reviews/442b6aa9/cancel returned an unexpected response body.",
+   "msg": "Expecting this call's answer",
+   "pos": 0,
    "request_id": "",
    "retryable": null,
-   "status_code": 0
+   "served_version": null,
+   "status_code": 200
   },
   "cause": null,
   "context": null,
-  "error": "LenzAPIError",
-  "str": "POST /reviews/442b6aa9/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call.\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request.\n  Docs:   https://lenz.io/docs/errors",
+  "error": "LenzInvalidResponseError",
+  "str": "POST /reviews/442b6aa9/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call (another job's body, or a proxy's).\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request id.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "cancel_unexpected_body": {
   "attrs": {
-   "body": null,
-   "cause": "The answer is not the shape the API documents for this call.",
+   "body": {
+    "cancelled": true,
+    "status": "cancelled",
+    "task_id": "other"
+   },
+   "body_text": "{\"task_id\": \"other\", \"cancelled\": true, \"status\": \"cancelled\"}",
+   "cause": "The answer is not the shape the API documents for this call (another job's body, or a proxy's).",
    "code": "",
+   "colno": 1,
+   "doc": "{\"task_id\": \"other\", \"cancelled\": true, \"status\": \"cancelled\"}",
    "doc_url": "https://lenz.io/docs/errors",
-   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+   "fix": "Retry; if it persists, contact support (https://lenz.io/contact) with the request id.",
+   "headers": "<ResponseHeaders>",
+   "lineno": 1,
    "message": "POST /verify/t1/cancel returned an unexpected response body.",
+   "msg": "Expecting this call's answer",
+   "pos": 0,
    "request_id": "",
    "retryable": null,
-   "status_code": 0
+   "served_version": null,
+   "status_code": 200
   },
   "cause": null,
   "context": null,
-  "error": "LenzAPIError",
-  "str": "POST /verify/t1/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call.\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request.\n  Docs:   https://lenz.io/docs/errors",
+  "error": "LenzInvalidResponseError",
+  "str": "POST /verify/t1/cancel returned an unexpected response body.\n  Cause:  The answer is not the shape the API documents for this call (another job's body, or a proxy's).\n  Fix:    Retry; if it persists, contact support (https://lenz.io/contact) with the request id.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "citecheck_409_names_the_job": {
@@ -7978,9 +8010,35 @@
   "suppress_context": false
  },
  "wait_garbage_hints": {
-  "cause": null,
-  "error": "ValidationError",
-  "idempotency_key": null
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "result": {
+   "audit": {
+    "adjudication_summary": "",
+    "assessments": [],
+    "debate_con": null,
+    "debate_pro": null,
+    "panel_agreement": ""
+   },
+   "claim": "A.",
+   "confidence": "low",
+   "coverage": null,
+   "created_at": null,
+   "depth": "",
+   "domain": "",
+   "entities": [],
+   "executive_summary": "",
+   "key_finding": "",
+   "language": "en",
+   "lenz_score": null,
+   "modified_at": null,
+   "presumed_intent": "",
+   "sources": [],
+   "suggested_rewrite": null,
+   "verdict": "",
+   "verification_id": "v1",
+   "visibility": "",
+   "warnings": []
+  }
  },
  "wait_needs_input": {
   "attrs": {
@@ -8206,9 +8264,23 @@
   }
  },
  "wait_unreadable_poll": {
-  "cause": null,
-  "error": "ValidationError",
-  "idempotency_key": null
+  "attrs": {
+   "body": null,
+   "cause": "The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown.",
+   "code": "",
+   "doc_url": "https://lenz.io/docs/verify#timeout",
+   "fix": "Resume via client.get_status('t1') later.",
+   "message": "wait timed out after 30s; the last poll's answer could not be read",
+   "request_id": "",
+   "retryable": null,
+   "status_code": 0,
+   "task_id": "t1"
+  },
+  "cause": "LenzInvalidResponseError",
+  "context": null,
+  "error": "LenzTimeoutError",
+  "str": "wait timed out after 30s; the last poll's answer could not be read\n  Cause:  The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown.\n  Fix:    Resume via client.get_status('t1') later.\n  Docs:   https://lenz.io/docs/verify#timeout",
+  "suppress_context": true
  },
  "wait_version": {
   "attrs": {

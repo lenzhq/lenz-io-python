@@ -69,6 +69,7 @@ if TYPE_CHECKING:
 from .client import API_VERSION, DEFAULT_BASE_URL, NOT_GIVEN, CitationPair, Lenz, NotGiven, VerifyBatchItem
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
+    USAGE_ERROR_CODES,
     CitecheckFailed,
     CitecheckFailedError,
     CitecheckTimeout,
@@ -79,6 +80,7 @@ from .errors import (
     LenzConnectionError,
     LenzError,
     LenzGoneError,
+    LenzInvalidKeyError,
     LenzInvalidResponseError,
     LenzNeedsInputError,
     LenzNotFoundError,
@@ -96,6 +98,7 @@ from .errors import (
     ReviewFailedError,
     ReviewTimeout,
     ReviewTimeoutError,
+    UsageErrorCode,
 )
 from .models import (
     AskHistory,
@@ -178,6 +181,7 @@ __all__ = [
     "DEFAULT_BASE_URL",
     "MAX_RETRY_AFTER_SLEEP",
     "NOT_GIVEN",
+    "USAGE_ERROR_CODES",
     "AskHistory",
     "AskMessage",
     "AskReply",
@@ -224,6 +228,7 @@ __all__ = [
     "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
+    "LenzInvalidKeyError",
     "LenzInvalidResponseError",
     "LenzNeedsInputError",
     "LenzNotFoundError",
@@ -267,6 +272,7 @@ __all__ = [
     "Usage",
     "UsageCapacity",
     "UsageCredits",
+    "UsageErrorCode",
     "UsageExtract",
     "Verdict",
     "VerdictLabel",

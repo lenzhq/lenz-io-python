@@ -360,8 +360,11 @@ _UNREADABLE = [
 def test_an_answer_the_model_refuses_carries_the_key(client: Lenz, path, body, call) -> None:
     from pydantic import ValidationError
 
+    from lenz_io import LenzInvalidResponseError
+
     with respx.mock(base_url=BASE) as r:
         r.post(path).respond(200, json=body)
-        with pytest.raises(ValidationError) as ei:
+        with pytest.raises(LenzInvalidResponseError) as ei:
             call(client)
-    assert ei.value.idempotency_key == "k"  # type: ignore[attr-defined]
+    assert ei.value.idempotency_key == "k"
+    assert isinstance(ei.value.__cause__, ValidationError)

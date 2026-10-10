@@ -200,6 +200,7 @@ from ._core import (
     _verification_from_terminal as _verification_from_terminal,
     _verifications_params as _verifications_params,
     _verify_payload as _verify_payload,
+    _wait_budget as _wait_budget,
     _wait_result as _wait_result,
     _wait_task_id as _wait_task_id,
     _walk as _walk,
@@ -355,7 +356,7 @@ class _VerificationsNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get()")
-        vid = _segment(verification_id, "verifications.get() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.get() needs a verification_id.", "verification_id")
         body = self._p._request(
             "GET",
             f"/verifications/{vid}",
@@ -394,7 +395,7 @@ class _VerificationsNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get_certificate()")
-        vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.", "verification_id")
         body = self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
         return Certificate.model_validate(body, context=self._p._results)
 
@@ -412,7 +413,7 @@ class _VerificationsNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.delete()")
-        vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.delete() needs a verification_id.", "verification_id")
         # Idempotent DELETE: a 404 (the row already gone, e.g. the reply to an
         # earlier delete was lost) is a success (``_already_deleted``).
         self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
@@ -443,7 +444,7 @@ class _VerificationsNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
-        vid = _segment(verification_id, "verifications.related() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.related() needs a verification_id.", "verification_id")
         body = self._p._request(
             "GET",
             f"/verifications/{vid}/related",
@@ -481,7 +482,7 @@ class _AskNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
-        vid = _segment(verification_id, "ask.history() needs a verification_id.")
+        vid = _segment(verification_id, "ask.history() needs a verification_id.", "verification_id")
         body = self._p._request("GET", f"/ask/{vid}", options=options)
         return AskHistory.model_validate(body, context=self._p._results)
 
@@ -534,7 +535,7 @@ class _AskNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
-        vid = _segment(verification_id, "ask.send() needs a verification_id.")
+        vid = _segment(verification_id, "ask.send() needs a verification_id.", "verification_id")
         payload = _ask_payload(message, language)
         key = _call_key(idempotency_key, idempotency)
         headers = _key_header(key)
@@ -562,7 +563,7 @@ class _AskNamespace:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
-        vid = _segment(verification_id, "ask.reset() needs a verification_id.")
+        vid = _segment(verification_id, "ask.reset() needs a verification_id.", "verification_id")
         self._p._request("DELETE", f"/ask/{vid}", options=options)
         return True
 
@@ -678,11 +679,13 @@ class Lenz:
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
     empty or whitespace-only ``api_key`` is no key and never reads the
-    environment (auth-required methods raise ``LenzAuthError``). Whitespace
-    around a key is dropped (since 3.2); what is left must be printable
-    ASCII without spaces (a space, a tab, a line break, another control
-    character or a non-ASCII character inside it raises ``LenzAuthError``
-    here, since 3.2).
+    environment (auth-required methods raise ``LenzAuthError``). ASCII
+    whitespace around a key (a trailing newline from a file or an
+    environment variable, say) is dropped silently, with no warning (since
+    3.2); what is left must be printable ASCII without spaces (a space, a
+    tab, a line break, another control character or a non-ASCII character
+    inside it raises ``LenzInvalidKeyError``, a ``LenzAuthError``, here,
+    since 3.2).
 
     ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass
     (``30.0`` included) is sent on each request (the client you passed is not
@@ -806,9 +809,10 @@ class Lenz:
           ``Content-Length``, ``Host``, ``Transfer-Encoding``) are refused.
         * ``api_key`` (since 3.2): the copy's own key, for example one user's
           OAuth access token (``lat_...``) on a server acting for several
-          users, sharing the pool. Whitespace around the key is dropped; a
-          key with a space, a control or a non-ASCII character inside it
-          raises ``LenzAuthError`` here (since 3.2). An empty or whitespace-only key, or ``None``, gives a copy
+          users, sharing the pool. ASCII whitespace around the key is
+          dropped silently; a key with a space, a control or a non-ASCII
+          character inside it raises ``LenzInvalidKeyError`` (a
+          ``LenzAuthError``) here (since 3.2). An empty or whitespace-only key, or ``None``, gives a copy
           with no key (a call that needs one raises ``LenzAuthError`` before
           sending). A copy never reads ``LENZ_API_KEY``. Left out, the copy
           keeps the key it was made from.
@@ -817,7 +821,9 @@ class Lenz:
         constructor only).
 
         Per option, a call's keyword wins over the copy, and the copy over the
-        client. A bad value raises ``ValueError`` here, before any request.
+        client. A bad value raises ``LenzUsageError`` (a ``ValueError``, with
+        ``code`` ``invalid_option`` or ``invalid_header``) here, before any
+        request.
         The wait helpers keep their own ``timeout`` (how long to wait); the
         timeout of each of their requests comes from the copy or the client.
 
@@ -1275,11 +1281,11 @@ class Lenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel()")
-        tid = _segment(task_id, "cancel() needs a task_id.")
+        tid = _segment(task_id, "cancel() needs a task_id.", "task_id")
         path = f"/verify/{tid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return CancelResult.model_validate(body, context=self._results)
 
     # ── headline ergonomic ──
@@ -1338,6 +1344,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1396,6 +1403,7 @@ class Lenz:
         timeout comes from the copy or the client, capped by what is left of
         the wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "wait()")
         options = _call_options(None, None, extra_headers, "wait()")
         task_id = _wait_task_id(task)
         terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress, options=options)
@@ -1444,6 +1452,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_batch_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1543,7 +1552,8 @@ class Lenz:
         first submit with its key is still being created (409
         ``idempotency_conflict`` naming the ``review_id``) is not an error:
         the review exists, and it is returned as a ``ReviewStarted``
-        (``status`` ``"queued"``).
+        (``status`` ``"queued"``, ``settled_by_conflict`` ``True`` and
+        ``http_status`` 409, since 3.2).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`Lenz.with_options`.
@@ -1632,7 +1642,7 @@ class Lenz:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_review()")
-        rid = _segment(review_id, "get_review() needs a review_id.")
+        rid = _segment(review_id, "get_review() needs a review_id.", "review_id")
         params = _review_params(view)
         if params is not None:
             return ReviewIssues.model_validate(
@@ -1669,11 +1679,11 @@ class Lenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_review()")
-        rid = _segment(review_id, "cancel_review() needs a review_id.")
+        rid = _segment(review_id, "cancel_review() needs a review_id.", "review_id")
         path = f"/reviews/{rid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return ReviewFull.model_validate(body, context=self._results)
 
     def review_and_wait(
@@ -1719,6 +1729,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, 600.0, "review_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
@@ -1791,7 +1802,8 @@ class Lenz:
         other calls, a resend that lands while the first submit with its key
         is still being created (409 ``idempotency_conflict`` naming the
         ``citecheck_id``) is not an error: the check exists, and it is
-        returned as a ``CitecheckStarted`` (``status`` ``"queued"``).
+        returned as a ``CitecheckStarted`` (``status`` ``"queued"``,
+        ``settled_by_conflict`` ``True`` and ``http_status`` 409, since 3.2).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`Lenz.with_options`.
@@ -1833,7 +1845,7 @@ class Lenz:
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_citecheck()")
-        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
+        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.", "citecheck_id")
         return Citecheck.model_validate(
             self._request("GET", f"/citechecks/{cid}", options=options), context=self._results
         )
@@ -1865,11 +1877,11 @@ class Lenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_citecheck()")
-        cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.")
+        cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.", "citecheck_id")
         path = f"/citechecks/{cid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return Citecheck.model_validate(body, context=self._results)
 
     def citecheck_and_wait(
@@ -1906,6 +1918,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, 600.0, "citecheck_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
@@ -2240,7 +2253,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "select()")
-        tid = _segment(task_id, "select() needs a task_id.")
+        tid = _segment(task_id, "select() needs a task_id.", "task_id")
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request(
@@ -2257,7 +2270,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> TaskStatus:
         options = _call_options(timeout, max_retries, extra_headers, "get_status()")
-        tid = _segment(task_id, "get_status() needs a task_id.")
+        tid = _segment(task_id, "get_status() needs a task_id.", "task_id")
         body = self._request("GET", f"/verify/status/{tid}", options=options)
         return TaskStatus.model_validate(body, context=self._results)
 
