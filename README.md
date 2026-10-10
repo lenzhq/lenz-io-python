@@ -985,8 +985,8 @@ string:
 | `code` | When | `param`, e.g. |
 |---|---|---|
 | `blank_input` | a blank claim, text or message (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs, `ask.send`) | `"claim"`, `"text"`, `"message"` |
-| `blank_item` | a blank item in a list (`assess(claims=[...])`, `select`) | `"claims[2]"` |
-| `empty_list` | an empty list (`assess(claims=[])`, `select`) | `"claims"` |
+| `blank_item` | a blank item in an `assess(claims=[...])` list | `"claims[2]"` |
+| `empty_list` | an empty list (`assess(claims=[])`), or a `select` list that is empty or all blank | `"claims"`, `"texts"` |
 | `invalid_page_size` | `page_size` outside 1 to 100 | `"page_size"` |
 | `invalid_page` | an iterator's `page` below 1 | `"page"` |
 | `invalid_id` | an id that cannot name anything: empty, `.`, `..`, a lone surrogate | `"task_id"`, `"verification_id"`, `"review_id"`, `"citecheck_id"` |
@@ -996,22 +996,29 @@ string:
 | `invalid_argument` | anything else (an `assess` list item that is not a string, ...) | `"claims[0]"`, `"view"`, `"sort"`, `"verdicts"` |
 
 For the codes that mirror the API's (`blank_input`, `blank_item`,
-`empty_list`), the message is the API's own sentence for the same request, so
-it reads the same whether the SDK or the API refused it:
+`empty_list`), the message is the API's own sentence (its `2026-10-11` 422
+`detail`) for the request the SDK would have sent. With the default
+`legacy_aliases=True` a 422 the API itself sends is read with its 2.x wording
+on some endpoints (`select`'s reads `texts is required and must be
+non-empty.`), so the two can differ there:
 
 | Call | `code` | Message |
 |---|---|---|
 | `verify("")`, `verify_and_wait("")`, `assess("")` | `blank_input` | `claim is required.` |
 | `assess(claims=[])` | `empty_list` | `claim: Field required` (the API reads an empty list as no input) |
-| `assess(claims=["A.", " "])`, `select(task_id, claims=["A.", " "])` (a list or a tuple) | `blank_item` | `claims[1] is blank.` |
-| `select(task_id, claims=[])` | `empty_list` | `claims is required.` |
+| `assess(claims=["A.", " "])` | `blank_item` | `claims[1] is blank.` |
+| `select(task_id, claims=[])`, or every item blank (a list or a tuple) | `empty_list` | `claims is required.` |
 | `review("")`, `review_and_wait("")` | `blank_input` | `text: send the draft, or one public http(s) URL.` |
 | `citecheck("")` (no pairs) | `blank_input` | `payload: Value error, send exactly one of text and pairs` |
 | `ask.send(id, message="")` | `blank_input` | `Message cannot be empty.` |
 
-The other codes carry the SDK's own message. A blank `select` item is refused
-since 3.2 (the API drops it silently). Called with `texts=` (the alias), `select`
-names it: `texts is required.`, `texts[i] is blank.`, `param` `"texts[i]"`.
+The other codes carry the SDK's own message. The rule: the SDK refuses locally
+only what the API would refuse, in the API's words. So `select` sends a list
+with some blank items as it is (the API drops them) and refuses only an empty
+or all-blank list (`param` names the list the API would read). Given both
+`claims=` and `texts=` (the alias), the SDK sends the one the API would read:
+`texts` when it has a non-blank item, else `claims`. The message is always the
+API's `claims is required.`.
 
 Not every blank input is refused locally: `verify_batch` / `verify_batch_and_wait`
 with an empty list or a blank item, and `citecheck(pairs=[])`, are sent, and the
@@ -1157,9 +1164,10 @@ the field by its path in the model read (a top-level result's `failure`, or
 `failure` for an `assess` row's, not `claims[0].failure`), and its `body` is
 that model's part of the answer (`row.raw` for a row). Since 3.2 none
 reads such a value as not sent (`null` and an absent key still read as not
-sent). A `completed` poll with no `result` (absent or `null`) is a run that
-ended but cannot be read: `wait` / `verify_and_wait` raise this error for it
-(3.1 raised `LenzPipelineError`), and in `verify_batch_and_wait` that item is
+sent). A `completed` status with no `result` (absent or `null`; the API never
+sends one) is a run that ended but cannot be read: `get_status`, `wait` and
+`verify_and_wait` raise this error for it, with the answer's status, headers
+and body (3.1's waits raised `LenzPipelineError`), and in `verify_batch_and_wait` that item is
 `failed` with the poll on `status_detail` and the error on `error`. In a wait
 helper, an unreadable poll whose `status` says the run ended (completed,
 failed, cancelled, needs input; for a review or a citation check, only a body

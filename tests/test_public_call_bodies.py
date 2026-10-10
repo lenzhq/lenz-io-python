@@ -230,14 +230,19 @@ class TestSyncCalls:
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
 
     @pytest.mark.parametrize(
-        "kwargs",
-        [{"claims": ["A.", "B."]}, {"texts": ["A.", "B."]}, {"claims": ["A.", "B."], "texts": ["C."]}],
+        ("kwargs", "sent"),
+        [
+            ({"claims": ["A.", "B."]}, ["A.", "B."]),
+            ({"texts": ["A.", "B."]}, ["A.", "B."]),
+            # Since 3.2 the list the API would read: ``texts`` when it has content.
+            ({"claims": ["A.", "B."], "texts": ["C."]}, ["C."]),
+        ],
     )
-    def test_select(self, client: Lenz, kwargs: dict[str, Any]) -> None:
+    def test_select(self, client: Lenz, kwargs: dict[str, Any], sent: list[str]) -> None:
         with respx.mock(base_url=BASE) as r:
             route = r.post("/verify/t/select").respond(200, json={"items": []})
             client.select("t", idempotency_key=KEY, **kwargs)
-        assert _ordered(route.calls.last.request.content) == [("texts", ["A.", "B."])]
+        assert _ordered(route.calls.last.request.content) == [("texts", sent)]
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
 
     @pytest.mark.parametrize(
