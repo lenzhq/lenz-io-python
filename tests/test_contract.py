@@ -245,7 +245,7 @@ def test_snippet_language_on_sources():
     the quote is not English, null for English or unknown, and None when the
     API predates the key."""
     detail = Verification.model_validate(_load("verifications_detail_snippet_language.json"))
-    assert [s.snippet_language for s in detail.sources] == [None, "uk", "pt-br", None]
+    assert [s.snippet_language for s in detail.sources] == [None, "uk", "pt", None]
     assert all("snippet_language" not in (s.model_extra or {}) for s in detail.sources)
     # The last source has no key at all; the first has an explicit null.
     raw = _load("verifications_detail_snippet_language.json")["sources"]

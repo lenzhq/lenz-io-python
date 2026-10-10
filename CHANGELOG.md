@@ -8,7 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
-- `snippet_language` on a verification's sources: the language of the quote when it is not English (needs the API change that adds it; older responses read as None/null).
+- `snippet_language` on a verification's sources: the language of the quote as an ISO 639-1 code (e.g. `uk`) when it is not English (needs the API change that adds it; older responses read as None/null).
 
 ## [3.0.0] - 2026-10-10
 
