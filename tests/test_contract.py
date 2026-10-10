@@ -360,6 +360,15 @@ def test_extract_located_positions_index_the_text_as_sent():
             assert text[pos.start : pos.end] == pos.text
 
 
+def test_extract_result_exposes_language():
+    """``language`` is the code the claims are written in; a body without it
+    (a replay stored before the API sent it) reads as ``None``."""
+    payload = _load("extract_response_located.json")
+    assert ExtractedClaims.model_validate(payload).language == "en"
+    del payload["language"]
+    assert ExtractedClaims.model_validate(payload).language is None
+
+
 def test_review_located_positions_span_their_passage():
     """Each review claim position is a half-open code-point span whose
     length is the passage's, for the claim rows and ``more_claim_locations``

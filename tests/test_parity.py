@@ -311,6 +311,9 @@ def test_model_schemas_match_the_previous_release() -> None:
     # (a response without them parses as before), so they are left out of the
     # comparison; ``test_snippet_language_on_sources`` pins each one.
     added_since_frozen = {"snippet_language"}
+    # ``language`` is a field of other models too, so it is dropped from
+    # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
+    added_to_models = {"ExtractedClaims": {"language"}}
 
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the
@@ -327,6 +330,9 @@ def test_model_schemas_match_the_previous_release() -> None:
 
     frozen = _shape(json.loads((FIXTURES / "schemas.json").read_text()))
     current = _shape(schemas())
+    for key, schema in current.items():
+        for gone in added_to_models.get(key.split(":")[0], ()):
+            schema["properties"].pop(gone, None)
     assert {k: current.get(k) for k in frozen} == frozen
 
 

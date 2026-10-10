@@ -133,6 +133,9 @@ def render_extract(out: Output, result: ExtractedClaims) -> None:
         out.console.print("[dim]No verifiable claim found in that text.[/dim]")
         return
 
+    if result.language:
+        out.console.print(f"[dim]Language: {result.language}[/dim]")
+
     # Only nudge to verify when there's a single, unambiguous claim — a lone
     # hint next to a multi-claim list reads as if it belongs to one of them.
     if len(claims) == 1:

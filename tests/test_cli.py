@@ -437,6 +437,26 @@ def test_extract_passes_focus_through(monkeypatch):
     assert fake.extract_calls[-1]["focus"] == "market size"
 
 
+def test_extract_language_flag_passes_through(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"], language="de"))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "some text", "--language", "AUTO"])
+    assert result.exit_code == 0
+    assert fake.extract_calls[-1]["language"] == "auto"
+    assert json.loads(result.stdout)["language"] == "de"
+
+
+def test_extract_omits_language_by_default(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "some text"])
+    assert result.exit_code == 0
+    assert fake.extract_calls[-1]["language"] == ""
+    assert json.loads(result.stdout)["language"] is None
+
+
 def test_extract_omits_focus_by_default(monkeypatch):
     monkeypatch.setenv("LENZ_API_KEY", "k")
     fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
@@ -490,6 +510,13 @@ def test_extract_pretty_renders_positions():
     assert 'at 0-11: "A grew 5 %."' in text
     # The passage is the user's text: printed literally, never as markup.
     assert 'at 12-26: "B fell [bold]."' in text
+
+
+def test_extract_pretty_shows_the_language_when_present():
+    with_lang = ExtractedClaims.model_validate({"status": "ready", "claims": [{"claim": "A."}], "language": "de"})
+    assert "Language: de" in _render_pretty(with_lang)
+    without = ExtractedClaims.model_validate({"status": "ready", "claims": [{"claim": "A."}]})
+    assert "Language:" not in _render_pretty(without)
 
 
 def test_extract_pretty_renders_url_positions_without_a_span():

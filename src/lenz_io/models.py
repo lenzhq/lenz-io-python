@@ -610,6 +610,12 @@ class ExtractedClaims(_Lax):
     key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
+    # The language the claims are written in (ISO 639-1, e.g. ``de``): the
+    # ``language`` you sent, or the one detected for ``language="auto"``
+    # (English when the text is short or undetectable). Pass it on to
+    # ``assess`` / ``verify`` to keep a chain in one language. ``None`` on a
+    # replayed response stored before the API sent it.
+    language: str | None = None
     # Deprecated: use ``claims`` (each with its ``positions``).
     locations: list[ClaimLocation] | None = Field(default=None, json_schema_extra={"deprecated": True})
 

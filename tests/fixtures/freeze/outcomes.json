@@ -197,7 +197,7 @@
   }
  },
  "borrowed_10:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -205,6 +205,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -212,7 +213,7 @@
   }
  },
  "borrowed_10:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -220,6 +221,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -628,7 +630,7 @@
   }
  },
  "borrowed_300:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -636,6 +638,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -643,7 +646,7 @@
   }
  },
  "borrowed_300:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -651,6 +654,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -2199,7 +2203,7 @@
   "suppress_context": false
  },
  "extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -2207,6 +2211,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -2214,7 +2219,7 @@
   }
  },
  "extract_options": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -2222,6 +2227,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -2229,7 +2235,7 @@
   }
  },
  "extract_timeout_5": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -2237,6 +2243,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -2244,7 +2251,7 @@
   }
  },
  "extract_timeout_obj": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -2252,6 +2259,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -4908,7 +4916,7 @@
   }
  },
  "timeout_120:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -4916,6 +4924,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -4923,7 +4932,7 @@
   }
  },
  "timeout_120:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -4931,6 +4940,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -5339,7 +5349,7 @@
   }
  },
  "timeout_200_read_5:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -5347,6 +5357,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -5354,7 +5365,7 @@
   }
  },
  "timeout_200_read_5:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -5362,6 +5373,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -5770,7 +5782,7 @@
   }
  },
  "timeout_30_read_none:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -5778,6 +5790,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -5785,7 +5798,7 @@
   }
  },
  "timeout_30_read_none:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -5793,6 +5806,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -6201,7 +6215,7 @@
   }
  },
  "timeout_5_read_200:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -6209,6 +6223,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -6216,7 +6231,7 @@
   }
  },
  "timeout_5_read_200:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -6224,6 +6239,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -6632,7 +6648,7 @@
   }
  },
  "timeout_none:extract": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -6640,6 +6656,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",
@@ -6647,7 +6664,7 @@
   }
  },
  "timeout_none:extract_timeout_9": {
-  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', locations=None, claims=[])",
+  "repr": "ExtractedClaims(status='ok', claim='', identified_claims=[], candidate_claims=[], domain='', key_entities=[], presumed_intent='', original_input='', language=None, locations=None, claims=[])",
   "result": {
    "candidate_claims": [],
    "claim": "",
@@ -6655,6 +6672,7 @@
    "domain": "",
    "identified_claims": [],
    "key_entities": [],
+   "language": null,
    "locations": null,
    "original_input": "",
    "presumed_intent": "",

@@ -844,7 +844,13 @@ class AsyncLenz:
         1000 calls/account/day (shared across your API keys).
 
         ``language`` (optional): return extracted claims in the target
-        language. Domain / status enums stay English.
+        language. Domain / status enums stay English. Leave it out for
+        English. ``"auto"`` writes the claims in the language of ``text``
+        (for a ``text`` that is a single URL, of the fetched page); a short
+        or undetectable text, or a detector failure, gives English. A
+        concrete code always wins. The result's ``language`` says which one
+        the claims are written in: pass it on to ``assess`` or ``verify`` as
+        ``language`` to keep a chain in one language.
 
         ``focus`` (optional): narrow the result to the claims it describes,
         e.g. ``"market size, growth and competitors"``. At most 300
