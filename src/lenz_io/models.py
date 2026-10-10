@@ -173,6 +173,9 @@ class Source(_Lax):
     # page's own language: up to ~2,000 characters, and it may contain line
     # breaks. ``…`` marks a cut paragraph, `` … `` separates two passages.
     snippet: str = ""
+    # The language of ``snippet``, the source page's own language, when it is
+    # not English; None for English or unknown.
+    snippet_language: str | None = None
     date: str = ""
 
 

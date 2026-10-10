@@ -163,6 +163,9 @@ def _load(name: str) -> dict:
         # `result` — the fixtures are the two halves of that contract.
         ("verify_status_processing.json", TaskStatus),
         ("verifications_detail.json", Verification),
+        # Sources with `snippet_language`: a code, a regional code, null, and
+        # a source from an API that predates the key. Same fixture as Node.
+        ("verifications_detail_snippet_language.json", Verification),
         # Both halves of the coverage contract. The server omits `coverage`
         # entirely when the feature is off (that is `verifications_detail`),
         # emits a full block with a certificate when a verdict qualifies, and
@@ -235,6 +238,21 @@ def test_contract_no_unknown_fields(fixture_name, model_cls):
         pytest.fail("\n".join([f"{fixture_name} → {model_cls.__name__}:", *errors]))
     # Sanity: model_validate also succeeds (smoke against the lax model)
     model_cls.model_validate(payload)
+
+
+def test_snippet_language_on_sources():
+    """`snippet_language` is a typed field on a source: a lowercase code when
+    the quote is not English, null for English or unknown, and None when the
+    API predates the key."""
+    detail = Verification.model_validate(_load("verifications_detail_snippet_language.json"))
+    assert [s.snippet_language for s in detail.sources] == [None, "uk", "pt-br", None]
+    assert all("snippet_language" not in (s.model_extra or {}) for s in detail.sources)
+    # The last source has no key at all; the first has an explicit null.
+    raw = _load("verifications_detail_snippet_language.json")["sources"]
+    assert "snippet_language" in raw[0] and "snippet_language" not in raw[3]
+    # A response from before the field: still parses, reads None.
+    older = Verification.model_validate(_load("verifications_detail.json"))
+    assert older.sources and older.sources[0].snippet_language is None
 
 
 def test_suggested_rewrite_is_on_every_verification_fixture():
