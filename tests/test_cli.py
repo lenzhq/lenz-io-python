@@ -667,8 +667,9 @@ def test_render_assess_shows_verdict_and_ask_hint():
 
 
 def test_render_assess_prints_the_reviewers_notes():
-    """A row's rationale prints under its verdict and a dissent under that,
-    led by who it belongs to; a row with neither prints no extra line."""
+    """A row's rationale prints under its verdict; the deprecated ``dissent``
+    is never printed, even when a payload carries one; a row with no rationale
+    prints no extra line."""
     from lenz_io.cli.render import render_assess
 
     out = _render(
@@ -687,9 +688,8 @@ def test_render_assess_prints_the_reviewers_notes():
         ),
     )
     assert "Some studies find an advantage" in out
-    assert "One reviewer disagreed:" in out
-    assert "no reliable advantage" in out
-    assert out.count("One reviewer disagreed:") == 1
+    assert "One reviewer disagreed:" not in out
+    assert "no reliable advantage" not in out
 
 
 def test_render_assess_lists_the_claims_it_did_not_check():

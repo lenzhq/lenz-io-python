@@ -170,12 +170,10 @@ def render_assess(out: Output, result: AssessResponse) -> None:
         # which is meaningless there.
         detail = c.error_code if c.status == "failed" and c.error_code else c.confidence
         out.console.print(f"[{color}]{c.verdict or '?'}[/{color}] ({detail}) — {c.claim}")
-        # The reviewers' notes, as plain text: `markup=False` because the
+        # The reviewer's note, as plain text: `markup=False` because the
         # words are a model's, and a stray "[bold]" in them is not ours.
         if c.rationale:
             out.console.print(f"    {c.rationale}", markup=False, highlight=False)
-        if c.dissent:
-            out.console.print(f"    One reviewer disagreed: {c.dissent}", markup=False, highlight=False)
         if c.more_claims:
             out.console.print("    [dim]also found:[/dim]")
             for other in c.more_claims:
