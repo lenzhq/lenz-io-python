@@ -1,0 +1,7 @@
+{
+  "body": {
+    "review_id": "<review_id#1:hex8>",
+    "status": "queued"
+  },
+  "status": 202
+}

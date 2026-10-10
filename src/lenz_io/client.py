@@ -114,6 +114,7 @@ from ._core import (
     EXTRACT_TIMEOUT as EXTRACT_TIMEOUT,
     MAX_TIMEOUT_SECONDS as MAX_TIMEOUT_SECONDS,
     NOT_GIVEN as NOT_GIVEN,
+    NOT_SENDABLE as NOT_SENDABLE,
     POLL_BACKOFF as POLL_BACKOFF,
     POLL_BACKOFF_CAP as POLL_BACKOFF_CAP,
     POLL_HINT_MAX as POLL_HINT_MAX,
@@ -149,6 +150,7 @@ from ._core import (
     _check_retries as _check_retries,
     _check_served_version as _check_served_version,
     _check_timeout as _check_timeout,
+    _check_user_agent as _check_user_agent,
     _citecheck_failed as _citecheck_failed,
     _citecheck_job as _citecheck_job,
     _citecheck_payload as _citecheck_payload,
@@ -173,6 +175,8 @@ from ._core import (
     _merge_headers as _merge_headers,
     _names_the_job as _names_the_job,
     _no_key as _no_key,
+    _not_sendable as _not_sendable,
+    _one_input as _one_input,
     _page_size_kw as _page_size_kw,
     _poll_hint as _poll_hint,
     _poll_timeout as _core_poll_timeout,
@@ -505,8 +509,10 @@ class _AskNamespace:
         SDK's own retry after a timeout or network drop replays the first
         reply instead of asking, and paying for, the question twice, and
         without appending the question and a second answer to the
-        conversation. The key is random per call and reused across that
-        call's retries; pin your own with ``idempotency_key=`` (it wins) to
+        conversation. The key is random per CALL and reused across that
+        call's own retries only: it protects those, while calling ``send``
+        again (a re-ask, even with the same message) is a new turn with a new
+        key, asked and charged again. Pin your own with ``idempotency_key=`` (it wins) to
         make a retry from another process replay too, or pass
         ``idempotency=False`` to send none. A retry that arrives while the
         first call is still running is answered 409 ``idempotency_conflict``:
@@ -729,6 +735,7 @@ class Lenz:
         # request (the borrowed client is not changed); left out, the borrowed
         # client's own timeout applies.
         self._send_timeout = self._borrowed and given_timeout is not _CONSTRUCTOR_TIMEOUT
+        user_agent = _check_user_agent(user_agent, "Lenz()")
         self._user_agent = user_agent or None
         self._sdk_user_agent = user_agent or _user_agent()
         self._options = _ClientOptions()
@@ -785,9 +792,10 @@ class Lenz:
           ``httpx.Timeout(None)`` for no timeout on one call). ``extract`` and
           ``assess`` take at least 150 s / 100 s when the timeout is the
           client's own; a timeout set on a copy (since 3.2) or passed to the
-          call is used as given, even below that (a shorter one can time out
-          a call the server is still running: retry it with the same
-          ``idempotency_key`` to get the answer).
+          call is used as given, even below that. A shorter one can end a
+          call the server is still running, and charging for: retry it with
+          the same ``idempotency_key`` to get its answer rather than a
+          second charge.
         * ``max_retries``: how often a request that failed in a way worth
           retrying (a 5xx, a 429, a dropped connection) is sent again: a whole
           number, 0 or more.
@@ -1150,7 +1158,7 @@ class Lenz:
                 extra_headers=extra_headers,
             )
         return self._assess(
-            text=claim or text,
+            text=_one_input(claim, text),
             language=language,
             suggest_rewrite=suggest_rewrite,
             timeout=timeout,
@@ -2330,6 +2338,7 @@ class Lenz:
             auth_required=auth_required,
             auth_optional=auth_optional,
             timeout=timeout,
+            has_body=json is not None,
             user_agent=(
                 _borrowed_user_agent(self._client.headers, self._user_agent, self._sdk_user_agent)
                 if self._borrowed
@@ -2342,10 +2351,11 @@ class Lenz:
                 response = self._client.request(
                     method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
                 )
-            except (httpx.UnsupportedProtocol, httpx.LocalProtocolError):
-                # The request could never be sent (a bad URL scheme, a request
-                # httpx refuses to write): a programming error, not a network one.
-                raise
+            except NOT_SENDABLE as exc:
+                # The request could never be sent (a bad URL or scheme, a
+                # request httpx refuses to write), or its answer could not be
+                # read: not a network failure, so never retried.
+                raise _not_sendable(exc, method, path) from exc
             except httpx.TransportError as exc:
                 # Worth sending again, unless this was the last attempt.
                 last_exc = exc

@@ -1,0 +1,12 @@
+{
+  "body": {
+    "docs_url": "https://lenz.io/docs/errors#cancelled",
+    "error": "Pipeline stopped at: cancelled",
+    "failure_class": "cancelled",
+    "failure_reason": "cancelled",
+    "retryable": false,
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

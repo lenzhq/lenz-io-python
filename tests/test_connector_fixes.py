@@ -393,3 +393,79 @@ def test_raw_on_a_failure_block_read_by_a_property() -> None:
     assert row.failure is not None and row.failure.raw == {"code": "timeout"}
     out = ExtractedClaims.model_validate({"claims": [{"claim": "A.", "x": 1}], "status": "ok"})
     assert out.claims[0].raw == {"claim": "A.", "x": 1}
+
+
+# ── batch 2 ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.verifications.list(page_size=0),
+        lambda c: c.assess(""),
+        lambda c: c.verify("  "),
+        lambda c: c.usage(timeout=0),
+        lambda c: c.usage(extra_headers={"Authorization": "x"}),
+        lambda c: c.usage(extra_headers={"X-A": "café"}),
+        lambda c: c.usage(extra_headers={"X-A": "a\r\nb"}),
+        lambda c: c.with_options(max_retries=-1),
+        lambda c: c.get_status(""),
+        lambda c: c.citecheck("Draft.", pairs=[]),
+    ],
+)
+def test_an_argument_error_is_a_usage_error_and_a_value_error(client: Any, call: Any) -> None:
+    from lenz_io import LenzUsageError
+
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        sent = r.route().respond(200, json={})
+        with pytest.raises(LenzUsageError) as ei:
+            call(client)
+    assert not sent.called
+    assert isinstance(ei.value, ValueError) and not isinstance(ei.value, LenzError)
+
+
+@pytest.mark.parametrize("agent", ["café/1", "a\nb", " lead", 7])
+def test_a_user_agent_that_cannot_be_sent_is_refused(agent: Any) -> None:
+    from lenz_io import LenzUsageError
+
+    with pytest.raises(LenzUsageError):
+        make_client(api_key=KEY, user_agent=agent)
+
+
+def test_the_blank_input_sentences_are_the_apis() -> None:
+    with make_client(api_key=KEY) as c:
+        with pytest.raises(ValueError, match=r"^claims\[1\] is blank\.$"):
+            c.assess(claims=["A.", " "])
+        with pytest.raises(ValueError, match=r"^claim is required\.$"):
+            c.verify("")
+
+
+@pytest.mark.parametrize(("claim", "text"), [("  ", "B."), ("", "B."), ("A.", "B."), ("A.", "  ")])
+def test_the_alias_with_content_is_sent(client: Any, claim: str, text: str) -> None:
+    with respx.mock(base_url=BASE) as r:
+        v = r.post("/verify").respond(202, json={"task_id": "t1", "claim": "x"})
+        a = r.post("/assess").respond(200, json={"claims": []})
+        client.verify(claim, text=text, idempotency=False)
+        client.assess(claim, text=text, idempotency=False)
+    expected = claim if claim.strip() else text
+    assert json.loads(v.calls.last.request.content)["text"] == expected
+    assert json.loads(a.calls.last.request.content)["text"] == expected
+
+
+@pytest.mark.parametrize("key", ["\u00a0lenz_abc", "\ufefflenz_abc", "lenz_abc\x85"])
+def test_only_ascii_whitespace_is_dropped_around_a_key(key: str) -> None:
+    with pytest.raises(LenzAuthError):
+        make_client(api_key=key)
+
+
+def test_content_type_goes_only_with_a_body(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        get = r.get("/me/usage").respond(200, json=_USAGE)
+        post = r.post("/verify/t1/cancel").respond(200, json={"task_id": "t1", "cancelled": True, "status": "x"})
+        ver = r.post("/verify").respond(202, json={"task_id": "t1", "claim": "A."})
+        client.usage()
+        client.cancel("t1")
+        client.verify("A.")
+    assert "content-type" not in get.calls.last.request.headers
+    assert "content-type" not in post.calls.last.request.headers
+    assert ver.calls.last.request.headers["content-type"] == "application/json"

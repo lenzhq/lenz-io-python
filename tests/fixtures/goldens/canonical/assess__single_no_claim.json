@@ -1,0 +1,16 @@
+{
+  "body": {
+    "claims": [],
+    "failure": {
+      "code": "no_checkable_claim",
+      "detail": "No claim in the input could be checked against public evidence.",
+      "docs_url": "https://lenz.io/docs/errors#invalid-input",
+      "failure_class": "invalid_input",
+      "hint": "The input is a greeting, not a statement that can be checked. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "retryable": false
+    },
+    "more_claims": [],
+    "status": "no_checkable_claim"
+  },
+  "status": 200
+}

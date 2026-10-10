@@ -45,7 +45,9 @@ _Job = TypeVar("_Job", ReviewFull, Citecheck)
 def _progress_copy(status: TaskStatus) -> Progress:
     """What ``on_progress`` is given: a copy, so a caller cannot change the
     poll's state."""
-    return status.progress.model_copy(deep=True)
+    # ``None`` only when the API sent ``null`` to a ``legacy_aliases=False`` client.
+    progress = status.progress if status.progress is not None else Progress()
+    return progress.model_copy(deep=True)
 
 
 class TaskPoll:

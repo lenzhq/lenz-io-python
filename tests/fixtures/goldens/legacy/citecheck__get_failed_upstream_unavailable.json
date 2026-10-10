@@ -1,0 +1,143 @@
+{
+  "body": {
+    "citation_failures": [
+      {
+        "citation_index": 0,
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "failure_reason": "upstream_unavailable",
+          "hint": "Lenz could not reach this source just now. Try again later.",
+          "retryable": true
+        },
+        "reference": "a report from the ministry"
+      },
+      {
+        "citation_index": 1,
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "failure": {
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "failure_reason": "upstream_unavailable",
+          "hint": "Lenz could not reach this source just now. Try again later.",
+          "retryable": true
+        },
+        "reference": "a statement"
+      }
+    ],
+    "citation_issues": [],
+    "citations": [
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": {
+            "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+            "failure_class": "upstream_unavailable",
+            "failure_reason": "upstream_unavailable",
+            "hint": "Lenz could not reach this source just now. Try again later.",
+            "retryable": true
+          },
+          "hint": "Lenz could not reach this source just now. Try again later.",
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": null,
+          "page_published_date": null,
+          "page_read": null,
+          "page_title": null,
+          "quote": null,
+          "rationale": null,
+          "registered": null,
+          "snippet": null,
+          "source_url": null,
+          "source_version": null,
+          "status": "failed",
+          "support": null,
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "index": 0,
+        "position": null,
+        "quotes": [],
+        "reference": "a report from the ministry",
+        "result": null,
+        "statement": null
+      },
+      {
+        "check": {
+          "doi_registered": null,
+          "failure": {
+            "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+            "failure_class": "upstream_unavailable",
+            "failure_reason": "upstream_unavailable",
+            "hint": "Lenz could not reach this source just now. Try again later.",
+            "retryable": true
+          },
+          "hint": "Lenz could not reach this source just now. Try again later.",
+          "metadata": null,
+          "metadata_differences": [],
+          "missing_quote": null,
+          "page_language": null,
+          "page_published_date": null,
+          "page_read": null,
+          "page_title": null,
+          "quote": null,
+          "rationale": null,
+          "registered": null,
+          "snippet": null,
+          "source_url": null,
+          "source_version": null,
+          "status": "failed",
+          "support": null,
+          "unchecked_reason": null
+        },
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "index": 1,
+        "position": null,
+        "quotes": [],
+        "reference": "a statement",
+        "result": null,
+        "statement": null
+      }
+    ],
+    "citecheck_id": "<citecheck_id#1:hex8>",
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 0
+    },
+    "failure": {
+      "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+      "failure_class": "upstream_unavailable",
+      "failure_reason": "upstream_unavailable",
+      "hint": null,
+      "retryable": true
+    },
+    "language": "en",
+    "more_citations": [],
+    "outcome": "unchecked",
+    "policy": {
+      "max_citations": 20
+    },
+    "poll_after_seconds": null,
+    "status": "failed",
+    "summary": {
+      "citation_checks": {
+        "checked": 0,
+        "failed": 2,
+        "unchecked": 0
+      },
+      "citation_issues": 0,
+      "citation_limit": 20,
+      "citation_limit_reached": false,
+      "citations_found": 2,
+      "citations_selected": 2
+    }
+  },
+  "status": 200
+}

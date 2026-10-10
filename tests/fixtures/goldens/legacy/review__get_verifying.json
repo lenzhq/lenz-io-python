@@ -1,0 +1,174 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "error_code": null,
+          "failure": null,
+          "hint": null,
+          "identified_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "False",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "index": 0,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": true,
+          "source": "assessment",
+          "verdict": "False"
+        },
+        "suggested_edits": null,
+        "verification": {
+          "claim": null,
+          "confidence": null,
+          "content_status": "available",
+          "created_at": null,
+          "depth": null,
+          "domain": null,
+          "entities": [],
+          "executive_summary": null,
+          "failure": null,
+          "key_finding": null,
+          "language": null,
+          "lenz_score": null,
+          "modified_at": null,
+          "status": "processing",
+          "suggested_rewrite": null,
+          "task_id": null,
+          "url": null,
+          "verdict": null,
+          "verification_id": null,
+          "verification_url": null,
+          "visibility": null,
+          "warnings": []
+        }
+      },
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "error_code": null,
+          "failure": null,
+          "hint": null,
+          "identified_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "Water boils at 100 C at sea level.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 1,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": null,
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 2
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "processing",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": null,
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": 15,
+    "review_id": "<review_id#1:hex8>",
+    "status": "verifying",
+    "summary": {
+      "assessments": {
+        "completed": 2,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": false,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 1,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 1
+      }
+    },
+    "view": "full"
+  },
+  "status": 200
+}

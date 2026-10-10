@@ -1,0 +1,12 @@
+{
+  "body": {
+    "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+    "error": "Pipeline stopped at: adjudication_failed",
+    "failure_class": "upstream_unavailable",
+    "failure_reason": "adjudication_failed",
+    "retryable": true,
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

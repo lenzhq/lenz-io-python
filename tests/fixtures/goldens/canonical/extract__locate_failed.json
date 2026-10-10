@@ -1,0 +1,30 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": null
+      },
+      {
+        "claim": "Beta fell 3% last year.",
+        "positions": null
+      }
+    ],
+    "domain": "Economics",
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "language": "en",
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
+  "status": 200
+}

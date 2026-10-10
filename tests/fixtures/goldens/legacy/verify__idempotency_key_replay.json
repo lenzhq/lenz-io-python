@@ -1,0 +1,8 @@
+{
+  "body": {
+    "chain_id": "<chain_id#2:hex16>",
+    "status": "queued",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 202
+}

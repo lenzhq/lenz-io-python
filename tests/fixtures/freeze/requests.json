@@ -33,10 +33,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -85,10 +81,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -172,7 +164,7 @@
  "assess_both_forms": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "assess takes either one claim (claim=) or a list (claims=), not both",
    "status_code": null
@@ -369,7 +361,7 @@
  "bad_header_option": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "usage(): the Authorization header is set by the SDK and cannot be passed in extra_headers.",
    "status_code": null
@@ -380,7 +372,7 @@
  "bad_timeout_option": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "usage(): timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got 0).",
    "status_code": null
@@ -480,10 +472,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -524,10 +512,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -638,10 +622,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -682,10 +662,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -730,10 +706,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -774,10 +746,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -889,10 +857,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -935,10 +899,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -981,10 +941,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -1025,10 +981,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -1073,10 +1025,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -1117,10 +1065,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -1417,10 +1361,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -1461,10 +1401,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -1517,10 +1453,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -1577,10 +1509,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -1623,10 +1551,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -1667,10 +1591,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -1967,10 +1887,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2011,10 +1927,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2067,10 +1979,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2127,10 +2035,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2173,10 +2077,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2217,10 +2117,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2281,10 +2177,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2337,10 +2229,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2401,10 +2289,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2457,10 +2341,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2521,10 +2401,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2581,10 +2457,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -2819,10 +2691,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -2931,10 +2799,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3039,10 +2903,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3083,10 +2943,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -3131,10 +2987,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3175,10 +3027,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -3293,10 +3141,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3318,7 +3162,7 @@
  "citecheck_both": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "citecheck() needs exactly one of text and pairs.",
    "status_code": null
@@ -3391,7 +3235,7 @@
  "citecheck_pairs_max": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "max_citations goes with text: every pair is checked.",
    "status_code": null
@@ -3466,7 +3310,7 @@
    "code": "",
    "error": "LenzInvalidResponseError",
    "idempotency_key": null,
-   "message": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.",
+   "message": "DELETE /ask/v1 answered HTTP 200 with an empty body.",
    "status_code": 200
   },
   "requests": [
@@ -3497,10 +3341,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -3555,10 +3395,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -3859,10 +3695,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3913,10 +3745,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -3936,7 +3764,7 @@
  "get_review_bad_view": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "view must be 'full' or 'issues' (got 'nope').",
    "status_code": null
@@ -3976,10 +3804,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -4030,10 +3854,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -4096,10 +3916,6 @@
       "application/json"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4138,10 +3954,6 @@
       "application/json"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4161,7 +3973,7 @@
  "library_iter_random": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "iter cannot walk sort=\"random\" (each page is a fresh sample); call library.list instead.",
    "status_code": null
@@ -4198,10 +4010,6 @@
      ],
      [
       "Accept",
-      "application/json"
-     ],
-     [
-      "Content-Type",
       "application/json"
      ],
      [
@@ -4251,10 +4059,6 @@
       "application/json"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4298,10 +4102,6 @@
      ],
      [
       "Accept",
-      "application/json"
-     ],
-     [
-      "Content-Type",
       "application/json"
      ],
      [
@@ -4357,10 +4157,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -4539,10 +4335,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4591,10 +4383,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -4779,10 +4567,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4831,10 +4615,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -4893,10 +4673,6 @@
       "1"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4937,10 +4713,6 @@
      [
       "X-P",
       "1"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -5113,10 +4885,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -5138,7 +4906,7 @@
  "path_id_dots": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "verifications.get() needs a verification_id.",
    "status_code": null
@@ -5182,10 +4950,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -5242,10 +5006,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -5286,10 +5046,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -5334,10 +5090,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -5378,10 +5130,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -5442,10 +5190,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -5486,10 +5230,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -5534,10 +5274,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -5578,10 +5314,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6168,10 +5900,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6212,10 +5940,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6336,10 +6060,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6380,10 +6100,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6556,10 +6272,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6600,10 +6312,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6662,10 +6370,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6706,10 +6410,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6754,10 +6454,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6798,10 +6494,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -6858,10 +6550,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -6902,10 +6590,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -7256,10 +6940,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -7302,10 +6982,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -7346,10 +7022,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -7463,10 +7135,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -7569,10 +7237,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -7683,10 +7347,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -7793,10 +7453,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -7907,10 +7563,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -7951,10 +7603,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -7999,10 +7647,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8045,10 +7689,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8089,10 +7729,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -8209,10 +7845,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8255,10 +7887,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8299,10 +7927,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -8416,10 +8040,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8462,10 +8082,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8506,10 +8122,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -8623,10 +8235,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -8646,7 +8254,7 @@
  "review_empty": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "review() needs the draft text, or one public http(s) URL.",
    "status_code": null
@@ -8719,7 +8327,7 @@
  "review_selector_str": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "verdicts is a list of strings, e.g. verdicts=['False'].",
    "status_code": null
@@ -8792,7 +8400,7 @@
  "select_empty": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "select requires a non-empty claims=[...]",
    "status_code": null
@@ -9074,10 +8682,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9118,10 +8722,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -9174,10 +8774,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -9234,10 +8830,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9280,10 +8872,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9324,10 +8912,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -9624,10 +9208,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9668,10 +9248,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -9724,10 +9300,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -9784,10 +9356,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9830,10 +9398,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -9874,10 +9438,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10174,10 +9734,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10218,10 +9774,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10274,10 +9826,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10334,10 +9882,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10380,10 +9924,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10424,10 +9964,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10724,10 +10260,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10768,10 +10300,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10824,10 +10352,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -10884,10 +10408,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10930,10 +10450,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -10974,10 +10490,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11274,10 +10786,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11318,10 +10826,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11374,10 +10878,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11434,10 +10934,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11480,10 +10976,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11524,10 +11016,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11650,10 +11138,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11694,10 +11178,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11822,10 +11302,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11874,10 +11350,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -11930,10 +11402,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -11982,10 +11450,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12042,10 +11506,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12100,10 +11560,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12152,10 +11608,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12208,10 +11660,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12255,10 +11703,6 @@
      ],
      [
       "Accept",
-      "application/json"
-     ],
-     [
-      "Content-Type",
       "application/json"
      ],
      [
@@ -12315,10 +11759,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12359,10 +11799,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12415,10 +11851,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12438,7 +11870,7 @@
  "verifications_iter_page_0": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "iter starts at page 1 or later (got page=0).",
    "status_code": null
@@ -12478,10 +11910,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12534,10 +11962,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12586,10 +12010,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12696,10 +12116,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12742,10 +12158,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -12786,10 +12198,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -12901,10 +12309,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -13081,10 +12485,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13125,10 +12525,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -13303,10 +12699,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13349,10 +12741,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13393,10 +12781,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -13699,10 +13083,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13743,10 +13123,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -13805,10 +13181,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13863,10 +13235,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -13886,7 +13254,7 @@
  "wait_empty_id": {
   "outcome": {
    "code": null,
-   "error": "ValueError",
+   "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).",
    "status_code": null
@@ -13930,10 +13298,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -13990,10 +13354,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14048,10 +13408,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14100,10 +13456,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14156,10 +13508,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14200,10 +13548,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14248,10 +13592,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14294,10 +13634,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14338,10 +13674,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14399,10 +13731,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14443,10 +13771,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14491,10 +13815,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14535,10 +13855,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14598,10 +13914,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14644,10 +13956,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14690,10 +13998,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14734,10 +14038,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14780,10 +14080,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -14897,10 +14193,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14951,10 +14243,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -14997,10 +14285,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -15041,10 +14325,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",
@@ -15104,10 +14384,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -15162,10 +14438,6 @@
       "Bearer lenz_00000000000000000000000000000000"
      ],
      [
-      "Content-Type",
-      "application/json"
-     ],
-     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -15218,10 +14490,6 @@
      [
       "Authorization",
       "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "Content-Type",
-      "application/json"
      ],
      [
       "X-Lenz-API-Version",

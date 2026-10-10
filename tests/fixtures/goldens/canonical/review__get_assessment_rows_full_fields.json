@@ -1,0 +1,164 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [
+            "The EU AI Act took effect in 2024.",
+            "It took effect in March."
+          ],
+          "rationale": "Two reviewers found the date wrong.",
+          "status": "completed",
+          "suggested_rewrite": "The EU AI Act entered into force in August 2024.",
+          "verdict": "False",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "cap",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "index": 0,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": true,
+          "source": "assessment",
+          "verdict": "False"
+        },
+        "suggested_edits": null,
+        "verification": null
+      },
+      {
+        "assessment": {
+          "confidence": null,
+          "dissent": null,
+          "failure": {
+            "code": "timeout",
+            "detail": "The check did not finish inside its time budget.",
+            "docs_url": null,
+            "failure_class": "upstream_unavailable",
+            "hint": "The check ran out of time. Retry it; nothing was charged.",
+            "retryable": true
+          },
+          "more_claims": [],
+          "rationale": null,
+          "status": "failed",
+          "suggested_rewrite": null,
+          "verdict": null,
+          "verification_url": null
+        },
+        "claim": "The Eiffel Tower is in Berlin.",
+        "escalation": null,
+        "index": 1,
+        "positions": null,
+        "result": null,
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 2
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 1,
+        "failure": {
+          "code": "timeout",
+          "detail": "The check did not finish inside its time budget.",
+          "docs_url": null,
+          "failure_class": "upstream_unavailable",
+          "hint": "The check ran out of time. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "cap",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": null,
+        "rationale": "Two reviewers found the date wrong.",
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": "The EU AI Act entered into force in August 2024.",
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": null,
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 0,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "<review_id#1:hex8>",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 1,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "claims_found": 2,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 1,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "status": 200
+}

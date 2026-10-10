@@ -897,9 +897,22 @@ except LenzError as exc:
         raise
 ```
 
-Local argument mistakes (an empty id, two exclusive arguments, a blank claim)
-raise `ValueError`, never a `LenzError`; an API key that cannot be sent (see
-[Configuration](#configuration)) raises `LenzAuthError` before any request.
+Local argument mistakes (an empty id, two exclusive arguments, a blank claim,
+a bad `page_size`, `timeout`, `max_retries`, `extra_headers` or `user_agent`)
+raise `LenzUsageError` before anything is sent (since 3.2). It is a
+`ValueError`, which 3.1 raised, and deliberately not a `LenzError`: an
+`except LenzError` that handles API answers never catches a bug in the call.
+A blank claim is refused with the API's own sentence (`claim is required.`,
+`claims[1] is blank.`); "blank" is what `str.strip()` removes, the API's rule.
+When both `claim=` and `text=` are given, the one with content is sent. An
+API key that cannot be sent (see [Configuration](#configuration)) raises
+`LenzAuthError` before any request.
+
+A request that could not be built or sent at all (a `base_url` that is not
+http(s), a request httpx refuses to write), or whose answer could not be
+decoded, raises `LenzConnectionError` with the httpx error as `__cause__` and
+`retryable` `False`, never retried (since 3.2; 3.1 let the httpx error
+escape).
 
 **`body` and `code`.** `exc.body` is the parsed JSON body of the error
 response exactly as sent (`None` or `{}` when there was none): the source of
@@ -994,11 +1007,12 @@ real `status_code` (`0` stays reserved for a request that got no answer), the
 its first 1,000 characters, followed by `…` when it was longer) and
 `retryable` `None`. It is also a `json.JSONDecodeError`, which is what 3.1 and
 earlier raised there, so existing `except json.JSONDecodeError` blocks keep
-working. A 204, a 205 or a 2xx with `Content-Length: 0` still reads as `{}`;
-any other empty or whitespace-only 2xx body raises it, and so (since 3.2) does
-a body that is JSON but not an object (`null`, a list, a number, a string),
-where every endpoint answers with an object: `body_text` holds it, and its
-message says "not an object".
+working. Since 3.2 it is also raised for an empty 2xx body (a 204, a 205 and
+`Content-Length: 0` included: 3.1 read those as `{}`; no endpoint answers
+without a body), a body that is JSON but not an object (`null`, a list, a
+number, a string: every endpoint answers with an object; its message says
+"not an object"), and any 3xx, with or without a body (the API never
+redirects and httpx does not follow one; the message names the `Location`).
 
 **Replays of requests made before the switch.** An idempotent request first
 sent before lenz.io served `2026-10-11`, and replayed with the same
@@ -1123,8 +1137,10 @@ from another process replay), or `idempotency=False` to opt out. `review`,
 `idempotency=False` since 3.2 (they always sent one before). The batch and
 `ask.send` keys are new in 3.0; 2.x sent one there only when you passed it.
 
-The key is never derived from the request: asking the same question again on
-`ask.send` is a new call, with a new key, and is asked again. Pin a key when
+The key is never derived from the request, and is random per call: it
+protects that call's own retries. Asking the same question again on
+`ask.send` is a new call, with a new key, so a new turn of the conversation,
+asked and charged again. Pin a key when
 your retry means "the same question, once" — the reply, the credit and the
 conversation history are then all the first call's:
 
@@ -1442,8 +1458,9 @@ environment. A server holding several users' keys builds its client with
 its user's key with `with_options(api_key=...)` (see
 [the server section](#using-lenz-io-from-a-server-that-forwards-per-user-credentials)).
 
-Whitespace around a key (a trailing newline read from a file or an
-environment variable) is dropped (since 3.2). What is left is printable ASCII
+ASCII whitespace around a key (space, tab, line breaks, form feed, vertical
+tab: a trailing newline read from a file or an environment variable) is
+dropped (since 3.2); a BOM or a no-break space is not. What is left is printable ASCII
 without spaces: a key with a space, a line break, another control character
 or a non-ASCII character inside it raises `LenzAuthError` when the client (or
 the `with_options` copy) is built, before any request (since 3.2; before, it
@@ -1491,6 +1508,16 @@ With `legacy_aliases=False`:
 | `Usage` | `quota_resets_at` | from `credits.resets_at` | `None` |
 | `UsageCredits` | `bonus` | from `extra` | `None` unless sent |
 | `UsageCapacity` | `credits` | from `bonus` | `None` unless sent |
+
+**A field sent as `null`** (since 3.2). A few optional fields keep a 3.x
+type without `None` (`AssessClaim.verdict` / `confidence` / `error_code` /
+`hint`, `AssessResponse.error` / `error_code`, `CandidateClaim.text`,
+`EntityRef.name`, `TaskStatus.reason` / `hint` / `progress` / `claims` /
+`docs_url` / `error` / `failure_class` / `failure_reason`, `Usage.verify` /
+`ask` / `assess`), and the API may send them as `null` (a stored replay, a
+value it has none of). That is read as if the field were not sent: its 3.x
+default, or `None` with `legacy_aliases=False`. 3.1 raised pydantic's
+`ValidationError` there. A required field sent as `null` still raises.
 
 `AssessClaim.verdict` / `confidence` and the numeric `Usage` aliases keep their
 3.x annotations (`str`, `int`, `UsageCapacity`), so with `legacy_aliases=False`
@@ -1555,9 +1582,11 @@ the copy's.
 `extract` and `assess` wait at least 150 s and 100 s when the timeout is the
 client's own (the constructor's, or the `http_client`'s). A timeout passed to
 the call, or set on a copy with `with_options(timeout=...)`, is used as given,
-even below that: it can time out a call the server is still running, so retry
-it with the same `idempotency_key` to get its answer. (3.1 and earlier raised
-a copy's timeout to the minimum too.)
+even below that. **An explicit timeout under 100 s (`assess`) or 150 s
+(`extract`) can end a call the server is still running, and charging for**:
+resend it with the same `idempotency_key` (`exc.idempotency_key`) to get its
+answer instead of paying again. (3.1 and earlier raised a copy's timeout to
+the minimum too.)
 
 `None` means different things in two places:
 
@@ -1633,7 +1662,7 @@ lenz = Lenz(
 
 
 def handle(user, text):
-    client = lenz.with_options(api_key=user.lenz_token, timeout=20)
+    client = lenz.with_options(api_key=user.lenz_token)  # no short timeout: assess can take 100 s
     try:
         out = client.assess(claim=text)
     except LenzError as exc:
@@ -1656,8 +1685,8 @@ def handle(user, text):
   then the User-Agent your `http_client=` set itself, then the SDK's
   (`lenz-io-python/<version> (...)`).
 - **Reserved headers**: `Authorization` (from the key), `Idempotency-Key`
-  (`idempotency_key=` / `idempotency=`), `Content-Type` and
-  `X-Lenz-API-Version` are set by the SDK on every request, and
+  (`idempotency_key=` / `idempotency=`), `Content-Type` (on a request with a
+  body only, since 3.2) and `X-Lenz-API-Version` are set by the SDK, and
   `extra_headers` refuses them (with `Content-Length`, `Host` and
   `Transfer-Encoding`), in any casing.
 - **`Accept`**: a client the SDK creates sends `Accept: application/json`. A
@@ -1665,8 +1694,9 @@ def handle(user, text):
   set it on that client or pass `extra_headers={"Accept": "application/json"}`.
 - **Timeouts**: a timeout on the copy or the call is used as given, also on
   `assess` and `extract` (only the client's own timeout is raised to their
-  100 s / 150 s minimum). A `timeout=` given with `http_client=` is sent on
-  each request.
+  100 s / 150 s minimum). Below that minimum it can end a call the server is
+  still running, and charging for: resend with `exc.idempotency_key` to get
+  its answer. A `timeout=` given with `http_client=` is sent on each request.
 - **Retries**: `max_retries=0` when your caller has its own deadline or
   retry budget; the SDK then sends each request once. A resend should reuse
   `exc.idempotency_key`.

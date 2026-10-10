@@ -343,9 +343,11 @@ class LenzAPIError(LenzError):
 
 
 class LenzInvalidResponseError(LenzAPIError, json.JSONDecodeError):
-    """A status below 400 (a 2xx, or a redirect httpx did not follow) whose
-    body is not JSON: typically a proxy,
-    captive portal or load balancer answering in the API's place.
+    """An answer below 400 that is not the API's JSON object: a 2xx whose
+    body is not JSON, is empty (a 204, a 205 and ``Content-Length: 0``
+    included, since 3.2) or is JSON but not an object (since 3.2), and any
+    3xx (since 3.2; the API never redirects): typically a proxy, captive
+    portal or load balancer answering in the API's place.
 
     ``status_code`` is the real HTTP status (never 0, which means the request
     got no answer at all), ``request_id`` the ``X-Request-ID`` if one came
@@ -630,6 +632,20 @@ class LenzApiVersionError(LenzError):
     def _derived_retryable(self) -> bool | None:
         # The same request answers in the same version again.
         return False
+
+
+class LenzUsageError(ValueError):
+    """A call refused before anything was sent, because of its own arguments:
+    a blank claim, a bad ``page_size``, ``timeout`` or ``max_retries``, a
+    header ``extra_headers`` may not set, an empty id, two arguments that
+    exclude each other, ... (an API key that cannot be sent is
+    :class:`LenzAuthError` instead).
+
+    A ``ValueError``, which is what 3.1 and earlier raised, so an existing
+    ``except ValueError`` keeps catching it. Deliberately not a
+    :class:`LenzError`: nothing was sent, no request failed, and an
+    ``except LenzError`` that handles API answers is not handed a bug in the
+    call. Since 3.2."""
 
 
 #: The job errors under the names the other error classes follow (``...Error``),
@@ -1211,6 +1227,7 @@ __all__ = [
     "LenzRequestTimeoutError",
     "LenzTimeoutError",
     "LenzUpstreamUnavailableError",
+    "LenzUsageError",
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",

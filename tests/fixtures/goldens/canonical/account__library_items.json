@@ -1,0 +1,55 @@
+{
+  "body": {
+    "items": [
+      {
+        "claim": "Library claim 0.",
+        "completed_at": "<completed_at#2:ts:+00:00:us>",
+        "confidence": "low",
+        "created_at": "<created_at#2:ts:+00:00:us>",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 10,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "<verification_id#1:hex8>"
+      },
+      {
+        "claim": "Library claim 1.",
+        "completed_at": "<completed_at#4:ts:+00:00:us>",
+        "confidence": "low",
+        "created_at": "<created_at#4:ts:+00:00:us>",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 10,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "<verification_id#3:hex8>"
+      },
+      {
+        "claim": "Library claim 2.",
+        "completed_at": "<completed_at#6:ts:+00:00:us>",
+        "confidence": "low",
+        "created_at": "<created_at#6:ts:+00:00:us>",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 10,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "<verification_id#5:hex8>"
+      }
+    ],
+    "page": 1,
+    "page_size": 20,
+    "total": 3
+  },
+  "status": 200
+}

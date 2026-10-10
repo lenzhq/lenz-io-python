@@ -67,6 +67,7 @@ from ._core import (
     DEFAULT_MAX_RETRIES,
     EXTRACT_TIMEOUT,
     NOT_GIVEN,
+    NOT_SENDABLE,
     WAIT_TIMEOUT,
     CitationPair,
     NotGiven,
@@ -88,6 +89,7 @@ from ._core import (
     _check_legacy_aliases,
     _check_library_iter_sort,
     _check_page_size,
+    _check_user_agent,
     _citecheck_failed,
     _citecheck_job,
     _citecheck_payload,
@@ -109,6 +111,8 @@ from ._core import (
     _library_params,
     _names_the_job,
     _no_key,
+    _not_sendable,
+    _one_input,
     _page_size_kw,
     _page_step,
     _poll_timeout as _core_poll_timeout,
@@ -441,8 +445,10 @@ class _AsyncAskNamespace:
         SDK's own retry after a timeout or network drop replays the first
         reply instead of asking, and paying for, the question twice, and
         without appending the question and a second answer to the
-        conversation. The key is random per call and reused across that
-        call's retries; pin your own with ``idempotency_key=`` (it wins) to
+        conversation. The key is random per CALL and reused across that
+        call's own retries only: it protects those, while calling ``send``
+        again (a re-ask, even with the same message) is a new turn with a new
+        key, asked and charged again. Pin your own with ``idempotency_key=`` (it wins) to
         make a retry from another process replay too, or pass
         ``idempotency=False`` to send none. A retry that arrives while the
         first call is still running is answered 409 ``idempotency_conflict``:
@@ -671,6 +677,7 @@ class AsyncLenz:
         # request (the borrowed client is not changed); left out, the borrowed
         # client's own timeout applies.
         self._send_timeout = self._borrowed and given_timeout is not _CONSTRUCTOR_TIMEOUT
+        user_agent = _check_user_agent(user_agent, "AsyncLenz()")
         self._user_agent = user_agent or None
         self._sdk_user_agent = user_agent or _async_user_agent()
         self._options = _ClientOptions()
@@ -736,7 +743,9 @@ class AsyncLenz:
           ``AsyncLenz(timeout=None)``; on a single call ``timeout=None`` keeps
           the client's. ``extract`` and ``assess`` take at least 150 s / 100 s
           when the timeout is the client's own; a copy's (since 3.2) or a
-          call's is used as given.
+          call's is used as given, even below that (it can end a call the
+          server is still running, and charging for: resend with the same
+          ``idempotency_key``).
         * ``max_retries``: how often a request that failed in a way worth
           retrying (a 5xx, a 429, a dropped connection) is sent again.
         * ``extra_headers``: headers added to every request, merged over the
@@ -1095,7 +1104,7 @@ class AsyncLenz:
                 extra_headers=extra_headers,
             )
         return await self._assess(
-            text=claim or text,
+            text=_one_input(claim, text),
             language=language,
             suggest_rewrite=suggest_rewrite,
             timeout=timeout,
@@ -2511,6 +2520,7 @@ class AsyncLenz:
             auth_required=auth_required,
             auth_optional=auth_optional,
             timeout=timeout,
+            has_body=json is not None,
             user_agent=(
                 _borrowed_user_agent(self._client.headers, self._user_agent, self._sdk_user_agent)
                 if self._borrowed
@@ -2523,10 +2533,11 @@ class AsyncLenz:
                 response = await self._client.request(
                     method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
                 )
-            except (httpx.UnsupportedProtocol, httpx.LocalProtocolError):
-                # The request could never be sent (a bad URL scheme, a request
-                # httpx refuses to write): a programming error, not a network one.
-                raise
+            except NOT_SENDABLE as exc:
+                # The request could never be sent (a bad URL or scheme, a
+                # request httpx refuses to write), or its answer could not be
+                # read: not a network failure, so never retried.
+                raise _not_sendable(exc, method, path) from exc
             except httpx.TransportError as exc:
                 # Worth sending again, unless this was the last attempt.
                 last_exc = exc

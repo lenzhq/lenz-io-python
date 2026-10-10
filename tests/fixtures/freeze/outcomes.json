@@ -22,7 +22,7 @@
  },
  "assess_both_forms": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "assess_claim": {
@@ -57,12 +57,12 @@
  },
  "bad_header_option": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "bad_timeout_option": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "batch_401_mid_round": {
@@ -2159,7 +2159,7 @@
  },
  "citecheck_both": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "citecheck_pairs": {
@@ -2171,7 +2171,7 @@
  },
  "citecheck_pairs_max": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "citecheck_text": {
@@ -2185,7 +2185,7 @@
   "attrs": {
    "body": null,
    "body_text": "",
-   "cause": "Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+   "cause": "Every Lenz API answer has a JSON body: something else answered in its place.",
    "code": "",
    "colno": 1,
    "doc": "",
@@ -2193,7 +2193,7 @@
    "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
    "headers": "<ResponseHeaders>",
    "lineno": 1,
-   "message": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.",
+   "message": "DELETE /ask/v1 answered HTTP 200 with an empty body.",
    "msg": "Expecting value",
    "pos": 0,
    "request_id": "",
@@ -2201,11 +2201,11 @@
    "served_version": null,
    "status_code": 200
   },
-  "cause": "JSONDecodeError",
-  "context": "JSONDecodeError",
+  "cause": null,
+  "context": null,
   "error": "LenzInvalidResponseError",
-  "str": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.\n  Cause:  Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
-  "suppress_context": true
+  "str": "DELETE /ask/v1 answered HTTP 200 with an empty body.\n  Cause:  Every Lenz API answer has a JSON body: something else answered in its place.\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "suppress_context": false
  },
  "error_404": {
   "attrs": {
@@ -2919,7 +2919,7 @@
  },
  "get_review_bad_view": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "get_review_issues": {
@@ -3141,7 +3141,7 @@
  },
  "library_iter_random": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "library_iter_short_page": {
@@ -3728,7 +3728,7 @@
  },
  "path_id_dots": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "path_ids_encoded": {
@@ -4924,7 +4924,7 @@
  },
  "review_empty": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "review_options": {
@@ -4936,7 +4936,7 @@
  },
  "review_selector_str": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "select": {
@@ -4948,7 +4948,7 @@
  },
  "select_empty": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "timeout_120:assess": {
@@ -7577,7 +7577,7 @@
  },
  "verifications_iter_page_0": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "verifications_list": {
@@ -7952,7 +7952,7 @@
  },
  "wait_empty_id": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "wait_failed": {

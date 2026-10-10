@@ -1,0 +1,39 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "Primary claim.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [
+          "Second claim.",
+          "Third claim."
+        ],
+        "rationale": null,
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      },
+      {
+        "claim": "A plain claim.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "ok"
+  },
+  "status": 200
+}

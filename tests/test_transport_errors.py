@@ -74,13 +74,36 @@ def test_retried_like_a_network_error(client: Lenz, failure: Exception) -> None:
     assert route.call_count == 2
 
 
-@pytest.mark.parametrize("failure", [httpx.UnsupportedProtocol("ftp"), httpx.LocalProtocolError("bad header")])
-def test_a_request_that_cannot_be_sent_is_not_wrapped(client: Lenz, failure: Exception) -> None:
+@pytest.mark.parametrize(
+    "failure",
+    [
+        httpx.UnsupportedProtocol("ftp"),
+        httpx.LocalProtocolError("bad header"),
+        httpx.InvalidURL("bad url"),
+        httpx.DecodingError("bad gzip"),
+        httpx.TooManyRedirects("loop"),
+        httpx.StreamConsumed(),
+    ],
+)
+def test_a_request_that_cannot_be_sent_is_wrapped_and_not_retried(client: Lenz, failure: Exception) -> None:
+    """Since 3.2 a ``LenzConnectionError`` (3.1 let the httpx error escape)."""
     with respx.mock(base_url=BASE) as r:
         route = r.get("/me/usage").mock(side_effect=failure)
-        with pytest.raises(type(failure)):
+        with pytest.raises(LenzConnectionError) as ei:
             client.usage()
     assert route.call_count == 1
+    assert ei.value.__cause__ is failure
+    assert ei.value.retryable is False
+    assert ei.value.status_code == 0
+
+
+def test_a_base_url_with_another_scheme_is_a_connection_error() -> None:
+    from conftest import make_client
+
+    with make_client(api_key="lenz_test", base_url="ftp://lenz.io/api/v1", max_retries=0) as c:
+        with pytest.raises(LenzConnectionError) as ei:
+            c.usage()
+    assert isinstance(ei.value.__cause__, httpx.UnsupportedProtocol)
 
 
 def test_a_server_that_hangs_up_mid_wait_is_polled_again(client: Lenz) -> None:

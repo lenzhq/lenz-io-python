@@ -331,7 +331,7 @@ CALLS: dict[str, tuple[Run, Answers]] = {
     ),
     "verifications.delete": (
         lambda c, o: c.verifications.delete("v1", **o),
-        {("DELETE", "/verifications/v1"): [S503, (204, None)]},
+        {("DELETE", "/verifications/v1"): [S503, (200, {"ok": True})]},
     ),
     "verifications.related": (
         lambda c, o: c.verifications.related("v1", limit=3, **o),
@@ -342,7 +342,7 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.ask.send("v1", message="Why?", idempotency_key=PINNED, **o),
         {("POST", "/ask/v1"): [S503, ASK_REPLY]},
     ),
-    "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (204, None)]}),
+    "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (200, {"ok": True})]}),
     "library.list": (lambda c, o: c.library.list(search="x", **o), {("GET", "/library"): [S503, LIB_1]}),
     "library.iter": (
         lambda c, o: list(c.library.iter(search="x", **o)),
@@ -669,9 +669,10 @@ class TestHeaders:
         accepts = [h for h in sent if h[0].lower() == "accept"]
         assert uas == [["user-agent", "mine/1"]] and accepts == [["ACCEPT", "x/y"]]
 
-    def test_content_type_is_still_sent_on_a_bodyless_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_content_type_is_sent_only_with_a_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Since 3.2 (3.1 sent it on every request)."""
         sent = _sent_headers(monkeypatch, lambda: make(api_key=API_KEY).usage(extra_headers={MARK: "m"}))
-        assert ["Content-Type", "application/json"] in sent
+        assert "content-type" not in [h[0].lower() for h in sent]
 
     def test_the_shared_client_is_never_changed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         root = make(api_key=API_KEY)

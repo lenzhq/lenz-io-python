@@ -1,0 +1,63 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 0
+    },
+    "failure": {
+      "docs_url": "https://lenz.io/docs/errors#invalid-input",
+      "failure_class": "invalid_input",
+      "failure_reason": "no_claim",
+      "hint": "None of the claims found in the text could be traced back to it. Send one factual claim, or run the text through /extract to enumerate its claims.",
+      "retryable": false
+    },
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": null,
+    "more_claim_locations": null,
+    "more_claims": null,
+    "outcome": "unchecked",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "<review_id#1:hex8>",
+    "status": "failed",
+    "summary": {
+      "assessments": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_reached": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_reached": null,
+      "claims_selected": null,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": null
+    },
+    "view": "full"
+  },
+  "status": 200
+}

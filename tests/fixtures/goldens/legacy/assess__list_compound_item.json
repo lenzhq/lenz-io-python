@@ -1,0 +1,40 @@
+{
+  "body": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "Primary claim.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": "Assessed the main claim only. Send identified_claims as their own items to check the rest.",
+        "identified_claims": [
+          "Second claim.",
+          "Third claim."
+        ],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "A plain claim.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Mostly False",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "status": 200
+}

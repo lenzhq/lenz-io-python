@@ -1,0 +1,8 @@
+{
+  "body": {
+    "cancelled": false,
+    "status": "completed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

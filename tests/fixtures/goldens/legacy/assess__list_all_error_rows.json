@@ -1,0 +1,37 @@
+{
+  "body": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "hi",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      },
+      {
+        "candidate_claims": [],
+        "claim": "hello",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "no_claim",
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "status": 200
+}

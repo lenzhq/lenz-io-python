@@ -1,0 +1,50 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "hi",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "no_checkable_claim",
+          "detail": "No claim in the input could be checked against public evidence.",
+          "docs_url": "https://lenz.io/docs/errors#invalid-input",
+          "failure_class": "invalid_input",
+          "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+          "retryable": false
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      },
+      {
+        "claim": "hello",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "no_checkable_claim",
+          "detail": "No claim in the input could be checked against public evidence.",
+          "docs_url": "https://lenz.io/docs/errors#invalid-input",
+          "failure_class": "invalid_input",
+          "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+          "retryable": false
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "no_checkable_claim"
+  },
+  "status": 200
+}

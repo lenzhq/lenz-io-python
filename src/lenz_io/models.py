@@ -22,13 +22,14 @@ import copy
 from collections.abc import ItemsView, KeysView, ValuesView
 from contextvars import ContextVar
 from datetime import datetime, timezone
-from typing import Any, Literal, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     PrivateAttr,
+    ValidationError,
     ValidationInfo,
     ValidatorFunctionWrapHandler,
     field_validator,
@@ -149,6 +150,33 @@ class _Lax(BaseModel):
     def _as_sent(cls, data: Any) -> Any:
         """The body as read with ``legacy_aliases=False``: as sent."""
         return data
+
+    #: Fields typed without ``None`` (3.x annotations, kept) that the API
+    #: can send as ``null``: read as unsent (see the validator below).
+    _NULLABLE: ClassVar[frozenset[str]] = frozenset()
+
+    @field_validator("*", mode="wrap")
+    @classmethod
+    def _null_where_none_is_not_a_value(
+        cls, value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+    ) -> Any:
+        # A ``null`` the API sends for an optional field typed without
+        # ``None`` (a stored replay, a value it has none of): never a
+        # ``ValidationError``. Read as the field was not sent (its 3.x
+        # default), or as ``None`` with ``legacy_aliases=False``.
+        if value is not None or info.field_name not in cls._NULLABLE:
+            return handler(value)
+        try:
+            return handler(value)
+        except ValidationError:
+            # A required field (no 3.x default) stays required.
+            name = info.field_name
+            field = cls.model_fields.get(name) if name else None
+            if field is None or field.is_required():
+                raise
+            if not _legacy(info):
+                return None
+            return field.get_default(call_default_factory=True)
 
     @model_validator(mode="after")
     def _remember_how_it_was_read(self, info: ValidationInfo) -> Any:
@@ -402,6 +430,8 @@ class Audit(_Lax):
 class CandidateClaim(_Lax):
     """One of multiple distinct claims framing found in the submitted text."""
 
+    _NULLABLE = frozenset({"text"})
+
     #: **Deprecated**, use :attr:`claim` (the same string).
     text: str = Field(default="", json_schema_extra={"deprecated": True})
     domain: str = ""
@@ -428,6 +458,8 @@ class EntityRef(_Lax):
     ``qid`` is the Wikidata Q identifier (e.g. ``Q42``) when the entity
     was resolved against Lenz's internal catalog; ``None`` otherwise.
     """
+
+    _NULLABLE = frozenset({"name"})
 
     name: str = ""
     qid: str | None = None
@@ -871,6 +903,8 @@ class AssessClaim(_Lax):
     deprecated and kept).
     """
 
+    _NULLABLE = frozenset({"verdict", "confidence", "error_code", "hint"})
+
     claim: str = ""
     # Output language (ISO 639-1). Echoes the language requested on the
     # call, or ``'en'`` when unspecified. Verdict enums always English.
@@ -1011,6 +1045,8 @@ class AssessResponse(_Lax):
     instead). The deprecated ``error`` and ``error_code`` (``'no_claim'``)
     keep their 2.x values.
     """
+
+    _NULLABLE = frozenset({"error_code", "error"})
 
     claims: list[AssessClaim] = Field(default_factory=list)
     # Deprecated: use ``failure`` / ``status``. The 2.x sentence for an input
@@ -1211,6 +1247,10 @@ _CANCELLED_TASK_FAILURE: dict[str, Any] = {
 
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
+
+    _NULLABLE = frozenset(
+        {"reason", "hint", "progress", "claims", "docs_url", "error", "failure_class", "failure_reason"}
+    )
 
     # processing | needs_input | completed | failed | cancelled. ``cancelled``
     # is a task stopped elsewhere (the website's Stop button, another
@@ -1514,6 +1554,8 @@ class Usage(_Lax):
     of those yourself for the low-depth count — there is deliberately no
     ``verify_low`` block beside ``verify``.
     """
+
+    _NULLABLE = frozenset({"verify", "ask", "assess"})
 
     #: The tier slug — ``"free"`` | ``"plus"`` | ``"pro"`` | ``"scale"``.
     #: This is the field to branch on; it is stable. The Pro plan's slug was

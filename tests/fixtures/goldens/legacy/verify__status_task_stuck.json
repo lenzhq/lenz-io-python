@@ -1,0 +1,12 @@
+{
+  "body": {
+    "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+    "error": "The task was never completed and has been marked failed.",
+    "failure_class": "upstream_unavailable",
+    "failure_reason": "task_stuck",
+    "retryable": true,
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}
