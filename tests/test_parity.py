@@ -307,11 +307,20 @@ def test_model_schemas_match_the_previous_release() -> None:
     serialization JSON schema: the newer names are properties, not fields."""
     from parity_static import schemas
 
+    # Fields added since the frozen release. They are additive and optional
+    # (a response without them parses as before), so they are left out of the
+    # comparison; ``test_snippet_language_on_sources`` pins each one.
+    added_since_frozen = {"snippet_language"}
+
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the
         # shape may not.
         if isinstance(schema, dict):
-            return {k: _shape(v) for k, v in schema.items() if k not in ("description", "deprecated")}
+            return {
+                k: _shape({n: p for n, p in v.items() if n not in added_since_frozen} if k == "properties" else v)
+                for k, v in schema.items()
+                if k not in ("description", "deprecated")
+            }
         if isinstance(schema, list):
             return [_shape(v) for v in schema]
         return schema
