@@ -36,10 +36,12 @@ One ``AsyncLenz`` belongs to one event loop, like the ``httpx.AsyncClient``
 inside it: create it where it is used (in an app's lifespan, not at import
 time). asyncio only (trio is not supported).
 
-Cancellation: a cancelled await raises ``CancelledError`` at once and the
-request in flight is closed. The job on the server keeps running (and is
-charged if it completes) unless the wait was called with
-``cancel_on_abort=True``. A submit cancelled after its request left may
+Cancellation: a cancelled await raises ``CancelledError`` and the request in
+flight is closed. The job on the server keeps running (and is charged if it
+completes) unless the wait was called with ``cancel_on_abort=True``: then the
+``CancelledError`` is re-raised after the server cancel was sent (at most 5
+seconds). Call ``aclose()`` (or leave ``async with``) before the event loop
+ends, so pending cancels go out. A submit cancelled after its request left may
 still have started the job: pin ``idempotency_key=`` and resend with it to
 get the same job back.
 """
@@ -614,6 +616,8 @@ class AsyncLenz:
         # ``cancel_on_abort`` cleanups still running: held so they are not
         # collected, awaited by ``aclose``; shared with ``with_options`` copies.
         self._aborts: set[asyncio.Task[None]] = set()
+        # The cleanups that started running (and so log for themselves).
+        self._aborts_started: set[asyncio.Task[Any]] = set()
         # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
         # the SDK keeps ownership of every other default header — so a new
         # default header can't be silently dropped by a hand-copied client.
@@ -2073,7 +2077,16 @@ class AsyncLenz:
 
     def _abort_done(self, cleanup: asyncio.Task[None]) -> None:
         self._aborts.discard(cleanup)
-        if not cleanup.cancelled() and cleanup.exception() is not None:
+        started = cleanup in self._aborts_started
+        self._aborts_started.discard(cleanup)
+        if cleanup.cancelled():
+            # Cancelled before ``_cancel_jobs`` ran (it logs once it runs).
+            if not started:
+                logger.warning(
+                    "cancel_on_abort: cancel given up: the event loop is closing; "
+                    "the run may still finish and be billed"
+                )
+        elif cleanup.exception() is not None:
             logger.warning("cancel_on_abort: the cleanup failed (%s)", type(cleanup.exception()).__name__)
 
     async def _cancel_jobs(self, kind: Literal["task", "review", "citecheck"], job_ids: list[str]) -> None:
@@ -2110,8 +2123,21 @@ class AsyncLenz:
                     status,
                 )
 
+        current = asyncio.current_task()
+        if current is not None:
+            self._aborts_started.add(current)
         try:
             await asyncio.wait_for(asyncio.gather(*(one(job_id) for job_id in job_ids)), _ABORT_CANCEL_BUDGET)
+        except asyncio.CancelledError:
+            # The cleanup itself was cancelled: the event loop is shutting
+            # down (``asyncio.run`` ending, a framework cancelling every task).
+            logger.warning(
+                "cancel_on_abort: cancelling %s %s given up: the event loop is closing; it may still finish and be "
+                "billed (call aclose() or leave async with before the loop ends)",
+                kind,
+                ", ".join(job_ids),
+            )
+            raise
         except asyncio.TimeoutError:
             logger.warning(
                 "cancel_on_abort: cancelling %s %s took over %ss and was given up; it may still finish and be charged",

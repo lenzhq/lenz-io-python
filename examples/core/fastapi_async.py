@@ -9,8 +9,8 @@ loop, never at import time) and closed on shutdown. Two endpoints:
 * ``POST /review`` awaits a whole review (2-4 minutes). FastAPI does not
   cancel a handler when the browser goes away, so the wait runs as a task
   that is cancelled once ``request.is_disconnected()`` says the caller left;
-  with ``cancel_on_abort=True`` the review is then stopped on the server
-  too (it refunds what it had not delivered).
+  with ``cancel_on_abort=True`` the review is then asked to stop on the
+  server too (it refunds what it had not delivered).
 * ``POST /verify-later`` starts a deep check and returns at once; its result
   arrives by webhook (see ``fastapi_webhook.py`` for the receiver).
 
@@ -41,7 +41,7 @@ class _Caller(Protocol):
 async def until_disconnected(request: _Caller, work: Awaitable[T], *, every: float = 1.0) -> T | None:
     """Await ``work``, but cancel it (and return ``None``) once the caller
     has disconnected, checked every ``every`` seconds. Cancelling a Lenz wait
-    made with ``cancel_on_abort=True`` also stops the job on the server."""
+    made with ``cancel_on_abort=True`` also asks the server to stop the job."""
     task = asyncio.ensure_future(work)
     try:
         while True:
@@ -82,7 +82,7 @@ async def review(payload: dict[str, str], request: Request) -> dict[str, Any] | 
     client: AsyncLenz = request.app.state.lenz
     result = await until_disconnected(request, client.review_and_wait(payload["text"], cancel_on_abort=True))
     if result is None:
-        return Response(status_code=499)  # the caller left; the review was stopped
+        return Response(status_code=499)  # the caller left; the review was asked to stop
     return {"outcome": result.outcome, "issues": [issue.claim for issue in result.issues]}
 
 

@@ -212,7 +212,7 @@ def test_the_docstrings_are_the_sync_ones_for_asyncio() -> None:
 def test_async_lenz_is_exported_and_imported_lazily() -> None:
     assert "AsyncLenz" in lenz_io.__all__
     assert lenz_io.AsyncLenz is AsyncLenz
-    code = "import sys, lenz_io; print('lenz_io.async_client' in sys.modules)"
+    code = "import sys, lenz_io; print('lenz_io.async_client' in sys.modules or 'AsyncLenz' not in dir(lenz_io))"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout
     assert out.strip() == "False"
     with pytest.raises(AttributeError):
@@ -937,3 +937,48 @@ async def test_the_example_returns_the_result_when_the_caller_stays(no_sleep: li
         return "done"
 
     assert await example.until_disconnected(Caller(), work(), every=0.005) == "done"
+
+
+@pytest.mark.parametrize("settle", [0, 3])
+def test_a_cleanup_cut_off_by_the_loop_closing_is_logged(caplog: pytest.LogCaptureFixture, settle: int) -> None:
+    """``asyncio.run`` cancels every task left when ``main`` returns: a
+    ``cancel_on_abort`` cleanup cut off that way (before or after it started)
+    says so at WARNING with the job id, instead of vanishing."""
+    caplog.set_level(logging.WARNING, logger="lenz_io")
+
+    async def main() -> None:
+        polled = asyncio.Event()
+
+        async def slow_cancel(request: httpx.Request) -> httpx.Response:
+            await asyncio.sleep(3600)
+            raise AssertionError("never answered")
+
+        server = Server(
+            {("GET", "/verify/status/t1"): [_blocked(polled)], ("POST", "/verify/t1/cancel"): [slow_cancel]}
+        )
+        client = server.client()
+        task = asyncio.ensure_future(client.wait("t1", cancel_on_abort=True))
+        await polled.wait()
+        task.cancel()
+        for _ in range(settle):
+            await asyncio.sleep(0)
+        # returns without awaiting the task or closing the client
+
+    asyncio.run(main())
+    records = [r for r in caplog.records if "event loop is closing" in r.getMessage()]
+    assert len(records) == 1
+    assert records[0].levelno == logging.WARNING
+
+
+async def test_aclose_lets_a_pending_cancel_go_out() -> None:
+    polled = asyncio.Event()
+    server = Server({("GET", "/verify/status/t1"): [_blocked(polled)], ("POST", "/verify/t1/cancel"): [CANCELLED]})
+    client = server.client()
+    task = asyncio.ensure_future(client.wait("t1", cancel_on_abort=True))
+    await polled.wait()
+    task.cancel()
+    await asyncio.sleep(0)  # the wait handles its cancellation and starts the cleanup
+    await client.aclose()
+    assert len(server.calls("POST", "/verify/t1/cancel")) == 1
+    with pytest.raises(asyncio.CancelledError):
+        await task

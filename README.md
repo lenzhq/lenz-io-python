@@ -1209,12 +1209,15 @@ app = FastAPI(lifespan=lifespan)
 async def review(text: str, request: Request) -> dict[str, object] | Response:
     client: AsyncLenz = request.app.state.lenz
     wait = asyncio.ensure_future(client.review_and_wait(text, cancel_on_abort=True))
-    while not wait.done():
-        await asyncio.wait({wait}, timeout=1)
-        if not wait.done() and await request.is_disconnected():
-            wait.cancel()  # cancel_on_abort: the review is stopped on the server too
-            await asyncio.gather(wait, return_exceptions=True)
-            return Response(status_code=499)
+    try:
+        while not wait.done():
+            await asyncio.wait({wait}, timeout=1)
+            if not wait.done() and await request.is_disconnected():
+                wait.cancel()  # cancel_on_abort: the review is asked to stop on the server too
+                await asyncio.gather(wait, return_exceptions=True)
+                return Response(status_code=499)
+    finally:
+        wait.cancel()  # no-op once it is done; stops it if this handler is cancelled
     result = wait.result()
     return {"outcome": result.outcome, "issues": [issue.claim for issue in result.issues]}
 ```
@@ -1240,12 +1243,14 @@ verdicts = await asyncio.gather(*(one(c) for c in claims))
 items in parallel, `asyncio.gather(*(client.wait(item) for item in batch.items))`.
 
 **Cancellation.** Cancelling the task that awaits a call (a timeout, a caller that left)
-raises `CancelledError` at once and closes the request in flight. It only stops waiting: the
+raises `CancelledError` and closes the request in flight. It only stops waiting: the
 verification, review or citation check keeps running on the server and is charged as usual if
 it completes. Unless the wait was called with `cancel_on_abort=True` (`wait`,
 `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`): then
 the SDK also sends the matching `cancel` / `cancel_review` / `cancel_citecheck` (one request
-per job, at most 5 seconds) and re-raises the `CancelledError` unchanged. A cancelled
+per job, at most 5 seconds) and then re-raises the `CancelledError` unchanged. Call
+`aclose()` (or leave `async with`) before the event loop ends, so pending cancels go out: a
+cancel cut off by the loop closing is logged at WARNING and never sent. A cancelled
 verification is not charged; a cancelled review or citation check refunds what it had not
 delivered. A cancel that fails, or that loses the race to the end of the job (which is then
 charged as usual), is logged at WARNING with the job id. `asyncio.timeout()` and

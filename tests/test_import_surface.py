@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 import json
+import re
 import sys
 import types
 from pathlib import Path
@@ -27,14 +28,21 @@ GOLDEN = Path(__file__).parent / "fixtures" / "freeze" / "names.json"
 _TYPING = ("typing", "typing_extensions")
 
 
+def _typing_kind(value: Any) -> str:
+    """A typing construct, named the same on every supported Python: a
+    function or class by its name (``overload``, ``TypeVar``), anything else
+    by its repr without the module (``Any``, ``Final``, ``Literal['a', 'b']``,
+    ``~_Client``), so swapping one alias for another is still caught."""
+    if inspect.isfunction(value) or inspect.isclass(value):
+        return f"typing:{value.__name__}"
+    return "typing:" + re.sub(r"\btyping(?:_extensions)?\.", "", repr(value))
+
+
 def _kind(value: Any) -> str:
     if inspect.isclass(value) and value.__module__ not in _TYPING:
         return "class"
     if getattr(value, "__module__", None) in _TYPING or type(value).__module__ in _TYPING:
-        # A typing construct (``Any``, ``Literal[...]``, ``Final``, a
-        # ``TypeVar``, ``overload``): what it is made of differs between
-        # Python versions.
-        return "typing"
+        return _typing_kind(value)
     if inspect.isclass(value):
         return "class"
     if inspect.isfunction(value) or inspect.isbuiltin(value):

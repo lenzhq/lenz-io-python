@@ -281,6 +281,10 @@ __all__ = [
 ]
 
 
+def __dir__() -> list[str]:
+    return sorted({*globals(), "AsyncLenz"})
+
+
 def __getattr__(name: str) -> Any:
     # ``AsyncLenz`` is imported on first use, so ``import lenz_io`` (and the
     # ``lenz`` CLI) does not load asyncio and the async client for sync users.
