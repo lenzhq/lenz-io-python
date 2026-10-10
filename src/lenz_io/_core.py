@@ -574,7 +574,11 @@ def _segment(value: Any, message: str) -> str:
     path normaliser eats the dots, and an empty id names the collection."""
     if not isinstance(value, str) or value in ("", ".", ".."):
         raise ValueError(message)
-    return quote(value, safe="")
+    try:
+        return quote(value, safe="")
+    except UnicodeEncodeError:
+        # A lone surrogate cannot be sent: the id cannot name anything.
+        raise ValueError(message) from None
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
@@ -929,7 +933,9 @@ def _well_formed(value: Any) -> Any:
     if isinstance(value, dict):
         return {_well_formed(k): _well_formed(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
-        return type(value)(_well_formed(v) for v in value)
+        # A plain list: any sequence goes out as a JSON array, and a
+        # namedtuple's constructor would not take one iterable.
+        return [_well_formed(v) for v in value]
     return value
 
 

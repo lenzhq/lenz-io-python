@@ -113,6 +113,18 @@ def _null_as_sent(value: Any, handler: ValidatorFunctionWrapHandler, info: Valid
     return handler(value)
 
 
+def _unsent_as_none(model: _M, info: ValidationInfo, *names: str) -> _M:
+    """With ``legacy_aliases=False``: each of ``names`` the server did not
+    send reads ``None`` (not a default that looks like a value), and stays
+    out of ``model_fields_set``, so ``model_dump(exclude_unset=True)`` is
+    the body as sent."""
+    if not _legacy(info):
+        for name in names:
+            if name not in model.model_fields_set:
+                model.__dict__[name] = None
+    return model
+
+
 def _legacy_view(model: _M) -> _M:
     """``model`` as the default (2.x-aliased) reading would have it: itself
     when it was read that way, else read again from what the server sent.
@@ -1271,10 +1283,10 @@ class UsageCredits(_Lax):
 
     _keep_null = field_validator("bonus", mode="wrap")(_null_as_sent)
 
-    @classmethod
-    def _as_sent(cls, data: Any) -> Any:
+    @model_validator(mode="after")
+    def _unsent_bonus(self, info: ValidationInfo) -> Any:
         # The alias the SDK would derive reads None, not a number nobody sent.
-        return _fill(data, bonus=None) if isinstance(data, dict) else data
+        return _unsent_as_none(self, info, "bonus")
 
     @model_validator(mode="before")
     @classmethod
@@ -1345,9 +1357,9 @@ class UsageCapacity(_Lax):
 
     _keep_null = field_validator("credits", mode="wrap")(_null_as_sent)
 
-    @classmethod
-    def _as_sent(cls, data: Any) -> Any:
-        return _fill(data, credits=None) if isinstance(data, dict) else data
+    @model_validator(mode="after")
+    def _unsent_credits(self, info: ValidationInfo) -> Any:
+        return _unsent_as_none(self, info, "credits")
 
     @model_validator(mode="before")
     @classmethod
@@ -1460,11 +1472,11 @@ class Usage(_Lax):
 
     _keep_null = field_validator("verify", "ask", "assess", mode="wrap")(_null_as_sent)
 
-    @classmethod
-    def _as_sent(cls, data: Any) -> Any:
+    @model_validator(mode="after")
+    def _unsent_blocks(self, info: ValidationInfo) -> Any:
         # The per-capability blocks are 2.x projections of the pool: None
         # unless the server sent them.
-        return _fill(data, verify=None, ask=None, assess=None) if isinstance(data, dict) else data
+        return _unsent_as_none(self, info, "verify", "ask", "assess")
 
     @model_validator(mode="before")
     @classmethod

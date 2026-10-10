@@ -903,7 +903,8 @@ names the version: "The API answered 2026-05-13; this SDK reads 2026-10-11
 only."
 
 `LenzInvalidResponseError` (a `LenzAPIError`, since 3.2) is raised when a
-success status (2xx) carries a body that is not JSON, typically a proxy,
+status below 400 (a 2xx, or a redirect httpx did not follow, such as an HTML
+302) carries a body that is not JSON, typically a proxy,
 captive portal or load balancer answering in the API's place. It carries the
 real `status_code` (`0` stays reserved for a request that got no answer), the
 `request_id` if one came back, `body` `None`, `body_text` (the body as text:
@@ -1345,7 +1346,7 @@ An OAuth access token for the Lenz API works wherever the API key goes: pass it 
 
 Since 3.0 the SDK reads the API's `2026-10-11` response shape and, by default,
 also fills in every deprecated 2.x field from it, so 2.x code runs unchanged.
-`Lenz(legacy_aliases=False)` (and `AsyncLenz(...)`, since 3.2) turns that off:
+`legacy_aliases=False` on the constructor (both clients, since 3.2) turns that off:
 results carry exactly what the API sent. Read the current names (`claim`,
 `status`, `failure`, `more_claims`, `completed_at`, `claims`, `credits`,
 `costs`, ...). The default, `True`, is 3.x behaviour, unchanged.
@@ -1379,7 +1380,8 @@ With `legacy_aliases=False`:
 3.x annotations (`str`, `int`, `UsageCapacity`), so with `legacy_aliases=False`
 read them as `... | None`. The deprecated attributes still exist on the models.
 A field the response leaves out still reads its declared default, as in every
-3.x release. `model_dump()` shows the body as sent. Errors (classes and
+3.x release. `model_dump(exclude_unset=True)` is the body as sent (the
+`Usage` aliases that read `None` are not marked set). Errors (classes and
 fields) and webhook parsing are the same either way, and so is
 `BatchItemResult.claim_text`, which the SDK builds itself. Results attached to
 an error are results: the `partial` of a `ReviewTimeout` / `CitecheckTimeout`

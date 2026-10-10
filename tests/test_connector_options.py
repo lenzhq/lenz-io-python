@@ -511,3 +511,30 @@ def test_batch_results_keep_how_their_statuses_were_read() -> None:
     assert item.status_detail is not None
     assert item.status_detail.failure is None  # not the 2.x block: none was sent
     assert item.status_detail.error == ""
+
+
+class TestReviewFollowUps:
+    def test_a_namedtuple_in_a_body_goes_out_as_an_array(self, client: Any) -> None:
+        from typing import NamedTuple
+
+        class Two(NamedTuple):
+            a: str
+            b: str
+
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/assess").respond(200, json={"status": "ok", "claims": [], "more_claims": []})
+            client.assess(claims=Two("One.", "Two\ud800."))
+        assert json.loads(route.calls.last.request.content)["claims"] == ["One.", "Two�."]
+
+    def test_a_lone_surrogate_in_a_path_id_is_an_invalid_id(self, client: Any) -> None:
+        with pytest.raises(ValueError):
+            client.get_status("a\ud800")
+
+    def test_unsent_usage_aliases_stay_unset(self) -> None:
+        with respx.mock(base_url=BASE) as r, make_client(api_key=KEY, legacy_aliases=False) as c:
+            r.get("/me/usage").respond(200, json=_USAGE)
+            u = c.usage()
+        dumped = u.model_dump(exclude_unset=True)
+        assert set(dumped) == set(_USAGE)
+        assert "bonus" not in dumped["credits"]
+        assert u.verify is None

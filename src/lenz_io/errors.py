@@ -291,7 +291,8 @@ class LenzAPIError(LenzError):
 
 
 class LenzInvalidResponseError(LenzAPIError, json.JSONDecodeError):
-    """A success status (2xx) whose body is not JSON: typically a proxy,
+    """A status below 400 (a 2xx, or a redirect httpx did not follow) whose
+    body is not JSON: typically a proxy,
     captive portal or load balancer answering in the API's place.
 
     ``status_code`` is the real HTTP status (never 0, which means the request
