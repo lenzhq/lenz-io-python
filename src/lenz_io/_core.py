@@ -882,9 +882,10 @@ def _client_settings(
     one tenant's call with the process's key. A call that needs a key then
     raises ``LenzAuthError``, as on a client given none.
 
-    A key that is not blank must be printable ASCII without spaces (no
-    whitespace or control character anywhere, a trailing newline included):
-    ``LenzAuthError`` here, before any request (since 3.2)."""
+    Whitespace around the key (a trailing newline read from a file) is
+    dropped; what is left must be printable ASCII without spaces (no
+    whitespace, control or non-ASCII character inside it): ``LenzAuthError``
+    here, before any request (since 3.2)."""
     import os
 
     # The same rule as every request option: refused here, before the
@@ -892,9 +893,7 @@ def _client_settings(
     checked_timeout = _check_timeout(timeout, where)
     retries = _check_retries(max_retries, where)
     from_env = api_key is None
-    key = (os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key
-    if not key.strip():
-        key = ""
+    key = ((os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key).strip()
     _check_api_key(key, where, from_env=from_env)
     url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
     return key, url, checked_timeout, retries
@@ -925,11 +924,12 @@ _API_KEY = re.compile(r"[\x21-\x7e]+")
 
 
 def _check_api_key(key: str, where: str, *, from_env: bool = False) -> None:
-    """Refuse a key that cannot be sent as a bearer token (a non-ASCII
-    character, a space, a newline or any other control character, anywhere
-    in it) with ``LenzAuthError``, before any request: httpx would otherwise
-    fail to encode it, or refuse the header, on every call. ``""`` (no key)
-    passes. The key itself is never put in the message."""
+    """Refuse a key (already stripped of surrounding whitespace) that cannot
+    be sent as a bearer token (a non-ASCII character, a space, a newline or
+    any other control character inside it) with ``LenzAuthError``, before
+    any request: httpx would otherwise fail to encode it, or refuse the
+    header, on every call. ``""`` (no key) passes. The key itself is never
+    put in the message."""
     if not key or _API_KEY.fullmatch(key):
         return
     source = "The LENZ_API_KEY environment variable" if from_env else "The api_key"
@@ -941,7 +941,7 @@ def _check_api_key(key: str, where: str, *, from_env: bool = False) -> None:
         ),
         fix=(
             "Pass the key exactly as https://lenz.io/api-credentials shows it: printable ASCII, no "
-            "spaces (strip a trailing newline read from a file or an environment variable)."
+            "spaces or line breaks inside it."
         ),
         doc_url="https://lenz.io/docs/auth",
     )
@@ -955,10 +955,9 @@ def _copy_api_key(value: Any) -> str:
         return ""
     if not isinstance(value, str):
         raise ValueError(f"with_options(): api_key must be a string or None (got {type(value).__name__}).")
-    if not value.strip():
-        return ""
-    _check_api_key(value, "with_options()")
-    return value
+    key = value.strip()
+    _check_api_key(key, "with_options()")
+    return key
 
 
 def _results_context(legacy_aliases: bool) -> dict[str, Any] | None:

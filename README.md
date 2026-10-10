@@ -1442,9 +1442,10 @@ environment. A server holding several users' keys builds its client with
 its user's key with `with_options(api_key=...)` (see
 [the server section](#using-lenz-io-from-a-server-that-forwards-per-user-credentials)).
 
-A key is printable ASCII without spaces. One with a space, a line break (a
-trailing newline read from a file included), another control character or a
-non-ASCII character anywhere in it raises `LenzAuthError` when the client (or
+Whitespace around a key (a trailing newline read from a file or an
+environment variable) is dropped (since 3.2). What is left is printable ASCII
+without spaces: a key with a space, a line break, another control character
+or a non-ASCII character inside it raises `LenzAuthError` when the client (or
 the `with_options` copy) is built, before any request (since 3.2; before, it
 failed on every call with an encoding or transport error). The message never
 contains the key.
@@ -1643,8 +1644,9 @@ def handle(user, text):
 - **Per-user keys**: `with_options(api_key=...)` per request, on the shared
   pool. A copy never reads `LENZ_API_KEY`; an empty key, or `None`, gives a
   copy with no key, and a call that needs one raises `LenzAuthError` before
-  sending. A key that is not printable ASCII without spaces raises
-  `LenzAuthError` there, before sending. Copies with different keys can run
+  sending. Whitespace around a key is dropped; a key with a space, a
+  control or a non-ASCII character inside it raises `LenzAuthError` there,
+  before sending. Copies with different keys can run
   at once (threads, or tasks on `AsyncLenz`).
 - **`legacy_aliases=False`** is a constructor argument only: every copy
   reads like its client. Results carry what the API sent, and `exc.code` is
@@ -1668,7 +1670,8 @@ def handle(user, text):
 - **Retries**: `max_retries=0` when your caller has its own deadline or
   retry budget; the SDK then sends each request once. A resend should reuse
   `exc.idempotency_key`.
-- **Raw bodies**: `result.raw` is the JSON object a result was read from;
+- **Raw bodies**: `result.raw` is the JSON object a result was read from
+  (nested results too; the Node SDK sets it on top-level results only);
   `exc.body` is an error's; `exc.headers` its response headers
   (`retry-after`, `x-request-id`, ...), and `exc.retry_after` the parsed wait
   (see [Errors](#errors) for which wins).

@@ -609,10 +609,11 @@ class AsyncLenz:
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
     empty or whitespace-only ``api_key`` is no key and never reads the
-    environment (auth-required methods raise ``LenzAuthError``). Any other
-    key must be printable ASCII without spaces (a newline, a tab, another
-    control character or a non-ASCII character anywhere in it raises
-    ``LenzAuthError`` here, since 3.2).
+    environment (auth-required methods raise ``LenzAuthError``). Whitespace
+    around a key is dropped (since 3.2); what is left must be printable
+    ASCII without spaces (a space, a tab, a line break, another control
+    character or a non-ASCII character inside it raises ``LenzAuthError``
+    here, since 3.2).
 
     ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass is
     sent on each request (the client you passed is not changed); left out,
@@ -743,9 +744,9 @@ class AsyncLenz:
           a header a copy added. The SDK's own headers are refused.
         * ``api_key`` (since 3.2): the copy's own key, for example one user's
           OAuth access token (``lat_...``) on a server acting for several
-          users, sharing the pool. A key is sent as given; one that is not
-          printable ASCII without spaces raises ``LenzAuthError`` here (since
-          3.2). An empty or whitespace-only key, or ``None``, gives a copy
+          users, sharing the pool. Whitespace around the key is dropped; a
+          key with a space, a control or a non-ASCII character inside it
+          raises ``LenzAuthError`` here (since 3.2). An empty or whitespace-only key, or ``None``, gives a copy
           with no key (a call that needs one raises ``LenzAuthError`` before
           sending). A copy never reads ``LENZ_API_KEY``. Left out, the copy
           keeps the key it was made from.

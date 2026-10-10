@@ -178,7 +178,7 @@ def test_a_submit_answered_with_a_list_says_which_key_it_sent(client: Any) -> No
 # ── 8. an API key that cannot be sent ─────────────────────────────────────
 
 
-_BAD_KEYS = ["lenz_abc\n", "lenz_a bc", "lenz_abc\t", "lenz_\x00abc", "lenz_abcé", "lenz_abc\u2028", " lenz_abc"]
+_BAD_KEYS = ["lenz_a bc", "lenz_ab\tc", "lenz_\x00abc", "lenz_abcé", "lenz_a\u2028bc", "lenz_a\nbc"]
 
 
 @pytest.mark.parametrize("key", _BAD_KEYS)
@@ -199,7 +199,7 @@ def test_a_bad_key_is_refused_by_with_options(client: Any, key: str) -> None:
 
 
 def test_a_bad_key_in_the_environment_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("LENZ_API_KEY", "lenz_abc\n")
+    monkeypatch.setenv("LENZ_API_KEY", "lenz_a bc")
     with pytest.raises(LenzAuthError) as ei:
         make_client()
     assert "LENZ_API_KEY" in str(ei.value)
@@ -346,3 +346,36 @@ def test_a_model_built_in_code_holds_its_fields() -> None:
 
     assert ReviewStarted(review_id="r1", status="queued").raw == {"review_id": "r1", "status": "queued"}
     assert TaskAccepted.model_validate({"task_id": "t", "claim": "A."}).raw == {"task_id": "t", "claim": "A."}
+
+
+@pytest.mark.parametrize("key", ["lenz_abc\n", " lenz_abc", "\tlenz_abc \r\n"])
+def test_whitespace_around_a_key_is_dropped(key: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LENZ_API_KEY", key)
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/me/usage").respond(200, json=_USAGE)
+        with make_client(api_key=key, max_retries=0) as c:
+            c.usage()
+            c.with_options(api_key=key).usage()
+        with make_client(max_retries=0) as c:
+            c.usage()
+    assert {call.request.headers["Authorization"] for call in route.calls} == {"Bearer lenz_abc"}
+
+
+def test_nested_raw_is_the_part_as_received_not_the_2x_reading() -> None:
+    from lenz_io.models import ReviewVerification
+
+    body = {"failure": {"code": "no_checkable_claim"}}
+    model = ReviewVerification.model_validate(body)
+    assert model.failure is not None and model.failure.failure_reason == "not_a_claim"
+    assert model.raw == body
+    assert model.failure.raw == {"code": "no_checkable_claim"}
+
+
+def test_raw_is_a_snapshot_taken_when_read() -> None:
+    from lenz_io.models import TaskAccepted
+
+    data = {"task_id": "t", "claim": "A.", "future": {"a": 1}}
+    model = TaskAccepted.model_validate(data)
+    model.future["a"] = 2  # type: ignore[attr-defined]
+    data["claim"] = "B."
+    assert model.raw == {"task_id": "t", "claim": "A.", "future": {"a": 1}}

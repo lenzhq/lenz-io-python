@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import copy
 from collections.abc import ItemsView, KeysView, ValuesView
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
 
@@ -34,6 +35,37 @@ from pydantic import (
     model_validator,
 )
 from typing_extensions import deprecated
+
+#: Set while a model is being read: nested reads leave ``raw`` to it.
+_READING: ContextVar[bool] = ContextVar("lenz_io_reading", default=False)
+
+
+def _hand_out_raw(model: Any, original: Any) -> None:
+    """``model``'s ``raw`` is ``original`` (its part of the body as received),
+    and each model nested in it gets the part under its own key (or index).
+    A nested model the body did not carry (filled in by the SDK) gets
+    ``None``; a model passed in already read keeps its own."""
+    if not isinstance(original, dict):
+        model._raw = None
+        return
+    model._raw = original
+    for name, field in type(model).model_fields.items():
+        value = model.__dict__.get(name)
+        key = field.alias or name
+        part = original.get(key) if key in original else None
+        if isinstance(value, _Lax):
+            _hand_out_one(value, part)
+        elif isinstance(value, list):
+            parts = part if isinstance(part, list) and len(part) == len(value) else None
+            for index, item in enumerate(value):
+                if isinstance(item, _Lax):
+                    _hand_out_one(item, parts[index] if parts is not None else None)
+
+
+def _hand_out_one(value: _Lax, part: Any) -> None:
+    if isinstance(part, _Lax):
+        return  # an existing result, nested as it is: it keeps its own
+    _hand_out_raw(value, part)
 
 
 class _Lax(BaseModel):
@@ -58,12 +90,23 @@ class _Lax(BaseModel):
     @model_validator(mode="wrap")
     @classmethod
     def _keep_what_was_read(cls, data: Any, handler: ValidatorFunctionWrapHandler) -> Any:
-        # The outermost validator: it sees the input before any ``before``
-        # validator fills in a 2.x alias or a default. Only a JSON object is
-        # kept; a model passed in (nesting an existing result) keeps its own.
-        model = handler(data)
-        if isinstance(data, dict) and isinstance(model, _Lax):
-            model._raw = data
+        # The outermost validator of the outermost model: it sees the input
+        # before any ``before`` validator fills in a 2.x alias or a default
+        # (a parent's validators may rewrite a nested object before the
+        # nested model sees it). So only the outermost read keeps a snapshot,
+        # a deep copy taken here, and hands each nested model its own part of
+        # it (``_hand_out_raw``). A model passed in (nesting an existing
+        # result) keeps its own.
+        if _READING.get():
+            return handler(data)
+        snapshot = copy.deepcopy(data) if isinstance(data, dict) else None
+        token = _READING.set(True)
+        try:
+            model = handler(data)
+        finally:
+            _READING.reset(token)
+        if snapshot is not None and isinstance(model, _Lax):
+            _hand_out_raw(model, snapshot)
         return model
 
     @property
