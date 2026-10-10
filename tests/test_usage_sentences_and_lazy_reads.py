@@ -72,8 +72,7 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
     ("verify_and_wait", lambda c: c.verify_and_wait(" "), "blank_input", "claim", "claim is required."),
     ("assess", lambda c: c.assess(""), "blank_input", "claim", "claim is required."),
     ("assess_text", lambda c: c.assess(text="\n"), "blank_input", "claim", "claim is required."),
-    # ``"claims": []`` reads as no input at all on /assess.
-    ("assess_empty_list", lambda c: c.assess(claims=[]), "empty_list", "claims", "claim: Field required"),
+    ("assess_empty_list", lambda c: c.assess(claims=[]), "empty_list", "claims", "claims is required."),
     ("assess_blank_item", lambda c: c.assess(claims=["A.", " "]), "blank_item", "claims[1]", "claims[1] is blank."),
     ("select_empty", lambda c: c.select("t1", claims=[]), "empty_list", "claims", "claims is required."),
     ("select_none", lambda c: c.select("t1"), "empty_list", "claims", "claims is required."),
@@ -130,6 +129,38 @@ def test_a_blank_input_is_refused_with_the_apis_sentence(
     assert str(ei.value) == sentence
     assert ei.value.code == code
     assert ei.value.param == param
+
+
+@pytest.mark.parametrize(("name", "call", "code", "param", "sentence"), _REFUSED, ids=[r[0] for r in _REFUSED])
+def test_the_sentence_is_the_same_without_legacy_aliases(
+    name: str, call: Callable[[Any], Any], code: str, param: str, sentence: str
+) -> None:
+    with make_client(api_key=KEY, max_retries=0, legacy_aliases=False) as c, pytest.raises(LenzUsageError) as ei:
+        call(c)
+    assert (str(ei.value), ei.value.code, ei.value.param) == (sentence, code, param)
+
+
+def test_citecheck_and_wait_refuses_a_blank_text(client: Any) -> None:
+    with pytest.raises(LenzUsageError) as ei:
+        client.citecheck_and_wait("  ")
+    assert str(ei.value) == "payload: Value error, send exactly one of text and pairs"
+    assert (ei.value.code, ei.value.param) == ("blank_input", "text")
+
+
+def test_a_bom_is_content_not_blank(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        sel = r.post("/verify/t1/select").respond(200, json={"items": []})
+        ask = r.post("/ask/v1").respond(200, json={"role": "expert", "content": "Because."})
+        client.select("t1", claims=["\ufeff"])
+        client.ask.send("v1", message="\ufeff")
+    assert sel.call_count == 1 and ask.call_count == 1
+
+
+def test_select_claims_that_are_not_a_list_are_sent_as_before(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.post("/verify/t1/select").respond(200, json={"items": []})
+        client.select("t1", claims="A. ")  # type: ignore[arg-type]
+    assert route.calls[0].request.content == b'{"texts":"A. "}'
 
 
 def test_other_codes_keep_the_sdks_message(client: Any) -> None:

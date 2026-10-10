@@ -999,7 +999,7 @@ it reads the same whether the SDK or the API refused it:
 | Call | `code` | Message |
 |---|---|---|
 | `verify("")`, `verify_and_wait("")`, `assess("")` | `blank_input` | `claim is required.` |
-| `assess(claims=[])` | `empty_list` | `claim: Field required` |
+| `assess(claims=[])` | `empty_list` | `claims is required.` |
 | `assess(claims=["A.", " "])`, `select(task_id, claims=["A.", " "])` | `blank_item` | `claims[1] is blank.` |
 | `select(task_id, claims=[])` | `empty_list` | `claims is required.` |
 | `review("")`, `review_and_wait("")` | `blank_input` | `text: send the draft, or one public http(s) URL.` |

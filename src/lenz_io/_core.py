@@ -1126,8 +1126,7 @@ def _with_options_layer(
 #: (``2026-10-11``) gives for the same request, so the message reads the same
 #: whether the SDK or the API refused it (a blank claim is ``claim is
 #: required.``, a blank ``assess`` item ``claims[i] is blank.``).
-_API_ASSESS_EMPTY_LIST = "claim: Field required"
-_API_SELECT_EMPTY = "claims is required."
+_API_CLAIMS_EMPTY = "claims is required."
 _API_ASK_BLANK = "Message cannot be empty."
 _API_REVIEW_BLANK = "text: send the draft, or one public http(s) URL."
 _API_CITECHECK_BLANK = "payload: Value error, send exactly one of text and pairs"
@@ -1246,8 +1245,7 @@ def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None
         )
     if claims is not None:
         if not claims:
-            # The API reads ``"claims": []`` as no input at all.
-            raise LenzUsageError(_API_ASSESS_EMPTY_LIST, code="empty_list", param="claims")
+            raise LenzUsageError(_API_CLAIMS_EMPTY, code="empty_list", param="claims")
         for index, item in enumerate(claims):
             if not isinstance(item, str):
                 raise LenzUsageError(
@@ -1286,8 +1284,10 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
     chosen = claims or texts
     if not chosen:
-        raise LenzUsageError(_API_SELECT_EMPTY, code="empty_list", param="claims")
-    for index, item in enumerate(chosen):
+        raise LenzUsageError(_API_CLAIMS_EMPTY, code="empty_list", param="claims")
+    # Only a list is checked: anything else is sent as before, for the API
+    # to answer.
+    for index, item in enumerate(chosen if isinstance(chosen, list) else ()):
         # Since 3.2 a blank item is refused, as ``assess`` refuses one (the
         # API drops it silently, and answers ``claims is required.`` only
         # when every item is blank).
