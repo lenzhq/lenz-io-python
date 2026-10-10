@@ -467,3 +467,88 @@ def test_the_codes_are_exported_at_the_top_level() -> None:
 
     assert lenz_io.USAGE_ERROR_CODES == USAGE_ERROR_CODES
     assert typing.get_args(lenz_io.UsageErrorCode) == USAGE_ERROR_CODES
+
+
+# ── 9. parity with the Node SDK's follow-ups ──────────────────────────────
+
+
+@pytest.mark.parametrize("item", [42, None, ["x"]])
+def test_an_assess_item_that_is_not_a_string_is_refused_locally(client: Any, item: Any) -> None:
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        with pytest.raises(LenzUsageError) as ei:
+            client.assess(claims=["A.", item])
+        assert not r.calls
+    assert (ei.value.code, ei.value.param) == ("invalid_argument", "claims[1]")
+
+
+@pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf"), "5", True])
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c, t: c.wait("t1", timeout=t),
+        lambda c, t: c.verify_and_wait("A.", timeout=t),
+        lambda c, t: c.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=t),
+        lambda c, t: c.review_and_wait("Draft.", timeout=t),
+        lambda c, t: c.citecheck_and_wait("Draft.", timeout=t),
+    ],
+)
+def test_a_wait_budget_that_is_not_a_finite_number_is_refused(client: Any, bad: Any, call: Any) -> None:
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        with pytest.raises(LenzUsageError) as ei:
+            call(client, bad)
+        assert not r.calls
+    assert (ei.value.code, ei.value.param) == ("invalid_option", "timeout")
+
+
+def test_a_wait_budget_of_none_is_the_default(client: Any, clock: list[float]) -> None:
+    done = {"status": "completed", "task_id": "t1", "result": {"verification_id": "v1", "claim": "A."}}
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=done)
+        assert client.wait("t1", timeout=None).verification_id == "v1"
+
+
+@pytest.mark.parametrize(
+    ("call", "path"),
+    [
+        (lambda c: c.cancel("t1"), "/verify/t1/cancel"),
+        (lambda c: c.cancel_review("r1"), "/reviews/r1/cancel"),
+        (lambda c: c.cancel_citecheck("c1"), "/citechecks/c1/cancel"),
+    ],
+)
+def test_a_cancel_answered_with_another_jobs_body_is_an_invalid_response(client: Any, call: Any, path: str) -> None:
+    other = {"task_id": "other", "review_id": "other", "citecheck_id": "other", "cancelled": True, "status": "x"}
+    with respx.mock(base_url=BASE) as r:
+        r.post(path).respond(200, json=other, headers={"X-Request-ID": "req_c"})
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            call(client)
+    err = ei.value
+    assert (err.status_code, err.request_id, err.body) == (200, "req_c", other)
+    assert err.body_text.startswith("{")
+
+
+def test_an_ended_but_unreadable_batch_item_carries_its_error(client: Any, clock: list[float]) -> None:
+    accepted = {"items": [{"task_id": "t1", "claim": "A."}, {"task_id": "t2", "claim": "B."}]}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify/batch").respond(202, json=accepted)
+        r.get("/verify/status/t1").respond(200, json={"status": "failed", "task_id": "t1", "failure": {"code": [1]}})
+        r.get("/verify/status/t2").respond(
+            200, json={"status": "completed", "task_id": "t2", "result": {"verification_id": "v2", "claim": "B."}}
+        )
+        out = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=60)
+    assert out[0].status == "failed"
+    assert out[0].status_detail is None
+    assert isinstance(out[0].error, LenzInvalidResponseError)
+    assert "error" not in out[0].model_dump()
+    assert out[1].status == "completed" and out[1].error is None
+
+
+def test_an_unreadable_body_of_another_review_is_polled_again(client: Any, clock: list[float]) -> None:
+    from lenz_io._polling import _job_of, _unreadable_end
+
+    err = LenzInvalidResponseError(message="m", status_code=200, body={"review_id": "r2", "status": "completed"})
+    assert _job_of("/reviews/r1") == ("review_id", "r1")
+    assert not _unreadable_end(err, ("completed",), ("review_id", "r1"))
+    err.body = {"status": "completed"}
+    assert not _unreadable_end(err, ("completed",), ("review_id", "r1"))
+    err.body = {"review_id": "r1", "status": "completed"}
+    assert _unreadable_end(err, ("completed",), ("review_id", "r1"))

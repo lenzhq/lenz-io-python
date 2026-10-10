@@ -200,6 +200,7 @@ from ._core import (
     _verification_from_terminal as _verification_from_terminal,
     _verifications_params as _verifications_params,
     _verify_payload as _verify_payload,
+    _wait_budget as _wait_budget,
     _wait_result as _wait_result,
     _wait_task_id as _wait_task_id,
     _walk as _walk,
@@ -1284,7 +1285,7 @@ class Lenz:
         path = f"/verify/{tid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return CancelResult.model_validate(body, context=self._results)
 
     # ── headline ergonomic ──
@@ -1343,6 +1344,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1401,6 +1403,7 @@ class Lenz:
         timeout comes from the copy or the client, capped by what is left of
         the wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "wait()")
         options = _call_options(None, None, extra_headers, "wait()")
         task_id = _wait_task_id(task)
         terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress, options=options)
@@ -1449,6 +1452,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_batch_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1679,7 +1683,7 @@ class Lenz:
         path = f"/reviews/{rid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return ReviewFull.model_validate(body, context=self._results)
 
     def review_and_wait(
@@ -1725,6 +1729,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, 600.0, "review_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
@@ -1876,7 +1881,7 @@ class Lenz:
         path = f"/citechecks/{cid}/cancel"
         body = self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return Citecheck.model_validate(body, context=self._results)
 
     def citecheck_and_wait(
@@ -1913,6 +1918,7 @@ class Lenz:
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
         """
+        timeout = _wait_budget(timeout, 600.0, "citecheck_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.

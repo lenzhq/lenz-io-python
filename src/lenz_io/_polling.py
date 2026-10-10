@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 from typing import Any, Generic, TypeVar
+from urllib.parse import unquote
 
 from ._core import (
     _TERMINAL_STATUSES,
@@ -56,14 +57,27 @@ def _never_sendable(exc: Exception) -> bool:
 _JOB_TERMINAL_STATUSES = ("completed", "failed", "cancelled")
 
 
-def _unreadable_end(exc: Exception, terminal: tuple[str, ...]) -> bool:
+def _unreadable_end(exc: Exception, terminal: tuple[str, ...], job: tuple[str, str] | None = None) -> bool:
     """Whether ``exc`` is an answer this release could not read whose body
     says the run has ENDED (its ``status`` is terminal): polling again would
-    only wait out the deadline and report a run that ended as still going."""
+    only wait out the deadline and report a run that ended as still going.
+    ``job``: ``(id field, id)`` the body must carry too (a review's or a
+    citation check's), so another job's body, or one with no id, is polled
+    again."""
     if not isinstance(exc, LenzInvalidResponseError):
         return False
     body = exc.body if isinstance(exc.body, dict) else {}
+    if job is not None and body.get(job[0]) != job[1]:
+        return False
     return body.get("status") in terminal
+
+
+def _job_of(path: str) -> tuple[str, str] | None:
+    """``(id field, id)`` of the job a poll path names (``/reviews/<id>``,
+    ``/citechecks/<id>``)."""
+    kind, _, segment = path.strip("/").partition("/")
+    field = {"reviews": "review_id", "citechecks": "citecheck_id"}.get(kind)
+    return (field, unquote(segment)) if field else None
 
 
 def _progress_copy(status: TaskStatus) -> Progress:
@@ -261,12 +275,17 @@ class JobPoll(Generic[_Job]):
         A body this release cannot read (pydantic's ValidationError is a
         ValueError) is read again next round, as for a 5xx; a request that
         could not be built (``UnicodeEncodeError``: nothing was sent) is not,
-        nor is a body this release cannot read whose ``status`` says the job
-        ended (raised at once: polling on would report it as still running).
+        nor is a body this release cannot read that names this job and whose
+        ``status`` says it ended (raised at once: polling on would report it
+        as still running).
         A 5xx, a network error or a 429 is read again next round, after the
         wait it stated, capped like the retry ladder caps it (an untyped
         proxy 503 can state an hour). Anything else (404, 403, 410) raises."""
-        if isinstance(exc, UnicodeEncodeError) or _never_sendable(exc) or _unreadable_end(exc, _JOB_TERMINAL_STATUSES):
+        if (
+            isinstance(exc, UnicodeEncodeError)
+            or _never_sendable(exc)
+            or _unreadable_end(exc, _JOB_TERMINAL_STATUSES, _job_of(self.path))
+        ):
             return True
         if isinstance(exc, LenzInvalidResponseError):
             self.unreadable = exc

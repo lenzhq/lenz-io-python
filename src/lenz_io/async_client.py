@@ -130,6 +130,7 @@ from ._core import (
     _verification_from_terminal,
     _verifications_params,
     _verify_payload,
+    _wait_budget,
     _wait_result,
     _wait_task_id,
     _well_formed,
@@ -1227,7 +1228,7 @@ class AsyncLenz:
         path = f"/verify/{tid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return CancelResult.model_validate(body, context=self._results)
 
     # ── headline ergonomic ──
@@ -1301,6 +1302,7 @@ class AsyncLenz:
         verification. Without the flag a cancelled await only stops waiting: the verification keeps
         running and is charged as usual.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1384,6 +1386,7 @@ class AsyncLenz:
         the wait starts cancels the run without polling it. A task cancelled before it ever runs
         never enters the call, so nothing is sent.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "wait()")
         options = _call_options(None, None, extra_headers, "wait()")
         task_id = _wait_task_id(task)
         terminal, timed_out, stopped = await self._poll_to_terminal(
@@ -1449,6 +1452,7 @@ class AsyncLenz:
         ``timeout`` running out does not, and never stops the verification. Without the flag a
         cancelled await only stops waiting: the verification keeps running and is charged as usual.
         """
+        timeout = _wait_budget(timeout, WAIT_TIMEOUT, "verify_batch_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
@@ -1683,7 +1687,7 @@ class AsyncLenz:
         path = f"/reviews/{rid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return ReviewFull.model_validate(body, context=self._results)
 
     async def review_and_wait(
@@ -1745,6 +1749,7 @@ class AsyncLenz:
         Without the flag a cancelled await only stops waiting: the review keeps running and is
         charged as usual.
         """
+        timeout = _wait_budget(timeout, 600.0, "review_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
@@ -1900,7 +1905,7 @@ class AsyncLenz:
         path = f"/citechecks/{cid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
-            raise _unexpected_answer("POST", path)
+            raise _unexpected_answer("POST", path, body)
         return Citecheck.model_validate(body, context=self._results)
 
     async def citecheck_and_wait(
@@ -1953,6 +1958,7 @@ class AsyncLenz:
         citation check. Without the flag a cancelled await only stops waiting: the citation check
         keeps running and is charged as usual.
         """
+        timeout = _wait_budget(timeout, 600.0, "citecheck_and_wait()")
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.

@@ -1568,8 +1568,9 @@ class BatchItemResult(_Lax):
     - ``failed``       — terminal failure (or completed-without-result), or cancelled elsewhere
       (``status_detail.status`` is then ``cancelled``); ``status_detail`` carries the diagnostic.
       An item whose poll could never succeed is ``failed`` with ``status_detail`` ``None``: a verification
-      removed by its account's retention period (HTTP 410), a task id nothing was found under (404), or an
-      answer in another API version.
+      removed by its account's retention period (HTTP 410), a task id nothing was found under (404), an
+      answer in another API version, or (since 3.2) an answer this release cannot read whose ``status``
+      says the run ended. Its ``error`` is then that error.
     - ``timeout``      — the deadline elapsed before this task reached a terminal state; ``status_detail`` is ``None``.
     """
 
@@ -1592,6 +1593,17 @@ class BatchItemResult(_Lax):
         response. ``verification.raw`` and ``status_detail.raw`` are the
         bodies it was built from. Since 3.2."""
         return None
+
+    #: The error that ended this item's polling (see ``error``).
+    _error: Exception | None = PrivateAttr(default=None)
+
+    @property
+    def error(self) -> Exception | None:
+        """On a ``failed`` item with no ``status_detail``: the error its poll
+        ended with (a ``LenzGoneError``, a ``LenzNotFoundError``, a
+        ``LenzApiVersionError`` or a ``LenzInvalidResponseError``); ``None``
+        otherwise. Not part of ``model_dump()``. Since 3.2."""
+        return self._error
 
 
 class UsageCredits(_Lax):

@@ -595,12 +595,17 @@ was read from (`200`, or `202` for a receipt such as `TaskAccepted`,
 the same read-only, case-insensitive mapping errors carry (`exc.headers`):
 
 ```python
-accepted = client.verify("The Eiffel Tower is in Paris.")
-print(accepted.http_status)  # 202
-if accepted.headers is not None:  # None only on a result not read from an answer
-    print(accepted.headers.get("location"))  # the poll URL, when the answer names one
-    print(accepted.headers.get("retry-after"))  # None when it states no wait
+started = client.review("The Eiffel Tower is in Paris. It opened in 1889.")
+print(started.http_status)  # 202
+if started.headers is not None:  # None only on a result not read from an answer
+    print(started.headers.get("location"))  # where to read the review
+    print(started.headers.get("retry-after"))  # None when it states no wait
+    print(started.headers.get("x-request-id"))  # quote it to support
 ```
+
+Use `.get()`: which headers an answer carries depends on the endpoint (a
+review's or citation check's receipt names its `Location`; a `verify`
+receipt does not).
 
 `headers` is a `lenz_io.errors.ResponseHeaders` (or `None`). Only the
 top-level result has them: a model nested in it (`TaskStatus.result`, an
@@ -957,7 +962,7 @@ string:
 | `invalid_header` | `extra_headers` (a reserved or malformed header) or `user_agent` | `"extra_headers"`, `"user_agent"` |
 | `invalid_option` | a client or `with_options` option, or a call's `timeout` / `max_retries` | `"timeout"`, `"max_retries"`, `"api_key"`, `"legacy_aliases"` |
 | `conflicting_input` | two arguments that exclude each other | `"claims"`, `"text"`, `"max_citations"` |
-| `invalid_argument` | anything else | `"view"`, `"sort"`, `"verdicts"` |
+| `invalid_argument` | anything else (an `assess` list item that is not a string, ...) | `"claims[0]"`, `"view"`, `"sort"`, `"verdicts"` |
 
 ```python
 from lenz_io import LenzUsageError
@@ -1089,8 +1094,9 @@ tolerates (see the changelog) is still read as unsent first. A block a result
 reads only when you ask for it (`ExtractedClaims.claims`, a `failure`) raises
 the same error on that read, with the answer's status and headers. In a wait
 helper, an unreadable poll whose `status` says the run ended (completed,
-failed, cancelled, needs input) raises it at once (in `verify_batch_and_wait`
-that item fails); any other is polled again, and if the wait then times out,
+failed, cancelled, needs input; for a review or a citation check, only a body
+carrying that job's id) raises it at once (in `verify_batch_and_wait` only
+that item fails, with the error on `BatchItemResult.error`); any other is polled again, and if the wait then times out,
 the timeout says the last poll could not be read and carries that answer's
 error as `__cause__`.
 

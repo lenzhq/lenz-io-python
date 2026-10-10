@@ -659,15 +659,48 @@ def _names_the_job(field: str) -> Callable[[Any], bool]:
     return check
 
 
-def _unexpected_answer(method: str, path: str) -> LenzAPIError:
+def _unexpected_answer(method: str, path: str, body: Any = None) -> LenzInvalidResponseError:
     """A 200 whose body is not the thing asked for (a proxy page, another
-    task's body): an error, never a default-valued result."""
-    return LenzAPIError(
+    task's body): ``LenzInvalidResponseError`` with the answer (its status,
+    request id, headers and body), never a default-valued result."""
+    status = body.http_status if isinstance(body, _Body) else 0
+    headers = body.headers if isinstance(body, _Body) else ResponseHeaders()
+    parsed = dict(body) if isinstance(body, dict) else None
+    text = json.dumps(parsed, ensure_ascii=False) if parsed is not None else ""
+    err = LenzInvalidResponseError(
         message=f"{method} {path} returned an unexpected response body.",
-        cause="The answer is not the shape the API documents for this call.",
-        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request.",
+        cause="The answer is not the shape the API documents for this call (another job's body, or a proxy's).",
+        fix="Retry; if it persists, contact support (https://lenz.io/contact) with the request id.",
         doc_url="https://lenz.io/docs/errors",
+        request_id=headers.get("X-Request-ID") or "",
+        status_code=status,
+        body=parsed,
+        body_text=text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026",
+        headers=headers,
+        served_version=(headers.get(_VERSION_HEADER) or "").strip() or None,
     )
+    err.msg = "Expecting this call's answer"
+    err.doc = text
+    err.pos = 0
+    err.lineno = 1
+    err.colno = 1
+    return err
+
+
+def _wait_budget(value: Any, default: float, where: str) -> float:
+    """A wait helper's ``timeout`` (how long to wait): ``None`` (the default
+    wait) or a finite number of seconds, else ``LenzUsageError`` before any
+    request (``nan`` would poll in a tight loop, ``inf`` forever). A number
+    ``<= 0`` keeps meaning "read once", as in 2.x."""
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, numbers.Real) or not math.isfinite(value):
+        raise LenzUsageError(
+            f"{where}: timeout must be a finite number of seconds, or None (got {value!r}).",
+            code="invalid_option",
+            param="timeout",
+        )
+    return value  # type: ignore[return-value]  # as given: messages print it as passed
 
 
 def _is_cancel_body(body: Any, task_id: str) -> bool:
@@ -1204,6 +1237,12 @@ def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None
         if not claims:
             raise LenzUsageError("claims is required.", code="empty_list", param="claims")
         for index, item in enumerate(claims):
+            if not isinstance(item, str):
+                raise LenzUsageError(
+                    f"claims[{index}] must be a string (got {type(item).__name__}).",
+                    code="invalid_argument",
+                    param=f"claims[{index}]",
+                )
             if _blank(item):
                 raise LenzUsageError(f"claims[{index}] is blank.", code="blank_item", param=f"claims[{index}]")
         return
@@ -1918,9 +1957,13 @@ def _batch_results(
         status = terminal.get(it.task_id)
         if it.task_id in stopped:
             # An error no later poll could change: removed by the
-            # account's retention period (410), an unknown task (404) or
-            # an answer in another API version. Terminal, with no status.
-            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed"))
+            # account's retention period (410), an unknown task (404), an
+            # answer in another API version, or an unreadable answer whose
+            # status says the run ended. Terminal, with no status; the
+            # error is the item's ``error``.
+            item = BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed")
+            item._error = stopped[it.task_id]
+            results.append(item)
         elif not it.task_id or it.task_id in timed_out or status is None:
             results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="timeout"))
         elif status.status == "completed" and status.result is not None:

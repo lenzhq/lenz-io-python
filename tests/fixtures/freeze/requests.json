@@ -2250,10 +2250,10 @@
  "cancel_citecheck_unexpected_body": {
   "outcome": {
    "code": "",
-   "error": "LenzAPIError",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": null,
    "message": "POST /citechecks/12bbbf65/cancel returned an unexpected response body.",
-   "status_code": 0
+   "status_code": 200
   },
   "requests": [
    {
@@ -2362,10 +2362,10 @@
  "cancel_review_unexpected_body": {
   "outcome": {
    "code": "",
-   "error": "LenzAPIError",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": null,
    "message": "POST /reviews/442b6aa9/cancel returned an unexpected response body.",
-   "status_code": 0
+   "status_code": 200
   },
   "requests": [
    {
@@ -2420,10 +2420,10 @@
  "cancel_unexpected_body": {
   "outcome": {
    "code": "",
-   "error": "LenzAPIError",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": null,
    "message": "POST /verify/t1/cancel returned an unexpected response body.",
-   "status_code": 0
+   "status_code": 200
   },
   "requests": [
    {
