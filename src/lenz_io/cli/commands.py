@@ -37,6 +37,12 @@ def extract(
         "--focus",
         help='Narrow to the claims that matter, e.g. "market size and competitors".',
     ),
+    language: str = typer.Option(
+        None,
+        "--language",
+        metavar="CODE",
+        help="Write the claims in this language (ISO 639-1, e.g. de), or 'auto' for the text's own. Default English.",
+    ),
     # ``Optional`` rather than ``bool | None``: typer evaluates the
     # annotation at runtime, and the CLI still runs on Python 3.9.
     locate: Optional[bool] = typer.Option(  # noqa: UP045
@@ -52,7 +58,7 @@ def extract(
     def work(client: Lenz) -> None:
         payload = read_text_arg(text)
         with out.working("Extracting claims…"):
-            result = client.extract(text=payload, focus=focus, locate=locate)
+            result = client.extract(text=payload, language=(language or "").strip().lower(), focus=focus, locate=locate)
         render_extract(out, result)
 
     execute(state, needs_key=True, work=work)

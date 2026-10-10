@@ -12,6 +12,7 @@
   ],
   "presumed_intent": "",
   "original_input": "🚀 Northwind Logistics reported quarterly revenue of EUR 48.3 million. The company also opened a new depot in Rotterdam.",
+  "language": "en",
   "locations": [
     {
       "claim": "Northwind Logistics reported quarterly revenue of EUR 48.3 million.",

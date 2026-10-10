@@ -263,6 +263,7 @@ lenz login                       # paste an API key (free — get one at lenz.io
 lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
 lenz extract "$(cat draft.txt)" --locate                    # where the text makes each claim
+lenz extract "Die Erde ist flach." --language auto           # claims in the text's own language
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
@@ -1139,18 +1140,31 @@ https://lenz.io/contact.
 ### Answer in the language of the text
 
 `language="auto"` on `assess`, `verify` / `verify_and_wait`, `review` /
-`review_and_wait` and `ask.send` answers in the language of the text you submitted
-(on `ask.send`, the language of the claim being discussed; on a review, one language
-for the whole draft). A concrete code always wins, and leaving `language` out still
-means English. The other methods (`extract`, `verify_batch`, `citecheck`) take the
-codes above, not `auto`. A review of a draft that is only a link decides
-its language once the page is read: until then its `language` reads `"auto"`, and a
-page that cannot be read leaves English.
+`review_and_wait`, `extract` and `ask.send` answers in the language of the text you
+submitted (on `ask.send`, the language of the claim being discussed; on a review, one
+language for the whole draft; on `extract`, for a `text` that is a single URL, the
+language of the fetched page). A concrete code always wins, and leaving `language`
+out still means English. A short or undetectable text gives English. The other
+methods (`verify_batch`, `citecheck`) take the codes above, not `auto`. A review of
+a draft that is only a link decides its language once the page is read: until then
+its `language` reads `"auto"`, and a page that cannot be read leaves English.
 
 ```python
 r = client.assess(claim="Die Erde ist flach.", language="auto")
 print(r.claims[0].verdict, r.claims[0].language)
 # False de
+```
+
+`extract` reports the language its claims are written in as `language` on the result
+(`None` on a replayed response stored before the API sent it). Pass it on to
+`assess` or `verify` to keep a chain in one language, rather than sending `auto`
+again on short extracted claims:
+
+```python
+out = client.extract(text="Die Erde ist flach.", language="auto")
+print(out.language)
+# de
+r = client.assess(claim=out.claims[0].claim, language=out.language or "")
 ```
 
 On `assess` with a `claims` list, one language is chosen for the whole request: the

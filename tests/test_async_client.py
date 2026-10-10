@@ -298,6 +298,18 @@ def test_the_sync_client_still_sleeps_through_its_time_module(monkeypatch: pytes
     assert slept == [1.0]
 
 
+async def test_async_extract_sends_auto_and_reads_language() -> None:
+    body = {"status": "ready", "claims": [], "language": "de"}
+    server = Server({("POST", "/extract"): [body]})
+    async with server.client() as client:
+        out = await client.extract(text="Die Erde ist flach.", language="auto")
+    assert json.loads(server.calls("POST", "/extract")[0].content) == {
+        "text": "Die Erde ist flach.",
+        "language": "auto",
+    }
+    assert out.language == "de"
+
+
 # ── callbacks ──────────────────────────────────────────────────────────────
 
 

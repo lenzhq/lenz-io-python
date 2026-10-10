@@ -237,6 +237,25 @@ class TestExplicitLanguageWireFormat:
             client.extract(text="x", language="es")
         assert self._body(route)["language"] == "es"
 
+    def test_extract_sends_auto_unchanged(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            route = r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": [], "domain": "Science", "language": "de"},
+            )
+            out = client.extract(text="Die Erde ist flach.", language="auto")
+        assert self._body(route) == {"text": "Die Erde ist flach.", "language": "auto"}
+        assert out.language == "de"
+
+    def test_extract_language_is_none_when_the_body_has_none(self, client):
+        with respx.mock(base_url=DEFAULT_BASE) as r:
+            r.post("/extract").respond(
+                200,
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+            )
+            out = client.extract(text="x")
+        assert out.language is None
+
     def test_assess_sends_auto_unchanged(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/assess").respond(200, json={"claims": [], "error": None})
