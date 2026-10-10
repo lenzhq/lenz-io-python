@@ -8,6 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- **`AsyncLenz`**, the client for asyncio: every method of `Lenz` with the same parameters, defaults, results and errors, as coroutines (`iter()` returns an async iterator), per-call options and `with_options` included. `async with AsyncLenz() as client: await client.assess(...)`. Both clients share one core, so they send the same requests, retry and wait the same way. What differs: `aclose()` / `async with`, an `httpx.AsyncClient` as `http_client=`, callbacks that may be `async def`, and `cancel_on_abort=True` on the waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`): when the awaiting task is cancelled, the job is also stopped on the server (best effort, at most 5 s), and the `CancelledError` is re-raised. Without it a cancelled await only stops waiting and the job runs on, charged as usual. The User-Agent ends `; async)`. Nothing changes for `Lenz`. See "Using Lenz from async code" in the README.
 - `snippet_language` on a verification's sources: the language of the quote as an ISO 639-1 code (e.g. `uk`) when it is not English (needs the API change that adds it; older responses read as None/null).
 
 ## [3.0.0] - 2026-10-10
