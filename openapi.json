@@ -3494,6 +3494,18 @@
             "default": "",
             "title": "Original Input",
             "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The language the claims are written in, as an ISO 639-1 code: the one you sent, `en` when you sent none, or the detected one when you asked for detection. Pass it on to `/assess` or `/verify` to keep a chain in one language. Absent on a replay of a response stored before this field existed.",
+            "title": "Language"
           }
         },
         "title": "ExtractOut",
@@ -3599,7 +3611,7 @@
           },
           "language": {
             "default": "",
-            "description": "ISO 639-1 code for the language of the emitted claims. Defaults to the input's language.",
+            "description": "ISO 639-1 code for the language of the emitted claims. Omitted: English. `auto`: detected from the submitted text (the same rule as lenz.io: a supported language, or English when the text is short, English or in a language we do not answer in). A code always wins. Responses carry the code that was used, never `auto`. For a `text` that is one URL, `auto` reads the page.",
             "title": "Language",
             "type": "string"
           },
@@ -5033,7 +5045,7 @@
           },
           "language": {
             "default": "",
-            "description": "The output language of every claim and rewrite. Default English.",
+            "description": "ISO 639-1 code for the output language of every claim and rewrite. Omitted: English. `auto`: detected once from the draft (the same rule as lenz.io: a supported language, or English when the draft is short, English or in a language we do not answer in; a draft that is one URL is read on its page). A code always wins. The review carries the code that was used; for a one-URL draft it reads `auto` until the page is read.",
             "title": "Language",
             "type": "string"
           },
@@ -6175,6 +6187,7 @@
             "title": "Completed At"
           },
           "language": {
+            "description": "The language the review is written in, as an ISO 639-1 code. `auto` only while a review sent with `language: \"auto\"` on a draft that is one URL has not read its page yet; then the detected code, or `en` when the page could not be read.",
             "title": "Language",
             "type": "string"
           },
@@ -6576,6 +6589,7 @@
             "title": "Completed At"
           },
           "language": {
+            "description": "The language the review is written in, as an ISO 639-1 code. `auto` only while a review sent with `language: \"auto\"` on a draft that is one URL has not read its page yet; then the detected code, or `en` when the page could not be read.",
             "title": "Language",
             "type": "string"
           },
@@ -9931,6 +9945,18 @@
             "title": "Original Input",
             "type": "string"
           },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The language the claims are written in, as an ISO 639-1 code: the one you sent, `en` when you sent none, or the detected one when you asked for detection. Pass it on to `/assess` or `/verify` to keep a chain in one language. Absent on a replay of a response stored before this field existed.",
+            "title": "Language"
+          },
           "claim": {
             "type": "string"
           },
@@ -10838,6 +10864,7 @@
             "title": "Completed At"
           },
           "language": {
+            "description": "The language the review is written in, as an ISO 639-1 code. `auto` only while a review sent with `language: \"auto\"` on a draft that is one URL has not read its page yet; then the detected code, or `en` when the page could not be read.",
             "title": "Language",
             "type": "string"
           },
@@ -11039,6 +11066,7 @@
             "title": "Completed At"
           },
           "language": {
+            "description": "The language the review is written in, as an ISO 639-1 code. `auto` only while a review sent with `language: \"auto\"` on a draft that is one URL has not read its page yet; then the detected code, or `en` when the page could not be read.",
             "title": "Language",
             "type": "string"
           },
