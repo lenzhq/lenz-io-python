@@ -8,6 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- `review` / `review_and_wait` accept `language="auto"`: the review comes back in the language of the draft (one language for the whole review). Needs the API release that accepts it on `/review`; before that the API answers 422.
 - `extract` accepts `language="auto"` (on `Lenz` and `AsyncLenz`): the claims are written in the language of the text, or of the fetched page when `text` is a single URL. A short or undetectable text, or a detector failure, gives English; leaving `language` out is still English and a concrete code always wins. `verify_batch`, `citecheck` and `review` still take the codes only.
 - `ExtractedClaims.language`: the ISO 639-1 code the claims are written in. Pass it on to `assess` or `verify` as `language` to keep a chain in one language. It is `None` on a replayed response stored before the API sent it. `lenz extract` takes `--language` (a code or `auto`) and prints the language it got back.
 

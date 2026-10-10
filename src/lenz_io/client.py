@@ -6,10 +6,11 @@ Multi-language SDK convention:
   field in the request body" — preserves byte-identical behavior for
   existing English callers. Set ``language='es'`` (or any of the 12
   supported codes) to receive prose fields in that language. ``assess``,
-  ``verify`` (and ``verify_and_wait``) and ``ask.send`` also take
-  ``language='auto'``: the answer comes back in the language of the submitted
-  text. ``extract`` takes ``'auto'`` too and reports the language it chose in
-  ``language`` on its result. The other methods take the codes only.
+  ``verify`` (and ``verify_and_wait``), ``review`` (and ``review_and_wait``),
+  ``extract`` and ``ask.send`` also take ``language='auto'``: the answer comes
+  back in the language of the submitted text (one language for a whole review).
+  ``extract`` reports the language it chose in ``language`` on its result. The
+  other methods take the codes only.
 * Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
   expose ``language`` populated by the server. Verdict / domain / status
   enum values stay English regardless of language; only free-form prose
