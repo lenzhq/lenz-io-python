@@ -572,11 +572,11 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nout = client.assess(claim=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" for Spanish verdict text; verdict labels stay English.\nfor c in out.claims:\n    print(c.claim, \"\u2192\", c.verdict, c.confidence)\n    if c.rationale:\n        print(\"  \", c.rationale)\n\n# Several claims at once: one row per item, same order (up to 20).\nrows = client.assess(claims=[\"Coffee causes cancer.\", \"The earth is flat.\"]).claims\nfor c in rows:\n    if c.failure:  # status == \"failed\": no verdict, nothing charged\n        print(\"No verdict:\", c.failure.code, c.failure.hint)\n    else:\n        print(c.verdict, c.confidence)\n    if c.dissent:\n        print(\"   One reviewer disagreed:\", c.dissent)\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nout = client.assess(claim=\"Coffee causes cancer and the earth is flat.\")\n# Add language=\"es\" for Spanish verdict text; verdict labels stay English.\nfor c in out.claims:\n    print(c.claim, \"\u2192\", c.verdict, c.confidence)\n    if c.rationale:\n        print(\"  \", c.rationale)\n\n# Several claims at once: one row per item, same order (up to 20).\nrows = client.assess(claims=[\"Coffee causes cancer.\", \"The earth is flat.\"]).claims\nfor c in rows:\n    if c.failure:  # status == \"failed\": no verdict, nothing charged\n        print(\"No verdict:\", c.failure.code, c.failure.hint)\n    else:\n        print(c.verdict, c.confidence)\n"
           },
           {
             "lang": "TypeScript",
-            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.assess({\n  claim: \"Coffee causes cancer and the earth is flat.\",\n});\nout.claims.forEach(c => {\n  console.log(c.claim, \"\u2192\", c.verdict, c.confidence);\n  if (c.rationale) console.log(\"  \", c.rationale);\n});\n\n// Several claims at once: one row per item, same order (up to 20).\nconst rows = (await client.assess({\n  claims: [\"Coffee causes cancer.\", \"The earth is flat.\"],\n})).claims;\nrows.forEach(c => {\n  // status \"failed\": no verdict, nothing charged\n  if (c.status === \"failed\") console.log(\"No verdict:\", c.failure?.code, c.failure?.hint);\n  else console.log(c.verdict, c.confidence);\n  if (c.dissent) console.log(\"   One reviewer disagreed:\", c.dissent);\n});\n"
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst out = await client.assess({\n  claim: \"Coffee causes cancer and the earth is flat.\",\n});\nout.claims.forEach(c => {\n  console.log(c.claim, \"\u2192\", c.verdict, c.confidence);\n  if (c.rationale) console.log(\"  \", c.rationale);\n});\n\n// Several claims at once: one row per item, same order (up to 20).\nconst rows = (await client.assess({\n  claims: [\"Coffee causes cancer.\", \"The earth is flat.\"],\n})).claims;\nrows.forEach(c => {\n  // status \"failed\": no verdict, nothing charged\n  if (c.status === \"failed\") console.log(\"No verdict:\", c.failure?.code, c.failure?.hint);\n  else console.log(c.verdict, c.confidence);\n});\n"
           }
         ]
       }
@@ -3159,7 +3159,7 @@
         "type": "object"
       },
       "AssessClaimOut": {
-        "description": "Per-claim entry inside an ``AssessOut.claims`` list.\n\n``status`` is ``completed`` when the row carries a verdict and ``failed``\nwhen it does not; a failed row has ``verdict`` and ``confidence``\n``null`` and says why in ``failure`` (``code``, ``detail``, ``hint``,\n``failure_class``, ``retryable``, ``docs_url``). ``failure.code`` is an\nOPEN set: ``no_checkable_claim`` (no claim in the item could be checked\nagainst public evidence), ``framing_failed`` (the item could not be read;\nsend it rephrased), ``upstream_unavailable`` and ``timeout`` (worth\nsending again in a new call). On a failed row ``claim`` echoes the item\nas submitted. Failed rows are free.\n\nA verdict row is the entire answer for that claim. ``verification_url``\nis set when a full verification of the same claim exists and the caller\ncan read it; follow it for sources, reasoning and the deep score.\n\n``rationale`` is the reasoning of a reviewer who agrees with the panel's\nverdict; ``dissent``, when set, is the reasoning of the reviewer farthest\nfrom it. Both are reviewers' notes, not checked sources; for sourced\nevidence, call /verify.\n\nSame field vocabulary as ``ClaimDetailOut`` (``claim``, ``verdict``,\n``confidence``); /assess omits ``lenz_score``, which only a full\nverification computes. ``language`` echoes the output language so a\nbatch caller can route per-claim text when items differ in language.\n\n``suggested_rewrite`` is on every row: the claim with its wrong part\ncorrected when the request set ``suggest_rewrite`` and the check found the\nclaim False or Mostly False with high confidence; ``null`` when it was not\nrequested, the row is outside that, or there was no correction to write. It\nis not itself verified: review it, or run it through /verify.\n\n``more_claims`` lists the OTHER claims found in a list item that were NOT\nassessed (the list form assesses one claim per item, the primary): send\nthem as their own items to check them. A vague item is assessed on its\nmost likely reading, which ``claim`` carries.",
+        "description": "Per-claim entry inside an ``AssessOut.claims`` list.\n\n``status`` is ``completed`` when the row carries a verdict and ``failed``\nwhen it does not; a failed row has ``verdict`` and ``confidence``\n``null`` and says why in ``failure`` (``code``, ``detail``, ``hint``,\n``failure_class``, ``retryable``, ``docs_url``). ``failure.code`` is an\nOPEN set: ``no_checkable_claim`` (no claim in the item could be checked\nagainst public evidence), ``framing_failed`` (the item could not be read;\nsend it rephrased), ``upstream_unavailable`` and ``timeout`` (worth\nsending again in a new call). On a failed row ``claim`` echoes the item\nas submitted. Failed rows are free.\n\nA verdict row is the entire answer for that claim. ``verification_url``\nis set when a full verification of the same claim exists and the caller\ncan read it; follow it for sources, reasoning and the deep score.\n\n``rationale`` is the reasoning of a reviewer who agrees with the panel's\nverdict. It is a reviewer's note, not a checked source; for sourced\nevidence, call /verify.\n\nSame field vocabulary as ``ClaimDetailOut`` (``claim``, ``verdict``,\n``confidence``); /assess omits ``lenz_score``, which only a full\nverification computes. ``language`` echoes the output language so a\nbatch caller can route per-claim text when items differ in language.\n\n``suggested_rewrite`` is on every row: the claim with its wrong part\ncorrected when the request set ``suggest_rewrite`` and the check found the\nclaim False or Mostly False with high confidence; ``null`` when it was not\nrequested, the row is outside that, or there was no correction to write. It\nis not itself verified: review it, or run it through /verify.\n\n``more_claims`` lists the OTHER claims found in a list item that were NOT\nassessed (the list form assesses one claim per item, the primary): send\nthem as their own items to check them. A vague item is assessed on its\nmost likely reading, which ``claim`` carries.",
         "properties": {
           "claim": {
             "title": "Claim",
@@ -3242,6 +3242,8 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated: always null.",
             "title": "Dissent"
           },
           "suggested_rewrite": {
@@ -5177,6 +5179,8 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated: always null.",
             "title": "Dissent"
           },
           "verification_url": {
@@ -9765,6 +9769,8 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated: always null.",
             "title": "Dissent"
           },
           "suggested_rewrite": {
@@ -10222,6 +10228,8 @@
                 "type": "null"
               }
             ],
+            "deprecated": true,
+            "description": "Deprecated: always null.",
             "title": "Dissent"
           },
           "verification_url": {
