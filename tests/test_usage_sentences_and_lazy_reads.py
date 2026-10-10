@@ -85,7 +85,7 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
         "claims[1] is blank.",
     ),
     ("select_blank_alias", lambda c: c.select("t1", texts=[""]), "blank_item", "texts[0]", "texts[0] is blank."),
-    ("select_empty_alias", lambda c: c.select("t1", texts=[]), "empty_list", "texts", "texts is required."),
+    ("select_empty_alias", lambda c: c.select("t1", texts=[]), "empty_list", "texts", "claims is required."),
     (
         "select_blank_tuple",
         lambda c: c.select("t1", claims=("A.", " ")),

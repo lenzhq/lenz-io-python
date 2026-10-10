@@ -1288,7 +1288,8 @@ def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str
     # alias was given (as the Node SDK names it).
     name = "texts" if not claims and texts is not None else "claims"
     if not chosen:
-        raise LenzUsageError(f"{name} is required.", code="empty_list", param=name)
+        # The API's sentence names ``claims`` whichever spelling was sent.
+        raise LenzUsageError("claims is required.", code="empty_list", param=name)
     # Only a list or a tuple is checked: anything else is sent as before, for
     # the API to answer.
     for index, item in enumerate(chosen if isinstance(chosen, (list, tuple)) else ()):

@@ -1011,7 +1011,8 @@ it reads the same whether the SDK or the API refused it:
 
 The other codes carry the SDK's own message. A blank `select` item is refused
 since 3.2 (the API drops it silently). Called with `texts=` (the alias), `select`
-names it: `texts is required.`, `texts[i] is blank.`, `param` `"texts[i]"`.
+names it in `param` (`"texts"`, `"texts[i]"`); an empty `texts` keeps the API's
+`claims is required.`, a blank item reads `texts[i] is blank.`.
 
 Not every blank input is refused locally: `verify_batch` / `verify_batch_and_wait`
 with an empty list or a blank item, and `citecheck(pairs=[])`, are sent, and the
