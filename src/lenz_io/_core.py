@@ -15,6 +15,7 @@ time in (``_polling.py`` holds the poll loops' state the same way).
 
 from __future__ import annotations
 
+import json
 import logging
 import math
 import numbers
@@ -31,6 +32,7 @@ import httpx
 
 from . import __version__
 from .errors import (
+    INVALID_BODY_TEXT_MAX,
     MAX_RETRY_AFTER_SLEEP as MAX_RETRY_AFTER_SLEEP,
     NO_RETRY_429_CODES,
     UPSTREAM_503_CODES,
@@ -41,6 +43,7 @@ from .errors import (
     LenzAuthError,
     LenzConnectionError,
     LenzError,
+    LenzInvalidResponseError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRequestTimeoutError,
@@ -50,6 +53,7 @@ from .errors import (
     map_response_to_error,
 )
 from .models import (
+    LEGACY_ALIASES,
     BatchAccepted,
     BatchItemResult,
     Citecheck,
@@ -62,6 +66,7 @@ from .models import (
     TaskStatus,
     Verification,
     VerificationList,
+    _legacy_view,
 )
 
 logger = logging.getLogger("lenz_io")
@@ -423,11 +428,11 @@ def _batch_item_body(item: Any) -> Any:
     return body
 
 
-def _extracted(body: Any, *, locate: bool | None) -> ExtractedClaims:
+def _extracted(body: Any, *, locate: bool | None, context: dict[str, Any] | None = None) -> ExtractedClaims:
     """``/extract``'s answer. A body that located every claim away answers
     ``claims: []``; the 2.x field for that was ``locations=[]``, which only the
     request (``locate=True``) can tell apart from "nothing found"."""
-    out = ExtractedClaims.model_validate(body)
+    out = ExtractedClaims.model_validate(body, context=context)
     answered = isinstance(body, dict) and body.get("claims") == []
     if answered and locate and out.status == "not_a_claim" and out.locations is None:
         out.locations = []
@@ -681,7 +686,7 @@ def _failure_of(job: Citecheck | ReviewFull) -> FailureBlock | None:
 
 
 def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
-    failure = _failure_of(check)
+    failure = _failure_of(_legacy_view(check))
     reason = (failure.failure_reason if failure else None) or ""
     hint = (failure.hint if failure else None) or ""
     retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
@@ -701,7 +706,7 @@ def _citecheck_failed(check: Citecheck) -> CitecheckFailed:
 
 
 def _review_failed(review: ReviewFull) -> ReviewFailed:
-    failure = _failure_of(review)
+    failure = _failure_of(_legacy_view(review))
     reason = (failure.failure_reason if failure else None) or ""
     hint = (failure.hint if failure else None) or ""
     retryable = failure.retryable if failure is not None and isinstance(failure.retryable, bool) else None
@@ -734,7 +739,7 @@ def _check_served_version(response: httpx.Response) -> None:
     except ValueError:
         parsed = None
     raise LenzApiVersionError(
-        message=f"The API answered in version {served}; lenz-io 3.x reads {API_VERSION} only.",
+        message=f"The API answered {served}; this SDK reads {API_VERSION} only.",
         cause=f"The response carries {_VERSION_HEADER}: {served}.",
         fix=(
             "If this persists, contact support (https://lenz.io/contact) with the request id; "
@@ -881,6 +886,51 @@ def _borrowed_user_agent(client_headers: Mapping[str, str], user_agent: str | No
     if own and not own.startswith("python-httpx/"):
         return own
     return sdk_agent
+
+
+def _check_legacy_aliases(value: Any, where: str) -> bool:
+    """``legacy_aliases``: ``True`` or ``False``, else ``ValueError``."""
+    if not isinstance(value, bool):
+        raise ValueError(f"{where}: legacy_aliases must be True or False (got {value!r}).")
+    return value
+
+
+def _copy_api_key(value: Any) -> str:
+    """The key a ``with_options`` copy is given. Never the environment: an
+    empty or whitespace-only key, or ``None``, is no key."""
+    if value is None:
+        return ""
+    if not isinstance(value, str):
+        raise ValueError(f"with_options(): api_key must be a string or None (got {type(value).__name__}).")
+    return value if value.strip() else ""
+
+
+def _results_context(legacy_aliases: bool) -> dict[str, Any] | None:
+    """The validation context results are read with: ``None`` (2.x aliases
+    filled in) or ``legacy_aliases=False``'s, read as sent."""
+    return None if legacy_aliases else {LEGACY_ALIASES: False}
+
+
+#: A UTF-16 surrogate code point: in a Python ``str`` only ever half of a pair
+#: written out as two code points, or a lone one, which UTF-8 cannot encode.
+_SURROGATE = re.compile("[\ud800-\udfff]")
+
+
+def _well_formed(value: Any) -> Any:
+    """``value`` with every string (dict keys included, at any depth) made
+    encodable: a surrogate pair becomes its one character and each lone
+    surrogate U+FFFD, as JavaScript's ``TextEncoder`` (the Node SDK) does, so
+    both SDKs send the same bytes and none raises ``UnicodeEncodeError``.
+    Anything without a surrogate is returned as is."""
+    if isinstance(value, str):
+        if _SURROGATE.search(value) is None:
+            return value
+        return value.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
+    if isinstance(value, dict):
+        return {_well_formed(k): _well_formed(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return type(value)(_well_formed(v) for v in value)
+    return value
 
 
 def _default_headers(user_agent: str) -> dict[str, str]:
@@ -1289,6 +1339,37 @@ def _after_transport_error(exc: httpx.TransportError, attempt: int, retries: int
     return _retry_sleep(attempt)
 
 
+def _success_body(response: httpx.Response, method: str, path: str) -> Any:
+    """A success's body: ``{}`` for a 204, a 205 or ``Content-Length: 0``,
+    else its JSON. Any other body that is not JSON (an empty one without
+    ``Content-Length: 0``, or only whitespace, included) raises
+    ``LenzInvalidResponseError`` with the real status (a proxy answering in
+    the API's place, typically), never a bare decode error."""
+    if response.status_code in (204, 205) or response.headers.get("Content-Length") == "0":
+        return {}
+    try:
+        return response.json()
+    except ValueError as exc:
+        text = response.text
+        err = LenzInvalidResponseError(
+            message=f"{method} {path} answered HTTP {response.status_code} with a body that is not JSON.",
+            cause="Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+            fix="Check base_url and any proxy between you and the API; quote the request id to support.",
+            doc_url="https://lenz.io/docs/errors",
+            request_id=response.headers.get("X-Request-ID") or "",
+            status_code=response.status_code,
+            body=None,
+            body_text=text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026",
+        )
+        decode = exc if isinstance(exc, json.JSONDecodeError) else None
+        err.msg = decode.msg if decode else str(exc)
+        err.doc = decode.doc if decode else text
+        err.pos = decode.pos if decode else 0
+        err.lineno = decode.lineno if decode else 1
+        err.colno = decode.colno if decode else 1
+        raise err from exc
+
+
 #: What ``_after_response`` says: the answer's body (the call is done) or the
 #: seconds to sleep before sending again.
 _Done = tuple[Literal[True], Any]
@@ -1310,7 +1391,7 @@ def _after_response(
     _check_served_version(response)
 
     if response.status_code < 400:
-        return True, response.json() if response.content else {}
+        return True, _success_body(response, method, path)
 
     # A 409 ``idempotency_conflict``: the first request with this key is
     # still running. Send the SAME key and body again after the stated
@@ -1415,6 +1496,8 @@ def _verification_from_terminal(status: TaskStatus, task_id: str) -> Verificatio
                 task_id=task_id,
             )
         return status.result
+    # The error is built from the 2.x reading, whatever ``legacy_aliases``.
+    status = _legacy_view(status)
     if status.status == "needs_input":
         raise LenzNeedsInputError(
             message=f"Pipeline paused: {status.reason}",
@@ -1497,14 +1580,14 @@ def _batch_results(
             # An error no later poll could change: removed by the
             # account's retention period (410), an unknown task (404) or
             # an answer in another API version. Terminal, with no status.
-            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed"))
+            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed"))
         elif not it.task_id or it.task_id in timed_out or status is None:
-            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="timeout"))
+            results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="timeout"))
         elif status.status == "completed" and status.result is not None:
             results.append(
                 BatchItemResult(
                     task_id=it.task_id,
-                    claim_text=it.claim_text,
+                    claim_text=it.claim_text or it.claim,
                     status="completed",
                     verification=status.result,
                     status_detail=status,
@@ -1513,19 +1596,21 @@ def _batch_results(
         elif status.status == "needs_input":
             results.append(
                 BatchItemResult(
-                    task_id=it.task_id, claim_text=it.claim_text, status="needs_input", status_detail=status
+                    task_id=it.task_id, claim_text=it.claim_text or it.claim, status="needs_input", status_detail=status
                 )
             )
         else:
             # failed, or completed-without-result (treated as failed).
             results.append(
-                BatchItemResult(task_id=it.task_id, claim_text=it.claim_text, status="failed", status_detail=status)
+                BatchItemResult(
+                    task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed", status_detail=status
+                )
             )
     return results
 
 
 def _review_job(
-    review_id: str, timeout: float
+    review_id: str, timeout: float, context: dict[str, Any] | None = None
 ) -> tuple[str, Callable[[Any], ReviewFull | None], Callable[[ReviewFull | None], Exception]]:
     """The poll path, body reader and timeout error of a review wait."""
 
@@ -1541,13 +1626,15 @@ def _review_job(
 
     return (
         f"/reviews/{_segment(review_id, '_wait_review() needs a review_id.')}",
-        lambda body: ReviewFull.model_validate(body) if _is_full_review_body(body, review_id) else None,
+        lambda body: (
+            ReviewFull.model_validate(body, context=context) if _is_full_review_body(body, review_id) else None
+        ),
         timed_out,
     )
 
 
 def _citecheck_job(
-    citecheck_id: str, timeout: float
+    citecheck_id: str, timeout: float, context: dict[str, Any] | None = None
 ) -> tuple[str, Callable[[Any], Citecheck | None], Callable[[Citecheck | None], Exception]]:
     """The poll path, body reader and timeout error of a citation-check wait."""
 
@@ -1563,6 +1650,8 @@ def _citecheck_job(
 
     return (
         f"/citechecks/{_segment(citecheck_id, '_wait_citecheck() needs a citecheck_id.')}",
-        lambda body: Citecheck.model_validate(body) if _is_citecheck_body(body, citecheck_id) else None,
+        lambda body: (
+            Citecheck.model_validate(body, context=context) if _is_citecheck_body(body, citecheck_id) else None
+        ),
         timed_out,
     )

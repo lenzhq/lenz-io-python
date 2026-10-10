@@ -83,7 +83,9 @@ class LenzError(Exception):
         body: dict[str, Any] | None = None,
         **extra: Any,
     ) -> None:
-        super().__init__(message or self.__class__.__name__)
+        # Not ``super()``: ``LenzInvalidResponseError`` is also a
+        # ``json.JSONDecodeError``, whose constructor takes other arguments.
+        Exception.__init__(self, message or self.__class__.__name__)
         self.message = message
         self.cause = cause
         self.fix = fix
@@ -286,6 +288,33 @@ class LenzAPIError(LenzError):
         # Any status this class is raised for is a 5xx; without one (built by
         # hand, or a request that failed with no diagnostic) it is unknown.
         return None if self.status_code == 0 else True
+
+
+class LenzInvalidResponseError(LenzAPIError, json.JSONDecodeError):
+    """A success status (2xx) whose body is not JSON: typically a proxy,
+    captive portal or load balancer answering in the API's place.
+
+    ``status_code`` is the real HTTP status (never 0, which means the request
+    got no answer at all), ``request_id`` the ``X-Request-ID`` if one came
+    back, ``body`` is ``None`` and ``body_text`` holds the body as text: its
+    first 1,000 characters, followed by ``…`` when it was longer. ``retryable`` is ``None``: nothing says
+    whether the same request would be answered properly next time.
+
+    Also a ``json.JSONDecodeError`` (``msg``, ``doc``, ``pos``, ``lineno``,
+    ``colno`` describe the decode failure), which is what lenz-io 3.1 and
+    earlier raised here, so ``except json.JSONDecodeError`` keeps working.
+    Since 3.2.
+    """
+
+    #: The body as text: its first 1,000 characters, plus ``…`` when longer.
+    body_text: str = ""
+
+    def _derived_retryable(self) -> bool | None:
+        return None
+
+
+#: How much of an unreadable body ``LenzInvalidResponseError.body_text`` keeps.
+INVALID_BODY_TEXT_MAX = 1000
 
 
 class LenzConnectionError(LenzAPIError):
@@ -1101,6 +1130,7 @@ __all__ = [
     "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
+    "LenzInvalidResponseError",
     "LenzNeedsInputError",
     "LenzNotFoundError",
     "LenzPipelineError",

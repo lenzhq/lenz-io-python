@@ -20,9 +20,18 @@ from __future__ import annotations
 
 from collections.abc import ItemsView, KeysView, ValuesView
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    PrivateAttr,
+    ValidationInfo,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+    model_validator,
+)
 from typing_extensions import deprecated
 
 
@@ -36,6 +45,25 @@ class _Lax(BaseModel):
     """
 
     model_config = ConfigDict(extra="allow")
+
+    #: Whether this result was read with the 2.x aliases filled in (the
+    #: client's ``legacy_aliases``); nested reads made by its properties
+    #: follow it.
+    _legacy_aliases: bool = PrivateAttr(default=True)
+
+    @classmethod
+    def _as_sent(cls, data: Any) -> Any:
+        """The body as read with ``legacy_aliases=False``: as sent."""
+        return data
+
+    @model_validator(mode="after")
+    def _remember_how_it_was_read(self, info: ValidationInfo) -> Any:
+        # Only a read made with a context decides: pydantic runs this again
+        # when an existing result is nested in a new model (built with no
+        # context), which must not reset how that result was read.
+        if info.context is not None:
+            self._legacy_aliases = _legacy(info)
+        return self
 
 
 # ── Reading the current response shape ───────────────────────────────────
@@ -59,6 +87,46 @@ class _Lax(BaseModel):
 # A few models are also built from webhook payloads of the original shape
 # (a review, a citation check, a failure block, a needs-input option); those
 # keep reading it.
+
+#: The validation-context key a client sets to ``False`` for
+#: ``legacy_aliases=False``: no 2.x field is filled in, and no field the
+#: current shape sends is rewritten to its 2.x value.
+LEGACY_ALIASES = "legacy_aliases"
+
+
+_M = TypeVar("_M", bound=BaseModel)
+
+
+def _legacy(info: ValidationInfo | None) -> bool:
+    """Whether this read fills in the 2.x aliases (the default: every read
+    not made by a client given ``legacy_aliases=False``)."""
+    context = info.context if info is not None else None
+    return not (isinstance(context, dict) and context.get(LEGACY_ALIASES) is False)
+
+
+def _null_as_sent(value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo) -> Any:
+    """A wrap validator for a field that ``legacy_aliases=False`` may leave
+    ``None`` although it is typed otherwise for 3.x code: a 2.x value the SDK
+    would compute, or a current field the 2.x reading rewrote from ``null``."""
+    if value is None and not _legacy(info):
+        return None
+    return handler(value)
+
+
+def _legacy_view(model: _M) -> _M:
+    """``model`` as the default (2.x-aliased) reading would have it: itself
+    when it was read that way, else read again from what the server sent.
+    Errors are built from this, so they are the same whatever
+    ``legacy_aliases`` a client has."""
+    if getattr(model, "_legacy_aliases", True):
+        return model
+    return type(model).model_validate(model.model_dump(exclude_unset=True))
+
+
+def _context(model: BaseModel) -> dict[str, Any] | None:
+    """The validation context a nested read made by ``model`` passes on."""
+    return None if getattr(model, "_legacy_aliases", True) else {LEGACY_ALIASES: False}
+
 
 #: The one code for "the input holds nothing that can be checked", in the
 #: newer response shape. The original shape spells it per endpoint:
@@ -234,7 +302,9 @@ class CandidateClaim(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if _is_newer(data, "claim"):
             return _fill(data, text=data["claim"])
         return data
@@ -434,7 +504,9 @@ class Verification(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         return _deep_check_failure(_fill_modified_at(data))
 
     @property
@@ -472,7 +544,9 @@ class VerificationListItem(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         return _deep_check_failure(_fill_modified_at(data))
 
     @property
@@ -621,7 +695,9 @@ class ExtractedClaims(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not (_is_newer(data, "claims") and isinstance(data["claims"], list)):
             return data
         items = [c for c in data["claims"] if isinstance(c, dict)]
@@ -646,7 +722,11 @@ class ExtractedClaims(_Lax):
         call located them. Replaces ``claim``, ``identified_claims`` and
         ``locations``, which are deprecated and kept."""
         sent = _sent(self, "claims")
-        return [ExtractedClaim.model_validate(c) for c in sent if isinstance(c, dict)] if isinstance(sent, list) else []
+        return (
+            [ExtractedClaim.model_validate(c, context=_context(self)) for c in sent if isinstance(c, dict)]
+            if isinstance(sent, list)
+            else []
+        )
 
 
 #: The original shape's ``hint`` on an /assess verdict row that found other
@@ -685,6 +765,9 @@ class AssessClaim(_Lax):
     # Output language (ISO 639-1). Echoes the language requested on the
     # call, or ``'en'`` when unspecified. Verdict enums always English.
     language: str = "en"
+    # ``None`` on a failed row only with ``legacy_aliases=False`` (the
+    # default reads ``"Error"`` and ``"low"`` there; the annotation stays
+    # ``str`` for 3.x code).
     verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
@@ -731,9 +814,13 @@ class AssessClaim(_Lax):
     # ``identified_claims``; ``None`` on a plain verdict row.
     hint: str | None = Field(default=None, json_schema_extra={"deprecated": True})
 
+    _keep_null = field_validator("verdict", "confidence", mode="wrap")(_null_as_sent)
+
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not _is_newer(data, "failure"):
             return data
         out = dict(data)
@@ -771,7 +858,7 @@ class AssessClaim(_Lax):
         one sentence on what to send next. Replaces ``error_code`` and
         ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
+        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
 
     @property
     def more_claims(self) -> list[str]:
@@ -828,7 +915,9 @@ class AssessResponse(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not _is_newer(data, "failure"):
             return data
         failure = data.get("failure") if isinstance(data.get("failure"), dict) else None
@@ -855,7 +944,7 @@ class AssessResponse(_Lax):
         """Why the single form has no rows; ``None`` otherwise. Replaces
         ``error`` and ``error_code``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent) if isinstance(sent, dict) else None
+        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
 
 
 class TaskAccepted(_Lax):
@@ -867,7 +956,9 @@ class TaskAccepted(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if _is_newer(data, "claim"):
             return _fill(data, claim_text=data["claim"])
         return data
@@ -1057,7 +1148,9 @@ class TaskStatus(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if isinstance(data, dict) and data.get("status") == "cancelled" and not isinstance(data.get("failure"), dict):
             # A task cancelled elsewhere: its own status, with no failure
             # block. The 2.x fields read what the original shape said of it.
@@ -1098,11 +1191,13 @@ class TaskStatus(_Lax):
         cancelled while running (``code`` and ``failure_class``
         ``cancelled``, ``detail`` "Cancelled.", not retryable)."""
         sent = _sent(self, "failure")
-        if not isinstance(sent, dict) and self.status == "cancelled":
+        if not isinstance(sent, dict) and self.status == "cancelled" and self._legacy_aliases:
             sent = _CANCELLED_TASK_FAILURE
         if not isinstance(sent, dict):
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.
+        if not self._legacy_aliases:
+            return FailureBlock.model_validate(sent, context=_context(self))
         return FailureBlock.model_validate(_verification_failure(sent))
 
 
@@ -1165,6 +1260,7 @@ class UsageCredits(_Lax):
     #: **Deprecated** old name of :attr:`extra`, the same number, kept for
     #: existing code. Reading it emits a ``DeprecationWarning``; it stays in
     #: ``model_dump()`` output (unwarned) for as long as the server sends it.
+    #: ``None`` with ``legacy_aliases=False`` unless the server sent it.
     bonus: int = Field(
         default=0,
         deprecated=(
@@ -1173,11 +1269,20 @@ class UsageCredits(_Lax):
     )
     resets_at: str | None = None
 
+    _keep_null = field_validator("bonus", mode="wrap")(_null_as_sent)
+
+    @classmethod
+    def _as_sent(cls, data: Any) -> Any:
+        # The alias the SDK would derive reads None, not a number nobody sent.
+        return _fill(data, bonus=None) if isinstance(data, dict) else data
+
     @model_validator(mode="before")
     @classmethod
-    def _mirror_extra_and_bonus(cls, data: Any) -> Any:
+    def _mirror_extra_and_bonus(cls, data: Any, info: ValidationInfo) -> Any:
         """Fill the deprecated ``bonus`` from ``extra``, the one number the
         current response shape sends."""
+        if not _legacy(info):
+            return cls._as_sent(data)
         if isinstance(data, dict) and data.get("extra") is not None and data.get("bonus") is None:
             return {**data, "bonus": data["extra"]}
         return data
@@ -1227,6 +1332,7 @@ class UsageCapacity(_Lax):
     #: capability's one-off top-up balance, which is exactly what ``bonus``
     #: reports. Reading it emits a ``DeprecationWarning``; it stays in
     #: ``model_dump()`` output (unwarned) for as long as the server sends it.
+    #: ``None`` with ``legacy_aliases=False`` unless the server sent it.
     credits: int = Field(
         default=0,
         deprecated=(
@@ -1237,11 +1343,19 @@ class UsageCapacity(_Lax):
     )
     remaining: int = 0
 
+    _keep_null = field_validator("credits", mode="wrap")(_null_as_sent)
+
+    @classmethod
+    def _as_sent(cls, data: Any) -> Any:
+        return _fill(data, credits=None) if isinstance(data, dict) else data
+
     @model_validator(mode="before")
     @classmethod
-    def _mirror_bonus_and_credits(cls, data: Any) -> Any:
+    def _mirror_bonus_and_credits(cls, data: Any, info: ValidationInfo) -> Any:
         """Fill the deprecated ``credits`` alias from ``bonus``: the blocks are
         computed from the pool, so they carry only ``bonus``."""
+        if not _legacy(info):
+            return cls._as_sent(data)
         if isinstance(data, dict) and data.get("bonus") is not None and data.get("credits") is None:
             return {**data, "credits": data["bonus"]}
         return data
@@ -1330,6 +1444,7 @@ class Usage(_Lax):
     #: :attr:`costs` instead::
     #:
     #:     left = u.credits.remaining // u.costs["verify"]
+    #: ``None`` with ``legacy_aliases=False`` unless the server sent the block.
     verify: UsageCapacity = Field(default_factory=UsageCapacity, json_schema_extra={"deprecated": True})
     #: DEPRECATED, kept for existing code. See :attr:`verify`.
     ask: UsageCapacity = Field(default_factory=UsageCapacity, json_schema_extra={"deprecated": True})
@@ -1343,12 +1458,22 @@ class Usage(_Lax):
     # Defaults to ``False`` on servers predating this field.
     has_webhook_secret: bool = False
 
+    _keep_null = field_validator("verify", "ask", "assess", mode="wrap")(_null_as_sent)
+
+    @classmethod
+    def _as_sent(cls, data: Any) -> Any:
+        # The per-capability blocks are 2.x projections of the pool: None
+        # unless the server sent them.
+        return _fill(data, verify=None, ask=None, assess=None) if isinstance(data, dict) else data
+
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
         """The newer shape sends the pool and the prices but not the
         deprecated per-capability blocks: compute them exactly as the server
         did, and ``quota_resets_at`` from ``credits.resets_at``."""
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not (isinstance(data, dict) and isinstance(data.get("credits"), dict)):
             return data
         credits, costs = data["credits"], data.get("costs")
@@ -1466,7 +1591,9 @@ class FailureBlock(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if _is_newer(data, "code"):
             return _fill(data, failure_reason=_old_code(data["code"], "no_claim"))
         return data
@@ -1601,7 +1728,9 @@ class ReviewSummary(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not _is_newer(data, "claim_limit_exceeded"):
             return data
         found, limit = data.get("claims_found"), data.get("claim_limit", 20)
@@ -1680,7 +1809,9 @@ class ReviewAssessment(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if not _is_newer(data, "more_claims"):
             return data
         failure = data.get("failure") if isinstance(data.get("failure"), dict) else {}
@@ -1749,7 +1880,9 @@ class ReviewVerification(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         return _deep_check_failure(_fill_modified_at(data))
 
     @property
@@ -1865,7 +1998,9 @@ class ReviewIssue(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         # An issue's failure is its deep check's.
         return _deep_check_failure(data)
 
@@ -1881,7 +2016,9 @@ class ReviewFailure(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if isinstance(data, dict) and data.get("stage") == "verification":
             return _deep_check_failure(data)
         return data
@@ -2080,7 +2217,9 @@ class CitecheckSummary(_Lax):
 
     @model_validator(mode="before")
     @classmethod
-    def _read_newer_shape(cls, data: Any) -> Any:
+    def _read_newer_shape(cls, data: Any, info: ValidationInfo) -> Any:
+        if not _legacy(info):
+            return cls._as_sent(data)
         if _is_newer(data, "citation_limit_exceeded"):
             return _fill(data, citation_limit_reached=data["citation_limit_exceeded"])
         return data

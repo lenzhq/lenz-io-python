@@ -2178,8 +2178,28 @@
   }
  },
  "empty_200": {
-  "repr": "True",
-  "result": true
+  "attrs": {
+   "body": null,
+   "body_text": "",
+   "cause": "Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+   "code": "",
+   "colno": 1,
+   "doc": "",
+   "doc_url": "https://lenz.io/docs/errors",
+   "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "lineno": 1,
+   "message": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.",
+   "msg": "Expecting value",
+   "pos": 0,
+   "request_id": "",
+   "retryable": null,
+   "status_code": 200
+  },
+  "cause": "JSONDecodeError",
+  "context": "JSONDecodeError",
+  "error": "LenzInvalidResponseError",
+  "str": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.\n  Cause:  Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "suppress_context": true
  },
  "error_404": {
   "attrs": {
@@ -7154,14 +7174,53 @@
   }
  },
  "unreadable_200": {
-  "cause": null,
-  "error": "JSONDecodeError",
-  "idempotency_key": "<random>"
+  "attrs": {
+   "body": null,
+   "body_text": "<html>",
+   "cause": "Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+   "code": "",
+   "colno": 1,
+   "doc": "<html>",
+   "doc_url": "https://lenz.io/docs/errors",
+   "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "idempotency_key": "<random>",
+   "lineno": 1,
+   "message": "POST /assess answered HTTP 200 with a body that is not JSON.",
+   "msg": "Expecting value",
+   "pos": 0,
+   "request_id": "",
+   "retryable": null,
+   "status_code": 200
+  },
+  "cause": "JSONDecodeError",
+  "context": "JSONDecodeError",
+  "error": "LenzInvalidResponseError",
+  "str": "POST /assess answered HTTP 200 with a body that is not JSON.\n  Cause:  Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "suppress_context": true
  },
  "unreadable_200_no_key": {
-  "cause": null,
-  "error": "JSONDecodeError",
-  "idempotency_key": null
+  "attrs": {
+   "body": null,
+   "body_text": "<html>",
+   "cause": "Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+   "code": "",
+   "colno": 1,
+   "doc": "<html>",
+   "doc_url": "https://lenz.io/docs/errors",
+   "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "lineno": 1,
+   "message": "GET /me/usage answered HTTP 200 with a body that is not JSON.",
+   "msg": "Expecting value",
+   "pos": 0,
+   "request_id": "",
+   "retryable": null,
+   "status_code": 200
+  },
+  "cause": "JSONDecodeError",
+  "context": "JSONDecodeError",
+  "error": "LenzInvalidResponseError",
+  "str": "GET /me/usage answered HTTP 200 with a body that is not JSON.\n  Cause:  Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "suppress_context": true
  },
  "usage": {
   "repr": "Usage(plan='pro', plan_label='Pro', quota_resets_at='2026-09-01T00:00:00+00:00', credits=UsageCredits(total=5200, used=130, remaining=5070, extra=200, bonus=200, resets_at='2026-09-01T00:00:00+00:00'), costs={'verify': 10, 'assess': 1, 'ask': 1, 'extract': 0}, cost_options={'verify': {'depth': {'standard': 10, 'low': 5}}}, verify=UsageCapacity(quota_used=13, quota_total=520, quota_remaining=507, bonus=20, credits=20, remaining=507), ask=UsageCapacity(quota_used=130, quota_total=5200, quota_remaining=5070, bonus=200, credits=200, remaining=5070), assess=UsageCapacity(quota_used=130, quota_total=5200, quota_remaining=5070, bonus=200, credits=200, remaining=5070), extract=UsageExtract(calls_today=4, daily_limit=1000, unlimited=False), has_webhook_secret=True)",
@@ -7262,7 +7321,7 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.",
-   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
    "request_id": "",
    "retryable": false,
    "status_code": 404
@@ -7270,7 +7329,7 @@
   "cause": null,
   "context": null,
   "error": "LenzApiVersionError",
-  "str": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.\n  Cause:  The response carries X-Lenz-API-Version: 2026-05-13.\n  Fix:    If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.\n  Docs:   https://lenz.io/docs/errors",
+  "str": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.\n  Cause:  The response carries X-Lenz-API-Version: 2026-05-13.\n  Fix:    If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "verifications_get": {
@@ -8125,7 +8184,7 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.",
-   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
    "request_id": "",
    "retryable": false,
    "status_code": 200
@@ -8133,7 +8192,7 @@
   "cause": null,
   "context": null,
   "error": "LenzApiVersionError",
-  "str": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.\n  Cause:  The response carries X-Lenz-API-Version: 2026-05-13.\n  Fix:    If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.\n  Docs:   https://lenz.io/docs/errors",
+  "str": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.\n  Cause:  The response carries X-Lenz-API-Version: 2026-05-13.\n  Fix:    If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "wait_zero": {

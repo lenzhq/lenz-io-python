@@ -142,6 +142,7 @@ from ._core import (
     _carrying_key as _carrying_key,
     _check_assess_forms as _check_assess_forms,
     _check_headers as _check_headers,
+    _check_legacy_aliases as _check_legacy_aliases,
     _check_library_iter_sort as _check_library_iter_sort,
     _check_page_size as _check_page_size,
     _check_retries as _check_retries,
@@ -153,6 +154,7 @@ from ._core import (
     _citecheck_started_by_conflict as _citecheck_started_by_conflict,
     _client_settings as _client_settings,
     _ClientOptions as _ClientOptions,
+    _copy_api_key as _copy_api_key,
     _default_headers as _default_headers,
     _exhausted as _exhausted,
     _extract_payload as _extract_payload,
@@ -175,6 +177,7 @@ from ._core import (
     _prepare as _prepare,
     _request_settings as _request_settings,
     _resolve as _resolve,
+    _results_context as _results_context,
     _retry_sleep as _retry_sleep,
     _review_failed as _review_failed,
     _review_job as _review_job,
@@ -195,6 +198,7 @@ from ._core import (
     _wait_result as _wait_result,
     _wait_task_id as _wait_task_id,
     _walk as _walk,
+    _well_formed as _well_formed,
     _with_options_layer as _with_options_layer,
 )
 from ._polling import JobPoll, TaskPoll, _progress_copy
@@ -284,7 +288,7 @@ class _VerificationsNamespace:
         options = _call_options(timeout, max_retries, extra_headers, "verifications.list()")
         params = _verifications_params(page, _check_page_size(page_size))
         body = self._p._request("GET", "/verifications", params=params, options=options)
-        return VerificationList.model_validate(body)
+        return VerificationList.model_validate(body, context=self._p._results)
 
     def iter(
         self,
@@ -354,7 +358,7 @@ class _VerificationsNamespace:
             auth_optional=True,  # send the key if we have one → owner sees private rows
             options=options,
         )
-        return Verification.model_validate(body)
+        return Verification.model_validate(body, context=self._p._results)
 
     def get_certificate(
         self,
@@ -387,7 +391,7 @@ class _VerificationsNamespace:
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get_certificate()")
         vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
         body = self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
-        return Certificate.model_validate(body)
+        return Certificate.model_validate(body, context=self._p._results)
 
     def delete(
         self,
@@ -443,7 +447,7 @@ class _VerificationsNamespace:
             auth_optional=True,  # send the key if we have one → owner sees own rows
             options=options,
         )
-        return RelatedVerifications.model_validate(body)
+        return RelatedVerifications.model_validate(body, context=self._p._results)
 
 
 class _AskNamespace:
@@ -474,7 +478,7 @@ class _AskNamespace:
         options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
         vid = _segment(verification_id, "ask.history() needs a verification_id.")
         body = self._p._request("GET", f"/ask/{vid}", options=options)
-        return AskHistory.model_validate(body)
+        return AskHistory.model_validate(body, context=self._p._results)
 
     def send(
         self,
@@ -535,7 +539,7 @@ class _AskNamespace:
                 headers=headers,
                 options=options,
             )
-            return AskReply.model_validate(body)
+            return AskReply.model_validate(body, context=self._p._results)
 
     def reset(
         self,
@@ -605,7 +609,7 @@ class _LibraryNamespace:
             auth_required=False,
             options=options,
         )
-        return LibraryList.model_validate(body)
+        return LibraryList.model_validate(body, context=self._p._results)
 
     def iter(
         self,
@@ -673,6 +677,17 @@ class Lenz:
     through a client given as ``http_client=`` (set on each request; the
     client's own headers are not changed). Without it, such a client sends
     the SDK's User-Agent unless it set its own.
+
+    ``legacy_aliases`` (default ``True``, since 3.2): ``True`` fills in every
+    deprecated 2.x field from the current response shape, as 3.0 and 3.1 did.
+    ``False`` reads each result exactly as the API sent it in the
+    ``2026-10-11`` shape: no deprecated field is computed (each holds what
+    the server sent, else its empty default; the numeric ``Usage`` aliases
+    hold ``None``), a failed ``assess`` row keeps ``verdict`` and
+    ``confidence`` ``None``, ``extract``'s ``status`` reads
+    ``no_checkable_claim`` and a ``cancelled`` status with no failure block
+    has ``failure`` ``None``. Errors and webhook parsing are unchanged. The
+    README lists every field it changes.
     """
 
     def __init__(
@@ -684,10 +699,13 @@ class Lenz:
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.Client | None = None,
         user_agent: str | None = None,
+        legacy_aliases: bool = True,
     ) -> None:
         self._api_key, self._base_url, timeout, max_retries = _client_settings(
             api_key, base_url, timeout, max_retries, "Lenz()"
         )
+        self._legacy_aliases = _check_legacy_aliases(legacy_aliases, "Lenz()")
+        self._results = _results_context(self._legacy_aliases)
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
@@ -726,6 +744,7 @@ class Lenz:
         timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN,
         max_retries: int | NotGiven = NOT_GIVEN,
         extra_headers: Mapping[str, str | None] | None = None,
+        api_key: str | None | NotGiven = NOT_GIVEN,
     ) -> _Client:
         """A copy of this client with other request options, sharing its
         connection pool, key and base URL. Cheap: make one per request if you
@@ -760,6 +779,16 @@ class Lenz:
           header a copy added. The SDK's own headers (``X-Lenz-API-Version``,
           ``Idempotency-Key``, ``Authorization``, ``Content-Type``,
           ``Content-Length``, ``Host``, ``Transfer-Encoding``) are refused.
+        * ``api_key`` (since 3.2): the copy's own key, for example one user's
+          OAuth access token (``lat_...``) on a server acting for several
+          users, sharing the pool. Any string is sent as given; an empty or
+          whitespace-only key, or ``None``, gives a copy with no key (a call
+          that needs one raises ``LenzAuthError`` before sending). A copy
+          never reads ``LENZ_API_KEY``. Left out, the copy keeps the key it
+          was made from.
+
+        A copy reads results with the client's ``legacy_aliases`` (set on the
+        constructor only).
 
         Per option, a call's keyword wins over the copy, and the copy over the
         client. A bad value raises ``ValueError`` here, before any request.
@@ -771,7 +800,9 @@ class Lenz:
         copy is as safe to share across threads as the client.
         """
         layer = _with_options_layer(self._options, timeout, max_retries, extra_headers)
+        key = self._api_key if isinstance(api_key, NotGiven) else _copy_api_key(api_key)
         clone = copy.copy(self)
+        clone._api_key = key
         clone._owns_client = False
         clone._options = layer
         clone.verifications = _VerificationsNamespace(clone)
@@ -1218,7 +1249,7 @@ class Lenz:
         body = self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
             raise _unexpected_answer("POST", path)
-        return CancelResult.model_validate(body)
+        return CancelResult.model_validate(body, context=self._results)
 
     # ── headline ergonomic ──
 
@@ -1508,7 +1539,7 @@ class Lenz:
         if isinstance(body, ReviewStarted):
             return body
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
-            return ReviewStarted.model_validate(body)
+            return ReviewStarted.model_validate(body, context=self._results)
 
     @overload
     def get_review(
@@ -1565,8 +1596,12 @@ class Lenz:
         rid = _segment(review_id, "get_review() needs a review_id.")
         params = _review_params(view)
         if params is not None:
-            return ReviewIssues.model_validate(self._request("GET", f"/reviews/{rid}", params=params, options=options))
-        return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}", options=options))
+            return ReviewIssues.model_validate(
+                self._request("GET", f"/reviews/{rid}", params=params, options=options), context=self._results
+            )
+        return ReviewFull.model_validate(
+            self._request("GET", f"/reviews/{rid}", options=options), context=self._results
+        )
 
     def cancel_review(
         self,
@@ -1600,7 +1635,7 @@ class Lenz:
         body = self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
             raise _unexpected_answer("POST", path)
-        return ReviewFull.model_validate(body)
+        return ReviewFull.model_validate(body, context=self._results)
 
     def review_and_wait(
         self,
@@ -1731,7 +1766,7 @@ class Lenz:
         if isinstance(body, CitecheckStarted):
             return body
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
-            return CitecheckStarted.model_validate(body)
+            return CitecheckStarted.model_validate(body, context=self._results)
 
     def get_citecheck(
         self,
@@ -1749,7 +1784,9 @@ class Lenz:
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_citecheck()")
         cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
-        return Citecheck.model_validate(self._request("GET", f"/citechecks/{cid}", options=options))
+        return Citecheck.model_validate(
+            self._request("GET", f"/citechecks/{cid}", options=options), context=self._results
+        )
 
     def cancel_citecheck(
         self,
@@ -1783,7 +1820,7 @@ class Lenz:
         body = self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
             raise _unexpected_answer("POST", path)
-        return Citecheck.model_validate(body)
+        return Citecheck.model_validate(body, context=self._results)
 
     def citecheck_and_wait(
         self,
@@ -1847,7 +1884,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> Citecheck:
         """The poll loop behind ``citecheck_and_wait`` (and ``lenz citecheck --resume``)."""
-        path, parse, timed_out = _citecheck_job(citecheck_id, timeout)
+        path, parse, timed_out = _citecheck_job(citecheck_id, timeout, self._results)
         return self._wait_job(
             path,
             timeout=timeout,
@@ -1867,7 +1904,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewFull:
         """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``)."""
-        path, parse, timed_out = _review_job(review_id, timeout)
+        path, parse, timed_out = _review_job(review_id, timeout, self._results)
         return self._wait_job(
             path,
             timeout=timeout,
@@ -1985,7 +2022,7 @@ class Lenz:
                         timeout=self._poll_timeout(remaining),
                         options=options,
                     )
-                    status = TaskStatus.model_validate(body)
+                    status = TaskStatus.model_validate(body, context=self._results)
                 except LenzError as exc:
                     if poll.failed(task_id, exc):
                         raise
@@ -2025,7 +2062,7 @@ class Lenz:
         """
         options = _call_options(timeout, max_retries, extra_headers, "usage()")
         body = self._request("GET", "/me/usage", options=options)
-        return Usage.model_validate(body)
+        return Usage.model_validate(body, context=self._results)
 
     # ── verb-level submit helpers (used by the verify namespace) ──
 
@@ -2057,7 +2094,7 @@ class Lenz:
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request("POST", "/verify", json=payload, headers=headers, options=options)
-            return TaskAccepted.model_validate(body)
+            return TaskAccepted.model_validate(body, context=self._results)
 
     def _verify_batch(
         self,
@@ -2079,7 +2116,7 @@ class Lenz:
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request("POST", "/verify/batch", json=payload, headers=headers, options=options)
-            return BatchAccepted.model_validate(body)
+            return BatchAccepted.model_validate(body, context=self._results)
 
     def _poll_timeout(self, remaining: float) -> httpx.Timeout | None:
         """The timeouts of one poll request: each phase (connect, read, write,
@@ -2111,7 +2148,7 @@ class Lenz:
             body = self._request(
                 "POST", "/extract", json=payload, headers=headers, options=options, floor=EXTRACT_TIMEOUT
             )
-            return _extracted(body, locate=locate)
+            return _extracted(body, locate=locate, context=self._results)
 
     def _assess(
         self,
@@ -2132,7 +2169,7 @@ class Lenz:
             body = self._request(
                 "POST", "/assess", json=payload, headers=headers, options=options, floor=ASSESS_TIMEOUT
             )
-            return AssessResponse.model_validate(body)
+            return AssessResponse.model_validate(body, context=self._results)
 
     def _select(
         self,
@@ -2151,7 +2188,7 @@ class Lenz:
             body = self._request(
                 "POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers, options=options
             )
-            return BatchAccepted.model_validate(body)
+            return BatchAccepted.model_validate(body, context=self._results)
 
     def _get_status(
         self,
@@ -2164,7 +2201,7 @@ class Lenz:
         options = _call_options(timeout, max_retries, extra_headers, "get_status()")
         tid = _segment(task_id, "get_status() needs a task_id.")
         body = self._request("GET", f"/verify/status/{tid}", options=options)
-        return TaskStatus.model_validate(body)
+        return TaskStatus.model_validate(body, context=self._results)
 
     # ── HTTP plumbing ──
 
@@ -2225,6 +2262,8 @@ class Lenz:
         retries: int,
         conflict_settles: Callable[[Any], bool] | None,
     ) -> dict[str, Any]:
+        # Lone surrogates out, so the body encodes (the same bytes as Node's).
+        json, params = _well_formed(json), _well_formed(params)
         url, req_headers, req_timeout = _prepare(
             api_key=self._api_key,
             base_url=self._base_url,
