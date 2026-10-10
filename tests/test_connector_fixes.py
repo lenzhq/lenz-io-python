@@ -379,3 +379,17 @@ def test_raw_is_a_snapshot_taken_when_read() -> None:
     model.future["a"] = 2  # type: ignore[attr-defined]
     data["claim"] = "B."
     assert model.raw == {"task_id": "t", "claim": "A.", "future": {"a": 1}}
+
+
+def test_raw_on_a_failure_block_read_by_a_property() -> None:
+    from lenz_io.models import AssessClaim, ExtractedClaims, TaskStatus
+
+    status = TaskStatus.model_validate({"status": "failed", "task_id": "t", "failure": {"code": "no_checkable_claim"}})
+    assert status.failure is not None and status.failure.failure_reason == "not_a_claim"
+    assert status.failure.raw == {"code": "no_checkable_claim"}
+    cancelled = TaskStatus.model_validate({"status": "cancelled", "task_id": "t"})
+    assert cancelled.failure is not None and cancelled.failure.raw is None  # made up by the 2.x reading
+    row = AssessClaim.model_validate({"claim": "A.", "status": "failed", "failure": {"code": "timeout"}})
+    assert row.failure is not None and row.failure.raw == {"code": "timeout"}
+    out = ExtractedClaims.model_validate({"claims": [{"claim": "A.", "x": 1}], "status": "ok"})
+    assert out.claims[0].raw == {"claim": "A.", "x": 1}

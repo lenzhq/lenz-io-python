@@ -62,6 +62,24 @@ def _hand_out_raw(model: Any, original: Any) -> None:
                     _hand_out_one(item, parts[index] if parts is not None else None)
 
 
+def _part_of(parent: Any, key: str, index: int | None = None) -> Any:
+    """The part of ``parent``'s body as received under ``key`` (and at
+    ``index`` in it), or ``None``."""
+    raw = getattr(parent, "_raw", None)
+    part = raw.get(key) if isinstance(raw, dict) else None
+    if index is not None:
+        part = part[index] if isinstance(part, list) and 0 <= index < len(part) else None
+    return part
+
+
+def _as_received(built: _M, parent: Any, key: str, index: int | None = None) -> _M:
+    """``built``, a model a property of ``parent`` read from what the server
+    sent under ``key``, with its ``raw`` (and its nested models') set from
+    ``parent``'s body as received: ``None`` for a block the SDK made up."""
+    _hand_out_raw(built, _part_of(parent, key, index))
+    return built
+
+
 def _hand_out_one(value: _Lax, part: Any) -> None:
     if isinstance(part, _Lax):
         return  # an existing result, nested as it is: it keeps its own
@@ -811,7 +829,11 @@ class ExtractedClaims(_Lax):
         ``locations``, which are deprecated and kept."""
         sent = _sent(self, "claims")
         return (
-            [ExtractedClaim.model_validate(c, context=_context(self)) for c in sent if isinstance(c, dict)]
+            [
+                _as_received(ExtractedClaim.model_validate(c, context=_context(self)), self, "claims", i)
+                for i, c in enumerate(sent)
+                if isinstance(c, dict)
+            ]
             if isinstance(sent, list)
             else []
         )
@@ -946,7 +968,9 @@ class AssessClaim(_Lax):
         one sentence on what to send next. Replaces ``error_code`` and
         ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
+        if not isinstance(sent, dict):
+            return None
+        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
 
     @property
     def more_claims(self) -> list[str]:
@@ -1032,7 +1056,9 @@ class AssessResponse(_Lax):
         """Why the single form has no rows; ``None`` otherwise. Replaces
         ``error`` and ``error_code``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
+        if not isinstance(sent, dict):
+            return None
+        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
 
 
 class TaskAccepted(_Lax):
@@ -1285,8 +1311,8 @@ class TaskStatus(_Lax):
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.
         if not self._legacy_aliases:
-            return FailureBlock.model_validate(sent, context=_context(self))
-        return FailureBlock.model_validate(_verification_failure(sent))
+            return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
+        return _as_received(FailureBlock.model_validate(_verification_failure(sent)), self, "failure")
 
 
 class BatchItemResult(_Lax):
