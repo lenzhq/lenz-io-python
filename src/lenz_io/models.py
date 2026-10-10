@@ -679,12 +679,12 @@ class AssessClaim(_Lax):
     confidence: str = "low"  # "high" | "medium" | "low"
     verification_url: str | None = None
     # ``rationale`` is the reasoning of a reviewer who agrees with the panel's
-    # verdict; ``dissent``, when set, is the reasoning of the reviewer farthest
-    # from it. Both are reviewers' notes, not checked sources; for sourced
-    # evidence, call ``verify``. Read both as optional: an ``"Error"`` row has
-    # neither, and a response replayed from before the API added them carries
-    # neither key.
+    # verdict. It is a reviewers' note, not a checked source; for sourced
+    # evidence, call ``verify``. Read it as optional: an ``"Error"`` row has
+    # none, and a response replayed from before the API added it carries no
+    # such key.
     rationale: str | None = None
+    #: **Deprecated:** always null. Kept so code that reads it keeps working.
     dissent: str | None = None
     # The claim with its wrong part corrected, when the request set
     # ``suggest_rewrite=True`` and the check found the claim "False" or
@@ -1650,6 +1650,7 @@ class ReviewAssessment(_Lax):
     verdict: str | None = None
     confidence: str | None = None
     rationale: str | None = None
+    #: **Deprecated:** always null. Kept so code that reads it keeps working.
     dissent: str | None = None
     verification_url: str | None = None
     #: **Deprecated**, use ``failure.code`` (``no_checkable_claim`` where this

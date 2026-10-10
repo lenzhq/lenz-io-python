@@ -159,6 +159,7 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
     ("review__get_failed_every_assessment_failed.json", "dump.failure.hint"): "the server words the hint differently",
     ("review__get_failed_every_assessment_failed.json", "render"): "the same hint, printed by the CLI",
     ("review__get_failed_every_assessment_failed.json", "render_issues"): "the same hint, printed by the CLI",
+    ("assess__single_one_claim.json", "render"): "the CLI no longer prints the deprecated `dissent`",
     ("extract__not_a_claim_beside_claims.json", "dump.status"): (
         "the newer shape answers `ready` when claims came back beside a non-claim"
     ),

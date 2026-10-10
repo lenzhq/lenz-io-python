@@ -88,6 +88,10 @@ Deprecated).
 
 ### Changed
 
+- **`dissent` on `/assess` rows and review assessments is deprecated and
+  always null; the CLI no longer prints it.** The field stays on
+  `AssessClaim` and `ReviewAssessment` (optional, `None`) so code that reads
+  it keeps working.
 - **`verify_signature` refuses an empty secret** with `ValueError`, as
   `LenzWebhooks(secret="")` always did. 2.x accepted a body signed with the
   empty key.
@@ -366,6 +370,7 @@ now a declared dependency (pydantic already installs it).
 | `ExtractedClaims.locations` | `claims` (each `.positions`) |
 | `ExtractedClaims.candidate_claims`, `AssessClaim.candidate_claims`, `AssessResponse.candidate_claims`, `TaskStatus.candidates`, `TaskStatus.similar_claims` | none: always empty |
 | `AssessClaim.verdict == "Error"` (with `confidence == "low"`) | `status == "failed"` |
+| `AssessClaim.dissent`, `ReviewAssessment.dissent` | none: always `None` |
 | `AssessClaim.error_code` | `failure.code` (`no_checkable_claim` where it reads `no_claim`) |
 | `AssessClaim.hint` | on a failed row `failure.hint`; on a completed row that found other claims, `more_claims` (the sentence is no longer sent; the attribute still reads it) |
 | `AssessClaim.identified_claims`, `ReviewAssessment.identified_claims` | `more_claims` |
