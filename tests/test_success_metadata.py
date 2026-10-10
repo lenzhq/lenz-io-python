@@ -13,19 +13,24 @@
 from __future__ import annotations
 
 import pickle
+import typing
 from collections.abc import Callable, Iterator
 from typing import Any
 
+import httpx
 import pytest
 import respx
 from conftest import make_client
 from pydantic import ValidationError
 
 from lenz_io import (
+    LenzApiVersionError,
     LenzAuthError,
     LenzError,
     LenzInvalidKeyError,
     LenzInvalidResponseError,
+    LenzQuotaExceededError,
+    LenzTimeoutError,
     LenzUsageError,
     LenzWebhooks,
     parse_webhook,
@@ -283,3 +288,182 @@ def test_the_null_rules_apply_before_the_type_check(client: Any) -> None:
         out = client.assess("A.")
     assert out.claims[0].claim == "A."
     assert out.http_status == 200
+
+
+# ── 6. an unreadable poll ─────────────────────────────────────────────────
+
+
+@pytest.fixture()
+def clock(any_client: Any) -> list[float]:
+    return any_client.install_clock([0.0])  # type: ignore[no-any-return]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"status": "completed", "task_id": "t1", "result": 42},
+        {"status": "failed", "task_id": "t1", "failure": {"code": ["x"]}},
+        {"status": "cancelled", "task_id": "t1", "failure": {"retryable": "x"}},
+        {"status": "needs_input", "task_id": "t1", "claims": "x"},
+    ],
+)
+def test_an_unreadable_poll_of_an_ended_run_raises_at_once(client: Any, clock: list[float], body: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/verify/status/t1").respond(200, json=body)
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            client.wait("t1", timeout=300)
+    assert route.call_count == 1
+    assert ei.value.body == body
+    assert isinstance(ei.value.__cause__, ValidationError)
+
+
+def test_an_unreadable_poll_of_an_ended_run_fails_only_its_batch_item(client: Any, clock: list[float]) -> None:
+    accepted = {"items": [{"task_id": "t1", "claim": "A."}, {"task_id": "t2", "claim": "B."}]}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify/batch").respond(202, json=accepted)
+        r.get("/verify/status/t1").respond(200, json={"status": "completed", "task_id": "t1", "result": 42})
+        r.get("/verify/status/t2").respond(
+            200, json={"status": "completed", "task_id": "t2", "result": {"verification_id": "v2", "claim": "B."}}
+        )
+        out = client.verify_batch_and_wait(claims=[{"claim": "A."}, {"claim": "B."}], timeout=60)
+    assert [item.status for item in out] == ["failed", "completed"]
+    assert out[0].status_detail is None
+
+
+def test_an_unreadable_running_poll_is_polled_again_and_named_by_the_timeout(client: Any, clock: list[float]) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/verify/status/t1").respond(200, json={"status": "processing", "task_id": "t1", "claims": 5})
+        with pytest.raises(LenzTimeoutError) as ei:
+            client.wait("t1", timeout=30)
+    assert route.call_count > 1
+    err = ei.value
+    assert isinstance(err.__cause__, LenzInvalidResponseError)
+    assert err.message == "wait timed out after 30s; the last poll's answer could not be read"
+    assert "unknown" in err.cause
+
+
+def test_a_readable_poll_after_an_unreadable_one_clears_it(client: Any, clock: list[float]) -> None:
+    bad = httpx.Response(200, json={"status": "processing", "task_id": "t1", "claims": 5})
+    running = httpx.Response(200, json={"status": "processing", "task_id": "t1"})
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").mock(side_effect=[bad, running, running, running, running, running, running])
+        with pytest.raises(LenzTimeoutError) as ei:
+            client.wait("t1", timeout=20)
+    assert ei.value.__cause__ is None
+    assert ei.value.message == "wait timed out after 20s"
+
+
+def _review_body(status: str, claims: Any) -> dict[str, Any]:
+    return {"review_id": "r1", "status": status, "issues": [], "failures": [], "claims": claims}
+
+
+def test_an_unreadable_review_that_ended_raises_at_once(client: Any, clock: list[float]) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review").respond(202, json={"review_id": "r1", "status": "queued"})
+        route = r.get("/reviews/r1").respond(200, json=_review_body("completed", [42]))
+        with pytest.raises(LenzInvalidResponseError):
+            client.review_and_wait("Draft.", timeout=300)
+    assert route.call_count == 1
+
+
+def test_an_unreadable_running_review_is_named_by_the_timeout(client: Any, clock: list[float]) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review").respond(202, json={"review_id": "r1", "status": "queued"})
+        route = r.get("/reviews/r1").respond(200, json=_review_body("running", [42]))
+        with pytest.raises(LenzTimeoutError) as ei:
+            client.review_and_wait("Draft.", timeout=30)
+    assert route.call_count > 1
+    assert isinstance(ei.value.__cause__, LenzInvalidResponseError)
+    assert ei.value.message.endswith("; the last poll's answer could not be read")
+
+
+# ── 7. a block read on access ─────────────────────────────────────────────
+
+
+def test_a_block_read_on_access_raises_an_invalid_response(client: Any) -> None:
+    body = {"status": "ready", "claims": [{"claim": "A."}, {"claim": ["x"]}]}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/extract").respond(200, json=body, headers={"X-Request-ID": "req_x"})
+        out = client.extract(text="A.")
+    with pytest.raises(LenzInvalidResponseError) as ei:
+        out.claims  # noqa: B018 - the read is the test
+    err = ei.value
+    assert (err.status_code, err.request_id, err.body) == (200, "req_x", body)
+    assert isinstance(err.__cause__, ValidationError)
+    assert "claims[1].claim" in err.message
+
+
+@pytest.mark.sync_only
+def test_a_nested_rows_failure_read_on_access_names_the_answer() -> None:
+    from lenz_io.errors import ResponseHeaders as RH
+    from lenz_io.models import _Body
+
+    body = {"claims": [{"claim": "A.", "status": "failed", "failure": {"retryable": "x"}}]}
+    out = AssessResponse.model_validate(
+        _Body(body, http_status=200, headers=RH({"X-Request-ID": "q"})), context={"legacy_aliases": False}
+    )
+    with pytest.raises(LenzInvalidResponseError) as ei:
+        out.claims[0].failure  # noqa: B018 - the read is the test
+    assert ei.value.status_code == 200
+    assert ei.value.request_id == "q"
+    # The row's own body and path: the row is the model that read the block.
+    assert "failure.retryable" in ei.value.message
+    assert ei.value.body == body["claims"][0]
+
+
+def test_a_failed_run_with_a_malformed_failure_without_legacy_aliases(clock: list[float]) -> None:
+    body = {"status": "failed", "task_id": "t1", "failure": {"hint": 3}}
+    with make_client(api_key=KEY, legacy_aliases=False) as c, respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=body)
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            c.wait("t1", timeout=30)
+    assert ei.value.status_code == 200
+    assert isinstance(ei.value.__cause__, ValidationError)
+
+
+# ── 8. odds and ends ──────────────────────────────────────────────────────
+
+
+def test_the_message_lists_every_field_and_the_fix_suggests_upgrading(client: Any) -> None:
+    body = {"claims": [{"claim": 1}, {"claim": 2}], "more_claims": 5}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/assess").respond(200, json=body)
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            client.assess("A.")
+    message = ei.value.message
+    assert "claims[0].claim" in message and "claims[1].claim" in message
+    assert "pip install -U lenz-io" in ei.value.fix
+
+
+def test_items_an_iterator_yields_have_no_metadata(client: Any) -> None:
+    page = {"items": [{"verification_id": "v1", "claim": "A."}], "total": 1, "page": 1, "page_size": 20}
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verifications").respond(200, json=page)
+        items = list(client.verifications.iter())
+    assert items and items[0].http_status is None and items[0].headers is None
+
+
+@pytest.mark.sync_only
+@pytest.mark.parametrize(
+    "err",
+    [
+        LenzInvalidKeyError(message="m", cause="c", status_code=0),
+        LenzInvalidResponseError(message="m", status_code=200, body={"a": 1}, body_text="t"),
+        LenzTimeoutError(message="m", task_id="t1"),
+        LenzQuotaExceededError(message="m", status_code=402, remaining=3),
+        LenzApiVersionError(api_version="2026-05-13", expected_version="2026-10-11", status_code=200),
+    ],
+)
+def test_every_error_pickles(err: LenzError) -> None:
+    again = pickle.loads(pickle.dumps(err))
+    assert type(again) is type(err)
+    assert str(again) == str(err)
+    assert vars(again) == vars(err)
+
+
+@pytest.mark.sync_only
+def test_the_codes_are_exported_at_the_top_level() -> None:
+    import lenz_io
+
+    assert lenz_io.USAGE_ERROR_CODES == USAGE_ERROR_CODES
+    assert typing.get_args(lenz_io.UsageErrorCode) == USAGE_ERROR_CODES

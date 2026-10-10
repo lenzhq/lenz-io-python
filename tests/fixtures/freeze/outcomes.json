@@ -8234,21 +8234,21 @@
  "wait_unreadable_poll": {
   "attrs": {
    "body": null,
-   "cause": "Pipeline still running server-side.",
+   "cause": "The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown.",
    "code": "",
    "doc_url": "https://lenz.io/docs/verify#timeout",
    "fix": "Resume via client.get_status('t1') later.",
-   "message": "wait timed out after 30s",
+   "message": "wait timed out after 30s; the last poll's answer could not be read",
    "request_id": "",
    "retryable": null,
    "status_code": 0,
    "task_id": "t1"
   },
-  "cause": null,
+  "cause": "LenzInvalidResponseError",
   "context": null,
   "error": "LenzTimeoutError",
-  "str": "wait timed out after 30s\n  Cause:  Pipeline still running server-side.\n  Fix:    Resume via client.get_status('t1') later.\n  Docs:   https://lenz.io/docs/verify#timeout",
-  "suppress_context": false
+  "str": "wait timed out after 30s; the last poll's answer could not be read\n  Cause:  The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown.\n  Fix:    Resume via client.get_status('t1') later.\n  Docs:   https://lenz.io/docs/verify#timeout",
+  "suppress_context": true
  },
  "wait_version": {
   "attrs": {

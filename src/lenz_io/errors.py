@@ -23,11 +23,13 @@ import json
 import re
 import warnings
 from collections.abc import Iterator, Mapping
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal, get_args
 
 from typing_extensions import deprecated
 
 if TYPE_CHECKING:
+    from pydantic import ValidationError
+
     from .models import Citecheck, ReviewFull
 
 
@@ -165,6 +167,11 @@ class LenzError(Exception):
             return False
         return None
 
+    def __reduce__(self) -> tuple[Any, ...]:
+        # Keyword-only constructors: rebuilt from the instance's state, not
+        # by calling the class with ``args`` (which pickle would do).
+        return (_rebuild_error, (type(self), self.args, dict(self.__dict__)))
+
     def __str__(self) -> str:  # pragma: no cover - trivial
         lines = [self.message or self.__class__.__name__]
         if self.cause:
@@ -176,6 +183,14 @@ class LenzError(Exception):
         if self.request_id:
             lines.append(f"  Request ID: {self.request_id}")
         return "\n".join(lines)
+
+
+def _rebuild_error(cls: type[LenzError], args: tuple[Any, ...], state: dict[str, Any]) -> LenzError:
+    """Rebuilds a pickled :class:`LenzError` (any subclass)."""
+    err = cls.__new__(cls)
+    Exception.__init__(err, *args)
+    err.__dict__.update(state)
+    return err
 
 
 #: 409 codes that mean "not yet": the same request, sent again later (with the
@@ -383,6 +398,80 @@ class LenzInvalidResponseError(LenzAPIError, json.JSONDecodeError):
 
 #: How much of an unreadable body ``LenzInvalidResponseError.body_text`` keeps.
 INVALID_BODY_TEXT_MAX = 1000
+
+#: How many unreadable fields the message of such an error lists.
+_FIELDS_LISTED = 5
+
+
+def _clip(text: str) -> str:
+    return text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026"
+
+
+def _path_as_sent(loc: tuple[int | str, ...], body: Any) -> str:
+    """``loc`` (pydantic's location of an error) as a path into ``body`` as
+    sent (``claims[0].verdict``): as far as the body has it, then the rest
+    marked as not sent (a value the SDK fills in from another field)."""
+    out = ""
+    node = body
+    for index, part in enumerate(loc):
+        if isinstance(part, int) and isinstance(node, list) and 0 <= part < len(node):
+            out, node = f"{out}[{part}]", node[part]
+        elif isinstance(part, str) and isinstance(node, dict) and part in node:
+            out, node = (f"{out}.{part}" if out else part), node[part]
+        else:
+            rest = ".".join(str(p) for p in loc[index:])
+            return f"{out} ({rest}, filled in from the body)" if out else f"{rest} (filled in from the body)"
+    return out or "the body"
+
+
+def unreadable_fields_error(
+    exc: ValidationError,
+    *,
+    body: dict[str, Any] | None,
+    status_code: int,
+    headers: Mapping[str, str] | None,
+    what: str = "",
+    text: str | None = None,
+    prefix: tuple[int | str, ...] = (),
+) -> LenzInvalidResponseError:
+    """``LenzInvalidResponseError`` for a JSON object whose fields this
+    release cannot read (``{"claims": "x"}``): every field at fault named by
+    its path in ``body`` as sent. ``what`` starts the message (``"POST
+    /assess answered HTTP 200"``); ``text`` is the body as received (else
+    ``body`` as JSON); ``prefix`` is where in ``body`` the object that failed
+    to read sits. The caller chains ``exc`` as the cause."""
+    errors = exc.errors()
+    listed = "; ".join(f"{_path_as_sent(prefix + tuple(e['loc']), body)}: {e['msg']}" for e in errors[:_FIELDS_LISTED])
+    if len(errors) > _FIELDS_LISTED:
+        listed += f"; and {len(errors) - _FIELDS_LISTED} more"
+    if text is None:
+        text = json.dumps(body, ensure_ascii=False) if body is not None else ""
+    response_headers = headers if isinstance(headers, ResponseHeaders) else ResponseHeaders(headers)
+    err = LenzInvalidResponseError(
+        message=(
+            f"{what} with a JSON object this SDK cannot read ({listed or 'unexpected value'})."
+            if what
+            else f"A JSON object this SDK cannot read ({listed or 'unexpected value'})."
+        ),
+        cause="A field of the answer does not have the type this release of lenz-io reads.",
+        fix=(
+            "Upgrade lenz-io (pip install -U lenz-io): the API may send a shape this release does not know. "
+            "If it persists on the latest release, check base_url and any proxy, and quote the request id to support."
+        ),
+        doc_url="https://lenz.io/docs/errors",
+        request_id=response_headers.get("X-Request-ID") or "",
+        status_code=status_code,
+        body=body,
+        body_text=_clip(text),
+        headers=response_headers,
+        served_version=(response_headers.get("X-Lenz-API-Version") or "").strip() or None,
+    )
+    err.msg = "Expecting a value of the documented type"
+    err.doc = text
+    err.pos = 0
+    err.lineno = 1
+    err.colno = 1
+    return err
 
 
 class LenzConnectionError(LenzAPIError):
@@ -647,9 +736,10 @@ class LenzApiVersionError(LenzError):
         return False
 
 
-#: The ``code`` values of :class:`LenzUsageError` (the Node SDK's ``code``
-#: values are the same strings).
-USAGE_ERROR_CODES = (
+#: The ``code`` of a :class:`LenzUsageError` (the Node SDK's ``code`` values
+#: are the same strings). Local codes: they do not depend on
+#: ``legacy_aliases``. Since 3.2.
+UsageErrorCode = Literal[
     "blank_input",
     "blank_item",
     "empty_list",
@@ -660,7 +750,10 @@ USAGE_ERROR_CODES = (
     "invalid_option",
     "conflicting_input",
     "invalid_argument",
-)
+]
+
+#: Every :data:`UsageErrorCode`, in order. Since 3.2.
+USAGE_ERROR_CODES: tuple[UsageErrorCode, ...] = get_args(UsageErrorCode)
 
 
 class LenzUsageError(ValueError):
@@ -685,16 +778,20 @@ class LenzUsageError(ValueError):
         ``invalid_option`` (a client or ``with_options`` option, or a call's
         ``timeout`` / ``max_retries``), ``conflicting_input`` (two arguments
         that exclude each other) and ``invalid_argument`` (anything else).
-        The same strings as the Node SDK's.
+        The same strings as the Node SDK's (:data:`UsageErrorCode`); local
+        codes, the same whatever ``legacy_aliases`` is (a blank claim is
+        ``blank_input`` and a blank list item ``blank_item`` in both modes).
       * ``param`` — the argument at fault, e.g. ``"claim"``,
         ``"claims[2]"``, ``"page_size"``, ``"task_id"``; ``None`` when no
         one argument is.
     """
 
-    code: str
+    code: UsageErrorCode
     param: str | None
 
-    def __init__(self, message: str = "", *, code: str = "invalid_argument", param: str | None = None) -> None:
+    def __init__(
+        self, message: str = "", *, code: UsageErrorCode = "invalid_argument", param: str | None = None
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.param = param
@@ -703,7 +800,7 @@ class LenzUsageError(ValueError):
         return (_usage_error, (str(self.args[0]) if self.args else "", self.code, self.param))
 
 
-def _usage_error(message: str, code: str, param: str | None) -> LenzUsageError:
+def _usage_error(message: str, code: UsageErrorCode, param: str | None) -> LenzUsageError:
     """Rebuilds a pickled :class:`LenzUsageError`."""
     return LenzUsageError(message, code=code, param=param)
 
@@ -1298,5 +1395,7 @@ __all__ = [
     "ReviewFailedError",
     "ReviewTimeout",
     "ReviewTimeoutError",
+    "UsageErrorCode",
     "map_response_to_error",
+    "unreadable_fields_error",
 ]

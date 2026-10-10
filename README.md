@@ -596,16 +596,17 @@ the same read-only, case-insensitive mapping errors carry (`exc.headers`):
 
 ```python
 accepted = client.verify("The Eiffel Tower is in Paris.")
-accepted.http_status  # 202
-accepted.headers["location"]  # the poll URL, when the answer names one
-accepted.headers.get("retry-after")  # None when it states no wait
-client.assess("A.").headers["x-request-id"]  # quote it to support
+print(accepted.http_status)  # 202
+if accepted.headers is not None:  # None only on a result not read from an answer
+    print(accepted.headers.get("location"))  # the poll URL, when the answer names one
+    print(accepted.headers.get("retry-after"))  # None when it states no wait
 ```
 
-Only the top-level result has them: a model nested in it (`TaskStatus.result`,
-an `AssessResponse.claims` row, ...), a result the SDK builds
-(`BatchItemResult`), a webhook's models and a model you validate yourself
-have `None` for both. A result a wait helper returns carries its last poll's
+`headers` is a `lenz_io.errors.ResponseHeaders` (or `None`). Only the
+top-level result has them: a model nested in it (`TaskStatus.result`, an
+`AssessResponse.claims` row, the items an `iter()` yields, each of which sits
+in a page, ...), a result the SDK builds (`BatchItemResult`), a webhook's
+models and a model you validate yourself have `None` for both. A result a wait helper returns carries its last poll's
 (`review_and_wait`, `citecheck_and_wait`); `verify_and_wait` returns the
 poll's nested `result`, so its `Verification` has `None`. Like `raw`, they are
 not part of `model_dump()` or `--json`.
@@ -936,9 +937,14 @@ A blank claim is refused with the API's own sentence (`claim is required.`,
 `claims[1] is blank.`); "blank" is what `str.strip()` removes, the API's rule.
 When both `claim=` and `text=` are given, the one with content is sent.
 
-`LenzUsageError` carries `code` (what is wrong) and `param` (the argument at
-fault, or `None`): branch on these, never on the message. The codes are the
-Node SDK's, string for string:
+`LenzUsageError` carries `code` (what is wrong, typed `lenz_io.UsageErrorCode`;
+`lenz_io.USAGE_ERROR_CODES` lists them) and `param` (the argument at fault, or
+`None`): branch on these, never on the message. They are local codes, set by
+the SDK before anything is sent, so they are the same whatever
+`legacy_aliases` is (a blank claim is `blank_input` and a blank list item
+`blank_item` in both modes; the server's `code` on an error answer is `exc.code`
+of a `LenzError`, a different thing). The codes are the Node SDK's, string for
+string:
 
 | `code` | When | `param`, e.g. |
 |---|---|---|
@@ -1076,9 +1082,17 @@ redirects and httpx does not follow one; the message names the `Location`).
 It is also raised for a JSON object with a field of the wrong type
 (`{"claims": "x"}`, `{"claims": [42]}`), where earlier releases let pydantic's
 `ValidationError` escape (it is the error's `__cause__`): then `body` is the
-object as parsed, `body_text` its text, and the message names the field. A
-`null` the SDK tolerates (see the changelog) is still read as unsent first. A
-poll inside a wait helper that meets one polls again, as after a 5xx.
+object as parsed, `body_text` its text, and the message names every field at
+fault by its path in the body as sent. Its `fix` suggests upgrading lenz-io:
+a newer API may send a shape an older release cannot read. A `null` the SDK
+tolerates (see the changelog) is still read as unsent first. A block a result
+reads only when you ask for it (`ExtractedClaims.claims`, a `failure`) raises
+the same error on that read, with the answer's status and headers. In a wait
+helper, an unreadable poll whose `status` says the run ended (completed,
+failed, cancelled, needs input) raises it at once (in `verify_batch_and_wait`
+that item fails); any other is polled again, and if the wait then times out,
+the timeout says the last poll could not be read and carries that answer's
+error as `__cause__`.
 
 **Replays of requests made before the switch.** An idempotent request first
 sent before lenz.io served `2026-10-11`, and replayed with the same

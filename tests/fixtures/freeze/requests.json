@@ -14477,7 +14477,7 @@
    "code": "",
    "error": "LenzTimeoutError",
    "idempotency_key": null,
-   "message": "wait timed out after 30s",
+   "message": "wait timed out after 30s; the last poll's answer could not be read",
    "status_code": 0
   },
   "requests": [

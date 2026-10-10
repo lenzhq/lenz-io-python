@@ -23,6 +23,8 @@ from ._core import (
     POLL_BACKOFF_CAP,
     REVIEW_POLL_DEFAULT,
     REVIEW_POLL_FLOOR,
+    TimedOut,
+    _note_unreadable,
     _poll_hint,
 )
 from .errors import (
@@ -32,6 +34,7 @@ from .errors import (
     LenzConnectionError,
     LenzError,
     LenzGoneError,
+    LenzInvalidResponseError,
     LenzNotFoundError,
     LenzRateLimitError,
 )
@@ -47,6 +50,20 @@ def _never_sendable(exc: Exception) -> bool:
     """A request that could not be sent at all (a bad ``base_url``, ...): no
     later poll can change it, so the wait raises it at once."""
     return isinstance(exc, LenzConnectionError) and exc.retryable is False
+
+
+#: The statuses a review or a citation check ends in.
+_JOB_TERMINAL_STATUSES = ("completed", "failed", "cancelled")
+
+
+def _unreadable_end(exc: Exception, terminal: tuple[str, ...]) -> bool:
+    """Whether ``exc`` is an answer this release could not read whose body
+    says the run has ENDED (its ``status`` is terminal): polling again would
+    only wait out the deadline and report a run that ended as still going."""
+    if not isinstance(exc, LenzInvalidResponseError):
+        return False
+    body = exc.body if isinstance(exc.body, dict) else {}
+    return body.get("status") in terminal
 
 
 def _progress_copy(status: TaskStatus) -> Progress:
@@ -84,6 +101,9 @@ class TaskPoll:
         self._still: list[str] = []
         self._server_hint: float | None = None
         self._stated_wait: float | None = None
+        #: Per id, the last poll answer that could not be read, when no
+        #: readable one came after it (it becomes the timeout's cause).
+        self.unreadable: dict[str, LenzInvalidResponseError] = {}
 
     def start_round(self) -> list[str]:
         self._still = []
@@ -105,14 +125,22 @@ class TaskPoll:
 
         A 401 / 403 refuses the key itself: every other id would answer the
         same, so the whole wait ends with it. A 410, a 404 and a version
-        error are terminal for this id. Any other ``LenzError`` is read again
+        error are terminal for this id, and so is an answer this release
+        cannot read whose ``status`` says the run ended (completed, failed,
+        cancelled, needs input). Any other ``LenzError`` is read again
         next round, after the wait it stated (capped like the retry ladder
         caps it). Anything else is not a poll failure and propagates."""
         if isinstance(exc, LenzAuthError) or _never_sendable(exc):
             return True
-        if isinstance(exc, (LenzGoneError, LenzNotFoundError, LenzApiVersionError)):
-            self.stopped[task_id] = exc
+        if isinstance(exc, (LenzGoneError, LenzNotFoundError, LenzApiVersionError)) or _unreadable_end(
+            exc, _TERMINAL_STATUSES
+        ):
+            # An unreadable answer whose status says the run ended is final
+            # for this id too: no later poll reads differently.
+            self.stopped[task_id] = exc  # type: ignore[assignment]
             return False
+        if isinstance(exc, LenzInvalidResponseError):
+            self.unreadable[task_id] = exc
         if isinstance(exc, LenzError):
             wait = getattr(exc, "retry_after", None)
             if isinstance(wait, int) and not isinstance(wait, bool) and wait > 0:
@@ -125,6 +153,7 @@ class TaskPoll:
     def answered(self, task_id: str, status: TaskStatus) -> bool:
         """Record a poll's status. ``True``: the task is still running, so
         ``on_progress`` fires for it."""
+        self.unreadable.pop(task_id, None)
         if status.status in _TERMINAL_STATUSES:
             self.terminal[task_id] = status
             return False
@@ -163,7 +192,8 @@ class TaskPoll:
         return [t for t in self.pending if t not in self.terminal and t not in self.stopped]
 
     def results(self) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzError]]:
-        return self.terminal, self.timed_out, self.stopped
+        unreadable = {t: e for t, e in self.unreadable.items() if t in self.timed_out}
+        return self.terminal, TimedOut(self.timed_out, unreadable), self.stopped
 
 
 class JobPoll(Generic[_Job]):
@@ -197,6 +227,13 @@ class JobPoll(Generic[_Job]):
         self._failed: Callable[[_Job], Exception] = failed
         self._timed_out: Callable[[_Job | None], Exception] = timed_out
         self._stated_wait: float | None = None
+        #: The last poll answer that could not be read, when no readable one
+        #: came after it (it becomes the timeout's cause).
+        self.unreadable: LenzInvalidResponseError | None = None
+
+    def _timeout(self) -> Exception:
+        err = self._timed_out(self.last)
+        return _note_unreadable(err, self.unreadable) if isinstance(err, LenzError) else err
 
     def before_poll(self, now: float) -> float:
         """What is left of the deadline for the next poll. Once it is spent
@@ -205,7 +242,7 @@ class JobPoll(Generic[_Job]):
         self._stated_wait = None
         remaining = self.deadline - now
         if remaining <= 0 and not self._first:
-            raise self._timed_out(self.last)
+            raise self._timeout()
         self._first = False
         return remaining
 
@@ -215,6 +252,7 @@ class JobPoll(Generic[_Job]):
         job = self._parse(body)
         if job is None:
             raise ValueError("not this job's body")
+        self.unreadable = None
         return job
 
     def failed(self, exc: Exception) -> bool:
@@ -222,12 +260,16 @@ class JobPoll(Generic[_Job]):
 
         A body this release cannot read (pydantic's ValidationError is a
         ValueError) is read again next round, as for a 5xx; a request that
-        could not be built (``UnicodeEncodeError``: nothing was sent) is not.
+        could not be built (``UnicodeEncodeError``: nothing was sent) is not,
+        nor is a body this release cannot read whose ``status`` says the job
+        ended (raised at once: polling on would report it as still running).
         A 5xx, a network error or a 429 is read again next round, after the
         wait it stated, capped like the retry ladder caps it (an untyped
         proxy 503 can state an hour). Anything else (404, 403, 410) raises."""
-        if isinstance(exc, UnicodeEncodeError) or _never_sendable(exc):
+        if isinstance(exc, UnicodeEncodeError) or _never_sendable(exc) or _unreadable_end(exc, _JOB_TERMINAL_STATUSES):
             return True
+        if isinstance(exc, LenzInvalidResponseError):
+            self.unreadable = exc
         if isinstance(exc, ValueError):
             logger.debug("unreadable body for %s", self.path, exc_info=True)
             return False
@@ -262,7 +304,7 @@ class JobPoll(Generic[_Job]):
         past the deadline (which, once passed, raises the timeout)."""
         remaining = self.deadline - now
         if remaining <= 0:
-            raise self._timed_out(self.last)
+            raise self._timeout()
         if self._stated_wait is not None:
             sleep_for = max(REVIEW_POLL_FLOOR, self._stated_wait)
         else:

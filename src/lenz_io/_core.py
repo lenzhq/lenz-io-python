@@ -25,7 +25,7 @@ import uuid
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, Final, Literal, TypedDict
+from typing import Any, Final, Literal, TypedDict, TypeVar
 from urllib.parse import quote
 
 import httpx
@@ -55,6 +55,7 @@ from .errors import (
     ReviewFailed,
     ReviewTimeout,
     map_response_to_error,
+    unreadable_fields_error,
 )
 from .models import (
     LEGACY_ALIASES,
@@ -72,9 +73,13 @@ from .models import (
     VerificationList,
     _Body,
     _legacy_view,
+    _Meta,
+    _set_raw,
 )
 
 logger = logging.getLogger("lenz_io")
+
+_E = TypeVar("_E", bound=LenzError)
 
 # The API version this SDK asks for, sent as ``X-Lenz-API-Version`` on every
 # request: the server answers in that version's response shape, whatever the
@@ -1422,9 +1427,7 @@ def _settled_by(started: ReviewStarted | CitecheckStarted, exc: LenzError, confl
     """``started`` as the 409 that settled the call: its ``raw`` is that
     answer's body, ``http_status`` 409, ``headers`` its headers, and
     ``settled_by_conflict`` ``True``."""
-    started._raw = conflict
-    started._http_status = exc.status_code
-    started._headers = exc.headers
+    _set_raw(started, conflict, _Meta(exc.status_code, ResponseHeaders(exc.headers)))
     started._settled_by_conflict = True
 
 
@@ -1662,18 +1665,14 @@ def _unreadable_fields(
     release cannot read (``{"claims": "x"}``, ``{"claims": [42]}``): what the
     null-tolerance rules leave unreadable. ``body`` is the object as parsed;
     the pydantic error is the ``__cause__``."""
-    errors = exc.errors()
-    where = ".".join(str(part) for part in errors[0]["loc"]) if errors else ""
-    what = errors[0]["msg"] if errors else "unexpected value"
-    err = _invalid_answer(
-        response,
-        f"{method} {path} answered HTTP {response.status_code} with a JSON object this SDK cannot read "
-        f"({where or 'the body'}: {what}).",
-        "A field of the answer does not have the type the API documents for this call.",
-        "Expecting a value of the documented type",
+    return unreadable_fields_error(
+        exc,
+        body=parsed,
+        status_code=response.status_code,
+        headers=ResponseHeaders(dict(response.headers)),
+        what=f"{method} {path} answered HTTP {response.status_code}",
+        text=response.text,
     )
-    err.body = parsed
-    return err
 
 
 #: What ``_after_response`` says: the answer's body (the call is done) or the
@@ -1872,12 +1871,39 @@ def _wait_result(
     stopped: dict[str, LenzError],
 ) -> TaskStatus:
     """The terminal status ``wait`` maps to its result; a stopped id's error
-    or the timeout is raised."""
+    or the timeout is raised (told when the last polls could not be read:
+    ``timed_out`` is then a ``TimedOut`` carrying the last such answer)."""
     if task_id in stopped:
         raise stopped[task_id]
     if task_id in timed_out:
-        raise _wait_timed_out(timeout, task_id)
+        unreadable: Mapping[str, LenzInvalidResponseError] = getattr(timed_out, "unreadable", {})
+        raise _note_unreadable(_wait_timed_out(timeout, task_id), unreadable.get(task_id))
     return terminal[task_id]
+
+
+class TimedOut(set[str]):
+    """The ids a verification poll timed out on, with ``unreadable``: per id,
+    the last poll answer that could not be read, when no readable one came
+    after it."""
+
+    def __init__(self, ids: set[str], unreadable: Mapping[str, LenzInvalidResponseError]) -> None:
+        super().__init__(ids)
+        self.unreadable = dict(unreadable)
+
+
+def _note_unreadable(err: _E, unreadable: LenzInvalidResponseError | None) -> _E:
+    """``err`` (a wait's timeout) told that the last polls could not be read:
+    ``unreadable`` (the last such answer) becomes its ``__cause__``, and the
+    message and cause say so instead of "still running"."""
+    if unreadable is None:
+        return err
+    err.message = f"{err.message}; the last poll's answer could not be read"
+    err.cause = (
+        "The last poll's answer could not be read (see __cause__), so whether the run is still going is unknown."
+    )
+    err.args = (err.message,)
+    err.__cause__ = unreadable
+    return err
 
 
 def _batch_results(

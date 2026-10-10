@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 import typing
-from collections.abc import Callable, ItemsView, KeysView, Mapping, ValuesView
+from collections.abc import Callable, ItemsView, KeysView, ValuesView
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
 
@@ -36,6 +36,8 @@ from pydantic import (
     model_validator,
 )
 from typing_extensions import Self, deprecated
+
+from .errors import LenzInvalidResponseError, ResponseHeaders, unreadable_fields_error
 
 
 def _json_copy(value: Any) -> Any:
@@ -65,7 +67,7 @@ class _Body(dict[str, Any]):
         parsed: dict[str, Any],
         *,
         http_status: int,
-        headers: Mapping[str, str],
+        headers: ResponseHeaders,
         unreadable: Callable[[ValidationError], Exception] | None = None,
     ) -> None:
         super().__init__(parsed)
@@ -75,6 +77,101 @@ class _Body(dict[str, Any]):
 
     def __reduce__(self) -> tuple[Any, ...]:
         return (dict, (dict(self),))
+
+
+class _Meta:
+    """The answer a read came from: its HTTP status and headers. ``top`` says
+    whether the model holding it is the result a call returned (its
+    ``http_status`` / ``headers`` read these) or a model nested in one, which
+    keeps them only to build an error about its own part of the body."""
+
+    __slots__ = ("_nested", "headers", "http_status", "top")
+
+    def __init__(self, http_status: int, headers: ResponseHeaders, top: bool = True) -> None:
+        self.http_status = http_status
+        self.headers = headers
+        self.top = top
+        self._nested: _Meta | None = None
+
+    def nested(self) -> _Meta:
+        """The same answer, for a model nested in this one (made once)."""
+        if not self.top:
+            return self
+        if self._nested is None:
+            self._nested = _Meta(self.http_status, self.headers, top=False)
+        return self._nested
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_Meta, (self.http_status, self.headers, self.top))
+
+
+class _Received:
+    """What ``_raw`` holds for a model read from an answer: its part of the
+    body (``body``) and the answer (``meta``). One private attribute for
+    both, so a read costs no more pydantic bookkeeping per model than it did
+    before ``http_status`` existed."""
+
+    __slots__ = ("body", "meta")
+
+    def __init__(self, body: dict[str, Any] | None, meta: _Meta) -> None:
+        self.body = body
+        self.meta = meta
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_Received, (self.body, self.meta))
+
+
+def _set_raw(model: Any, body: dict[str, Any] | None, meta: _Meta | None) -> None:
+    """Store ``model``'s body as received, and the answer it came in. Written
+    straight into pydantic's private store: ``__setattr__`` would cost more
+    than the read of a small model."""
+    value = body if meta is None else _Received(body, meta)
+    private = getattr(model, "__pydantic_private__", None)
+    if isinstance(private, dict):
+        private["_raw"] = value
+    else:
+        model._raw = value
+
+
+def _body_of(model: Any) -> Any:
+    """``model``'s part of the body as received (``None`` if none)."""
+    stored = getattr(model, "_raw", None)
+    return stored.body if isinstance(stored, _Received) else stored
+
+
+def _meta_of(model: Any) -> _Meta | None:
+    """The answer ``model`` was read from (``None`` if none)."""
+    stored = getattr(model, "_raw", None)
+    return stored.meta if isinstance(stored, _Received) else None
+
+
+def _unreadable_in(model: Any, exc: ValidationError, prefix: tuple[int | str, ...] = ()) -> LenzInvalidResponseError:
+    """``LenzInvalidResponseError`` for a part of ``model``'s body (under
+    ``prefix``) this release cannot read, met after the read (a property
+    that reads a block on access): the answer's status and headers when the
+    model was read from one (else 0 and none), and ``model``'s ``raw``."""
+    meta = _meta_of(model)
+    status = meta.http_status if meta is not None else 0
+    return unreadable_fields_error(
+        exc,
+        body=model.raw if isinstance(model, _Lax) else None,
+        status_code=status,
+        headers=meta.headers if meta is not None else None,
+        what=f"The API answered HTTP {status}" if status else "",
+        prefix=prefix,
+    )
+
+
+def _read_block(
+    parent: Any, cls: type[_M], data: Any, prefix: tuple[int | str, ...], context: dict[str, Any] | None = None
+) -> _M:
+    """``cls`` read from ``data``, a block of ``parent``'s body under
+    ``prefix``: a field this release cannot read raises
+    ``LenzInvalidResponseError`` (the pydantic error as its cause)."""
+    try:
+        return cls.model_validate(data, context=context)
+    except ValidationError as exc:
+        raise _unreadable_in(parent, exc, prefix) from exc
 
 
 def _null_reads_unsent(
@@ -124,34 +221,36 @@ def _nested_fields(cls: type) -> tuple[tuple[str, str], ...]:
     return fields
 
 
-def _hand_out_raw(model: Any, original: Any) -> None:
+def _hand_out_raw(model: Any, original: Any, meta: _Meta | None = None) -> None:
     """``model``'s ``raw`` is ``original`` (its part of the body as received),
     and each model nested in it gets the part under its own key (or index).
     A nested model the body did not carry (filled in by the SDK) gets
     ``None``; a model passed in already read keeps its own. In a list whose
     length the reading changed, each item still gets the part at its index
-    when that part is an object."""
+    when that part is an object. ``meta``: the answer the body came in, kept
+    by every model of the read (see ``_Meta``)."""
     if not isinstance(original, dict):
-        model._raw = None
+        _set_raw(model, None, meta)
         return
-    model._raw = dict(original) if isinstance(original, _Body) else original
+    _set_raw(model, dict(original) if isinstance(original, _Body) else original, meta)
     values = model.__dict__
+    inner = meta.nested() if meta is not None else None
     for name, key in _nested_fields(type(model)):
         value = values.get(name)
         part = original.get(key)
         if isinstance(value, _Lax):
-            _hand_out_one(value, part)
+            _hand_out_one(value, part, inner)
         elif isinstance(value, list):
             parts = part if isinstance(part, list) else ()
             for index, item in enumerate(value):
                 if isinstance(item, _Lax):
-                    _hand_out_one(item, parts[index] if index < len(parts) else None)
+                    _hand_out_one(item, parts[index] if index < len(parts) else None, inner)
 
 
 def _part_of(parent: Any, key: str, index: int | None = None) -> Any:
     """The part of ``parent``'s body as received under ``key`` (and at
     ``index`` in it), or ``None``."""
-    raw = getattr(parent, "_raw", None)
+    raw = _body_of(parent)
     part = raw.get(key) if isinstance(raw, dict) else None
     if index is not None:
         part = part[index] if isinstance(part, list) and 0 <= index < len(part) else None
@@ -162,14 +261,15 @@ def _as_received(built: _M, parent: Any, key: str, index: int | None = None) -> 
     """``built``, a model a property of ``parent`` read from what the server
     sent under ``key``, with its ``raw`` (and its nested models') set from
     ``parent``'s body as received: ``None`` for a block the SDK made up."""
-    _hand_out_raw(built, _part_of(parent, key, index))
+    meta = _meta_of(parent)
+    _hand_out_raw(built, _part_of(parent, key, index), meta.nested() if meta is not None else None)
     return built
 
 
-def _hand_out_one(value: _Lax, part: Any) -> None:
+def _hand_out_one(value: _Lax, part: Any, meta: _Meta | None) -> None:
     if isinstance(part, _Lax):
         return  # an existing result, nested as it is: it keeps its own
-    _hand_out_raw(value, part)
+    _hand_out_raw(value, part, meta)
 
 
 class _Lax(BaseModel):
@@ -188,13 +288,10 @@ class _Lax(BaseModel):
     #: follow it.
     _legacy_aliases: bool = PrivateAttr(default=True)
 
-    #: The JSON object this model was read from, as received (see ``raw``).
+    #: The JSON object this model was read from, as received (see ``raw``),
+    #: or a ``_Received`` holding it with the answer it came in (see
+    #: ``http_status`` / ``headers``).
     _raw: Any = PrivateAttr(default=None)
-
-    #: The HTTP status and headers of the answer this result was read from
-    #: (see ``http_status`` / ``headers``); ``None`` when it was not.
-    _http_status: int | None = PrivateAttr(default=None)
-    _headers: Mapping[str, str] | None = PrivateAttr(default=None)
 
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> Self:
@@ -214,10 +311,7 @@ class _Lax(BaseModel):
                 raise obj.unreadable(exc) from exc
             raise
         if isinstance(obj, dict) and isinstance(model, _Lax):
-            _hand_out_raw(model, obj)
-            if isinstance(obj, _Body):
-                model._http_status = obj.http_status
-                model._headers = obj.headers
+            _hand_out_raw(model, obj, _Meta(obj.http_status, obj.headers) if isinstance(obj, _Body) else None)
         return model
 
     @property
@@ -227,19 +321,21 @@ class _Lax(BaseModel):
         ``ReviewStarted``; ``409`` for a ``ReviewStarted`` / ``CitecheckStarted``
         a 409 naming the job settled). ``None`` on a model nested in a result
         (``TaskStatus.result``, an ``AssessResponse.claims`` row, ...), on a
-        result the SDK builds (``BatchItemResult``), on a webhook's models and
-        on a model you validate yourself. Not part of ``model_dump()``.
-        Since 3.2."""
-        return self._http_status
+        result the SDK builds (``BatchItemResult``), on the items an ``iter()``
+        yields (each is nested in a page), on a webhook's models and on a
+        model you validate yourself. Not part of ``model_dump()``. Since 3.2."""
+        meta = _meta_of(self)
+        return meta.http_status if meta is not None and meta.top else None
 
     @property
-    def headers(self) -> Mapping[str, str] | None:
+    def headers(self) -> ResponseHeaders | None:
         """The headers of the answer this result was read from, as a
         read-only mapping whose lookups ignore case (the type errors carry as
         ``exc.headers``): ``result.headers["x-request-id"]``, or a receipt's
         ``Location`` and ``Retry-After``. ``None`` wherever ``http_status``
         is. Not part of ``model_dump()``. Since 3.2."""
-        return self._headers
+        meta = _meta_of(self)
+        return meta.headers if meta is not None and meta.top else None
 
     @property
     def raw(self) -> dict[str, Any] | None:
@@ -264,7 +360,8 @@ class _Lax(BaseModel):
         that is not a JSON object. ``None`` on a model built with keyword
         arguments (``Model(field=...)``): only ``model_validate`` (what the
         clients and ``parse_webhook`` use) reads a body. Since 3.2."""
-        return _json_copy(self._raw) if isinstance(self._raw, dict) else None
+        body = _body_of(self)
+        return _json_copy(body) if isinstance(body, dict) else None
 
     @classmethod
     def _as_sent(cls, data: Any) -> Any:
@@ -347,7 +444,10 @@ def _legacy_view(model: _M) -> _M:
     ``legacy_aliases`` a client has."""
     if getattr(model, "_legacy_aliases", True):
         return model
-    return type(model).model_validate(model.model_dump(exclude_unset=True))
+    try:
+        return type(model).model_validate(model.model_dump(exclude_unset=True))
+    except ValidationError as exc:
+        raise _unreadable_in(model, exc) from exc
 
 
 def _context(model: BaseModel) -> dict[str, Any] | None:
@@ -955,7 +1055,7 @@ class ExtractedClaims(_Lax):
         sent = _sent(self, "claims")
         return (
             [
-                _as_received(ExtractedClaim.model_validate(c, context=_context(self)), self, "claims", i)
+                _as_received(_read_block(self, ExtractedClaim, c, ("claims", i), _context(self)), self, "claims", i)
                 for i, c in enumerate(sent)
                 if isinstance(c, dict)
             ]
@@ -1103,7 +1203,7 @@ class AssessClaim(_Lax):
         sent = _sent(self, "failure")
         if not isinstance(sent, dict):
             return None
-        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
+        return _as_received(_read_block(self, FailureBlock, sent, ("failure",), _context(self)), self, "failure")
 
     @property
     def more_claims(self) -> list[str]:
@@ -1193,7 +1293,7 @@ class AssessResponse(_Lax):
         sent = _sent(self, "failure")
         if not isinstance(sent, dict):
             return None
-        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
+        return _as_received(_read_block(self, FailureBlock, sent, ("failure",), _context(self)), self, "failure")
 
 
 class TaskAccepted(_Lax):
@@ -1450,8 +1550,8 @@ class TaskStatus(_Lax):
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.
         if not self._legacy_aliases:
-            return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
-        return _as_received(FailureBlock.model_validate(_verification_failure(sent)), self, "failure")
+            return _as_received(_read_block(self, FailureBlock, sent, ("failure",), _context(self)), self, "failure")
+        return _as_received(_read_block(self, FailureBlock, _verification_failure(sent), ("failure",)), self, "failure")
 
 
 class BatchItemResult(_Lax):
