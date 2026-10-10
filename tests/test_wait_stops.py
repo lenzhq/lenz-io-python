@@ -10,9 +10,13 @@ HTTP request bounded by what is left of the deadline.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
 import httpx
 import pytest
 import respx
+from conftest import AnyClient, make_client, make_http
 
 from lenz_io import (
     Lenz,
@@ -23,16 +27,31 @@ from lenz_io import (
     LenzTimeoutError,
 )
 
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
+
 BASE = "https://lenz.io/api/v1"
 _DONE = {"status": "completed", "task_id": "t", "result": {"verification_id": "v1", "claim": "A."}}
 _RUNNING = {"status": "processing", "task_id": "t", "progress": {"step": "research"}}
 
 
 @pytest.fixture()
-def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    calls: list[float] = []
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: calls.append(s))
-    return calls
+def slept(any_client: AnyClient) -> list[float]:
+    return any_client.slept
 
 
 @pytest.mark.parametrize(
@@ -169,7 +188,7 @@ class TestEachPollIsBounded:
         assert len(slept) == 1
 
     def test_the_request_timeout_never_runs_past_the_deadline(self, slept: list[float]) -> None:
-        with Lenz(api_key="lenz_test", timeout=60.0) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=60.0) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t")
             poll.side_effect = [httpx.Response(200, json=_RUNNING), httpx.Response(200, json=_DONE)]
             client.wait("t", timeout=5)
@@ -179,7 +198,7 @@ class TestEachPollIsBounded:
     def test_a_zero_timeout_still_reads_once(self, slept: list[float]) -> None:
         # As in 2.x, ``timeout=0`` reads the status once (bounded by the
         # client timeout, there being no deadline left to bound it), then stops.
-        with Lenz(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
             with pytest.raises(LenzTimeoutError):
                 client.wait("t", timeout=0)
@@ -188,7 +207,7 @@ class TestEachPollIsBounded:
         assert slept == []
 
     def test_the_client_timeout_bounds_a_long_wait(self, slept: list[float]) -> None:
-        with Lenz(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=20.0) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_DONE)
             client.wait("t", timeout=300)
         assert poll.calls.last.request.extensions["timeout"]["read"] == 20.0
@@ -227,13 +246,10 @@ class TestJobWaits:
 
 
 @pytest.fixture()
-def clock(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    """A fake clock: ``time.sleep`` moves it, requests take no time unless a
-    test moves it."""
-    now = [0.0]
-    monkeypatch.setattr("lenz_io.client.time.monotonic", lambda: now[0])
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: now.__setitem__(0, now[0] + s))
-    return now
+def clock(any_client: AnyClient) -> list[float]:
+    """A fake clock: a sleep moves it, requests take no time unless a test
+    moves it."""
+    return any_client.install_clock([0.0])
 
 
 def _read_timeouts(route: respx.Route) -> list[float | None]:
@@ -242,7 +258,7 @@ def _read_timeouts(route: respx.Route) -> list[float | None]:
 
 class TestNoPollPastTheDeadline:
     def test_no_poll_starts_once_the_deadline_is_spent(self, clock: list[float]) -> None:
-        with Lenz(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
             with pytest.raises(LenzTimeoutError):
                 client.wait("t", timeout=5)
@@ -251,7 +267,7 @@ class TestNoPollPastTheDeadline:
         assert clock[0] == 5.0
 
     def test_a_smaller_client_timeout_bounds_every_poll(self, clock: list[float]) -> None:
-        with Lenz(api_key="lenz_test", timeout=2.5) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=2.5) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
             with pytest.raises(LenzTimeoutError):
                 client.wait("t", timeout=5)
@@ -300,7 +316,7 @@ class TestNoPollPastTheDeadline:
     )
     def test_job_waits_stop_at_the_deadline(self, clock: list[float], submit, path, body, call) -> None:
         accepted = {"review_id": "r1", "citecheck_id": "c1", "status": "queued"}
-        with Lenz(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=30.0) as client, respx.mock(base_url=BASE) as r:
             r.post(submit).respond(202, json=accepted)
             poll = r.get(path).respond(200, json=body)
             with pytest.raises(LenzTimeoutError):
@@ -318,7 +334,7 @@ class TestTheClientTimeoutSetting:
         [(None, 300.0), (4.0, 4.0), (httpx.Timeout(7.0), 7.0), (httpx.Timeout(10.0, read=6.0), 6.0)],
     )
     def test_wait(self, slept: list[float], timeout, expected) -> None:
-        with Lenz(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_DONE)
             client.wait("t", timeout=300)
         assert _read_timeouts(poll) == [pytest.approx(expected, abs=1.0)]
@@ -333,7 +349,7 @@ class TestTheClientTimeoutSetting:
             "citation_issues": [],
             "citation_failures": [],
         }
-        with Lenz(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=timeout) as client, respx.mock(base_url=BASE) as r:
             r.post("/review").respond(202, json={"review_id": "r1", "status": "queued"})
             r.get("/reviews/r1").respond(200, json=done_review)
             r.post("/citecheck").respond(202, json={"citecheck_id": "c1", "status": "queued"})
@@ -342,14 +358,14 @@ class TestTheClientTimeoutSetting:
             assert client.citecheck_and_wait("Draft.").status == "completed"
 
     def test_an_injected_http_client_keeps_its_own_timeout(self, slept: list[float]) -> None:
-        with httpx.Client(timeout=9.0) as http, Lenz(api_key="lenz_test", http_client=http) as client:
+        with make_http(timeout=9.0) as http, make_client(api_key="lenz_test", http_client=http) as client:
             with respx.mock(base_url=BASE) as r:
                 poll = r.get("/verify/status/t").respond(200, json=_DONE)
                 client.wait("t", timeout=300)
         assert _read_timeouts(poll) == [9.0]
 
     def test_an_injected_unbounded_http_client(self, slept: list[float]) -> None:
-        with httpx.Client(timeout=None) as http, Lenz(api_key="lenz_test", http_client=http) as client:
+        with make_http(timeout=None) as http, make_client(api_key="lenz_test", http_client=http) as client:
             with respx.mock(base_url=BASE) as r:
                 poll = r.get("/verify/status/t").respond(200, json=_DONE)
                 client.wait("t", timeout=300)
@@ -365,7 +381,7 @@ class TestTheDeadlineBoundsEveryItem:
             clock[0] += 100.0  # every poll is slow
             return httpx.Response(200, json=_RUNNING)
 
-        with Lenz(api_key="lenz_test", timeout=None) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=None) as client, respx.mock(base_url=BASE) as r:
             r.post("/verify/batch").respond(
                 200,
                 json={"batch_id": "b", "items": [{"task_id": t, "claim": "A."} for t in ("a", "b", "c")]},
@@ -390,7 +406,7 @@ class TestTheDeadlineBoundsEveryItem:
 class TestEveryTimeoutPhaseIsKept:
     def test_each_phase_capped_by_what_is_left(self, clock: list[float]) -> None:
         configured = httpx.Timeout(30.0, connect=1.0, pool=0.25, write=2.0)
-        with Lenz(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_RUNNING)
             with pytest.raises(LenzTimeoutError):
                 client.wait("t", timeout=5)
@@ -400,7 +416,7 @@ class TestEveryTimeoutPhaseIsKept:
 
     def test_an_unbounded_phase_is_bounded_by_the_deadline(self, clock: list[float]) -> None:
         with (
-            Lenz(api_key="lenz_test", timeout=httpx.Timeout(None, connect=1.0)) as client,
+            make_client(api_key="lenz_test", timeout=httpx.Timeout(None, connect=1.0)) as client,
             respx.mock(base_url=BASE) as r,
         ):
             poll = r.get("/verify/status/t").respond(200, json=_DONE)
@@ -414,7 +430,7 @@ class TestEveryTimeoutPhaseIsKept:
 
     def test_a_zero_timeout_poll_keeps_the_client_phases(self, clock: list[float]) -> None:
         configured = httpx.Timeout(30.0, connect=1.0, pool=0.25, write=2.0)
-        with Lenz(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
+        with make_client(api_key="lenz_test", timeout=configured) as client, respx.mock(base_url=BASE) as r:
             poll = r.get("/verify/status/t").respond(200, json=_DONE)
             client.wait("t", timeout=0)
         assert poll.calls.last.request.extensions["timeout"] == {

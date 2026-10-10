@@ -9,12 +9,18 @@ from typing import Any
 import httpx
 import pytest
 import respx
+from conftest import make_client, make_http
 from parity_observe import load
 
 import lenz_io
 from lenz_io import Lenz, LenzApiVersionError, LenzError
 from lenz_io.client import API_VERSION, DEFAULT_BASE_URL
 from lenz_io.webhooks import parse_webhook
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
 
 KEY = "lenz_" + "0" * 32
 OLD = "2026-05-13"
@@ -27,8 +33,8 @@ def _seen_versions(headers_on_client: dict[str, str] | None) -> list[str | None]
         seen.append(request.headers.get("X-Lenz-API-Version"))
         return httpx.Response(200, json={"api": "ok"})
 
-    http = httpx.Client(transport=httpx.MockTransport(handler), headers=headers_on_client or {})
-    with Lenz(api_key=KEY, http_client=http) as c:
+    http = make_http(transport=httpx.MockTransport(handler), headers=headers_on_client or {})
+    with make_client(api_key=KEY, http_client=http) as c:
         c._request("GET", "/")
         c._request("POST", "/verify", json={"claim": "x"}, headers={"X-Lenz-API-Version": OLD})
     return seen
@@ -43,7 +49,7 @@ def test_a_custom_http_client_with_a_stale_default_is_overridden() -> None:
 
 
 def test_the_default_client_sends_it() -> None:
-    with Lenz(api_key=KEY, max_retries=0) as c, respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+    with make_client(api_key=KEY, max_retries=0) as c, respx.mock(base_url=DEFAULT_BASE_URL) as mock:
         route = mock.get("/me/usage").respond(200, json={})
         c._request("GET", "/me/usage")
     assert route.calls.last.request.headers["X-Lenz-API-Version"] == "2026-10-11"
@@ -54,7 +60,7 @@ def test_the_default_client_sends_it() -> None:
 
 @pytest.fixture
 def client() -> Any:
-    c = Lenz(api_key=KEY, max_retries=0)
+    c = make_client(api_key=KEY, max_retries=0)
     yield c
     c.close()
 

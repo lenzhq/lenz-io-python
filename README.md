@@ -37,6 +37,10 @@ else:
     print(row.verdict, row.confidence)  # e.g. False high  (about 15-20 s, 1 credit)
 ```
 
+Using asyncio? `AsyncLenz` has the same methods, awaited
+([more](#using-lenz-from-async-code)): `async with AsyncLenz() as client:
+row = (await client.assess(claim=...)).claims[0]`.
+
 From there: [the whole ladder](#quickstart--the-canonical-integration) on an
 LLM answer, [a review](#review-a-draft) of a draft, or [the command-line
 tool](#command-line-tool).
@@ -1164,61 +1168,122 @@ batch = client.verify_batch(
 
 ## Using Lenz from async code
 
-The client is synchronous. Lenz calls take a while (`assess` about 15 s, a deep check about
-90 s, a review a few minutes), so calling one directly inside an `async def` blocks the event
-loop for that long: in a FastAPI or aiohttp server, every other request on that worker
-waits. Run the call in a worker thread instead:
+`AsyncLenz` (since 3.1) is the client for asyncio: the same methods, parameters, defaults,
+results and errors as `Lenz`, awaited. It never blocks the event loop.
+
+```python
+from lenz_io import AsyncLenz
+
+async with AsyncLenz() as client:  # reads LENZ_API_KEY
+    row = (await client.assess(claim="The Great Wall of China is visible from space.")).claims[0]
+    review = await client.review_and_wait(draft)
+    async for item in client.verifications.iter():
+        print(item.verification_id, item.verdict)
+```
+
+In a web app, create one `AsyncLenz` in the app's lifespan and close it on shutdown. FastAPI
+does not cancel a handler when the caller goes away, so a long wait behind a request runs as a
+task that you cancel on `request.is_disconnected()`; with `cancel_on_abort=True` that also
+stops the job on the server
+([full example](https://github.com/lenzhq/lenz-io-python/blob/main/examples/core/fastapi_async.py)):
 
 ```python
 import asyncio
-from lenz_io import Lenz
-
-client = Lenz()  # one client for the whole app; it is safe to share across threads
-
-
-async def quick_check(claim: str) -> str:
-    out = await asyncio.to_thread(client.assess, claim=claim)
-    return out.claims[0].verdict
-```
-
-The same applies to every method, and above all to the ones that wait (`verify_and_wait`,
-`verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`, `wait`): never call them
-directly inside an async handler. In FastAPI, a plain `def` route runs in the thread pool
-already:
-
-```python
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
-from lenz_io import Lenz
+from fastapi import FastAPI, Request, Response
+from lenz_io import AsyncLenz
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    app.state.lenz = Lenz()
-    yield
-    app.state.lenz.close()
+    async with AsyncLenz() as client:
+        app.state.lenz = client
+        yield
 
 
 app = FastAPI(lifespan=lifespan)
 
 
-@app.post("/check")
-def check(claim: str) -> dict[str, object]:  # `def`, not `async def`: FastAPI runs it in a thread
-    v = app.state.lenz.verify_and_wait(claim)
-    return {"verdict": v.verdict, "score": v.lenz_score}
+@app.post("/review", response_model=None)
+async def review(text: str, request: Request) -> dict[str, object] | Response:
+    client: AsyncLenz = request.app.state.lenz
+    wait = asyncio.ensure_future(client.review_and_wait(text, cancel_on_abort=True))
+    try:
+        while not wait.done():
+            await asyncio.wait({wait}, timeout=1)
+            if not wait.done() and await request.is_disconnected():
+                wait.cancel()  # cancel_on_abort: the review is asked to stop on the server too
+                await asyncio.gather(wait, return_exceptions=True)
+                return Response(status_code=499)
+    finally:
+        wait.cancel()  # no-op once it is done; stops it if this handler is cancelled
+    result = wait.result()
+    return {"outcome": result.outcome, "issues": [issue.claim for issue in result.issues]}
 ```
 
-Cancelling the asyncio task that awaits `asyncio.to_thread(...)` does not stop the call: the
-thread runs on until the call returns. Bound each request with `timeout=` (see
-[Per-call options](#per-call-options)), and stop paid work on the server with `cancel()`,
-`cancel_review()` or `cancel_citecheck()` (see [Stopping a run](#stopping-a-run)). A native
-async client is planned.
+To check many claims at once, send them in one call (`assess(claims=[...])`,
+`verify_batch_and_wait`), or fan out with `asyncio.gather` behind a semaphore. A 429 is
+retried by the SDK; the semaphore keeps the burst (and the connection pool, 100 connections
+by default) in bounds:
 
-For a long check behind a web request, `verify(..., webhook_url=...)` returns at once and
-Lenz posts the result to you when it is done (see [Webhooks](#webhooks)). That ties up no
-thread for the wait. To check many claims at once, send them in one call
-(`assess(claims=[...])`, `verify_batch`) rather than one thread per claim.
+```python
+limit = asyncio.Semaphore(8)
+
+
+async def one(claim: str) -> str:
+    async with limit:
+        return (await client.assess(claim=claim)).claims[0].verdict
+
+
+verdicts = await asyncio.gather(*(one(c) for c in claims))
+```
+
+`verify_batch_and_wait` polls its items one after another, as the sync client does; to poll
+items in parallel, `asyncio.gather(*(client.wait(item) for item in batch.items))`.
+
+**Cancellation.** Cancelling the task that awaits a call (a timeout, a caller that left)
+raises `CancelledError` and closes the request in flight. It only stops waiting: the
+verification, review or citation check keeps running on the server and is charged as usual if
+it completes. Unless the wait was called with `cancel_on_abort=True` (`wait`,
+`verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`): then
+the SDK also sends the matching `cancel` / `cancel_review` / `cancel_citecheck` (one request
+per job, at most 5 seconds) and then re-raises the `CancelledError` unchanged. Call
+`aclose()` (or leave `async with`) before the event loop ends, so pending cancels go out: a
+cancel cut off by the loop closing is logged at WARNING and never sent. A cancelled
+verification is not charged; a cancelled review or citation check refunds what it had not
+delivered. A cancel that fails, or that loses the race to the end of the job (which is then
+charged as usual), is logged at WARNING with the job id. `asyncio.timeout()` and
+`asyncio.wait_for()` around a wait are cancellations; the wait's own `timeout=` running out is
+not, and never stops the job. `wait(task_id, cancel_on_abort=True)` knows the id up front: a
+cancellation already requested when it starts cancels the run without polling. A task
+cancelled before it ever runs never enters the call, so nothing is sent.
+
+A submit cancelled after its request left may still have started the job, and a fresh call
+would start (and charge) a second one. If you may cancel a submit, pin `idempotency_key=` and
+resend with the same key to get the same job back (within 24 hours); to keep the `task_id`
+across a cancelled wait, call `verify()` and then `wait()`.
+
+What differs from `Lenz`:
+
+- the methods are coroutines (`iter()` returns an async iterator, `with_options()` stays a
+  plain method); close with `await client.aclose()` or `async with` (no `close()`, no `with`);
+- `http_client=` takes an `httpx.AsyncClient`;
+- `on_progress` / `on_update` may be `async def` (awaited before the next poll);
+- the waits take `cancel_on_abort` (above);
+- the User-Agent ends `; async)`.
+
+One `AsyncLenz` belongs to one event loop (like the `httpx.AsyncClient` inside it): create it
+where it is used, never at import time. asyncio only; trio is not supported. In tests, pass
+`http_client=httpx.AsyncClient(transport=httpx.MockTransport(handler))` to answer every
+request yourself.
+
+For a long check you do not need to wait for, `verify(..., webhook_url=...)` returns at once
+and Lenz posts the result to you when it is done (see [Webhooks](#webhooks)).
+
+On lenz-io 3.0 and earlier (no `AsyncLenz`), run the sync client in a worker thread
+(`await asyncio.to_thread(client.assess, claim=claim)`); cancelling such a task does not stop
+the call.
 
 ## Configuration
 
@@ -1230,6 +1295,8 @@ Lenz(
     max_retries=3,
 )
 ```
+
+`AsyncLenz(...)` takes the same arguments, with an `httpx.AsyncClient` as `http_client=`.
 
 Environment variables:
 
@@ -1327,7 +1394,9 @@ from.
 - Python 3.10, 3.11, 3.12
 - Works in CI/CD (no interactive prompts, no global state)
 - Mockable for tests: every HTTP call goes through `httpx`; use `respx` or
-  inject your own `httpx.Client` via `Lenz(..., http_client=...)`
+  inject your own `httpx.Client` via `Lenz(..., http_client=...)` (an
+  `httpx.AsyncClient` for `AsyncLenz`)
+- `AsyncLenz`: asyncio (not trio)
 
 ## Contributing
 

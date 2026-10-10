@@ -10,8 +10,9 @@ from typing import Any
 import httpx
 import pytest
 import respx
+from conftest import AnyClient
 
-from lenz_io import Lenz, LenzRateLimitError, LenzWebhookSignatureError, verify_signature
+from lenz_io import LenzRateLimitError, LenzWebhookSignatureError, verify_signature
 from lenz_io.client import DEFAULT_BASE_URL
 from lenz_io.errors import map_response_to_error
 from lenz_io.webhooks import _sign
@@ -42,52 +43,51 @@ _TOO_LONG = [1e10, 2_147_484, (5, 1e10, 5, 5)]
 
 
 @pytest.mark.parametrize("bad", _TOO_LONG)
-def test_a_timeout_past_the_limit_is_refused_everywhere(bad: Any) -> None:
+def test_a_timeout_past_the_limit_is_refused_everywhere(bad: Any, any_client: AnyClient) -> None:
+    make = any_client.make
     for call in (
-        lambda: Lenz(api_key=KEY, timeout=bad),
-        lambda: Lenz(api_key=KEY).with_options(timeout=bad),
-        lambda: Lenz(api_key=KEY).usage(timeout=bad),
-        lambda: Lenz(api_key=KEY).extract(text="Doc.", timeout=bad),
+        lambda: make(api_key=KEY, timeout=bad),
+        lambda: make(api_key=KEY).with_options(timeout=bad),
+        lambda: make(api_key=KEY).usage(timeout=bad),
+        lambda: make(api_key=KEY).extract(text="Doc.", timeout=bad),
     ):
         with pytest.raises(ValueError, match="2,147,483"):
             call()
 
 
-def test_an_httpx_timeout_past_the_limit_is_refused() -> None:
+def test_an_httpx_timeout_past_the_limit_is_refused(any_client: AnyClient) -> None:
     with pytest.raises(ValueError, match="2,147,483"):
-        Lenz(api_key=KEY, timeout=httpx.Timeout(5, read=1e10))
+        any_client.make(api_key=KEY, timeout=httpx.Timeout(5, read=1e10))
 
 
-def test_the_limit_itself_is_accepted() -> None:
-    Lenz(api_key=KEY, timeout=2_147_483).with_options(timeout=(1, 2_147_483, None, 1)).close()
+def test_the_limit_itself_is_accepted(any_client: AnyClient) -> None:
+    any_client.make(api_key=KEY, timeout=2_147_483).with_options(timeout=(1, 2_147_483, None, 1)).close()
 
 
 # ── 6. an infinite stated wait ─────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("header", ["1e999", "inf", "-inf", "-1e999", "nan"])
-def test_a_non_finite_retry_after_is_no_stated_wait(header: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    slept: list[float] = []
-    monkeypatch.setattr("lenz_io.client.time.sleep", slept.append)
+def test_a_non_finite_retry_after_is_no_stated_wait(header: str, any_client: AnyClient) -> None:
+    slept = any_client.slept
     with respx.mock(base_url=DEFAULT_BASE_URL) as r:
         route = r.get("/me/usage").respond(
             429, json={"code": "rate_limited", "detail": "slow"}, headers={"Retry-After": header}
         )
         with pytest.raises(LenzRateLimitError):
-            Lenz(api_key=KEY).usage()
+            any_client.make(api_key=KEY).usage()
     # As in Node: no stated wait, so the normal backoff ladder runs.
     assert route.call_count == 4
     assert slept == [1.0, 2.0, 4.0]
 
 
-def test_a_huge_finite_retry_after_is_clamped_and_raises_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+def test_a_huge_finite_retry_after_is_clamped_and_raises_at_once(any_client: AnyClient) -> None:
     with respx.mock(base_url=DEFAULT_BASE_URL) as r:
         route = r.get("/me/usage").respond(
             429, json={"code": "rate_limited", "detail": "slow"}, headers={"Retry-After": "1e300"}
         )
         with pytest.raises(LenzRateLimitError):
-            Lenz(api_key=KEY).usage()
+            any_client.make(api_key=KEY).usage()
     assert route.call_count == 1
 
 
@@ -199,12 +199,11 @@ def test_the_cancelled_webhooks_verification_carries_it_too() -> None:
     assert event.verification is not None and _block(event.verification.failure) == _CANCELLED_BLOCK
 
 
-def test_a_batch_items_cancelled_status_detail_carries_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+def test_a_batch_items_cancelled_status_detail_carries_it(any_client: AnyClient) -> None:
     with respx.mock(base_url=DEFAULT_BASE_URL) as r:
         r.post("/verify/batch").respond(200, json={"batch_id": "b", "items": [{"task_id": "t1", "claim": "A."}]})
         r.get("/verify/status/t1").respond(200, json={"status": "cancelled", "task_id": "t1"})
-        [item] = Lenz(api_key=KEY).verify_batch_and_wait(claims=[{"claim": "A."}])
+        [item] = any_client.make(api_key=KEY).verify_batch_and_wait(claims=[{"claim": "A."}])
     assert item.status == "failed" and item.status_detail is not None
     assert _block(item.status_detail.failure) == _CANCELLED_BLOCK
 

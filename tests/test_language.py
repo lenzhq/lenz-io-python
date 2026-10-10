@@ -22,9 +22,29 @@ the field. We mock 422s to confirm typed errors surface cleanly.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from typing import Any
 
 import pytest
 import respx
+from conftest import make_client
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 DEFAULT_BASE = "https://lenz.io/api/v1"
 

@@ -1,262 +1,201 @@
-"""Public Lenz client — the ergonomic top-level surface.
+"""``AsyncLenz``: the Lenz client for asyncio.
 
-Multi-language SDK convention:
-* Request methods (verify, assess, extract, ask, …) take ``language=''``
-  as their default. Sending an empty string means "do NOT include the
-  field in the request body" — preserves byte-identical behavior for
-  existing English callers. Set ``language='es'`` (or any of the 12
-  supported codes) to receive prose fields in that language. ``assess``,
-  ``verify`` (and ``verify_and_wait``) and ``ask.send`` also take
-  ``language='auto'``: the answer comes back in the language of the submitted
-  text. The other methods take the codes only.
-* Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
-  expose ``language`` populated by the server. Verdict / domain / status
-  enum values stay English regardless of language; only free-form prose
-  (atomic_claim, executive_summary, audit text) follows the request.
-* Mixing the two (e.g. ``language='en'`` on a request) would send an
-  extra ``"language": "en"`` key on every English call — breaks the
-  byte-identical English path. The empty-default-then-omit convention
-  exists precisely to avoid that.
+The same methods, parameters, defaults and results as :class:`lenz_io.Lenz`,
+as coroutines::
 
-Shape (six calls: the four-call ladder, ``review`` and ``citecheck``, plus
-the supporting reads):
+    from lenz_io import AsyncLenz
 
-    from lenz_io import Lenz
-    client = Lenz(api_key="lenz_...")
+    async with AsyncLenz() as client:  # reads LENZ_API_KEY
+        row = (await client.assess(claim="...")).claims[0]
+        v = await client.verify_and_wait(claim="...", depth="low")
+        async for item in client.verifications.iter():
+            ...
 
-    # Marquee verbs — top-level (the four-call ladder)
-    out = client.extract(text="...")                       # find claims in a document
-    r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
-    r = client.assess(claim="...")                         # ...or a single claim, ~15s
-    v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
-    reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
-    review = client.review_and_wait(text=draft)            # the whole ladder on a draft, 2-4 min
+Both clients drive one shared core (``_core.py``, ``_polling.py``): every
+request body, header, retry, poll pacing and deadline is decided there once,
+so the two send the same requests and wait the same way. This module only
+sends requests (``httpx.AsyncClient``), sleeps (``asyncio.sleep``) and awaits
+the callbacks.
 
-    # Review without waiting
-    started = client.review(draft)                         # returns a review_id
-    review = client.get_review(started.review_id)          # ReviewFull; view="issues" → ReviewIssues
+The differences from ``Lenz``:
 
-    # Other verify-family verbs
-    v = client.verify(claim="...")          # async submit; returns task_id
-    result = client.wait(v)                  # block on a task_id / TaskAccepted
-    batch = client.verify_batch(claims=[...])
-    results = client.verify_batch_and_wait(claims=[...])   # submit + poll all
-    status = client.get_status(task_id)      # single non-blocking poll
-    client.select(task_id, claims=["The earth is flat."])  # pick one or more
+* ``async def`` methods, ``AsyncIterator`` from ``iter()``, ``await
+  client.aclose()`` and ``async with`` (there is no ``close()`` and no sync
+  ``with``);
+* ``http_client=`` takes an ``httpx.AsyncClient``;
+* ``on_progress`` / ``on_update`` may return an awaitable, which is awaited
+  before the poll continues;
+* the waits take ``cancel_on_abort`` (default ``False``): when the task
+  awaiting a wait is cancelled after the job exists, also stop the job on the
+  server;
+* the User-Agent says ``async`` in its comment
+  (``lenz-io-python/<v> (httpx <v>; async)``), and argument errors of the
+  constructor name ``AsyncLenz()``.
 
-    # Resource namespaces
-    client.verifications.list()
-    client.verifications.get(id) / delete(id)
-    client.ask.history(id) / send(id, message=...) / reset(id)
-    client.library.list()
-    client.usage()
+One ``AsyncLenz`` belongs to one event loop, like the ``httpx.AsyncClient``
+inside it: create it where it is used (in an app's lifespan, not at import
+time). asyncio only (trio is not supported).
 
-Naming: ``text`` is a document, ``claim`` is a claim. ``extract`` takes
-``text``; ``assess``, ``verify``, batch items and ``select`` take ``claim`` /
-``claims``. The older spellings (``text=`` on assess / verify / batch items,
-``texts=`` on select) are accepted as aliases and are not going away.
-
-Design decisions:
-
-* Single persistent ``httpx.Client`` per ``Lenz`` instance for HTTP
-  keep-alive (saves ~80ms TLS handshake per call on warm pool). Use as
-  a context manager for clean shutdown, or call ``close()`` explicitly.
-* Exponential backoff on transient errors (5xx, 429). 3 retry attempts
-  by default. ``Retry-After`` honored on 429s.
-* ``Idempotency-Key`` auto-generated per call for ``verify``,
-  ``verify_and_wait``, ``verify_batch``, ``verify_batch_and_wait``,
-  ``select``, ``assess``, ``extract`` and ``ask.send`` (random, reused
-  across that call's own retries) so a network drop doesn't run the request
-  twice. Customer can override with explicit ``idempotency_key=...`` or opt
-  out with ``idempotency=False``. (2.x sent a key on ``verify_batch``,
-  ``verify_batch_and_wait`` and ``ask.send`` only when you passed one.)
-* ``X-Lenz-API-Version`` header pinned per SDK release (``API_VERSION``), so
-  the server answers every release in the response shape it was built for.
-* ``X-Request-ID`` is captured from every response onto the typed error
-  for support escalation.
+Cancellation: a cancelled await raises ``CancelledError`` and the request in
+flight is closed. The job on the server keeps running (and is charged if it
+completes) unless the wait was called with ``cancel_on_abort=True``: then the
+``CancelledError`` is re-raised after the server cancel was sent (at most 5
+seconds). Call ``aclose()`` (or leave ``async with``) before the event loop
+ends, so pending cancels go out. A submit cancelled after its request left may
+still have started the job: pin ``idempotency_key=`` and resend with it to
+get the same job back.
 """
 
 from __future__ import annotations
 
+import asyncio
 import builtins
 import copy
+import inspect
 import logging
 import time
-import uuid  # noqa: F401  (tests patch ``lenz_io.client.uuid.uuid4``)
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager  # noqa: F401  (importable from here before the core existed)
-from dataclasses import dataclass  # noqa: F401  (likewise)
-from typing import Any, Final, Literal, TypedDict, TypeVar, overload  # noqa: F401  (likewise)
-from urllib.parse import quote  # noqa: F401  (likewise)
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
+from typing import Any, Literal, TypeVar, overload
 
 import httpx
 from typing_extensions import Self
 
-# Every name below lived in this module before the shared core existed and
-# stays importable from it (callers, the CLI and the tests import them here).
 from ._core import (
-    _CANCELLED_FAILURE as _CANCELLED_FAILURE,
-    _HEADER_NAME as _HEADER_NAME,
-    _HEADER_VALUE as _HEADER_VALUE,
-    _NO_OPTIONS as _NO_OPTIONS,
-    _RESERVED_HEADERS as _RESERVED_HEADERS,
-    _TERMINAL_STATUSES as _TERMINAL_STATUSES,
-    _VERSION_HEADER as _VERSION_HEADER,
-    API_VERSION as API_VERSION,
-    ASSESS_LIST_TIMEOUT as ASSESS_LIST_TIMEOUT,
-    ASSESS_TIMEOUT as ASSESS_TIMEOUT,
-    DEFAULT_BASE_URL as DEFAULT_BASE_URL,
-    DEFAULT_MAX_RETRIES as DEFAULT_MAX_RETRIES,
-    DEFAULT_TIMEOUT as DEFAULT_TIMEOUT,
-    EXTRACT_TIMEOUT as EXTRACT_TIMEOUT,
-    MAX_TIMEOUT_SECONDS as MAX_TIMEOUT_SECONDS,
-    NOT_GIVEN as NOT_GIVEN,
-    POLL_BACKOFF as POLL_BACKOFF,
-    POLL_BACKOFF_CAP as POLL_BACKOFF_CAP,
-    POLL_HINT_MAX as POLL_HINT_MAX,
-    POLL_HINT_MIN as POLL_HINT_MIN,
-    RETRY_BACKOFF as RETRY_BACKOFF,
-    REVIEW_POLL_DEFAULT as REVIEW_POLL_DEFAULT,
-    REVIEW_POLL_FLOOR as REVIEW_POLL_FLOOR,
-    WAIT_TIMEOUT as WAIT_TIMEOUT,
-    CitationPair as CitationPair,
-    NotGiven as NotGiven,
-    VerifyBatchItem as VerifyBatchItem,
-    _aborts_on_long_stated_wait as _aborts_on_long_stated_wait,
-    _after_response as _after_response,
-    _after_transport_error as _after_transport_error,
-    _already_deleted as _already_deleted,
-    _ask_payload as _ask_payload,
-    _assess_payload as _assess_payload,
-    _batch_item_body as _batch_item_body,
-    _batch_payload as _batch_payload,
-    _batch_results as _batch_results,
-    _blank_webhook_url as _blank_webhook_url,
-    _body_error_code as _body_error_code,
-    _call_key as _call_key,
-    _call_options as _call_options,
-    _CallOptions as _CallOptions,
-    _carrying_key as _carrying_key,
-    _check_assess_forms as _check_assess_forms,
-    _check_headers as _check_headers,
-    _check_library_iter_sort as _check_library_iter_sort,
-    _check_retries as _check_retries,
-    _check_served_version as _check_served_version,
-    _check_timeout as _check_timeout,
-    _citecheck_failed as _citecheck_failed,
-    _citecheck_job as _citecheck_job,
-    _citecheck_payload as _citecheck_payload,
-    _citecheck_started_by_conflict as _citecheck_started_by_conflict,
-    _client_settings as _client_settings,
-    _ClientOptions as _ClientOptions,
-    _default_headers as _default_headers,
-    _exhausted as _exhausted,
-    _extract_payload as _extract_payload,
-    _extracted as _extracted,
-    _failure_of as _failure_of,
-    _first_page as _first_page,
-    _given as _given,
-    _is_cancel_body as _is_cancel_body,
-    _is_citecheck_body as _is_citecheck_body,
-    _is_full_review_body as _is_full_review_body,
-    _job_key as _job_key,
-    _json_or_none as _json_or_none,
-    _key_header as _key_header,
-    _library_params as _library_params,
-    _merge_headers as _merge_headers,
-    _names_the_job as _names_the_job,
-    _poll_hint as _poll_hint,
+    _NO_OPTIONS,
+    ASSESS_TIMEOUT,
+    DEFAULT_MAX_RETRIES,
+    DEFAULT_TIMEOUT,
+    EXTRACT_TIMEOUT,
+    NOT_GIVEN,
+    WAIT_TIMEOUT,
+    CitationPair,
+    NotGiven,
+    VerifyBatchItem,
+    _after_response,
+    _after_transport_error,
+    _already_deleted,
+    _ask_payload,
+    _assess_payload,
+    _async_user_agent,
+    _batch_payload,
+    _batch_results,
+    _call_key,
+    _call_options,
+    _CallOptions,
+    _carrying_key,
+    _check_assess_forms,
+    _check_library_iter_sort,
+    _citecheck_failed,
+    _citecheck_job,
+    _citecheck_payload,
+    _citecheck_started_by_conflict,
+    _client_settings,
+    _ClientOptions,
+    _default_headers,
+    _exhausted,
+    _extract_payload,
+    _extracted,
+    _first_page,
+    _given,
+    _is_cancel_body,
+    _is_citecheck_body,
+    _is_full_review_body,
+    _job_key,
+    _key_header,
+    _library_params,
+    _names_the_job,
+    _page_step,
     _poll_timeout as _core_poll_timeout,
-    _prepare as _prepare,
-    _request_settings as _request_settings,
-    _resolve as _resolve,
-    _retry_sleep as _retry_sleep,
-    _review_failed as _review_failed,
-    _review_job as _review_job,
-    _review_params as _review_params,
-    _review_payload as _review_payload,
-    _review_started_by_conflict as _review_started_by_conflict,
-    _seconds as _seconds,
-    _segment as _segment,
-    _select_texts as _select_texts,
-    _snapshot as _snapshot,
-    _stated_retry_after as _stated_retry_after,
-    _status_path as _status_path,
-    _unexpected_answer as _unexpected_answer,
-    _user_agent as _user_agent,
-    _verification_from_terminal as _verification_from_terminal,
-    _verify_payload as _verify_payload,
-    _wait_result as _wait_result,
-    _wait_task_id as _wait_task_id,
-    _walk as _walk,
-    _with_options_layer as _with_options_layer,
+    _prepare,
+    _request_settings,
+    _review_failed,
+    _review_job,
+    _review_params,
+    _review_payload,
+    _review_started_by_conflict,
+    _segment,
+    _select_texts,
+    _status_path,
+    _unexpected_answer,
+    _verification_from_terminal,
+    _verify_payload,
+    _wait_result,
+    _wait_task_id,
+    _with_options_layer,
 )
 from ._polling import JobPoll, TaskPoll, _progress_copy
-from .errors import (
-    MAX_RETRY_AFTER_SLEEP as MAX_RETRY_AFTER_SLEEP,
-    NO_RETRY_429_CODES as NO_RETRY_429_CODES,
-    UPSTREAM_503_CODES as UPSTREAM_503_CODES,
-    CitecheckFailed as CitecheckFailed,
-    CitecheckTimeout as CitecheckTimeout,
-    LenzAPIError as LenzAPIError,
-    LenzApiVersionError as LenzApiVersionError,
-    LenzAuthError as LenzAuthError,
-    LenzConnectionError as LenzConnectionError,
-    LenzError as LenzError,
-    LenzGoneError as LenzGoneError,
-    LenzNeedsInputError as LenzNeedsInputError,
-    LenzNotFoundError as LenzNotFoundError,
-    LenzPipelineError as LenzPipelineError,
-    LenzRateLimitError as LenzRateLimitError,
-    LenzRequestTimeoutError as LenzRequestTimeoutError,
-    LenzTimeoutError as LenzTimeoutError,
-    ReviewFailed as ReviewFailed,
-    ReviewTimeout as ReviewTimeout,
-    map_response_to_error as map_response_to_error,
-)
+from .errors import LenzError
 from .models import (
-    AskHistory as AskHistory,
-    AskReply as AskReply,
-    AssessResponse as AssessResponse,
-    BatchAccepted as BatchAccepted,
-    BatchItemResult as BatchItemResult,
-    CancelResult as CancelResult,
-    Certificate as Certificate,
-    Citecheck as Citecheck,
-    CitecheckStarted as CitecheckStarted,
-    ExtractedClaims as ExtractedClaims,
-    FailureBlock as FailureBlock,
-    LibraryItem as LibraryItem,
-    LibraryList as LibraryList,
-    Progress as Progress,
-    RelatedVerifications as RelatedVerifications,
-    ReviewFull as ReviewFull,
-    ReviewIssues as ReviewIssues,
-    ReviewStarted as ReviewStarted,
-    TaskAccepted as TaskAccepted,
-    TaskStatus as TaskStatus,
-    Usage as Usage,
-    Verification as Verification,
-    VerificationList as VerificationList,
-    VerificationListItem as VerificationListItem,
+    AskHistory,
+    AskReply,
+    AssessResponse,
+    BatchAccepted,
+    BatchItemResult,
+    CancelResult,
+    Certificate,
+    Citecheck,
+    CitecheckStarted,
+    ExtractedClaims,
+    LibraryItem,
+    LibraryList,
+    Progress,
+    RelatedVerifications,
+    ReviewFull,
+    ReviewIssues,
+    ReviewStarted,
+    TaskAccepted,
+    TaskStatus,
+    Usage,
+    Verification,
+    VerificationList,
+    VerificationListItem,
 )
 
 logger = logging.getLogger("lenz_io")
 
-#: ``Lenz`` or a subclass, for ``with_options``' return type.
-_Client = TypeVar("_Client", bound="Lenz")
+#: The sleep and the clock of every wait and retry. Tests replace these two
+#: (never the global ``time.monotonic``, which the event loop runs on).
+_sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
+_monotonic: Callable[[], float] = time.monotonic
+
+#: ``cancel_on_abort``: the server cancels of one aborted wait (one request
+#: per job, sent together, no retry) take at most this many seconds of wall
+#: clock before they are given up and the ``CancelledError`` is re-raised.
+_ABORT_CANCEL_BUDGET = 5.0
+
+#: ``AsyncLenz`` or a subclass, for ``with_options``' return type.
+_Client = TypeVar("_Client", bound="AsyncLenz")
 
 #: An async job the poll loop waits on: a review or a citation check.
 _Job = TypeVar("_Job", ReviewFull, Citecheck)
 
 
-class _VerificationsNamespace:
+async def _invoke(callback: Callable[..., Any], *args: Any) -> None:
+    """Call ``callback`` and await its result when that is awaitable."""
+    result = callback(*args)
+    if inspect.isawaitable(result):
+        await result
+
+
+async def _awalk(fetch: Callable[[int], Awaitable[VerificationList | LibraryList]], page: int) -> AsyncIterator[Any]:
+    """The items of ``await fetch(page)``, ``await fetch(page + 1)``, ...
+    (``_page_step`` decides where to stop). An async generator: no page is
+    fetched before its first item is asked for."""
+    next_page: int | None = page
+    while next_page is not None:
+        page = next_page
+        items, next_page = _page_step(await fetch(page), page)
+        for item in items:
+            yield item
+
+
+class _AsyncVerificationsNamespace:
     """``client.verifications.{list,get,delete,related}``."""
 
-    def __init__(self, parent: Lenz) -> None:
+    def __init__(self, parent: AsyncLenz) -> None:
         self._p = parent
 
-    def list(
+    async def list(
         self,
         *,
         page: int = 1,
@@ -267,10 +206,10 @@ class _VerificationsNamespace:
         """One page of your verifications, newest first.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.list()")
-        body = self._p._request("GET", "/verifications", params={"page": page}, options=options)
+        body = await self._p._request("GET", "/verifications", params={"page": page}, options=options)
         return VerificationList.model_validate(body)
 
     def iter(
@@ -280,7 +219,7 @@ class _VerificationsNamespace:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
-    ) -> Iterator[VerificationListItem]:
+    ) -> AsyncIterator[VerificationListItem]:
         """Every verification on your account, newest first, page after page
         from ``page`` (default 1).
 
@@ -290,20 +229,20 @@ class _VerificationsNamespace:
         server answers another page than the one asked for. ``page`` must be
         1 or more (``ValueError``)::
 
-            for item in client.verifications.iter():
+            async for item in client.verifications.iter():
                 print(item.verification_id, item.verdict)
 
         Since 3.0. ``list(page=...)`` reads one page.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``)
         apply to every page request, and a bad one raises here, before the
-        first page: see :meth:`Lenz.with_options`.
+        first page: see :meth:`AsyncLenz.with_options`.
         """
         # Checked and snapshotted now: every page is read with these.
         options = _call_options(timeout, max_retries, extra_headers, "verifications.iter()")
-        return _walk(lambda n: self.list(page=n, **_given(options)), _first_page(page))
+        return _awalk(lambda n: self.list(page=n, **_given(options)), _first_page(page))
 
-    def get(
+    async def get(
         self,
         verification_id: str,
         *,
@@ -321,16 +260,16 @@ class _VerificationsNamespace:
         completed run returns its verification. A run with no result yet
         raises :class:`LenzVerificationNotReadyError` while it is running or
         waiting for input, and :class:`LenzPipelineError` when it failed. To
-        wait for a run, use ``client.wait(task_id)``.
+        wait for a run, use ``await client.wait(task_id)``.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get()")
         vid = _segment(verification_id, "verifications.get() needs a verification_id.")
-        body = self._p._request(
+        body = await self._p._request(
             "GET",
             f"/verifications/{vid}",
             auth_required=False,
@@ -339,7 +278,7 @@ class _VerificationsNamespace:
         )
         return Verification.model_validate(body)
 
-    def get_certificate(
+    async def get_certificate(
         self,
         verification_id: str,
         *,
@@ -365,14 +304,14 @@ class _VerificationsNamespace:
         certificate is still served — it is the record of what was warranted.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get_certificate()")
         vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
-        body = self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
+        body = await self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
         return Certificate.model_validate(body)
 
-    def delete(
+    async def delete(
         self,
         verification_id: str,
         *,
@@ -383,16 +322,16 @@ class _VerificationsNamespace:
         """Idempotent. Retry-on-404 returns True ("already deleted").
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.delete()")
         vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
         # Idempotent DELETE: a 404 (the row already gone, e.g. the reply to an
         # earlier delete was lost) is a success (``_already_deleted``).
-        self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
+        await self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
         return True
 
-    def related(
+    async def related(
         self,
         verification_id: str,
         *,
@@ -414,11 +353,11 @@ class _VerificationsNamespace:
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
         vid = _segment(verification_id, "verifications.related() needs a verification_id.")
-        body = self._p._request(
+        body = await self._p._request(
             "GET",
             f"/verifications/{vid}/related",
             params={"limit": limit},
@@ -429,17 +368,17 @@ class _VerificationsNamespace:
         return RelatedVerifications.model_validate(body)
 
 
-class _AskNamespace:
+class _AsyncAskNamespace:
     """``client.ask.{history,send,reset}``.
 
     The endpoint moved from ``/verifications/{id}/follow-up`` to a flat
     ``/ask/{id}`` server-side; this namespace tracks the new URL shape.
     """
 
-    def __init__(self, parent: Lenz) -> None:
+    def __init__(self, parent: AsyncLenz) -> None:
         self._p = parent
 
-    def history(
+    async def history(
         self,
         verification_id: str,
         *,
@@ -452,14 +391,14 @@ class _AskNamespace:
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
         vid = _segment(verification_id, "ask.history() needs a verification_id.")
-        body = self._p._request("GET", f"/ask/{vid}", options=options)
+        body = await self._p._request("GET", f"/ask/{vid}", options=options)
         return AskHistory.model_validate(body)
 
-    def send(
+    async def send(
         self,
         verification_id: str,
         *,
@@ -498,12 +437,12 @@ class _AskNamespace:
         previous one wrote, so a key derived from the text would replay a
         stale answer. A new call is a new key, so it is asked again.
 
-        Paid — see ``client.usage()``.
+        Paid — see ``await client.usage()``.
 
         Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
         vid = _segment(verification_id, "ask.send() needs a verification_id.")
@@ -511,7 +450,7 @@ class _AskNamespace:
         key = _call_key(idempotency_key, idempotency)
         headers = _key_header(key)
         with _carrying_key(key, unreadable=True):
-            body = self._p._request(
+            body = await self._p._request(
                 "POST",
                 f"/ask/{vid}",
                 json=payload,
@@ -520,7 +459,7 @@ class _AskNamespace:
             )
             return AskReply.model_validate(body)
 
-    def reset(
+    async def reset(
         self,
         verification_id: str,
         *,
@@ -531,28 +470,28 @@ class _AskNamespace:
         """Clear the follow-up conversation on a verification.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
         vid = _segment(verification_id, "ask.reset() needs a verification_id.")
-        self._p._request("DELETE", f"/ask/{vid}", options=options)
+        await self._p._request("DELETE", f"/ask/{vid}", options=options)
         return True
 
 
-class _LibraryNamespace:
-    """``client.library.list()``. Works without an API key.
+class _AsyncLibraryNamespace:
+    """``await client.library.list()``. Works without an API key.
 
     The single-item ``library.get()`` was removed when the server merged
     ``GET /api/v1/library/{id}`` into ``GET /api/v1/verifications/{id}``.
-    Use ``client.verifications.get(id)`` for single-item lookups — it
+    Use ``await client.verifications.get(id)`` for single-item lookups — it
     works on a key-less client too (the server accepts an optional
     Bearer; anon callers see public + non-hidden claims).
     """
 
-    def __init__(self, parent: Lenz) -> None:
+    def __init__(self, parent: AsyncLenz) -> None:
         self._p = parent
 
-    def list(
+    async def list(
         self,
         *,
         page: int = 1,
@@ -575,13 +514,13 @@ class _LibraryNamespace:
         ``most_untrue`` / ``relevance``.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "library.list()")
         params = _library_params(
             page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
         )
-        body = self._p._request(
+        body = await self._p._request(
             "GET",
             "/library",
             params=params,
@@ -604,7 +543,7 @@ class _LibraryNamespace:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
-    ) -> Iterator[LibraryItem]:
+    ) -> AsyncIterator[LibraryItem]:
         """Every item of the public catalog that matches the filters (the
         ones ``list`` takes), page after page from ``page``. Works without an
         API key.
@@ -619,13 +558,13 @@ class _LibraryNamespace:
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``)
         apply to every page request, and a bad one raises here, before the
-        first page: see :meth:`Lenz.with_options`.
+        first page: see :meth:`AsyncLenz.with_options`.
         """
         # Checked and snapshotted now: every page is read with these.
         options = _call_options(timeout, max_retries, extra_headers, "library.iter()")
         _check_library_iter_sort(sort)
         page = _first_page(page)
-        return _walk(
+        return _awalk(
             lambda n: self.list(
                 page=n,
                 sort=sort,
@@ -640,7 +579,7 @@ class _LibraryNamespace:
         )
 
 
-class Lenz:
+class AsyncLenz:
     """Top-level client.
 
     The constructor accepts ``api_key=None`` so library endpoints work
@@ -649,6 +588,12 @@ class Lenz:
     ``LenzAuthError`` with a link to ``/api-credentials``.
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed.
+
+    The asyncio client: every method of :class:`lenz_io.Lenz`, with the same parameters, defaults
+    and results, as a coroutine. Use it as ``async with AsyncLenz() as client:`` or close it with
+    ``await client.aclose()``. One ``AsyncLenz`` belongs to one event loop, like the
+    ``httpx.AsyncClient`` inside it: create it where it is used (in an app's lifespan, not at import
+    time).
     """
 
     def __init__(
@@ -658,38 +603,48 @@ class Lenz:
         base_url: str | None = None,
         timeout: float | httpx.Timeout | None = DEFAULT_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
-        http_client: httpx.Client | None = None,
+        http_client: httpx.AsyncClient | None = None,
         user_agent: str | None = None,
     ) -> None:
         self._api_key, self._base_url, timeout, max_retries = _client_settings(
-            api_key, base_url, timeout, max_retries, "Lenz()"
+            api_key, base_url, timeout, max_retries, "AsyncLenz()"
         )
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
         self._options = _ClientOptions()
+        # ``cancel_on_abort`` cleanups still running: held so they are not
+        # collected, awaited by ``aclose``; shared with ``with_options`` copies.
+        self._aborts: set[asyncio.Task[None]] = set()
+        # The cleanups that started running (and so log for themselves).
+        self._aborts_started: set[asyncio.Task[Any]] = set()
         # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
         # the SDK keeps ownership of every other default header — so a new
         # default header can't be silently dropped by a hand-copied client.
-        self._client = http_client or httpx.Client(
-            timeout=httpx.Timeout(timeout), headers=_default_headers(user_agent or _user_agent())
+        self._client = http_client or httpx.AsyncClient(
+            timeout=httpx.Timeout(timeout), headers=_default_headers(user_agent or _async_user_agent())
         )
 
         # Resource namespaces (Stripe pattern for CRUD on past verifications,
         # follow-up conversations, and the public library)
-        self.verifications = _VerificationsNamespace(self)
-        self.ask = _AskNamespace(self)
-        self.library = _LibraryNamespace(self)
+        self.verifications = _AsyncVerificationsNamespace(self)
+        self.ask = _AsyncAskNamespace(self)
+        self.library = _AsyncLibraryNamespace(self)
 
     # ── lifecycle ──
 
-    def close(self) -> None:
+    async def aclose(self) -> None:
         """Close the connection pool, if this client created it. A client
         given ``http_client=`` leaves it open (it is yours), and a copy made
         by :meth:`with_options` never closes the pool it shares: close the
-        client you made the copies from."""
+        client you made the copies from. ``cancel_on_abort`` cancels still on
+        their way are given up to 5 seconds to finish first."""
+        if self._aborts:
+            # ``cancel_on_abort`` cancels still on their way: give them their
+            # budget before the pool they use is closed.
+            await asyncio.wait(set(self._aborts), timeout=_ABORT_CANCEL_BUDGET)
         if self._owns_client:
-            self._client.close()
+            await self._client.aclose()
 
     def with_options(
         self: _Client,
@@ -699,66 +654,58 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> _Client:
         """A copy of this client with other request options, sharing its
-        connection pool, key and base URL. Cheap: make one per request if you
-        like. The client it was made from is not changed::
+        connection pool, key and base URL. A plain method (not a coroutine):
+        cheap, make one per request if you like. The client it was made from
+        is not changed::
 
             fast = client.with_options(timeout=10, max_retries=0)
-            fast.usage()
+            await fast.usage()
 
             traced = client.with_options(extra_headers={"X-Trace-Id": trace_id})
-            traced.assess(claim="...")
+            await traced.assess(claim="...")
 
         Every method also takes the same three options as keywords, for one
-        call: ``client.assess(claim="...", timeout=20)``.
+        call: ``await client.assess(claim="...", timeout=20)``. The options
+        and their rules are those of :meth:`lenz_io.Lenz.with_options`:
 
         * ``timeout``: one HTTP attempt, in seconds (a number greater than 0)
-          or an ``httpx.Timeout``. httpx applies it per phase (connect, read,
-          write, pool) and the read limit to each chunk, so it is an
-          inactivity limit, not a bound on the whole call, and retries each get
-          their own. Here ``None`` means no timeout, as on ``Lenz(timeout=None)``;
-          on a single call ``timeout=None`` keeps the client's (pass
-          ``httpx.Timeout(None)`` for no timeout on one call). ``extract`` and
-          ``assess`` take at least 150 s / 100 s when the timeout is inherited
-          from a copy or the client, as they always did; a timeout passed to the
-          call itself is used as given, even below that (a shorter one can time
-          out a call the server is still running: retry it with the same
-          ``idempotency_key`` to get the answer).
+          or an ``httpx.Timeout``, applied by httpx per phase, so not a bound
+          on the whole call. Here ``None`` means no timeout, as on
+          ``AsyncLenz(timeout=None)``; on a single call ``timeout=None`` keeps
+          the client's. ``extract`` and ``assess`` take at least 150 s / 100 s
+          when the timeout is inherited from a copy or the client.
         * ``max_retries``: how often a request that failed in a way worth
-          retrying (a 5xx, a 429, a dropped connection) is sent again: a whole
-          number, 0 or more.
+          retrying (a 5xx, a 429, a dropped connection) is sent again.
         * ``extra_headers``: headers added to every request, merged over the
-          copy's own by name, case-insensitively. ``None`` as a value removes a
-          header a copy added. The SDK's own headers (``X-Lenz-API-Version``,
-          ``Idempotency-Key``, ``Authorization``, ``Content-Type``,
-          ``Content-Length``, ``Host``, ``Transfer-Encoding``) are refused.
+          copy's own by name, case-insensitively; ``None`` as a value removes
+          a header a copy added. The SDK's own headers are refused.
 
         Per option, a call's keyword wins over the copy, and the copy over the
         client. A bad value raises ``ValueError`` here, before any request.
-        The wait helpers keep their own ``timeout`` (how long to wait); the
-        timeout of each of their requests comes from the copy or the client.
+        The wait helpers keep their own ``timeout`` (how long to wait).
 
-        The copy shares the pool: ``close()`` and ``with`` on a copy do
-        nothing, closing the original closes the pool for every copy, and a
-        copy is as safe to share across threads as the client.
+        The copy shares the pool and the event loop: ``aclose()`` and ``async
+        with`` on a copy close nothing, and closing the original closes the
+        pool for every copy.
         """
         layer = _with_options_layer(self._options, timeout, max_retries, extra_headers)
         clone = copy.copy(self)
         clone._owns_client = False
         clone._options = layer
-        clone.verifications = _VerificationsNamespace(clone)
-        clone.ask = _AskNamespace(clone)
-        clone.library = _LibraryNamespace(clone)
+        clone.verifications = _AsyncVerificationsNamespace(clone)
+        clone.ask = _AsyncAskNamespace(clone)
+        clone.library = _AsyncLibraryNamespace(clone)
         return clone
 
-    def __enter__(self) -> Self:
+    async def __aenter__(self) -> Self:
         return self
 
-    def __exit__(self, *exc_info: Any) -> None:
-        self.close()
+    async def __aexit__(self, *exc_info: Any) -> None:
+        await self.aclose()
 
     # ── marquee verbs (top-level shortcuts) ──
 
-    def verify(
+    async def verify(
         self,
         claim: str = "",
         *,
@@ -809,10 +756,10 @@ class Lenz:
         your key's default webhook URL.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         _call_options(timeout, max_retries, extra_headers, "verify()")
-        return self._verify_submit(
+        return await self._verify_submit(
             claim=claim,
             text=text,
             source_url=source_url,
@@ -826,7 +773,7 @@ class Lenz:
             extra_headers=extra_headers,
         )
 
-    def verify_batch(
+    async def verify_batch(
         self,
         *,
         claims: Sequence[VerifyBatchItem | dict[str, Any]],
@@ -865,10 +812,10 @@ class Lenz:
         when you passed one.)
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         _call_options(timeout, max_retries, extra_headers, "verify_batch()")
-        return self._verify_batch(
+        return await self._verify_batch(
             claims=claims,
             webhook_url=webhook_url,
             language=language,
@@ -880,7 +827,7 @@ class Lenz:
             extra_headers=extra_headers,
         )
 
-    def extract(
+    async def extract(
         self,
         *,
         text: str,
@@ -929,7 +876,7 @@ class Lenz:
         request, used as given. Otherwise ``extract`` uses
         ``EXTRACT_TIMEOUT`` (150s), or your client timeout when you configured
         a longer one: a long input can take more than a minute to extract.
-        ``max_retries`` and ``extra_headers``: see :meth:`Lenz.with_options`.
+        ``max_retries`` and ``extra_headers``: see :meth:`AsyncLenz.with_options`.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
         SDK's own retry after a timeout or network drop replays the first
@@ -939,7 +886,7 @@ class Lenz:
         ``idempotency=False`` to send none. Never derived from the text.
         """
         _call_options(timeout, max_retries, extra_headers, "extract()")
-        return self._extract(
+        return await self._extract(
             text=text,
             language=language,
             focus=focus,
@@ -950,7 +897,7 @@ class Lenz:
             extra_headers=extra_headers,
         )
 
-    def assess(
+    async def assess(
         self,
         claim: str = "",
         *,
@@ -976,10 +923,10 @@ class Lenz:
           back per item, in the order sent. This is the step after
           ``extract`` in the ladder::
 
-              out = client.extract(text=llm_output)
+              out = await client.extract(text=llm_output)
               claims = [c.claim for c in out.claims]
               quick = [row for i in range(0, len(claims), 20)  # 20 a call
-                       for row in client.assess(claims=claims[i : i + 20]).claims]
+                       for row in (await client.assess(claims=claims[i : i + 20])).claims]
 
           The two forms are mutually exclusive — passing ``claims`` together
           with a non-empty ``claim`` / ``text`` raises ``ValueError``.
@@ -1029,7 +976,7 @@ class Lenz:
         ``ASSESS_TIMEOUT`` (100s), or your client timeout when you configured a
         longer one — the server runs framing and a 3-model panel inside one
         request, and a long text can use the server's whole 90s budget.
-        ``max_retries`` and ``extra_headers``: see :meth:`Lenz.with_options`.
+        ``max_retries`` and ``extra_headers``: see :meth:`AsyncLenz.with_options`.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
         retry after a network drop replays the first response instead of
@@ -1043,7 +990,7 @@ class Lenz:
         replay the first answer for 24h — including for a claim whose verdict
         the server would otherwise refresh.
 
-        Paid — see ``client.usage()``. 1 credit per claim assessed; a
+        Paid — see ``await client.usage()``. 1 credit per claim assessed; a
         single-string input read as N claims (up to 20) costs N; ``Error``
         rows are free.
         """
@@ -1051,7 +998,7 @@ class Lenz:
         _check_assess_forms(claim, text, claims)
         key = _call_key(idempotency_key, idempotency)
         if claims is not None:
-            return self._assess(
+            return await self._assess(
                 claims=claims,
                 language=language,
                 suggest_rewrite=suggest_rewrite,
@@ -1060,7 +1007,7 @@ class Lenz:
                 max_retries=max_retries,
                 extra_headers=extra_headers,
             )
-        return self._assess(
+        return await self._assess(
             text=claim or text,
             language=language,
             suggest_rewrite=suggest_rewrite,
@@ -1070,7 +1017,7 @@ class Lenz:
             extra_headers=extra_headers,
         )
 
-    def select(
+    async def select(
         self,
         task_id: str,
         *,
@@ -1102,11 +1049,11 @@ class Lenz:
         ``idempotency=False`` to send none.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         _call_options(timeout, max_retries, extra_headers, "select()")
         chosen = _select_texts(claims, texts)
-        return self._select(
+        return await self._select(
             task_id,
             texts=chosen,
             idempotency_key=_call_key(idempotency_key, idempotency),
@@ -1115,7 +1062,7 @@ class Lenz:
             extra_headers=extra_headers,
         )
 
-    def get_status(
+    async def get_status(
         self,
         task_id: str,
         *,
@@ -1130,11 +1077,11 @@ class Lenz:
         that is still running never answers 410.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
-        return self._get_status(task_id, timeout=timeout, max_retries=max_retries, extra_headers=extra_headers)
+        return await self._get_status(task_id, timeout=timeout, max_retries=max_retries, extra_headers=extra_headers)
 
-    def cancel(
+    async def cancel(
         self,
         task_id: str,
         *,
@@ -1160,7 +1107,7 @@ class Lenz:
           already resolved answers ``False`` with ``"needs_input"``: cancel
           the task ids ``select`` returned.
 
-        ``client.wait(task_id)`` and ``get_status`` then see ``cancelled``;
+        ``await client.wait(task_id)`` and ``get_status`` then see ``cancelled``;
         ``wait`` raises :class:`LenzPipelineError` with
         ``failure_class == "cancelled"``.
 
@@ -1173,21 +1120,21 @@ class Lenz:
         send twice.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
 
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel()")
         tid = _segment(task_id, "cancel() needs a task_id.")
         path = f"/verify/{tid}/cancel"
-        body = self._request("POST", path, options=options)
+        body = await self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
             raise _unexpected_answer("POST", path)
         return CancelResult.model_validate(body)
 
     # ── headline ergonomic ──
 
-    def verify_and_wait(
+    async def verify_and_wait(
         self,
         claim: str = "",
         *,
@@ -1200,21 +1147,22 @@ class Lenz:
         timeout: float = WAIT_TIMEOUT,
         idempotency: bool = True,
         idempotency_key: str | None = None,
-        on_progress: Callable[[str, Progress], None] | None = None,
+        on_progress: Callable[[str, Progress], Awaitable[object] | None] | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> Verification:
         """Submit + poll until the pipeline terminates.
 
         Returns the completed ``Verification`` on success. Raises:
           * ``LenzNeedsInputError`` if the pipeline pauses (multi_claim).
             Resolve via
-            ``client.select(task_id, ...)`` then re-call this helper on
+            ``await client.select(task_id, ...)`` then re-call this helper on
             the new task.
           * ``LenzPipelineError`` on terminal failure.
           * ``LenzTimeoutError`` if ``timeout`` elapses; the task may
             still finish server-side — recover via
-            ``client.get_status(task_id)``.
+            ``await client.get_status(task_id)``.
 
         ``idempotency=True`` (default) auto-generates a key per call so a
         network drop after submit doesn't spawn a duplicate verification
@@ -1224,7 +1172,7 @@ class Lenz:
         is still going — the only way to see the stage during the ~90s wait,
         since this helper does the polling for you::
 
-            client.verify_and_wait(
+            await client.verify_and_wait(
                 claim="...",
                 on_progress=lambda tid, p: print(f"{p.step} {p.index}/{p.total}"),
             )
@@ -1237,15 +1185,29 @@ class Lenz:
 
         ``max_retries``: the submit's retries (each poll is one request and a
         failed poll is read again on the next round). ``extra_headers``: added
-        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        to the submit and to every poll. See :meth:`AsyncLenz.with_options`; the
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
+
+        ``on_progress`` may also be a coroutine function, or return an awaitable: it is awaited
+        before the poll continues.
+
+        ``cancel_on_abort`` (default ``False``, async only): when the task awaiting this call is
+        cancelled after the verification exists, also stop it on the server: one ``cancel(task_id)``
+        request, no retry, all within 5 seconds, and then the ``CancelledError`` is re-raised
+        unchanged. A cancelled verification is not charged. A cancel that fails, or that loses the
+        race to the end of the verification (it then answers with the finished result, charged as
+        usual), is logged at WARNING with the task id. A cancellation from outside counts (a client
+        that disconnected, ``asyncio.timeout`` or ``asyncio.wait_for``, which may then overrun by up
+        to those 5 seconds); this call's own ``timeout`` running out does not, and never stops the
+        verification. Without the flag a cancelled await only stops waiting: the verification keeps
+        running and is charged as usual.
         """
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
-            accepted = self._verify_submit(
+            accepted = await self._verify_submit(
                 claim=claim,
                 text=text,
                 source_url=source_url,
@@ -1261,23 +1223,30 @@ class Lenz:
             # Only the headers reach the polls, and only when there are some, so
             # a subclass overriding ``wait`` with the 2.21 signature is still
             # called the way 2.21 called it.
-            return self.wait(
-                accepted, timeout=timeout, on_progress=on_progress, **_given(_CallOptions(headers=options.headers))
+            # ``cancel_on_abort`` too, only when asked for.
+            abort: dict[str, Any] = {"cancel_on_abort": True} if cancel_on_abort else {}
+            return await self.wait(
+                accepted,
+                timeout=timeout,
+                on_progress=on_progress,
+                **_given(_CallOptions(headers=options.headers)),
+                **abort,
             )
 
-    def wait(
+    async def wait(
         self,
         task: str | TaskAccepted,
         *,
         timeout: float = WAIT_TIMEOUT,
-        on_progress: Callable[[str, Progress], None] | None = None,
+        on_progress: Callable[[str, Progress], Awaitable[object] | None] | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> Verification:
-        """Block until an already-submitted task terminates, then return its
+        """Wait until an already-submitted task terminates, then return its
         ``Verification``.
 
         ``task`` is a ``task_id`` string OR the ``TaskAccepted`` returned by
-        ``verify`` / ``select`` — so ``client.wait(client.verify(claim=...))``
+        ``verify`` / ``select`` — so ``await client.wait(await client.verify(claim=...))``
         reads naturally. Raises ``ValueError`` for an empty id,
         ``LenzNeedsInputError`` / ``LenzPipelineError`` on terminal
         non-success (a verification cancelled elsewhere, such as the
@@ -1294,18 +1263,38 @@ class Lenz:
         is polled again on the next round. (Since 3.0; 2.x polled through
         every error until the timeout.)
 
-        ``extra_headers``: added to every poll (see :meth:`Lenz.with_options`).
+        ``extra_headers``: added to every poll (see :meth:`AsyncLenz.with_options`).
         Each poll is one request, so there is no ``max_retries`` here; its
         timeout comes from the copy or the client, capped by what is left of
         the wait.
+
+        ``on_progress`` may also be a coroutine function, or return an awaitable: it is awaited
+        before the poll continues.
+
+        ``cancel_on_abort`` (default ``False``, async only): when the task awaiting this call is
+        cancelled after the verification exists, also stop it on the server: one ``cancel(task_id)``
+        request, no retry, all within 5 seconds, and then the ``CancelledError`` is re-raised
+        unchanged. A cancelled verification is not charged. A cancel that fails, or that loses the
+        race to the end of the verification (it then answers with the finished result, charged as
+        usual), is logged at WARNING with the task id. A cancellation from outside counts (a client
+        that disconnected, ``asyncio.timeout`` or ``asyncio.wait_for``, which may then overrun by up
+        to those 5 seconds); this call's own ``timeout`` running out does not, and never stops the
+        verification. Without the flag a cancelled await only stops waiting: the verification keeps
+        running and is charged as usual.
+
+        The id is known up front: with ``cancel_on_abort``, a cancellation already requested when
+        the wait starts cancels the run without polling it. A task cancelled before it ever runs
+        never enters the call, so nothing is sent.
         """
         options = _call_options(None, None, extra_headers, "wait()")
         task_id = _wait_task_id(task)
-        terminal, timed_out, stopped = self._poll_to_terminal([task_id], timeout, on_progress, options=options)
+        terminal, timed_out, stopped = await self._poll_to_terminal(
+            [task_id], timeout, on_progress, options=options, cancel_on_abort=cancel_on_abort
+        )
         status = _wait_result(task_id, timeout, terminal, timed_out, stopped)
         return self._verification_from_terminal(status, task_id)
 
-    def verify_batch_and_wait(
+    async def verify_batch_and_wait(
         self,
         *,
         claims: Sequence[VerifyBatchItem | dict[str, Any]],
@@ -1315,10 +1304,11 @@ class Lenz:
         depth: str = "",
         idempotency_key: str | None = None,
         timeout: float = WAIT_TIMEOUT,
-        on_progress: Callable[[str, Progress], None] | None = None,
+        on_progress: Callable[[str, Progress], Awaitable[object] | None] | None = None,
         idempotency: bool = True,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> list[BatchItemResult]:
         """Submit a batch and poll every item to a terminal state.
 
@@ -1343,15 +1333,29 @@ class Lenz:
 
         ``max_retries``: the submit's retries (each poll is one request and a
         failed poll is read again on the next round). ``extra_headers``: added
-        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        to the submit and to every poll. See :meth:`AsyncLenz.with_options`; the
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
+
+        ``on_progress`` may also be a coroutine function, or return an awaitable: it is awaited
+        before the poll continues.
+
+        ``cancel_on_abort`` (default ``False``, async only): when the task awaiting this call is
+        cancelled after the batch was accepted, also stop it on the server: one ``cancel(task_id)``
+        request per item not yet finished, sent together, no retry, all within 5 seconds, and then
+        the ``CancelledError`` is re-raised unchanged. A cancelled verification is not charged. A
+        cancel that fails, or that loses the race to the end of the verification (it then answers
+        with the finished result, charged as usual), is logged at WARNING with the task id. A
+        cancellation from outside counts (a client that disconnected, ``asyncio.timeout`` or
+        ``asyncio.wait_for``, which may then overrun by up to those 5 seconds); this call's own
+        ``timeout`` running out does not, and never stops the verification. Without the flag a
+        cancelled await only stops waiting: the verification keeps running and is charged as usual.
         """
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "verify_batch_and_wait()")
         key = _call_key(idempotency_key, idempotency)
         with _carrying_key(key):
-            accepted = self._verify_batch(
+            accepted = await self._verify_batch(
                 claims=claims,
                 webhook_url=webhook_url,
                 language=language,
@@ -1362,15 +1366,19 @@ class Lenz:
                 extra_headers=dict(options.headers),
             )
             ids = [it.task_id for it in accepted.items if it.task_id]
-            terminal, timed_out, stopped = self._poll_to_terminal(
-                ids, timeout, on_progress, options=_CallOptions(headers=options.headers)
+            terminal, timed_out, stopped = await self._poll_to_terminal(
+                ids,
+                timeout,
+                on_progress,
+                options=_CallOptions(headers=options.headers),
+                cancel_on_abort=cancel_on_abort,
             )
 
         return _batch_results(accepted, terminal, timed_out, stopped)
 
     # ── /review: the whole recipe in one call ──
 
-    def review(
+    async def review(
         self,
         text: str,
         *,
@@ -1442,7 +1450,7 @@ class Lenz:
         review.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "review()")
         payload = _review_payload(
@@ -1461,7 +1469,7 @@ class Lenz:
         headers = {"Idempotency-Key": _job_key(idempotency_key)}
         # A 409 naming the review a resend started settles the call
         # (``_review_started_by_conflict``).
-        body = self._recovering(
+        body = await self._recovering(
             _review_started_by_conflict,
             "POST",
             "/review",
@@ -1476,7 +1484,7 @@ class Lenz:
             return ReviewStarted.model_validate(body)
 
     @overload
-    def get_review(
+    async def get_review(
         self,
         review_id: str,
         *,
@@ -1486,7 +1494,7 @@ class Lenz:
     ) -> ReviewFull: ...
 
     @overload
-    def get_review(
+    async def get_review(
         self,
         review_id: str,
         *,
@@ -1497,7 +1505,7 @@ class Lenz:
     ) -> ReviewFull: ...
 
     @overload
-    def get_review(
+    async def get_review(
         self,
         review_id: str,
         *,
@@ -1507,7 +1515,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> ReviewIssues: ...
 
-    def get_review(
+    async def get_review(
         self,
         review_id: str,
         *,
@@ -1524,16 +1532,18 @@ class Lenz:
         period has removed the review.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_review()")
         rid = _segment(review_id, "get_review() needs a review_id.")
         params = _review_params(view)
         if params is not None:
-            return ReviewIssues.model_validate(self._request("GET", f"/reviews/{rid}", params=params, options=options))
-        return ReviewFull.model_validate(self._request("GET", f"/reviews/{rid}", options=options))
+            return ReviewIssues.model_validate(
+                await self._request("GET", f"/reviews/{rid}", params=params, options=options)
+            )
+        return ReviewFull.model_validate(await self._request("GET", f"/reviews/{rid}", options=options))
 
-    def cancel_review(
+    async def cancel_review(
         self,
         review_id: str,
         *,
@@ -1555,24 +1565,24 @@ class Lenz:
         retention period has removed it.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
 
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_review()")
         rid = _segment(review_id, "cancel_review() needs a review_id.")
         path = f"/reviews/{rid}/cancel"
-        body = self._request("POST", path, options=options)
+        body = await self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
             raise _unexpected_answer("POST", path)
         return ReviewFull.model_validate(body)
 
-    def review_and_wait(
+    async def review_and_wait(
         self,
         text: str,
         *,
         timeout: float = 600.0,
-        on_update: Callable[[ReviewFull], None] | None = None,
+        on_update: Callable[[ReviewFull], Awaitable[object] | None] | None = None,
         verdicts: list[str] | None = None,
         confidence: list[str] | None = None,
         max_assessments: int | None = None,
@@ -1586,6 +1596,7 @@ class Lenz:
         idempotency_key: str | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> ReviewFull:
         """Start a review (``review(text, ...)``, which documents every option
         but ``timeout`` and ``on_update``) and poll it until it ends.
@@ -1605,16 +1616,31 @@ class Lenz:
 
         ``max_retries``: the submit's retries (each poll is one request and a
         failed poll is read again on the next round). ``extra_headers``: added
-        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        to the submit and to every poll. See :meth:`AsyncLenz.with_options`; the
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
+
+        ``on_update`` may also be a coroutine function, or return an awaitable: it is awaited before
+        the poll continues.
+
+        ``cancel_on_abort`` (default ``False``, async only): when the task awaiting this call is
+        cancelled after the review exists, also stop it on the server: one
+        ``cancel_review(review_id)`` request, no retry, all within 5 seconds, and then the
+        ``CancelledError`` is re-raised unchanged. A cancelled review refunds what it had not
+        delivered; what it delivered is charged. A cancel that fails, or that loses the race to the
+        end of the review (it then answers with the finished result, charged as usual), is logged at
+        WARNING with the review id. A cancellation from outside counts (a client that disconnected,
+        ``asyncio.timeout`` or ``asyncio.wait_for``, which may then overrun by up to those 5
+        seconds); this call's own ``timeout`` running out does not, and never stops the review.
+        Without the flag a cancelled await only stops waiting: the review keeps running and is
+        charged as usual.
         """
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
         key = _job_key(idempotency_key)
         with _carrying_key(key):
-            started = self.review(
+            started = await self.review(
                 text,
                 verdicts=verdicts,
                 confidence=confidence,
@@ -1631,13 +1657,17 @@ class Lenz:
                 **_given(options),
             )
             logger.info("Submitted review: %s", started.review_id)
-            return self._wait_review(
-                started.review_id, timeout=timeout, on_update=on_update, extra_headers=dict(options.headers)
+            return await self._wait_review(
+                started.review_id,
+                timeout=timeout,
+                on_update=on_update,
+                extra_headers=dict(options.headers),
+                cancel_on_abort=cancel_on_abort,
             )
 
     # ── /citecheck: the citation check on its own ──
 
-    def citecheck(
+    async def citecheck(
         self,
         text: str | None = None,
         *,
@@ -1675,7 +1705,7 @@ class Lenz:
         same key within 24 hours returns the same check.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "citecheck()")
         payload = _citecheck_payload(
@@ -1684,7 +1714,7 @@ class Lenz:
         headers = {"Idempotency-Key": _job_key(idempotency_key)}
         # A 409 naming the check a resend started settles the call
         # (``_citecheck_started_by_conflict``).
-        body = self._recovering(
+        body = await self._recovering(
             _citecheck_started_by_conflict,
             "POST",
             "/citecheck",
@@ -1698,7 +1728,7 @@ class Lenz:
         with _carrying_key(headers["Idempotency-Key"], unreadable=True):
             return CitecheckStarted.model_validate(body)
 
-    def get_citecheck(
+    async def get_citecheck(
         self,
         citecheck_id: str,
         *,
@@ -1710,13 +1740,13 @@ class Lenz:
         the account's retention period has removed it.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_citecheck()")
         cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
-        return Citecheck.model_validate(self._request("GET", f"/citechecks/{cid}", options=options))
+        return Citecheck.model_validate(await self._request("GET", f"/citechecks/{cid}", options=options))
 
-    def cancel_citecheck(
+    async def cancel_citecheck(
         self,
         citecheck_id: str,
         *,
@@ -1738,24 +1768,24 @@ class Lenz:
         the account's retention period has removed it.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
 
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_citecheck()")
         cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.")
         path = f"/citechecks/{cid}/cancel"
-        body = self._request("POST", path, options=options)
+        body = await self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
             raise _unexpected_answer("POST", path)
         return Citecheck.model_validate(body)
 
-    def citecheck_and_wait(
+    async def citecheck_and_wait(
         self,
         text: str | None = None,
         *,
         timeout: float = 600.0,
-        on_update: Callable[[Citecheck], None] | None = None,
+        on_update: Callable[[Citecheck], Awaitable[object] | None] | None = None,
         pairs: list[CitationPair] | None = None,
         max_citations: int | None = None,
         language: str = "",
@@ -1763,6 +1793,7 @@ class Lenz:
         idempotency_key: str | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> Citecheck:
         """Start a citation check (``citecheck(text, ...)``, which documents
         every option but ``timeout`` and ``on_update``) and poll it until
@@ -1779,16 +1810,31 @@ class Lenz:
 
         ``max_retries``: the submit's retries (each poll is one request and a
         failed poll is read again on the next round). ``extra_headers``: added
-        to the submit and to every poll. See :meth:`Lenz.with_options`; the
+        to the submit and to every poll. See :meth:`AsyncLenz.with_options`; the
         timeout of each request comes from the copy or the client, since
         ``timeout`` here is how long to wait.
+
+        ``on_update`` may also be a coroutine function, or return an awaitable: it is awaited before
+        the poll continues.
+
+        ``cancel_on_abort`` (default ``False``, async only): when the task awaiting this call is
+        cancelled after the citation check exists, also stop it on the server: one
+        ``cancel_citecheck(citecheck_id)`` request, no retry, all within 5 seconds, and then the
+        ``CancelledError`` is re-raised unchanged. A cancelled citation check refunds what it had
+        not delivered; what it delivered is charged. A cancel that fails, or that loses the race to
+        the end of the citation check (it then answers with the finished result, charged as usual),
+        is logged at WARNING with the citecheck id. A cancellation from outside counts (a client
+        that disconnected, ``asyncio.timeout`` or ``asyncio.wait_for``, which may then overrun by up
+        to those 5 seconds); this call's own ``timeout`` running out does not, and never stops the
+        citation check. Without the flag a cancelled await only stops waiting: the citation check
+        keeps running and is charged as usual.
         """
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
         key = _job_key(idempotency_key)
         with _carrying_key(key):
-            started = self.citecheck(
+            started = await self.citecheck(
                 text,
                 pairs=pairs,
                 max_citations=max_citations,
@@ -1799,21 +1845,26 @@ class Lenz:
                 **_given(options),
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
-            return self._wait_citecheck(
-                started.citecheck_id, timeout=timeout, on_update=on_update, extra_headers=dict(options.headers)
+            return await self._wait_citecheck(
+                started.citecheck_id,
+                timeout=timeout,
+                on_update=on_update,
+                extra_headers=dict(options.headers),
+                cancel_on_abort=cancel_on_abort,
             )
 
-    def _wait_citecheck(
+    async def _wait_citecheck(
         self,
         citecheck_id: str,
         *,
         timeout: float,
-        on_update: Callable[[Citecheck], None] | None = None,
+        on_update: Callable[[Citecheck], Awaitable[object] | None] | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> Citecheck:
         """The poll loop behind ``citecheck_and_wait`` (and ``lenz citecheck --resume``)."""
         path, parse, timed_out = _citecheck_job(citecheck_id, timeout)
-        return self._wait_job(
+        return await self._wait_job(
             path,
             timeout=timeout,
             on_update=on_update,
@@ -1821,19 +1872,21 @@ class Lenz:
             failed=_citecheck_failed,
             timed_out=timed_out,
             options=_call_options(None, None, extra_headers, "citecheck_and_wait()"),
+            abort=("citecheck", citecheck_id) if cancel_on_abort else None,
         )
 
-    def _wait_review(
+    async def _wait_review(
         self,
         review_id: str,
         *,
         timeout: float,
-        on_update: Callable[[ReviewFull], None] | None = None,
+        on_update: Callable[[ReviewFull], Awaitable[object] | None] | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
     ) -> ReviewFull:
         """The poll loop behind ``review_and_wait`` (and ``lenz review --resume``)."""
         path, parse, timed_out = _review_job(review_id, timeout)
-        return self._wait_job(
+        return await self._wait_job(
             path,
             timeout=timeout,
             on_update=on_update,
@@ -1841,18 +1894,20 @@ class Lenz:
             failed=_review_failed,
             timed_out=timed_out,
             options=_call_options(None, None, extra_headers, "review_and_wait()"),
+            abort=("review", review_id) if cancel_on_abort else None,
         )
 
-    def _wait_job(
+    async def _wait_job(
         self,
         path: str,
         *,
         timeout: float,
-        on_update: Callable[[_Job], None] | None,
+        on_update: Callable[[_Job], Awaitable[object] | None] | None,
         parse: Callable[[Any], _Job | None],
         failed: Callable[[_Job], Exception],
         timed_out: Callable[[_Job | None], Exception],
         options: _CallOptions = _NO_OPTIONS,
+        abort: tuple[Literal["review", "citecheck"], str] | None = None,
     ) -> _Job:
         """The poll loop behind every ``*_and_wait`` of an async job (a review,
         a citation check).
@@ -1864,15 +1919,34 @@ class Lenz:
         ``parse`` returns the job's model, or ``None`` for a 200 that is not
         this job's body (a failed poll).
         """
-        poll = JobPoll(path, timeout, time.monotonic(), parse=parse, failed=failed, timed_out=timed_out)
+        try:
+            return await self._poll_job(path, timeout, on_update, parse, failed, timed_out, options)
+        except asyncio.CancelledError:
+            if abort is not None:
+                await self._abort(abort[0], [abort[1]])
+            raise
+
+    async def _poll_job(
+        self,
+        path: str,
+        timeout: float,
+        on_update: Callable[[_Job], Awaitable[object] | None] | None,
+        parse: Callable[[Any], _Job | None],
+        failed: Callable[[_Job], Exception],
+        timed_out: Callable[[_Job | None], Exception],
+        options: _CallOptions,
+    ) -> _Job:
+        poll = JobPoll(path, timeout, _monotonic(), parse=parse, failed=failed, timed_out=timed_out)
         while True:
             # One request per poll, bounded by what is left of the deadline:
             # the client's own retry ladder inside a poll could run minutes
             # past it. A failed poll is retried on the next round instead.
-            remaining = poll.before_poll(time.monotonic())
+            remaining = poll.before_poll(_monotonic())
             job: _Job | None
             try:
-                body = self._request("GET", path, max_retries=0, timeout=self._poll_timeout(remaining), options=options)
+                body = await self._request(
+                    "GET", path, max_retries=0, timeout=self._poll_timeout(remaining), options=options
+                )
                 job = poll.read(body)
             except Exception as exc:
                 if poll.failed(exc):
@@ -1881,22 +1955,23 @@ class Lenz:
             if job is not None:
                 if poll.changed(job) and on_update is not None:
                     try:
-                        on_update(job.model_copy(deep=True))
+                        await _invoke(on_update, job.model_copy(deep=True))
                     except Exception:
                         logger.debug("on_update callback raised for %s", path, exc_info=True)
                 if poll.settle(job):
                     return job
-            time.sleep(poll.next_sleep(time.monotonic()))
+            await _sleep(poll.next_sleep(_monotonic()))
 
     # ── poll engine (shared by wait + verify_batch_and_wait) ──
 
-    def _poll_to_terminal(
+    async def _poll_to_terminal(
         self,
         task_ids: list[str],
         timeout: float,
-        on_progress: Callable[[str, Progress], None] | None = None,
+        on_progress: Callable[[str, Progress], Awaitable[object] | None] | None = None,
         *,
         options: _CallOptions = _NO_OPTIONS,
+        cancel_on_abort: bool = False,
     ) -> tuple[dict[str, TaskStatus], set[str], dict[str, LenzError]]:
         """Round-robin poll ``task_ids`` until each reaches a terminal state
         (completed / needs_input / failed / cancelled) or the deadline elapses.
@@ -1936,14 +2011,32 @@ class Lenz:
         The server's ``progress.poll_after_seconds`` replaces the fixed 2/4/8…
         ladder when it is present and sane; garbage falls back to the ladder.
         """
-        poll = TaskPoll(task_ids, timeout, time.monotonic())
+        poll = TaskPoll(task_ids, timeout, _monotonic())
+        try:
+            if cancel_on_abort:
+                # A checkpoint before the first poll: a cancellation already
+                # requested (the ids are known) cancels them without polling.
+                await asyncio.sleep(0)
+            await self._poll_tasks(poll, on_progress, options)
+        except asyncio.CancelledError:
+            if cancel_on_abort:
+                await self._abort("task", poll.live())
+            raise
+        return poll.results()
+
+    async def _poll_tasks(
+        self,
+        poll: TaskPoll,
+        on_progress: Callable[[str, Progress], Awaitable[object] | None] | None,
+        options: _CallOptions,
+    ) -> None:
         while poll.pending:
             for task_id in poll.start_round():
-                remaining = poll.may_poll(task_id, time.monotonic())
+                remaining = poll.may_poll(task_id, _monotonic())
                 if remaining is None:
                     continue
                 try:
-                    body = self._request(
+                    body = await self._request(
                         "GET",
                         _status_path(task_id),
                         max_retries=0,
@@ -1958,16 +2051,108 @@ class Lenz:
                 if poll.answered(task_id, status) and on_progress is not None:
                     try:
                         # A copy — a caller must not be able to mutate our state.
-                        on_progress(task_id, _progress_copy(status))
+                        await _invoke(on_progress, task_id, _progress_copy(status))
                     except Exception:
                         logger.debug("on_progress callback raised for task %s", task_id, exc_info=True)
             if poll.round_done():
                 break
-            sleep_for = poll.next_sleep(time.monotonic())
+            sleep_for = poll.next_sleep(_monotonic())
             if sleep_for is None:
                 break
-            time.sleep(sleep_for)
-        return poll.results()
+            await _sleep(sleep_for)
+
+    async def _abort(self, kind: Literal["task", "review", "citecheck"], ids: list[str]) -> None:
+        """``cancel_on_abort``, from a wait whose task is being cancelled:
+        stop ``ids`` on the server, best effort, then return (the caller
+        re-raises its ``CancelledError``, unchanged).
+
+        The cancels run as ONE task held by the client (``self._aborts``),
+        awaited through ``asyncio.shield``: a second cancellation of the
+        waiting task returns at once and leaves them running, and ``aclose``
+        waits for them before closing the pool. Nothing here raises."""
+        job_ids = list(dict.fromkeys(job_id for job_id in ids if job_id))
+        if not job_ids:
+            return
+        cleanup = asyncio.ensure_future(self._cancel_jobs(kind, job_ids))
+        self._aborts.add(cleanup)
+        cleanup.add_done_callback(self._abort_done)
+        try:
+            await asyncio.shield(cleanup)
+        except asyncio.CancelledError:
+            # Cancelled again while cancelling: stop waiting; the cleanup goes
+            # on, bounded by its budget.
+            return
+
+    def _abort_done(self, cleanup: asyncio.Task[None]) -> None:
+        self._aborts.discard(cleanup)
+        started = cleanup in self._aborts_started
+        self._aborts_started.discard(cleanup)
+        if cleanup.cancelled():
+            # Cancelled before ``_cancel_jobs`` ran (it logs once it runs).
+            if not started:
+                logger.warning(
+                    "cancel_on_abort: cancel given up: the event loop is closing; "
+                    "the run may still finish and be billed"
+                )
+        elif cleanup.exception() is not None:
+            logger.warning("cancel_on_abort: the cleanup failed (%s)", type(cleanup.exception()).__name__)
+
+    async def _cancel_jobs(self, kind: Literal["task", "review", "citecheck"], job_ids: list[str]) -> None:
+        """One cancel request per job, sent together, each on its own (one
+        failing never stops the others), no retry, all within
+        ``_ABORT_CANCEL_BUDGET`` seconds. A job that may still finish and be
+        charged (the cancel failed, was given up, or lost the race to the
+        job's end) is logged at WARNING with its id, nothing else."""
+
+        async def one(job_id: str) -> None:
+            try:
+                if kind == "task":
+                    task = await self.cancel(job_id, timeout=_ABORT_CANCEL_BUDGET, max_retries=0)
+                    stopped, status = task.cancelled, task.status
+                elif kind == "review":
+                    review = await self.cancel_review(job_id, timeout=_ABORT_CANCEL_BUDGET, max_retries=0)
+                    stopped, status = review.status == "cancelled", review.status
+                else:
+                    check = await self.cancel_citecheck(job_id, timeout=_ABORT_CANCEL_BUDGET, max_retries=0)
+                    stopped, status = check.status == "cancelled", check.status
+            except Exception as exc:
+                logger.warning(
+                    "cancel_on_abort: cancelling %s %s failed (%s); it may still finish and be charged",
+                    kind,
+                    job_id,
+                    type(exc).__name__,
+                )
+                return
+            if not stopped:
+                logger.warning(
+                    "cancel_on_abort: %s %s was not cancelled (it is %s); it is charged as usual",
+                    kind,
+                    job_id,
+                    status,
+                )
+
+        current = asyncio.current_task()
+        if current is not None:
+            self._aborts_started.add(current)
+        try:
+            await asyncio.wait_for(asyncio.gather(*(one(job_id) for job_id in job_ids)), _ABORT_CANCEL_BUDGET)
+        except asyncio.CancelledError:
+            # The cleanup itself was cancelled: the event loop is shutting
+            # down (``asyncio.run`` ending, a framework cancelling every task).
+            logger.warning(
+                "cancel_on_abort: cancelling %s %s given up: the event loop is closing; it may still finish and be "
+                "billed (call aclose() or leave async with before the loop ends)",
+                kind,
+                ", ".join(job_ids),
+            )
+            raise
+        except asyncio.TimeoutError:
+            logger.warning(
+                "cancel_on_abort: cancelling %s %s took over %ss and was given up; it may still finish and be charged",
+                kind,
+                ", ".join(job_ids),
+                _ABORT_CANCEL_BUDGET,
+            )
 
     def _verification_from_terminal(self, status: TaskStatus, task_id: str) -> Verification:
         """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
@@ -1976,7 +2161,7 @@ class Lenz:
 
     # ── account ──
 
-    def usage(
+    async def usage(
         self,
         *,
         timeout: float | httpx.Timeout | None = None,
@@ -1986,15 +2171,15 @@ class Lenz:
         """The account's plan, credits and per-capability usage.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
+        see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "usage()")
-        body = self._request("GET", "/me/usage", options=options)
+        body = await self._request("GET", "/me/usage", options=options)
         return Usage.model_validate(body)
 
     # ── verb-level submit helpers (used by the verify namespace) ──
 
-    def _verify_submit(
+    async def _verify_submit(
         self,
         *,
         claim: str = "",
@@ -2021,10 +2206,10 @@ class Lenz:
         )
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/verify", json=payload, headers=headers, options=options)
+            body = await self._request("POST", "/verify", json=payload, headers=headers, options=options)
             return TaskAccepted.model_validate(body)
 
-    def _verify_batch(
+    async def _verify_batch(
         self,
         *,
         claims: Sequence[VerifyBatchItem | dict[str, Any]],
@@ -2043,7 +2228,7 @@ class Lenz:
         )
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request("POST", "/verify/batch", json=payload, headers=headers, options=options)
+            body = await self._request("POST", "/verify/batch", json=payload, headers=headers, options=options)
             return BatchAccepted.model_validate(body)
 
     def _poll_timeout(self, remaining: float) -> httpx.Timeout | None:
@@ -2053,11 +2238,11 @@ class Lenz:
         (only a ``timeout <= 0`` wait polls then) ``None``: the copy's or the client's own.
 
         Reads the client actually in use, so ``Lenz(timeout=None)``, an
-        ``httpx.Timeout`` and an ``httpx.Client`` passed as ``http_client=``
+        ``httpx.Timeout`` and an ``httpx.AsyncClient`` passed as ``http_client=``
         all work, and so does a copy's timeout (``with_options``)."""
         return _core_poll_timeout(self._options.timeout, self._client.timeout, remaining)
 
-    def _extract(
+    async def _extract(
         self,
         *,
         text: str,
@@ -2073,12 +2258,12 @@ class Lenz:
         payload = _extract_payload(text=text, language=language, focus=focus, locate=locate)
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request(
+            body = await self._request(
                 "POST", "/extract", json=payload, headers=headers, options=options, floor=EXTRACT_TIMEOUT
             )
             return _extracted(body, locate=locate)
 
-    def _assess(
+    async def _assess(
         self,
         *,
         text: str = "",
@@ -2094,12 +2279,12 @@ class Lenz:
         payload = _assess_payload(text=text, claims=claims, language=language, suggest_rewrite=suggest_rewrite)
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request(
+            body = await self._request(
                 "POST", "/assess", json=payload, headers=headers, options=options, floor=ASSESS_TIMEOUT
             )
             return AssessResponse.model_validate(body)
 
-    def _select(
+    async def _select(
         self,
         task_id: str,
         *,
@@ -2113,12 +2298,12 @@ class Lenz:
         tid = _segment(task_id, "select() needs a task_id.")
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
-            body = self._request(
+            body = await self._request(
                 "POST", f"/verify/{tid}/select", json={"texts": texts}, headers=headers, options=options
             )
             return BatchAccepted.model_validate(body)
 
-    def _get_status(
+    async def _get_status(
         self,
         task_id: str,
         *,
@@ -2128,12 +2313,12 @@ class Lenz:
     ) -> TaskStatus:
         options = _call_options(timeout, max_retries, extra_headers, "get_status()")
         tid = _segment(task_id, "get_status() needs a task_id.")
-        body = self._request("GET", f"/verify/status/{tid}", options=options)
+        body = await self._request("GET", f"/verify/status/{tid}", options=options)
         return TaskStatus.model_validate(body)
 
     # ── HTTP plumbing ──
 
-    def _request(
+    async def _request(
         self,
         method: str,
         path: str,
@@ -2161,7 +2346,7 @@ class Lenz:
             options, self._options, self._client.timeout, self._max_retries, floor, timeout, max_retries
         )
         with _carrying_key(key, unreadable=True):
-            return self._send(
+            return await self._send(
                 method,
                 path,
                 json=json,
@@ -2175,7 +2360,7 @@ class Lenz:
                 conflict_settles=conflict_settles,
             )
 
-    def _send(
+    async def _send(
         self,
         method: str,
         path: str,
@@ -2203,7 +2388,7 @@ class Lenz:
         last_exc: Exception | None = None
         for attempt in range(retries + 1):
             try:
-                response = self._client.request(
+                response = await self._client.request(
                     method, url, json=json, params=params, headers=req_headers, timeout=req_timeout
                 )
             except (httpx.UnsupportedProtocol, httpx.LocalProtocolError):
@@ -2213,21 +2398,21 @@ class Lenz:
             except httpx.TransportError as exc:
                 # Worth sending again, unless this was the last attempt.
                 last_exc = exc
-                time.sleep(_after_transport_error(exc, attempt, retries, method, path))
+                await _sleep(_after_transport_error(exc, attempt, retries, method, path))
                 continue
             done, value = _after_response(response, attempt, retries, method, path, req_headers, conflict_settles)
             if done:
                 return value  # type: ignore[return-value]
-            time.sleep(value)
+            await _sleep(value)
         raise _exhausted(last_exc, method, path)
 
-    def _recovering(self, recover: Callable[[LenzError], Any], method: str, path: str, **kwargs: Any) -> Any:
+    async def _recovering(self, recover: Callable[[LenzError], Any], method: str, path: str, **kwargs: Any) -> Any:
         """``_request``, where an error ``recover`` reads as an answer (not
         ``None``) settles the call with that answer: the per-operation
         recoveries of ``_core`` (an already-deleted verification, a 409 naming
         the job a resend started)."""
         try:
-            return self._request(method, path, **kwargs)
+            return await self._request(method, path, **kwargs)
         except LenzError as exc:
             settled = recover(exc)
             if settled is None:
@@ -2235,4 +2420,4 @@ class Lenz:
             return settled
 
 
-__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "NOT_GIVEN", "Lenz", "NotGiven", "VerifyBatchItem"]
+__all__ = ["AsyncLenz"]

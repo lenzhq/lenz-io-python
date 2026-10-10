@@ -42,8 +42,17 @@ The primitives, call by call:
     if deep is not None:
         reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
 
+The same calls from asyncio, as coroutines:
+
+    from lenz_io import AsyncLenz
+
+    async with AsyncLenz() as client:
+        row = (await client.assess(claim="...")).claims[0]
+
 See https://lenz.io/api/v1/docs/ for the full API reference.
 """
+
+from typing import TYPE_CHECKING, Any
 
 # Version is generated at build time by hatch-vcs from the git tag.
 # `_version.py` is gitignored; falls back to "0.0.0+local" for editable
@@ -52,6 +61,9 @@ try:
     from ._version import __version__
 except ImportError:
     __version__ = "0.0.0+local"
+
+if TYPE_CHECKING:
+    from .async_client import AsyncLenz
 
 # Public surface
 from .client import API_VERSION, DEFAULT_BASE_URL, NOT_GIVEN, CitationPair, Lenz, NotGiven, VerifyBatchItem
@@ -171,6 +183,7 @@ __all__ = [
     "AssessResponse",
     "AssessStatus",
     "Assessment",
+    "AsyncLenz",
     "Audit",
     "BatchAccepted",
     "BatchItemResult",
@@ -266,3 +279,17 @@ __all__ = [
     "parse_webhook",
     "verify_signature",
 ]
+
+
+def __dir__() -> list[str]:
+    return sorted({*globals(), "AsyncLenz"})
+
+
+def __getattr__(name: str) -> Any:
+    # ``AsyncLenz`` is imported on first use, so ``import lenz_io`` (and the
+    # ``lenz`` CLI) does not load asyncio and the async client for sync users.
+    if name == "AsyncLenz":
+        from .async_client import AsyncLenz
+
+        return AsyncLenz
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

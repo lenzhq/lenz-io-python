@@ -12,12 +12,15 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
 import respx
+from conftest import AnyClient, make_client
 
 from lenz_io import (
     Citecheck,
@@ -31,6 +34,23 @@ from lenz_io import (
     LenzWebhooks,
     parse_webhook,
 )
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 BASE = "https://lenz.io/api/v1"
 FIXTURES = Path(__file__).parent / "fixtures" / "contract"
@@ -46,10 +66,8 @@ CHECK_ID = COMPLETED["citecheck_id"]
 
 
 @pytest.fixture()
-def no_sleep(monkeypatch):
-    slept: list[float] = []
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: slept.append(s))
-    return slept
+def no_sleep(any_client: AnyClient) -> list[float]:
+    return any_client.slept
 
 
 def _running() -> dict:
@@ -257,8 +275,7 @@ class TestWait:
 
     def test_timeout_raises_with_the_last_body(self, client, monkeypatch):
         clock = [0.0]
-        monkeypatch.setattr("lenz_io.client.time.monotonic", lambda: clock[0])
-        monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: clock.__setitem__(0, clock[0] + s))
+        AnyClient.current.install_clock(clock)  # type: ignore[union-attr]
         with respx.mock(base_url=BASE) as r:
             r.post("/citecheck").respond(202, json=_load("citecheck_accepted.json"))
             r.get(f"/citechecks/{CHECK_ID}").respond(200, json=_running())

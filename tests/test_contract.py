@@ -163,7 +163,7 @@ def _load(name: str) -> dict:
         # `result` — the fixtures are the two halves of that contract.
         ("verify_status_processing.json", TaskStatus),
         ("verifications_detail.json", Verification),
-        # Sources with `snippet_language`: a code, a regional code, null, and
+        # Sources with `snippet_language`: two codes (`uk`, `pt`), null, and
         # a source from an API that predates the key. Same fixture as Node.
         ("verifications_detail_snippet_language.json", Verification),
         # Both halves of the coverage contract. The server omits `coverage`

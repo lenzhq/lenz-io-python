@@ -169,6 +169,17 @@
   ],
   "sleeps": []
  },
+ "assess_both_forms": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "assess takes either one claim (claim=) or a list (claims=), not both",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "assess_claim": {
   "outcome": {
    "result": "AssessResponse"
@@ -354,6 +365,783 @@
    }
   ],
   "sleeps": []
+ },
+ "bad_header_option": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "usage(): the Authorization header is set by the SDK and cannot be passed in extra_headers.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
+ "bad_timeout_option": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "usage(): timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got 0).",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
+ "batch_401_mid_round": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAuthError",
+   "idempotency_key": "<random>",
+   "message": "Invalid API key.",
+   "status_code": 401
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"claims\":[{\"text\":\"A.\"},{\"text\":\"B.\"},{\"text\":\"C.\"}]}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "54"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/batch"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t2"
+   }
+  ],
+  "sleeps": []
+ },
+ "batch_mixed_outcomes": {
+  "outcome": {
+   "result": [
+    "BatchItemResult",
+    "BatchItemResult",
+    "BatchItemResult"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"claims\":[{\"text\":\"A.\"},{\"text\":\"B.\"},{\"text\":\"C.\"}]}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "54"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/batch"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t2"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t3"
+   },
+   {
+    "at": 2.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 28.0,
+     "pool": 28.0,
+     "read": 28.0,
+     "write": 28.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t3"
+   }
+  ],
+  "sleeps": [
+   2.0
+  ]
+ },
+ "batch_times_out": {
+  "outcome": {
+   "result": [
+    "BatchItemResult",
+    "BatchItemResult"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"claims\":[{\"text\":\"A.\"},{\"text\":\"B.\"}]}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "40"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/batch"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 7.0,
+     "pool": 7.0,
+     "read": 7.0,
+     "write": 7.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 7.0,
+     "pool": 7.0,
+     "read": 7.0,
+     "write": 7.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t2"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 4.0,
+     "pool": 4.0,
+     "read": 4.0,
+     "write": 4.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 4.0,
+     "pool": 4.0,
+     "read": 4.0,
+     "write": 4.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t2"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 1.0,
+     "pool": 1.0,
+     "read": 1.0,
+     "write": 1.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 1.0,
+     "pool": 1.0,
+     "read": 1.0,
+     "write": 1.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t2"
+   }
+  ],
+  "sleeps": [
+   3.0,
+   3.0,
+   1.0
+  ]
  },
  "borrowed_10:assess": {
   "outcome": {
@@ -1571,6 +2359,68 @@
   ],
   "sleeps": []
  },
+ "cancel_citecheck_unexpected_body": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAPIError",
+   "idempotency_key": null,
+   "message": "POST /citechecks/12bbbf65/cancel returned an unexpected response body.",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Content-Length",
+      "0"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65/cancel"
+   }
+  ],
+  "sleeps": []
+ },
  "cancel_review": {
   "outcome": {
    "result": "ReviewFull"
@@ -1625,6 +2475,258 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/reviews/d6b2bd72/cancel"
+   }
+  ],
+  "sleeps": []
+ },
+ "cancel_review_unexpected_body": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAPIError",
+   "idempotency_key": null,
+   "message": "POST /reviews/442b6aa9/cancel returned an unexpected response body.",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Content-Length",
+      "0"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9/cancel"
+   }
+  ],
+  "sleeps": []
+ },
+ "cancel_unexpected_body": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAPIError",
+   "idempotency_key": null,
+   "message": "POST /verify/t1/cancel returned an unexpected response body.",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Content-Length",
+      "0"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/t1/cancel"
+   }
+  ],
+  "sleeps": []
+ },
+ "citecheck_409_names_the_job": {
+  "outcome": {
+   "result": "CitecheckStarted"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "22"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citecheck"
+   }
+  ],
+  "sleeps": []
+ },
+ "citecheck_409_other_code": {
+  "outcome": {
+   "code": "conflict",
+   "error": "LenzError",
+   "idempotency_key": "pinned-key-1",
+   "message": "HTTP 409",
+   "status_code": 409
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "22"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citecheck"
    }
   ],
   "sleeps": []
@@ -1737,6 +2839,493 @@
   ],
   "sleeps": []
  },
+ "citecheck_and_wait_failed": {
+  "outcome": {
+   "code": "",
+   "error": "CitecheckFailed",
+   "idempotency_key": "pinned-key-1",
+   "message": "Citation check failed: x",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "22"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citecheck"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   }
+  ],
+  "sleeps": []
+ },
+ "citecheck_and_wait_stated_wait_and_floor": {
+  "outcome": {
+   "result": "Citecheck"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "22"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citecheck"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   },
+   {
+    "at": 5.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   },
+   {
+    "at": 25.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   },
+   {
+    "at": 30.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   }
+  ],
+  "sleeps": [
+   5.0,
+   20.0,
+   5.0
+  ]
+ },
+ "citecheck_and_wait_times_out": {
+  "outcome": {
+   "code": "",
+   "error": "CitecheckTimeout",
+   "idempotency_key": "<random>",
+   "message": "citecheck_and_wait timed out after 8s",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "22"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/citecheck"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 8.0,
+     "pool": 8.0,
+     "read": 8.0,
+     "write": 8.0
+    },
+    "url": "https://lenz.io/api/v1/citechecks/12bbbf65"
+   }
+  ],
+  "sleeps": [
+   8.0
+  ]
+ },
+ "citecheck_both": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "citecheck() needs exactly one of text and pairs.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "citecheck_pairs": {
   "outcome": {
    "result": "CitecheckStarted"
@@ -1799,6 +3388,17 @@
   ],
   "sleeps": []
  },
+ "citecheck_pairs_max": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "max_citations goes with text: every pair is checked.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "citecheck_text": {
   "outcome": {
    "result": "CitecheckStarted"
@@ -1857,6 +3457,60 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/citecheck"
+   }
+  ],
+  "sleeps": []
+ },
+ "empty_200": {
+  "outcome": {
+   "result": "bool"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "DELETE",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/ask/v1"
    }
   ],
   "sleeps": []
@@ -2275,6 +3929,17 @@
   ],
   "sleeps": []
  },
+ "get_review_bad_view": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "view must be 'full' or 'issues' (got 'nope').",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "get_review_issues": {
   "outcome": {
    "result": "ReviewIssues"
@@ -2485,6 +4150,69 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/library?page=2&sort=recent&search=x&domain=&entity="
+   }
+  ],
+  "sleeps": []
+ },
+ "library_iter_random": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "iter cannot walk sort=\"random\" (each page is a fresh sample); call library.list instead.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
+ "library_iter_short_page": {
+  "outcome": {
+   "result": [
+    "LibraryItem"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=&domain=&entity=&curated=trivia"
    }
   ],
   "sleeps": []
@@ -2768,6 +4496,709 @@
   "sleeps": [
    1.0
   ]
+ },
+ "no_retry_429_code": {
+  "outcome": {
+   "code": "review_in_flight",
+   "error": "LenzRateLimitError",
+   "idempotency_key": null,
+   "message": "one at a time",
+   "status_code": 429
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": []
+ },
+ "option_ua_override": {
+  "outcome": {
+   "result": "Usage"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "User-Agent",
+      "mine/1.0"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": []
+ },
+ "options_everywhere": {
+  "outcome": {
+   "result": "Verification"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "X-A",
+      "1"
+     ],
+     [
+      "X-C",
+      "3"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "29"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 11,
+     "pool": 11,
+     "read": 11,
+     "write": 11
+    },
+    "url": "https://lenz.io/api/v1/verify"
+   },
+   {
+    "at": 1.0,
+    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "X-A",
+      "1"
+     ],
+     [
+      "X-C",
+      "3"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "29"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 11,
+     "pool": 11,
+     "read": 11,
+     "write": 11
+    },
+    "url": "https://lenz.io/api/v1/verify"
+   },
+   {
+    "at": 1.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "X-A",
+      "1"
+     ],
+     [
+      "X-C",
+      "3"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 11,
+     "pool": 11,
+     "read": 11,
+     "write": 11
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "X-A",
+      "1"
+     ],
+     [
+      "X-C",
+      "3"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 11,
+     "pool": 11,
+     "read": 11,
+     "write": 11
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   1.0,
+   2.0
+  ]
+ },
+ "options_on_iter": {
+  "outcome": {
+   "result": [
+    "LibraryItem",
+    "LibraryItem"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "X-P",
+      "1"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 3,
+     "pool": 3,
+     "read": 9,
+     "write": 3
+    },
+    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=&domain=&entity="
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "X-P",
+      "1"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 3,
+     "pool": 3,
+     "read": 9,
+     "write": 3
+    },
+    "url": "https://lenz.io/api/v1/library?page=2&sort=recent&search=&domain=&entity="
+   }
+  ],
+  "sleeps": []
+ },
+ "options_on_review_and_wait": {
+  "outcome": {
+   "result": "ReviewFull"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "X-T",
+      "1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 120.0,
+     "pool": 120.0,
+     "read": 120.0,
+     "write": 120.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 1.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "X-T",
+      "1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 120.0,
+     "pool": 120.0,
+     "read": 120.0,
+     "write": 120.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 1.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "X-T",
+      "1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 120.0,
+     "pool": 120.0,
+     "read": 120.0,
+     "write": 120.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": [
+   1.0
+  ]
+ },
+ "path_id_dots": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "verifications.get() needs a verification_id.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
+ "path_ids_encoded": {
+  "outcome": {
+   "code": null,
+   "error": "AssertionError",
+   "idempotency_key": null,
+   "message": "unscripted request GET /verify/status/a/b?c#d%e",
+   "status_code": null
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/a%2Fb%3Fc%23d%25e"
+   }
+  ],
+  "sleeps": []
  },
  "retries_exhausted_503": {
   "outcome": {
@@ -3287,6 +5718,586 @@
    2
   ]
  },
+ "retry_409_exhausted": {
+  "outcome": {
+   "code": "",
+   "error": "LenzError",
+   "idempotency_key": "pinned-key-1",
+   "message": "in flight",
+   "status_code": 409
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   },
+   {
+    "at": 2.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   },
+   {
+    "at": 4.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   },
+   {
+    "at": 6.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   }
+  ],
+  "sleeps": [
+   2,
+   2,
+   2
+  ]
+ },
+ "retry_409_long_wait": {
+  "outcome": {
+   "result": "AskReply"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"message\":\"Why?\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "18"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/ask/v1"
+   },
+   {
+    "at": 1.0,
+    "body": "{\"message\":\"Why?\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "18"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/ask/v1"
+   }
+  ],
+  "sleeps": [
+   1.0
+  ]
+ },
+ "retry_409_no_key": {
+  "outcome": {
+   "code": "",
+   "error": "LenzError",
+   "idempotency_key": null,
+   "message": "in flight",
+   "status_code": 409
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   }
+  ],
+  "sleeps": []
+ },
+ "retry_429_body_wait": {
+  "outcome": {
+   "result": "Usage"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": [
+   3
+  ]
+ },
+ "retry_429_long_raises": {
+  "outcome": {
+   "code": "rate_limited",
+   "error": "LenzRateLimitError",
+   "idempotency_key": "<random>",
+   "message": "tomorrow",
+   "status_code": 429
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Doc.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "15"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 150.0,
+     "pool": 150.0,
+     "read": 150.0,
+     "write": 150.0
+    },
+    "url": "https://lenz.io/api/v1/extract"
+   }
+  ],
+  "sleeps": []
+ },
  "retry_429_stated": {
   "outcome": {
    "result": "Usage"
@@ -3609,6 +6620,308 @@
    1.0
   ]
  },
+ "retry_untyped_503_exhausted": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAPIError",
+   "idempotency_key": null,
+   "message": "maintenance",
+   "status_code": 503
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 1.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 7.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": [
+   1.0,
+   2.0,
+   4.0
+  ]
+ },
+ "retry_untyped_503_long": {
+  "outcome": {
+   "result": "Usage"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 1.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": [
+   1.0
+  ]
+ },
  "review": {
   "outcome": {
    "result": "ReviewStarted"
@@ -3670,6 +6983,186 @@
    }
   ],
   "sleeps": []
+ },
+ "review_409_names_the_job": {
+  "outcome": {
+   "result": "ReviewStarted"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   }
+  ],
+  "sleeps": []
+ },
+ "review_409_then_accepted": {
+  "outcome": {
+   "result": "ReviewStarted"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 2.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   }
+  ],
+  "sleeps": [
+   2
+  ]
  },
  "review_and_wait": {
   "outcome": {
@@ -3872,6 +7365,752 @@
   "sleeps": [
    10.0,
    10.0
+  ]
+ },
+ "review_and_wait_404": {
+  "outcome": {
+   "code": "not_found",
+   "error": "LenzNotFoundError",
+   "idempotency_key": "<random>",
+   "message": "nope",
+   "status_code": 404
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": []
+ },
+ "review_and_wait_409_names_the_job": {
+  "outcome": {
+   "result": "ReviewFull"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": []
+ },
+ "review_and_wait_cancelled": {
+  "outcome": {
+   "code": "",
+   "error": "ReviewFailed",
+   "idempotency_key": "<random>",
+   "message": "Review failed: cancelled",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": []
+ },
+ "review_and_wait_failed": {
+  "outcome": {
+   "code": "",
+   "error": "ReviewFailed",
+   "idempotency_key": "pinned-key-1",
+   "message": "Review failed: no_claim",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": []
+ },
+ "review_and_wait_odd_bodies": {
+  "outcome": {
+   "code": "",
+   "error": "ReviewTimeout",
+   "idempotency_key": "<random>",
+   "message": "review_and_wait timed out after 100s",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 10.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 20.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 25.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 85.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 15.0,
+     "pool": 15.0,
+     "read": 15.0,
+     "write": 15.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": [
+   10.0,
+   10.0,
+   5.0,
+   60.0,
+   15.0
   ]
  },
  "review_and_wait_times_out": {
@@ -4082,6 +8321,212 @@
    5.0
   ]
  },
+ "review_and_wait_updates": {
+  "outcome": {
+   "result": [
+    "str",
+    "str"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"Draft text.\",\"visibility\":\"private\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "45"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/review"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 10.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   },
+   {
+    "at": 20.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/reviews/442b6aa9"
+   }
+  ],
+  "sleeps": [
+   10.0,
+   10.0
+  ]
+ },
  "review_and_wait_zero": {
   "outcome": {
    "code": "",
@@ -4194,6 +8639,17 @@
   ],
   "sleeps": []
  },
+ "review_empty": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "review() needs the draft text, or one public http(s) URL.",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "review_options": {
   "outcome": {
    "result": "ReviewStarted"
@@ -4256,6 +8712,17 @@
   ],
   "sleeps": []
  },
+ "review_selector_str": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "verdicts is a list of strings, e.g. verdicts=['False'].",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
  "select": {
   "outcome": {
    "result": "BatchAccepted"
@@ -4316,6 +8783,17 @@
     "url": "https://lenz.io/api/v1/verify/t1/select"
    }
   ],
+  "sleeps": []
+ },
+ "select_empty": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "select requires a non-empty claims=[...]",
+   "status_code": null
+  },
+  "requests": [],
   "sleeps": []
  },
  "timeout_120:assess": {
@@ -7068,6 +11546,298 @@
    6.0
   ]
  },
+ "typed_503_raises": {
+  "outcome": {
+   "code": "upstream_unavailable",
+   "error": "LenzUpstreamUnavailableError",
+   "idempotency_key": "<random>",
+   "message": "busy",
+   "status_code": 503
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   }
+  ],
+  "sleeps": []
+ },
+ "typed_503_short_wait": {
+  "outcome": {
+   "result": "Usage"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   },
+   {
+    "at": 30.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": [
+   30
+  ]
+ },
+ "unreadable_200": {
+  "outcome": {
+   "code": null,
+   "error": "JSONDecodeError",
+   "idempotency_key": "<random>",
+   "message": "Expecting value: line 1 column 1 (char 0)",
+   "status_code": null
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "13"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 100.0,
+     "pool": 100.0,
+     "read": 100.0,
+     "write": 100.0
+    },
+    "url": "https://lenz.io/api/v1/assess"
+   }
+  ],
+  "sleeps": []
+ },
+ "unreadable_200_no_key": {
+  "outcome": {
+   "code": null,
+   "error": "JSONDecodeError",
+   "idempotency_key": null,
+   "message": "Expecting value: line 1 column 1 (char 0)",
+   "status_code": null
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/me/usage"
+   }
+  ],
+  "sleeps": []
+ },
  "usage": {
   "outcome": {
    "result": "Usage"
@@ -7179,6 +11949,122 @@
  "verifications_delete_404": {
   "outcome": {
    "result": "bool"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "DELETE",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verifications/v1"
+   }
+  ],
+  "sleeps": []
+ },
+ "verifications_delete_500": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAPIError",
+   "idempotency_key": null,
+   "message": "boom",
+   "status_code": 500
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "DELETE",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verifications/v1"
+   }
+  ],
+  "sleeps": []
+ },
+ "verifications_delete_version_404": {
+  "outcome": {
+   "code": "",
+   "error": "LenzApiVersionError",
+   "idempotency_key": null,
+   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "status_code": 404
   },
   "requests": [
    {
@@ -7489,6 +12375,71 @@
     "url": "https://lenz.io/api/v1/verifications?page=2"
    }
   ],
+  "sleeps": []
+ },
+ "verifications_iter_clamped": {
+  "outcome": {
+   "result": []
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verifications?page=2"
+   }
+  ],
+  "sleeps": []
+ },
+ "verifications_iter_page_0": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "iter starts at page 1 or later (got page=0).",
+   "status_code": null
+  },
+  "requests": [],
   "sleeps": []
  },
  "verifications_list": {
@@ -7855,6 +12806,184 @@
    3.0,
    4.0
   ]
+ },
+ "verify_and_wait_poll_404": {
+  "outcome": {
+   "code": "",
+   "error": "LenzNotFoundError",
+   "idempotency_key": "<random>",
+   "message": "nope",
+   "status_code": 404
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "29"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "verify_and_wait_submit_fails": {
+  "outcome": {
+   "code": "",
+   "error": "LenzValidationError",
+   "idempotency_key": "pinned-key-1",
+   "message": "bad",
+   "status_code": 422
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "pinned-key-1"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "29"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify"
+   }
+  ],
+  "sleeps": []
  },
  "verify_and_wait_times_out": {
   "outcome": {
@@ -8528,6 +13657,413 @@
   ],
   "sleeps": []
  },
+ "wait_401": {
+  "outcome": {
+   "code": "",
+   "error": "LenzAuthError",
+   "idempotency_key": null,
+   "message": "Invalid API key.",
+   "status_code": 401
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   3.0
+  ]
+ },
+ "wait_cancelled": {
+  "outcome": {
+   "code": "",
+   "error": "LenzPipelineError",
+   "idempotency_key": null,
+   "message": "Pipeline failed: Cancelled.",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_completed_empty": {
+  "outcome": {
+   "code": "",
+   "error": "LenzPipelineError",
+   "idempotency_key": null,
+   "message": "Pipeline completed but the result is empty.",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_empty_id": {
+  "outcome": {
+   "code": null,
+   "error": "ValueError",
+   "idempotency_key": null,
+   "message": "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).",
+   "status_code": null
+  },
+  "requests": [],
+  "sleeps": []
+ },
+ "wait_failed": {
+  "outcome": {
+   "code": "",
+   "error": "LenzPipelineError",
+   "idempotency_key": null,
+   "message": "Pipeline failed: unknown",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_garbage_hints": {
+  "outcome": {
+   "code": null,
+   "error": "ValidationError",
+   "idempotency_key": null,
+   "message": "1 validation error for TaskStatus\nprogress.poll_after_seconds\n  Input should be a valid integer, got a number with a fractional part [type=int_from_float, input_value=0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/<version>/v/int_from_float",
+   "status_code": null
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_needs_input": {
+  "outcome": {
+   "code": "",
+   "error": "LenzNeedsInputError",
+   "idempotency_key": null,
+   "message": "Pipeline paused: multi_claim",
+   "status_code": 0
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
  "wait_negative": {
   "outcome": {
    "result": "Verification"
@@ -8581,6 +14117,249 @@
    }
   ],
   "sleeps": []
+ },
+ "wait_out_of_range_hints": {
+  "outcome": {
+   "result": "Verification"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 2.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 7.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 10.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   2.0,
+   4.0,
+   1.0,
+   3.0
+  ]
  },
  "wait_poll_errors": {
   "outcome": {
@@ -8777,6 +14556,627 @@
    4.0,
    8.0
   ]
+ },
+ "wait_progress_callbacks": {
+  "outcome": {
+   "result": [
+    "list",
+    "list"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 3.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 7.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 7.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 10.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   3.0,
+   4.0,
+   3.0
+  ]
+ },
+ "wait_slow_poll_eats_the_deadline": {
+  "outcome": {
+   "result": [
+    "BatchItemResult",
+    "BatchItemResult"
+   ]
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "{\"claims\":[{\"text\":\"A.\"},{\"text\":\"B.\"}]}",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Idempotency-Key",
+      "<random>"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ],
+     [
+      "Content-Length",
+      "40"
+     ]
+    ],
+    "method": "POST",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/batch"
+   },
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 10.0,
+     "pool": 10.0,
+     "read": 10.0,
+     "write": 10.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_stated_wait_beats_hint": {
+  "outcome": {
+   "result": "Verification"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 60.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 63.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   60.0,
+   3.0
+  ]
+ },
+ "wait_unreadable_poll": {
+  "outcome": {
+   "code": null,
+   "error": "ValidationError",
+   "idempotency_key": null,
+   "message": "1 validation error for TaskStatus\nstatus\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/<version>/v/string_type",
+   "status_code": null
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
+ },
+ "wait_version": {
+  "outcome": {
+   "code": "",
+   "error": "LenzApiVersionError",
+   "idempotency_key": null,
+   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "status_code": 200
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": []
  },
  "wait_zero": {
   "outcome": {

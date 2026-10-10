@@ -13,6 +13,7 @@ public method, and ``Lenz.with_options``.
 
 from __future__ import annotations
 
+import asyncio
 import inspect
 import math
 import sys
@@ -22,6 +23,7 @@ from typing import Any, ClassVar
 
 import httpx
 import pytest
+from async_adapter import SyncView
 from freeze_cases import (
     ACCEPTED,
     ASK_HISTORY,
@@ -56,7 +58,7 @@ from freeze_cases import (
 from freeze_harness import API_KEY, BASE, PINNED, Recording, recording
 
 import lenz_io
-from lenz_io import NOT_GIVEN, Lenz, NotGiven
+from lenz_io import NOT_GIVEN, AsyncLenz, Lenz, NotGiven
 from lenz_io.client import EXTRACT_TIMEOUT, WAIT_TIMEOUT
 
 MARK = "X-Marker"
@@ -68,11 +70,60 @@ def _no_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LENZ_BASE_URL", raising=False)
 
 
+class _Clients:
+    """Which client the test runs on (``both_clients``): ``Lenz``, or an
+    ``AsyncLenz`` driven through ``SyncView`` on ``loop``."""
+
+    use_async = False
+    loop: asyncio.AbstractEventLoop | None = None
+
+
+@pytest.fixture(autouse=True, params=["sync", "async"])
+def both_clients(request: pytest.FixtureRequest) -> Iterator[str]:
+    """Every test here runs on both clients, except the ones marked
+    ``sync_only`` (subclassing ``Lenz`` itself, or its sync-only surface)."""
+    if request.param == "async" and request.node.get_closest_marker("sync_only"):
+        pytest.skip("sync client only")
+    _Clients.use_async = request.param == "async"
+    _Clients.loop = asyncio.new_event_loop() if _Clients.use_async else None
+    try:
+        yield request.param
+    finally:
+        if _Clients.loop is not None:
+            _Clients.loop.close()
+        _Clients.use_async = False
+        _Clients.loop = None
+
+
+def make(**kwargs: Any) -> Any:
+    """``Lenz(**kwargs)``, or the same ``AsyncLenz`` behind ``SyncView``."""
+    if not _Clients.use_async:
+        return Lenz(**kwargs)
+    assert _Clients.loop is not None
+    return SyncView(AsyncLenz(**kwargs), _Clients.loop)
+
+
+def close_http(http: Any) -> None:
+    if isinstance(http, httpx.AsyncClient):
+        assert _Clients.loop is not None
+        _Clients.loop.run_until_complete(http.aclose())
+    else:
+        http.close()
+
+
+def make_http(**kwargs: Any) -> Any:
+    """An ``httpx.Client``, or an ``httpx.AsyncClient`` for the async run."""
+    return httpx.AsyncClient(**kwargs) if _Clients.use_async else httpx.Client(**kwargs)
+
+
 @contextmanager
 def recorded(answers: dict[tuple[str, str], list[Any]]) -> Iterator[Recording]:
     """Record the requests of the block, under a fake clock patched for the
     block only (so a test's own monkeypatches are left alone)."""
-    with pytest.MonkeyPatch.context() as mp, recording(mp, answers) as rec:
+    with (
+        pytest.MonkeyPatch.context() as mp,
+        recording(mp, answers, async_client=_Clients.use_async) as rec,
+    ):
         yield rec
 
 
@@ -125,7 +176,7 @@ PARITY: dict[str, tuple[str, str]] = {
 
 
 def _public_methods() -> dict[str, Callable[..., Any]]:
-    client = Lenz(api_key=API_KEY)
+    client = Lenz(api_key=API_KEY)  # the sync surface (the async one: test_async_surface.py)
     out: dict[str, Callable[..., Any]] = {}
     for name, value in inspect.getmembers(client):
         if name.startswith("_"):
@@ -140,10 +191,12 @@ def _public_methods() -> dict[str, Callable[..., Any]]:
     return out
 
 
+@pytest.mark.sync_only
 def test_every_public_method_is_in_the_parity_map() -> None:
     assert sorted(_public_methods()) == sorted(PARITY)
 
 
+@pytest.mark.sync_only
 @pytest.mark.parametrize("name", sorted(PARITY))
 def test_each_method_takes_the_options_the_map_says(name: str) -> None:
     kind = PARITY[name][1]
@@ -173,6 +226,7 @@ def test_each_method_takes_the_options_the_map_says(name: str) -> None:
         assert options["extra_headers"].default is None
 
 
+@pytest.mark.sync_only
 @pytest.mark.skipif(sys.version_info < (3, 11), reason="typing.get_overloads is 3.11+")
 def test_get_review_overloads_all_take_the_options() -> None:
     from typing import get_overloads  # type: ignore[attr-defined,unused-ignore]
@@ -312,11 +366,12 @@ def _options_for(name: str, *, headers: dict[str, str | None] | None = None) -> 
 def _run(monkeypatch: pytest.MonkeyPatch, name: str, opts: dict[str, Any], client: Lenz | None = None) -> Any:
     call, answers = CALLS[name]
     with recorded(answers) as rec:
-        c = client or Lenz(api_key=API_KEY)
+        c = client or make(api_key=API_KEY)
         call(c, opts)
     return rec
 
 
+@pytest.mark.sync_only
 def test_every_method_with_options_is_exercised() -> None:
     assert sorted(CALLS) == sorted(n for n, (_, kind) in PARITY.items() if kind not in ("with_options", "lifecycle"))
 
@@ -331,7 +386,7 @@ def test_options_reach_every_request_the_method_makes(monkeypatch: pytest.Monkey
 
 @pytest.mark.parametrize("name", sorted(CALLS))
 def test_a_copys_options_reach_every_request_too(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
-    root = Lenz(api_key=API_KEY)
+    root = make(api_key=API_KEY)
     rec = _run(monkeypatch, name, {}, client=root.with_options(extra_headers={MARK: "copy"}))
     for request in rec.requests:
         assert _headers(request).get(MARK.lower()) == "copy", (name, request["url"])
@@ -368,7 +423,7 @@ def test_max_retries_reaches_the_request_it_retries(name: str) -> None:
     the one request made, and the call fails with it."""
     call, answers = CALLS[name]
     with recorded(answers) as rec, pytest.raises(lenz_io.LenzAPIError):
-        call(Lenz(api_key=API_KEY), {"max_retries": 0})
+        call(make(api_key=API_KEY), {"max_retries": 0})
     assert len(rec.requests) == 1
 
 
@@ -387,7 +442,7 @@ def _count(monkeypatch: pytest.MonkeyPatch, answers: Answers, call: Callable[[Le
 class TestBudgets:
     def test_max_retries_replaces_the_clients_count(self, monkeypatch: pytest.MonkeyPatch) -> None:
         answers: Answers = {("GET", "/me/usage"): [S503]}
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         assert len(_count(monkeypatch, answers, lambda c: c.usage(), client).requests) == 4
         assert len(_count(monkeypatch, answers, lambda c: c.usage(max_retries=0), client).requests) == 1
         assert len(_count(monkeypatch, answers, lambda c: c.usage(max_retries=5), client).requests) == 6
@@ -401,7 +456,7 @@ class TestBudgets:
             ("GET", f"/verify/status/{TASK}"): [S503, S503, DONE],
         }
         rec = _count(
-            monkeypatch, answers, lambda c: c.verify_and_wait("A.", max_retries=5, timeout=60), Lenz(api_key=API_KEY)
+            monkeypatch, answers, lambda c: c.verify_and_wait("A.", max_retries=5, timeout=60), make(api_key=API_KEY)
         )
         submits = [r for r in rec.requests if r["method"] == "POST"]
         polls = [r for r in rec.requests if r["method"] == "GET"]
@@ -411,7 +466,7 @@ class TestBudgets:
 
     def test_max_retries_0_on_a_wait_submits_once(self, monkeypatch: pytest.MonkeyPatch) -> None:
         answers: Answers = {("POST", "/review"): [S503]}
-        rec = _count(monkeypatch, answers, lambda c: c.review_and_wait(DRAFT, max_retries=0), Lenz(api_key=API_KEY))
+        rec = _count(monkeypatch, answers, lambda c: c.review_and_wait(DRAFT, max_retries=0), make(api_key=API_KEY))
         assert len(rec.requests) == 1
 
     def test_a_per_call_timeout_reaches_each_page(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -419,7 +474,7 @@ class TestBudgets:
             monkeypatch,
             {("GET", "/verifications"): [PAGE_1, PAGE_2]},
             lambda c: list(c.verifications.iter(timeout=4)),
-            Lenz(api_key=API_KEY),
+            make(api_key=API_KEY),
         )
         assert [r["timeout"]["read"] for r in rec.requests] == [4, 4]
 
@@ -430,7 +485,7 @@ class TestBudgets:
             monkeypatch,
             {("GET", f"/verify/status/{TASK}"): [RUNNING_NO_HINT]},
             lambda c: c.wait(TASK, timeout=12),
-            Lenz(api_key=API_KEY),
+            make(api_key=API_KEY),
         )
         assert [r["timeout"]["read"] for r in rec.requests] == [12, 10, 6]
 
@@ -441,7 +496,7 @@ class TestBudgets:
             monkeypatch,
             {("POST", "/verify"): [ACCEPTED], ("GET", f"/verify/status/{TASK}"): [DONE]},
             lambda c: c.with_options(timeout=45).verify_and_wait("A.", timeout=5),
-            Lenz(api_key=API_KEY),
+            make(api_key=API_KEY),
         )
         assert rec.requests[0]["timeout"]["read"] == 45  # the submit: the copy's attempt timeout
         assert rec.requests[1]["timeout"]["read"] == 5  # the poll: capped by the wait
@@ -485,7 +540,7 @@ class TestTimeoutPrecedence:
         ],
     )
     def test_a_plain_call(self, monkeypatch: pytest.MonkeyPatch, build: Any, expected: dict[str, Any]) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         assert _timeout_of(monkeypatch, lambda: build(client), _USAGE) == expected
 
     @pytest.mark.parametrize(
@@ -514,27 +569,27 @@ class TestTimeoutPrecedence:
     def test_extract_floor_applies_to_an_inherited_timeout_only(
         self, monkeypatch: pytest.MonkeyPatch, constructor: float, build: Any, expected: dict[str, Any]
     ) -> None:
-        client = Lenz(api_key=API_KEY, timeout=constructor)
+        client = make(api_key=API_KEY, timeout=constructor)
         assert _timeout_of(monkeypatch, lambda: build(client), _EXTRACT) == expected
 
     def test_assess_floor_on_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         assert _timeout_of(monkeypatch, lambda: client.with_options(timeout=50).assess("A."), _ASSESS) == _all(100.0)
         assert _timeout_of(monkeypatch, lambda: client.assess("A.", timeout=20), _ASSESS) == _all(20)
 
     def test_a_borrowed_clients_own_timeout_counts_below_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        client = Lenz(api_key=API_KEY, http_client=httpx.Client(timeout=300.0))
+        client = make(api_key=API_KEY, http_client=make_http(timeout=300.0))
         assert _timeout_of(monkeypatch, lambda: client.extract(text="Doc."), _EXTRACT) == _all(300.0)
         assert _timeout_of(monkeypatch, lambda: client.with_options(timeout=40).usage(), _USAGE) == _all(40)
 
     def test_a_copys_timeout_bounds_a_waits_polls(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        client = Lenz(api_key=API_KEY).with_options(timeout=httpx.Timeout(4, read=8))
+        client = make(api_key=API_KEY).with_options(timeout=httpx.Timeout(4, read=8))
         with recorded({("GET", f"/verify/status/{TASK}"): [RUNNING_NO_HINT, DONE]}) as rec:
             client.wait(TASK, timeout=60)
         assert [r["timeout"] for r in rec.requests] == [{"connect": 4, "read": 8, "write": 4, "pool": 4}] * 2
 
     def test_a_zero_budget_poll_uses_the_copys_timeout(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        client = Lenz(api_key=API_KEY).with_options(timeout=9)
+        client = make(api_key=API_KEY).with_options(timeout=9)
         with recorded({("GET", f"/verify/status/{TASK}"): [DONE]}) as rec:
             client.wait(TASK, timeout=0)
         assert rec.requests[0]["timeout"] == _all(9)
@@ -551,14 +606,14 @@ def _sent_headers(monkeypatch: pytest.MonkeyPatch, call: Callable[[], Any]) -> l
 
 class TestHeaders:
     def test_merged_case_insensitively_the_calls_spelling_and_value_win(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        copy = Lenz(api_key=API_KEY).with_options(extra_headers={"x-a": "copy", "X-B": "b"})
+        copy = make(api_key=API_KEY).with_options(extra_headers={"x-a": "copy", "X-B": "b"})
         sent = _sent_headers(monkeypatch, lambda: copy.usage(extra_headers={"X-A": "call"}))
         names = [h[0] for h in sent]
         assert ["X-A", "call"] in sent and ["X-B", "b"] in sent
         assert [n.lower() for n in names].count("x-a") == 1
 
     def test_a_copy_of_a_copy_merges_over_its_parent(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        parent = Lenz(api_key=API_KEY).with_options(extra_headers={"X-A": "1", "X-B": "2"})
+        parent = make(api_key=API_KEY).with_options(extra_headers={"X-A": "1", "X-B": "2"})
         child = parent.with_options(extra_headers={"x-b": "3", "X-A": None})
         sent = _sent_headers(monkeypatch, child.usage)
         assert ["x-b", "3"] in sent
@@ -567,25 +622,25 @@ class TestHeaders:
         assert ["X-A", "1"] in _sent_headers(monkeypatch, parent.usage)
 
     def test_none_removes_a_copy_header_and_nothing_else(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        copy = Lenz(api_key=API_KEY).with_options(extra_headers={"X-A": "1"})
+        copy = make(api_key=API_KEY).with_options(extra_headers={"X-A": "1"})
         sent = _sent_headers(monkeypatch, lambda: copy.usage(extra_headers={"x-a": None, "User-Agent": None}))
         lower = [h[0].lower() for h in sent]
         assert "x-a" not in lower
         assert "user-agent" in lower  # a default is not removed by None
 
     def test_an_option_header_replaces_a_default_in_any_casing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         sent = _sent_headers(monkeypatch, lambda: client.usage(extra_headers={"user-agent": "mine/1", "ACCEPT": "x/y"}))
         uas = [h for h in sent if h[0].lower() == "user-agent"]
         accepts = [h for h in sent if h[0].lower() == "accept"]
         assert uas == [["user-agent", "mine/1"]] and accepts == [["ACCEPT", "x/y"]]
 
     def test_content_type_is_still_sent_on_a_bodyless_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sent = _sent_headers(monkeypatch, lambda: Lenz(api_key=API_KEY).usage(extra_headers={MARK: "m"}))
+        sent = _sent_headers(monkeypatch, lambda: make(api_key=API_KEY).usage(extra_headers={MARK: "m"}))
         assert ["Content-Type", "application/json"] in sent
 
     def test_the_shared_client_is_never_changed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        root = Lenz(api_key=API_KEY)
+        root = make(api_key=API_KEY)
         before = (list(root._client.headers.raw), root._client.timeout)
         copy = root.with_options(timeout=3, max_retries=0, extra_headers={"User-Agent": "x", MARK: "m"})
         _sent_headers(monkeypatch, copy.usage)
@@ -605,7 +660,7 @@ class TestHeaders:
         ],
     )
     def test_reserved_names_are_refused_everywhere(self, name: str) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         for call in (
             lambda: client.usage(extra_headers={name: "x"}),
             lambda: client.verify("A.", extra_headers={name: "x"}),
@@ -623,20 +678,20 @@ class TestHeaders:
 
 class TestOwnership:
     def test_the_root_that_made_the_pool_closes_it(self) -> None:
-        root = Lenz(api_key=API_KEY)
+        root = make(api_key=API_KEY)
         root.close()
         assert root._client.is_closed
 
     def test_a_borrowed_pool_is_never_closed(self) -> None:
-        http = httpx.Client()
-        root = Lenz(api_key=API_KEY, http_client=http)
+        http = make_http()
+        root = make(api_key=API_KEY, http_client=http)
         root.with_options(timeout=5).close()
         root.close()
         assert not http.is_closed
-        http.close()
+        close_http(http)
 
     def test_a_copys_close_and_with_do_nothing(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        root = Lenz(api_key=API_KEY)
+        root = make(api_key=API_KEY)
         with root.with_options(max_retries=0) as copy:
             copy.close()
         assert not root._client.is_closed
@@ -647,14 +702,14 @@ class TestOwnership:
         root.close()
 
     def test_a_copy_after_the_root_closed_fails_with_httpxs_error(self) -> None:
-        root = Lenz(api_key=API_KEY)
+        root = make(api_key=API_KEY)
         copy = root.with_options(timeout=5)
         root.close()
         with pytest.raises(RuntimeError, match="closed"):
             copy.usage()
 
     def test_parent_and_siblings_are_isolated(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        root = Lenz(api_key=API_KEY)
+        root = make(api_key=API_KEY)
         a = root.with_options(timeout=3)
         b = root.with_options(timeout=4)
         assert _timeout_of(monkeypatch, a.usage, _USAGE) == _all(3)
@@ -662,6 +717,7 @@ class TestOwnership:
         assert _timeout_of(monkeypatch, root.usage, _USAGE) == _all(30.0)
         assert root._client is a._client is b._client
 
+    @pytest.mark.sync_only
     def test_a_subclass_and_its_namespaces_are_kept(self) -> None:
         class MyLenz(Lenz):
             def hello(self) -> str:
@@ -706,7 +762,7 @@ def _per_call_entry_points(client: Lenz) -> list[Callable[..., Any]]:
 class TestValidation:
     @pytest.mark.parametrize("bad", _BAD_TIMEOUTS)
     def test_a_bad_timeout_is_refused_before_any_request(self, bad: Any, no_key_minted: None) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with httpx_refused():
             for call in _per_call_entry_points(client):
                 with pytest.raises(ValueError, match="timeout"):
@@ -714,11 +770,11 @@ class TestValidation:
             with pytest.raises(ValueError, match="timeout"):
                 client.with_options(timeout=bad)
             with pytest.raises(ValueError, match="timeout"):
-                Lenz(api_key=API_KEY, timeout=bad)
+                make(api_key=API_KEY, timeout=bad)
 
     @pytest.mark.parametrize("bad", _BAD_RETRIES)
     def test_a_bad_retry_count_is_refused_before_any_request(self, bad: Any, no_key_minted: None) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with httpx_refused():
             for call in _per_call_entry_points(client):
                 with pytest.raises(ValueError, match="max_retries"):
@@ -729,18 +785,18 @@ class TestValidation:
                 lambda: client.review_and_wait(DRAFT, max_retries=bad),
                 lambda: client.citecheck_and_wait(DRAFT, max_retries=bad),
                 lambda: client.with_options(max_retries=bad),
-                lambda: Lenz(api_key=API_KEY, max_retries=bad),
+                lambda: make(api_key=API_KEY, max_retries=bad),
             ):
                 with pytest.raises(ValueError, match="max_retries"):
                     call()
 
     def test_with_options_refuses_none_retries(self) -> None:
         with pytest.raises(ValueError, match="max_retries"):
-            Lenz(api_key=API_KEY).with_options(max_retries=None)  # type: ignore[arg-type]
+            make(api_key=API_KEY).with_options(max_retries=None)  # type: ignore[arg-type]
 
     @pytest.mark.parametrize("bad", _BAD_HEADERS)
     def test_bad_headers_are_refused_before_any_request(self, bad: Any, no_key_minted: None) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with httpx_refused():
             for call in _per_call_entry_points(client):
                 with pytest.raises(ValueError):
@@ -755,14 +811,15 @@ class TestValidation:
 
     @pytest.mark.parametrize("good", [1, 0.5, 30, httpx.Timeout(None), httpx.Timeout(5, read=None), None])
     def test_good_timeouts_are_accepted(self, good: Any) -> None:
-        Lenz(api_key=API_KEY, timeout=good).with_options(timeout=good).close()
+        make(api_key=API_KEY, timeout=good).with_options(timeout=good).close()
 
     def test_wait_budgets_are_not_newly_validated(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # ``<= 0`` keeps meaning "poll once".
         with recorded({("GET", f"/verify/status/{TASK}"): [DONE]}) as rec:
-            Lenz(api_key=API_KEY).wait(TASK, timeout=-5)
+            make(api_key=API_KEY).wait(TASK, timeout=-5)
         assert len(rec.requests) == 1
 
+    @pytest.mark.sync_only
     def test_not_given_is_one_falsy_object(self) -> None:
         assert NotGiven() is NOT_GIVEN and not NOT_GIVEN and repr(NOT_GIVEN) == "NOT_GIVEN"
         assert lenz_io.NOT_GIVEN is NOT_GIVEN
@@ -878,6 +935,7 @@ _CHECK_WAIT: Answers = {
 _VERIFY_WAIT: Answers = {("POST", "/verify"): [ACCEPTED], ("GET", f"/verify/status/{TASK}"): [DONE]}
 
 
+@pytest.mark.sync_only
 class TestOverridesWritten221:
     """A subclass written for 2.21 keeps working through the helpers that call
     its overridden methods, as long as the caller passes no option (an empty
@@ -905,7 +963,7 @@ class TestOverridesWritten221:
         assert client.called == ["wait"]
 
     def test_the_iterators(self) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         client.verifications = _OldVerifications(client)
         client.library = _OldLibrary(client)
         with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2], ("GET", "/library"): [LIB_1, LIB_2]}):
@@ -913,7 +971,7 @@ class TestOverridesWritten221:
             assert len(list(client.library.iter(extra_headers={}))) == 2
 
     def test_an_option_still_reaches_an_override_that_takes_it(self) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with recorded(_REVIEW_WAIT) as rec:
             client.review_and_wait(DRAFT, extra_headers={MARK: "m"})
         assert all(_headers(r).get(MARK.lower()) == "m" for r in rec.requests)
@@ -922,7 +980,7 @@ class TestOverridesWritten221:
 class TestSnapshots:
     def test_a_copy_keeps_the_timeout_it_was_given(self) -> None:
         t = httpx.Timeout(8)
-        a = Lenz(api_key=API_KEY).with_options(timeout=t)
+        a = make(api_key=API_KEY).with_options(timeout=t)
         b = a.with_options()
         t.read = None
         for client in (a, b):
@@ -934,7 +992,7 @@ class TestSnapshots:
         headers: dict[str, str | None] = {MARK: "first"}
         t = httpx.Timeout(4)
         with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2]}) as rec:
-            it = Lenz(api_key=API_KEY).verifications.iter(extra_headers=headers, timeout=t)
+            it = make(api_key=API_KEY).verifications.iter(extra_headers=headers, timeout=t)
             headers[MARK] = "changed"
             next(it)
             headers["X-Late"] = "late"
@@ -947,7 +1005,7 @@ class TestSnapshots:
     def test_the_library_iterator_too(self) -> None:
         headers: dict[str, str | None] = {MARK: "first"}
         with recorded({("GET", "/library"): [LIB_1, LIB_2]}) as rec:
-            it = Lenz(api_key=API_KEY).library.iter(extra_headers=headers)
+            it = make(api_key=API_KEY).library.iter(extra_headers=headers)
             next(it)
             headers[MARK] = "changed"
             list(it)
@@ -963,11 +1021,11 @@ class TestTimeoutForms:
 
     def test_the_tuple_form_on_the_constructor(self) -> None:
         with recorded(_USAGE) as rec:
-            Lenz(api_key=API_KEY, timeout=self._TUPLE).usage()  # type: ignore[arg-type]
+            make(api_key=API_KEY, timeout=self._TUPLE).usage()  # type: ignore[arg-type]
         assert rec.requests[0]["timeout"] == self._AS_DICT
 
     def test_the_tuple_form_on_a_call_and_a_copy(self) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with recorded(_EXTRACT) as rec:
             client.extract(text="Doc.", timeout=self._TUPLE)  # type: ignore[arg-type]
         assert rec.requests[0]["timeout"] == self._AS_DICT
@@ -978,13 +1036,13 @@ class TestTimeoutForms:
     @pytest.mark.parametrize("bad", [(5, 0, 5, 5), (5, math.nan, 5, 5), (5, -1, 5, 5), (5, True, 5, 5), (5, 5), ()])
     def test_a_bad_tuple_is_refused(self, bad: Any) -> None:
         with pytest.raises(ValueError, match="timeout"):
-            Lenz(api_key=API_KEY, timeout=bad)
+            make(api_key=API_KEY, timeout=bad)
         with pytest.raises(ValueError, match="timeout"):
-            Lenz(api_key=API_KEY).usage(timeout=bad)
+            make(api_key=API_KEY).usage(timeout=bad)
 
     def test_a_tuple_with_an_unbounded_part(self) -> None:
         with recorded(_USAGE) as rec:
-            Lenz(api_key=API_KEY).usage(timeout=(5, None, 5, 5))  # type: ignore[arg-type]
+            make(api_key=API_KEY).usage(timeout=(5, None, 5, 5))  # type: ignore[arg-type]
         assert rec.requests[0]["timeout"]["read"] is None
 
     def test_any_real_number_and_any_integer_like_retry_count(self) -> None:
@@ -994,7 +1052,7 @@ class TestTimeoutForms:
             def __index__(self) -> int:
                 return 3
 
-        client = Lenz(api_key=API_KEY, timeout=Fraction(5), max_retries=Three())  # type: ignore[arg-type]
+        client = make(api_key=API_KEY, timeout=Fraction(5), max_retries=Three())  # type: ignore[arg-type]
         client.with_options(timeout=Fraction(1, 2), max_retries=Three())  # type: ignore[arg-type]
         with recorded({("GET", "/me/usage"): [S503]}) as rec, pytest.raises(lenz_io.LenzAPIError):
             client.usage(max_retries=Three(), timeout=7)  # type: ignore[arg-type]
@@ -1015,7 +1073,7 @@ class TestHeaderSyntax:
         ],
     )
     def test_refused_before_a_key_or_a_request(self, headers: dict[str, str], no_key_minted: None) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with httpx_refused():
             for call in (
                 lambda: client.verify("A.", extra_headers=headers),
@@ -1027,13 +1085,13 @@ class TestHeaderSyntax:
 
     def test_tab_and_space_are_allowed_in_a_value(self) -> None:
         with recorded(_USAGE) as rec:
-            Lenz(api_key=API_KEY).usage(extra_headers={"X-A": "a b\tc", "X-Empty": ""})
+            make(api_key=API_KEY).usage(extra_headers={"X-A": "a b\tc", "X-Empty": ""})
         assert _headers(rec.requests[0])["x-a"] == "a b\tc"
         assert _headers(rec.requests[0])["x-empty"] == ""
 
     @pytest.mark.parametrize("value", ["trace ", " trace", "\ttrace", "trace\t", " ", "\t"])
     def test_whitespace_at_either_end_of_a_value_is_refused(self, value: str, no_key_minted: None) -> None:
-        client = Lenz(api_key=API_KEY)
+        client = make(api_key=API_KEY)
         with httpx_refused():
             for call in (
                 lambda: client.verify("A.", extra_headers={"X-A": value}),
@@ -1055,12 +1113,23 @@ class TestHeaderSyntax:
                 raise UnicodeEncodeError("ascii", "é", 0, 1, "not ASCII")
             return real(self, method, path, **kw)
 
-        monkeypatch.setattr(Lenz, "_request", failing)
+        real_async = AsyncLenz._request
+
+        async def failing_async(self: AsyncLenz, method: str, path: str, **kw: Any) -> Any:
+            if method == "GET":
+                raise UnicodeEncodeError("ascii", "é", 0, 1, "not ASCII")
+            return await real_async(self, method, path, **kw)
+
+        if _Clients.use_async:
+            monkeypatch.setattr(AsyncLenz, "_request", failing_async)
+        else:
+            monkeypatch.setattr(Lenz, "_request", failing)
         with recorded(_REVIEW_WAIT) as rec, pytest.raises(UnicodeEncodeError):
-            Lenz(api_key=API_KEY).review_and_wait(DRAFT, timeout=60)
+            make(api_key=API_KEY).review_and_wait(DRAFT, timeout=60)
         assert rec.clock.sleeps == []
 
 
+@pytest.mark.sync_only
 def test_a_with_block_on_a_subclass_copy_keeps_the_subclass() -> None:
     class Sub(Lenz):
         pass

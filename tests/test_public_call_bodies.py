@@ -16,13 +16,32 @@ from __future__ import annotations
 
 import inspect
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import respx
+from conftest import AnyClient, make_client
 
 from lenz_io import Lenz
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 BASE = "https://lenz.io/api/v1"
 KEY = "pinned-key-1"
@@ -44,8 +63,8 @@ def _ordered(content: bytes) -> list[tuple[str, Any]]:
 
 
 @pytest.fixture()
-def no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+def no_sleep(any_client: AnyClient) -> list[float]:
+    return any_client.slept
 
 
 # ── verify / verify_and_wait ───────────────────────────────────────────────

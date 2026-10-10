@@ -23,10 +23,8 @@ from typing import Any
 from rich.console import Console
 
 import lenz_io.cli.render as render_mod
-from lenz_io import errors as errors_mod
-from lenz_io import models
-from lenz_io.cli import citecheck as citecheck_cli
-from lenz_io.cli import review as review_cli
+from lenz_io import errors as errors_mod, models
+from lenz_io.cli import citecheck as citecheck_cli, review as review_cli
 from lenz_io.cli.errors import friendly_text, to_payload
 from lenz_io.client import Lenz
 from lenz_io.webhooks import parse_webhook

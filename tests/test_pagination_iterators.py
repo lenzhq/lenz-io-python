@@ -6,12 +6,32 @@ a page is fetched only when the items before it have been consumed, and
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from itertools import islice
+from typing import Any
 
 import pytest
 import respx
+from conftest import make_client
 
 from lenz_io import Lenz, LibraryItem, VerificationListItem
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 BASE = "https://lenz.io/api/v1"
 

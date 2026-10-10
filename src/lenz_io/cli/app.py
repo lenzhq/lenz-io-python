@@ -14,10 +14,7 @@ import typer
 from lenz_io import __version__
 from lenz_io.client import DEFAULT_BASE_URL
 
-from . import citecheck as citecheck_mod
-from . import commands
-from . import review as review_mod
-from . import verify as verify_mod
+from . import citecheck as citecheck_mod, commands, review as review_mod, verify as verify_mod
 from .config import ENV_BASE_URL, ConfigError, resolve_all
 from .context import CLIState
 from .render import Output

@@ -17,9 +17,7 @@ from typer.testing import CliRunner
 
 import lenz_io.cli
 import lenz_io.cli as cli_pkg
-from lenz_io.cli import _run, normalize_argv
-from lenz_io.cli import config as cfg
-from lenz_io.cli import verify as verify_mod
+from lenz_io.cli import _run, config as cfg, normalize_argv, verify as verify_mod
 from lenz_io.cli.app import app
 from lenz_io.cli.errors import CLIError
 from lenz_io.errors import (
