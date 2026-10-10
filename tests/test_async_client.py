@@ -32,7 +32,16 @@ import httpx
 import pytest
 
 import lenz_io
-from lenz_io import AsyncLenz, Lenz, LenzAPIError, LenzError, ReviewFull, async_client as async_module
+from lenz_io import (
+    AsyncLenz,
+    BatchAccepted,
+    Lenz,
+    LenzAPIError,
+    LenzError,
+    ReviewFull,
+    TaskAccepted,
+    async_client as async_module,
+)
 from lenz_io.async_client import (
     _AsyncAskNamespace,
     _AsyncLibraryNamespace,
@@ -982,3 +991,64 @@ async def test_aclose_lets_a_pending_cancel_go_out() -> None:
     assert len(server.calls("POST", "/verify/t1/cancel")) == 1
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+# ── wait: the id is known up front, so an early cancellation cancels it ────
+
+
+def _wait_server() -> Server:
+    return Server(
+        {
+            ("GET", "/verify/status/t1"): [_blocked(asyncio.Event())],
+            ("POST", "/verify/t1/cancel"): [CANCELLED],
+        }
+    )
+
+
+@pytest.mark.parametrize("flag", [True, False])
+@pytest.mark.parametrize("given", ["id", "task_accepted", "batch_item"])
+async def test_a_cancellation_requested_before_the_first_poll(flag: bool, given: str) -> None:
+    """The task awaiting ``wait`` was already cancelled when ``wait`` began
+    (the asyncio form of an aborted signal): with the flag, the run is
+    cancelled at once, without a poll; without it, nothing is cancelled."""
+    batch = BatchAccepted.model_validate({"batch_id": "b", "items": [{"task_id": "t1", "claim": "A."}]})
+    task_arg: Any = {"id": "t1", "task_accepted": TaskAccepted(task_id="t1"), "batch_item": batch.items[0]}[given]
+    server = _wait_server()
+    async with server.client() as client:
+
+        async def caller() -> None:
+            current = asyncio.current_task()
+            assert current is not None
+            current.cancel()  # delivered at the wait's first await
+            await client.wait(task_arg, cancel_on_abort=flag)
+
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.ensure_future(caller())
+    cancels = server.calls("POST", "/verify/t1/cancel")
+    if flag:
+        assert len(cancels) == 1
+        assert server.calls("GET", "/verify/status/t1") == []  # cancelled without a poll
+    else:
+        assert cancels == []
+
+
+@pytest.mark.parametrize("flag", [True, False])
+async def test_a_cancellation_during_the_first_poll(flag: bool) -> None:
+    polled = asyncio.Event()
+    server = Server({("GET", "/verify/status/t1"): [_blocked(polled)], ("POST", "/verify/t1/cancel"): [CANCELLED]})
+    async with server.client() as client:
+        await _cancel_once_polling(client.wait("t1", cancel_on_abort=flag), polled)
+    assert len(server.calls("GET", "/verify/status/t1")) == 1
+    assert len(server.calls("POST", "/verify/t1/cancel")) == (1 if flag else 0)
+
+
+async def test_a_task_cancelled_before_it_ever_runs_never_enters_wait() -> None:
+    """A coroutine cancelled before its first step runs no code at all, so
+    ``wait`` cannot see the cancellation, whatever the flag (documented)."""
+    server = _wait_server()
+    async with server.client() as client:
+        task = asyncio.ensure_future(client.wait("t1", cancel_on_abort=True))
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert server.requests == []

@@ -93,6 +93,9 @@ ADDENDA = {
     ("AsyncLenz", "wait"): [
         _CALLBACK.format(name="on_progress"),
         _ABORT.format(job="verification", cancel="cancel(task_id)", per="", charge=_VERIFY_CHARGE, job_id="task id"),
+        "The id is known up front: with ``cancel_on_abort``, a cancellation already requested when the wait "
+        "starts cancels the run without polling it. A task cancelled before it ever runs never enters the "
+        "call, so nothing is sent.",
     ],
     ("AsyncLenz", "verify_batch_and_wait"): [
         _CALLBACK.format(name="on_progress"),

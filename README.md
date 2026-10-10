@@ -1255,7 +1255,9 @@ verification is not charged; a cancelled review or citation check refunds what i
 delivered. A cancel that fails, or that loses the race to the end of the job (which is then
 charged as usual), is logged at WARNING with the job id. `asyncio.timeout()` and
 `asyncio.wait_for()` around a wait are cancellations; the wait's own `timeout=` running out is
-not, and never stops the job.
+not, and never stops the job. `wait(task_id, cancel_on_abort=True)` knows the id up front: a
+cancellation already requested when it starts cancels the run without polling. A task
+cancelled before it ever runs never enters the call, so nothing is sent.
 
 A submit cancelled after its request left may still have started the job, and a fresh call
 would start (and charge) a second one. If you may cancel a submit, pin `idempotency_key=` and

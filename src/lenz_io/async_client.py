@@ -1281,6 +1281,10 @@ class AsyncLenz:
         to those 5 seconds); this call's own ``timeout`` running out does not, and never stops the
         verification. Without the flag a cancelled await only stops waiting: the verification keeps
         running and is charged as usual.
+
+        The id is known up front: with ``cancel_on_abort``, a cancellation already requested when
+        the wait starts cancels the run without polling it. A task cancelled before it ever runs
+        never enters the call, so nothing is sent.
         """
         options = _call_options(None, None, extra_headers, "wait()")
         task_id = _wait_task_id(task)
@@ -2009,6 +2013,10 @@ class AsyncLenz:
         """
         poll = TaskPoll(task_ids, timeout, _monotonic())
         try:
+            if cancel_on_abort:
+                # A checkpoint before the first poll: a cancellation already
+                # requested (the ids are known) cancels them without polling.
+                await asyncio.sleep(0)
             await self._poll_tasks(poll, on_progress, options)
         except asyncio.CancelledError:
             if cancel_on_abort:
