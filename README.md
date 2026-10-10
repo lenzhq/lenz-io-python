@@ -1143,7 +1143,9 @@ https://lenz.io/contact.
 (on `ask.send`, the language of the claim being discussed; on a review, one language
 for the whole draft). A concrete code always wins, and leaving `language` out still
 means English. The other methods (`extract`, `verify_batch`, `citecheck`) take the
-codes above, not `auto`.
+codes above, not `auto`. A review of a draft that is only a link decides
+its language once the page is read: until then its `language` reads `"auto"`, and a
+page that cannot be read leaves English.
 
 ```python
 r = client.assess(claim="Die Erde ist flach.", language="auto")
