@@ -620,7 +620,7 @@ def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:
     else:
         payload = json.loads(body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body)
     if not isinstance(payload, dict):
-        raise ValueError(f"A webhook body is a JSON object, got {type(payload).__name__}.")
+        raise LenzUsageError(f"A webhook body is a JSON object, got {type(payload).__name__}.")
     return _build_event(payload)
 
 

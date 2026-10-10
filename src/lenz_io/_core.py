@@ -85,10 +85,6 @@ _VERSION_HEADER = "X-Lenz-API-Version"
 
 DEFAULT_BASE_URL = "https://lenz.io/api/v1"
 DEFAULT_TIMEOUT = 30.0
-#: The default of the clients' ``timeout=``: :data:`DEFAULT_TIMEOUT`'s value,
-#: but its own object, so a client can tell "left out" (keep a borrowed
-#: ``http_client``'s own timeout) from any value passed, ``30.0`` included.
-_CONSTRUCTOR_TIMEOUT: Final[float] = float("30.0")
 # ``assess`` runs framing and then a 3-model panel inside one synchronous
 # request, and the server divides a single budget between them — so BOTH
 # forms get the same room, not just the list one. Typical calls answer in
@@ -778,12 +774,23 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
 
     Reads the ``Retry-After`` header first, then the body's
     ``reset_in_seconds`` (429 shapes), then the body's ``retry_after``
-    (the 503 shapes carry the wait under that key). Returns None (rather
+    (the 503 shapes carry the wait under that key). A typed 503
+    (``upstream_unavailable`` / ``capacity``) reads its body's
+    ``retry_after`` / ``retry_after_seconds`` first, as its error does. Returns None (rather
     than 0) on an absent or unparseable value so the caller can tell
     "server stated no wait" apart from "server said wait 0 seconds" and
     fall back to its own backoff.
     """
     raw = response.headers.get("Retry-After")
+    if response.status_code == 503 and _body_error_code(response) in UPSTREAM_503_CODES:
+        # The API's own 503 states its wait in the body, which wins over the
+        # header, as on ``LenzUpstreamUnavailableError.retry_after``.
+        body = _json_or_none(response)
+        stated = body.get("retry_after") if isinstance(body, dict) else None
+        if stated is None or str(stated).strip() == "":
+            stated = body.get("retry_after_seconds") if isinstance(body, dict) else None
+        if stated is not None and str(stated).strip() != "":
+            raw = stated
     if raw is None or str(raw).strip() == "":
         try:
             body = response.json()
@@ -891,7 +898,8 @@ def _client_settings(
 
     # The same rule as every request option: refused here, before the
     # client exists, rather than failing (or retrying forever) later.
-    checked_timeout = _check_timeout(timeout, where)
+    # Left out (``NOT_GIVEN``): the 30 s default.
+    checked_timeout = _check_timeout(DEFAULT_TIMEOUT if isinstance(timeout, NotGiven) else timeout, where)
     retries = _check_retries(max_retries, where)
     from_env = api_key is None
     key = ((os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key).strip(_ASCII_SPACE)
@@ -1306,8 +1314,12 @@ def _no_key(idempotency: bool) -> dict[str, Any]:
 
 def _job_key(idempotency_key: str | None, idempotency: bool = True) -> str | None:
     """A review's or citation check's ``Idempotency-Key``: the caller's, else
-    a new random one, else (``idempotency=False``, since 3.2) none."""
-    return idempotency_key or (uuid.uuid4().hex if idempotency else None)
+    a new random one, else (``idempotency=False``, since 3.2) none. An empty
+    ``idempotency_key=""`` sends none, as on every other call (3.1 generated
+    one here)."""
+    if idempotency_key is not None:
+        return idempotency_key or None
+    return uuid.uuid4().hex if idempotency else None
 
 
 def _review_params(view: str) -> dict[str, Any] | None:

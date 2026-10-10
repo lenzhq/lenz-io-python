@@ -98,7 +98,6 @@ from typing_extensions import Self
 # stays importable from it (callers, the CLI and the tests import them here).
 from ._core import (
     _CANCELLED_FAILURE as _CANCELLED_FAILURE,
-    _CONSTRUCTOR_TIMEOUT as _CONSTRUCTOR_TIMEOUT,
     _HEADER_NAME as _HEADER_NAME,
     _HEADER_VALUE as _HEADER_VALUE,
     _NO_OPTIONS as _NO_OPTIONS,
@@ -685,9 +684,10 @@ class Lenz:
     character or a non-ASCII character inside it raises ``LenzAuthError``
     here, since 3.2).
 
-    ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass is
-    sent on each request (the client you passed is not changed); left out,
-    that client's own timeout applies.
+    ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass
+    (``30.0`` included) is sent on each request (the client you passed is not
+    changed); left out, that client's own timeout applies. Left out on a
+    client the SDK creates, it is 30 s (``DEFAULT_TIMEOUT``).
 
     ``user_agent`` replaces the SDK's User-Agent, also on requests sent
     through a client given as ``http_client=`` (set on each request; the
@@ -713,7 +713,7 @@ class Lenz:
         *,
         api_key: str | None = None,
         base_url: str | None = None,
-        timeout: float | httpx.Timeout | None = _CONSTRUCTOR_TIMEOUT,
+        timeout: float | httpx.Timeout | NotGiven | None = NOT_GIVEN,
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.Client | None = None,
         user_agent: str | None = None,
@@ -734,7 +734,7 @@ class Lenz:
         # A ``timeout=`` given with a borrowed ``http_client=`` is sent on each
         # request (the borrowed client is not changed); left out, the borrowed
         # client's own timeout applies.
-        self._send_timeout = self._borrowed and given_timeout is not _CONSTRUCTOR_TIMEOUT
+        self._send_timeout = self._borrowed and not isinstance(given_timeout, NotGiven)
         user_agent = _check_user_agent(user_agent, "Lenz()")
         self._user_agent = user_agent or None
         self._sdk_user_agent = user_agent or _user_agent()

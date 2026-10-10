@@ -341,10 +341,10 @@ def test_a_batch_item_has_no_raw() -> None:
     assert BatchItemResult(task_id="t", status="timeout").raw is None
 
 
-def test_a_model_built_in_code_holds_its_fields() -> None:
+def test_a_model_built_with_keywords_has_no_raw() -> None:
     from lenz_io.models import ReviewStarted, TaskAccepted
 
-    assert ReviewStarted(review_id="r1", status="queued").raw == {"review_id": "r1", "status": "queued"}
+    assert ReviewStarted(review_id="r1", status="queued").raw is None
     assert TaskAccepted.model_validate({"task_id": "t", "claim": "A."}).raw == {"task_id": "t", "claim": "A."}
 
 
@@ -371,13 +371,17 @@ def test_nested_raw_is_the_part_as_received_not_the_2x_reading() -> None:
     assert model.failure.raw == {"code": "no_checkable_claim"}
 
 
-def test_raw_is_a_snapshot_taken_when_read() -> None:
+def test_raw_hands_out_a_copy() -> None:
+    """``raw`` is the object the model was read from, not a copy taken at
+    read time (that would cost every read, used or not), and every access
+    returns a copy of it, so changing what it returned changes nothing."""
     from lenz_io.models import TaskAccepted
 
-    data = {"task_id": "t", "claim": "A.", "future": {"a": 1}}
-    model = TaskAccepted.model_validate(data)
-    model.future["a"] = 2  # type: ignore[attr-defined]
-    data["claim"] = "B."
+    model = TaskAccepted.model_validate({"task_id": "t", "claim": "A.", "future": {"a": 1}})
+    first = model.raw
+    assert first is not None
+    first["future"]["a"] = 2
+    first["claim"] = "B."
     assert model.raw == {"task_id": "t", "claim": "A.", "future": {"a": 1}}
 
 
@@ -479,3 +483,66 @@ def test_a_wait_on_a_client_that_cannot_send_raises_at_once(client: Any) -> None
             c.wait("t1", timeout=60)
         with pytest.raises(LenzConnectionError):
             c._wait_review("r1", timeout=60)
+
+
+# ── review round 1 ────────────────────────────────────────────────────────
+
+
+def test_the_ladder_sleeps_a_typed_503s_body_wait_first(client: Any) -> None:
+    from lenz_io._core import _stated_retry_after
+
+    def answer(body: dict[str, Any], headers: dict[str, str]) -> Any:
+        import httpx
+
+        return httpx.Response(503, json=body, headers=headers)
+
+    assert _stated_retry_after(answer({"code": "capacity", "retry_after": 30}, {"Retry-After": "5"})) == 30
+    assert _stated_retry_after(answer({"code": "capacity"}, {"Retry-After": "5"})) == 5
+    assert _stated_retry_after(answer({"detail": "x", "retry_after": 30}, {"Retry-After": "5"})) == 5
+
+
+def test_an_old_shape_failed_row_with_a_null_verdict_reads_error() -> None:
+    from lenz_io.models import AssessClaim
+
+    row = AssessClaim.model_validate({"claim": "A.", "verdict": None, "confidence": None, "error_code": "timeout"})
+    assert (row.verdict, row.confidence, row.error_code) == ("Error", "low", "timeout")
+
+
+@pytest.mark.parametrize(
+    ("path", "answer", "call"),
+    [
+        ("/review", {"review_id": "r1", "status": "queued"}, lambda c: c.review("Draft.", idempotency_key="")),
+        ("/citecheck", {"citecheck_id": "c1", "status": "queued"}, lambda c: c.citecheck("Draft.", idempotency_key="")),
+        ("/verify", {"task_id": "t1", "claim": "A."}, lambda c: c.verify("A.", idempotency_key="")),
+    ],
+)
+def test_an_empty_idempotency_key_sends_none(client: Any, path: str, answer: Any, call: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.post(path).respond(202, json=answer)
+        call(client)
+    assert "Idempotency-Key" not in route.calls.last.request.headers
+
+
+def test_a_webhook_that_is_not_an_object_is_a_usage_error() -> None:
+    from lenz_io import LenzUsageError
+    from lenz_io.webhooks import parse_webhook
+
+    with pytest.raises(LenzUsageError):
+        parse_webhook(b"[1]")
+
+
+@pytest.mark.sync_only
+def test_an_explicit_default_timeout_counts_with_a_borrowed_client() -> None:
+    import httpx
+
+    from lenz_io.client import DEFAULT_TIMEOUT
+
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/me/usage").respond(200, json=_USAGE)
+        borrowed = httpx.Client(timeout=300.0)
+        from lenz_io import Lenz
+
+        Lenz(api_key=KEY, http_client=borrowed, timeout=DEFAULT_TIMEOUT).usage()
+        Lenz(api_key=KEY, http_client=borrowed).usage()
+    timeouts = [c.request.extensions["timeout"]["read"] for c in route.calls]
+    assert timeouts == [30.0, 300.0]

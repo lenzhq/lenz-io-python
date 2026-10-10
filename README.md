@@ -580,8 +580,13 @@ the payload carried. A
 `ReviewStarted` / `CitecheckStarted` that a 409 naming the job settled (see
 [Idempotency](#idempotency)) holds that 409's body. `BatchItemResult` is built
 by the SDK, so its `raw` is `None` (its `verification.raw` and
-`status_detail.raw` are the bodies it was built from). A model you build
-yourself holds the fields you built it with.
+`status_detail.raw` are the bodies it was built from). A model built with
+keyword arguments has `None`; `Model.model_validate(data)` sets it. `raw` is
+the object the model was read from, not a copy taken then (a copy would cost
+every read, used or not); each access returns a new copy. A client's reads
+hand the model a freshly parsed body, so nothing else holds it; when you
+validate a dict of your own, changing that dict in place changes what `raw`
+returns.
 
 ### A suggested rewrite (`suggested_rewrite`)
 
@@ -1137,7 +1142,9 @@ drop after submit doesn't spawn a duplicate or charge a second time. Override
 with `idempotency_key="..."` to pin a specific key (it also makes a retry
 from another process replay), or `idempotency=False` to opt out. `review`,
 `citecheck` and their `*_and_wait` helpers send one the same way, and take
-`idempotency=False` since 3.2 (they always sent one before). The batch and
+`idempotency=False` since 3.2 (they always sent one before). On every call an
+empty `idempotency_key=""` sends no key (since 3.2 on `review` / `citecheck`
+too, which generated one). The batch and
 `ask.send` keys are new in 3.0; 2.x sent one there only when you passed it.
 
 The key is never derived from the request, and is random per call: it
@@ -1473,8 +1480,8 @@ contains the key.
 **`http_client=`**: your own `httpx.Client` (`httpx.AsyncClient` for
 `AsyncLenz`). Its connection pool, proxies and transport are used as they are,
 and it is never closed by the SDK. Since 3.2 a `timeout=` passed next to it is
-sent on each request (3.1 ignored it); left out, the client's own timeout
-applies. The client itself is never changed.
+sent on each request (3.1 ignored it), `30.0` (or `lenz_io.client.DEFAULT_TIMEOUT`)
+passed explicitly included; left out, the client's own timeout applies. The client itself is never changed.
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
 
@@ -1522,9 +1529,16 @@ value it has none of). That is read as if the field were not sent: its 3.x
 default, or `None` with `legacy_aliases=False`. 3.1 raised pydantic's
 `ValidationError` there. A required field sent as `null` still raises.
 
-`AssessClaim.verdict` / `confidence` and the numeric `Usage` aliases keep their
-3.x annotations (`str`, `int`, `UsageCapacity`), so with `legacy_aliases=False`
-read them as `... | None`. The deprecated attributes still exist on the models.
+These keep their 3.x annotations (`str`, `int`, `UsageCapacity`, `Progress`,
+`list`), so with `legacy_aliases=False` read them as `... | None`: the numeric
+`Usage` aliases, and every field the API can send as `null`
+(`AssessClaim.verdict` / `confidence` / `error_code` / `hint`,
+`AssessResponse.error` / `error_code`, `CandidateClaim.text`,
+`EntityRef.name`, `TaskStatus.reason` / `hint` / `progress` / `claims` /
+`docs_url` / `error` / `failure_class` / `failure_reason`, `Usage.verify` /
+`ask` / `assess`). With the default `legacy_aliases=True` a failed `assess`
+row with a `null` verdict reads `verdict == "Error"` and `confidence == "low"`,
+as in 2.x. The deprecated attributes still exist on the models.
 A field the response leaves out still reads its declared default, as in every
 3.x release. `model_dump(exclude_unset=True)` is the body as sent (the
 `Usage` aliases that read `None` are not marked set). Errors (classes and
