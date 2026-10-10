@@ -41,11 +41,11 @@ from .errors import (
     CitecheckTimeout,
     LenzAPIError,
     LenzApiVersionError,
-    LenzAuthError,
     LenzConnectionError,
     LenzError,
     LenzInvalidKeyError,
     LenzInvalidResponseError,
+    LenzMissingKeyError,
     LenzNeedsInputError,
     LenzPipelineError,
     LenzRequestTimeoutError,
@@ -74,6 +74,7 @@ from .models import (
     _Body,
     _legacy_view,
     _Meta,
+    _no_result,
     _set_raw,
 )
 
@@ -1121,6 +1122,16 @@ def _with_options_layer(
 
 # ── request bodies (argument errors raise here, before any request) ──
 
+#: A blank input or an empty list is refused with the sentence the API's 422
+#: (``2026-10-11``) gives for the same request, so the message reads the same
+#: whether the SDK or the API refused it (a blank claim is ``claim is
+#: required.``, a blank ``assess`` item ``claims[i] is blank.``).
+_API_ASSESS_EMPTY_LIST = "claim: Field required"
+_API_SELECT_EMPTY = "claims is required."
+_API_ASK_BLANK = "Message cannot be empty."
+_API_REVIEW_BLANK = "text: send the draft, or one public http(s) URL."
+_API_CITECHECK_BLANK = "payload: Value error, send exactly one of text and pairs"
+
 
 def _key_header(idempotency_key: str | None) -> dict[str, str]:
     """``{"Idempotency-Key": key}``, or no header when there is no key."""
@@ -1235,7 +1246,8 @@ def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None
         )
     if claims is not None:
         if not claims:
-            raise LenzUsageError("claims is required.", code="empty_list", param="claims")
+            # The API reads ``"claims": []`` as no input at all.
+            raise LenzUsageError(_API_ASSESS_EMPTY_LIST, code="empty_list", param="claims")
         for index, item in enumerate(claims):
             if not isinstance(item, str):
                 raise LenzUsageError(
@@ -1274,11 +1286,20 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
     chosen = claims or texts
     if not chosen:
-        raise LenzUsageError("select requires a non-empty claims=[...]", code="empty_list", param="claims")
+        raise LenzUsageError(_API_SELECT_EMPTY, code="empty_list", param="claims")
+    for index, item in enumerate(chosen):
+        # Since 3.2 a blank item is refused, as ``assess`` refuses one (the
+        # API drops it silently, and answers ``claims is required.`` only
+        # when every item is blank).
+        if _blank(item):
+            raise LenzUsageError(f"claims[{index}] is blank.", code="blank_item", param=f"claims[{index}]")
     return chosen
 
 
 def _ask_payload(message: str, language: str) -> dict[str, Any]:
+    # ``None`` too: the API reads a ``null`` message as an empty one.
+    if message is None or _blank(message):
+        raise LenzUsageError(_API_ASK_BLANK, code="blank_input", param="message")
     payload: dict[str, Any] = {"message": message}
     if language:
         payload["language"] = language
@@ -1334,9 +1355,7 @@ def _review_payload(
     visibility: str,
 ) -> dict[str, Any]:
     if not text or not text.strip():
-        raise LenzUsageError(
-            "review() needs the draft text, or one public http(s) URL.", code="blank_input", param="text"
-        )
+        raise LenzUsageError(_API_REVIEW_BLANK, code="blank_input", param="text")
     payload: dict[str, Any] = {"text": text}
     if language:
         payload["language"] = language
@@ -1381,12 +1400,10 @@ def _citecheck_payload(
     webhook_url: str | None,
 ) -> dict[str, Any]:
     has_text = bool(text and text.strip())
-    if has_text == (pairs is not None):
-        raise LenzUsageError(
-            "citecheck() needs exactly one of text and pairs.",
-            code="conflicting_input" if has_text else "blank_input",
-            param="text",
-        )
+    if not has_text and pairs is None:
+        raise LenzUsageError(_API_CITECHECK_BLANK, code="blank_input", param="text")
+    if has_text and pairs is not None:
+        raise LenzUsageError("citecheck() needs exactly one of text and pairs.", code="conflicting_input", param="text")
     if pairs is not None and max_citations is not None:
         raise LenzUsageError(
             "max_citations goes with text: every pair is checked.", code="conflicting_input", param="max_citations"
@@ -1521,10 +1538,10 @@ def _prepare(
 ) -> tuple[str, dict[str, str], Any]:
     """The URL, headers and timeout one request is sent with (every attempt
     of it). Raises ``LenzAuthError`` when the call needs a key and there is
-    none. ``user_agent``: a User-Agent to send on this request (a client
+    none (``LenzMissingKeyError``). ``user_agent``: a User-Agent to send on this request (a client
     given ``http_client=``), under the request options' headers."""
     if auth_required and not api_key:
-        raise LenzAuthError(
+        raise LenzMissingKeyError(
             message="API key required",
             cause="This method requires authentication; no API key was provided.",
             fix=(
@@ -1840,13 +1857,9 @@ def _verification_from_terminal(status: TaskStatus, task_id: str) -> Verificatio
     matching typed error."""
     if status.status == "completed":
         if status.result is None:
-            raise LenzPipelineError(
-                message="Pipeline completed but the result is empty.",
-                cause="Server reported status=completed without a result block.",
-                fix="File an issue at https://github.com/lenzhq/lenz-io-python/issues with the Request ID.",
-                doc_url="https://lenz.io/docs/errors",
-                task_id=task_id,
-            )
+            # The run ended, but there is nothing to read (since 3.2; 3.1
+            # raised ``LenzPipelineError``).
+            raise _no_result(status)
         return status.result
     # The error is built from the 2.x reading, whatever ``legacy_aliases``.
     status = _legacy_view(status)
@@ -1983,12 +1996,14 @@ def _batch_results(
                 )
             )
         else:
-            # failed, or completed-without-result (treated as failed).
-            results.append(
-                BatchItemResult(
-                    task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed", status_detail=status
-                )
+            # failed, or completed-without-result (treated as failed: the run
+            # ended, but its result cannot be read, which ``error`` says).
+            item = BatchItemResult(
+                task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed", status_detail=status
             )
+            if status.status == "completed":
+                item._error = _no_result(status)
+            results.append(item)
     return results
 
 

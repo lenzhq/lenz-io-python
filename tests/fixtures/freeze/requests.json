@@ -3875,7 +3875,7 @@
  "keyless_refused": {
   "outcome": {
    "code": "",
-   "error": "LenzAuthError",
+   "error": "LenzMissingKeyError",
    "idempotency_key": null,
    "message": "API key required",
    "status_code": 0
@@ -5338,7 +5338,7 @@
  },
  "retry_409_conflict": {
   "outcome": {
-   "result": "TaskAccepted"
+   "result": "TaskAcceptedResult"
   },
   "requests": [
    {
@@ -8256,7 +8256,7 @@
    "code": "blank_input",
    "error": "LenzUsageError",
    "idempotency_key": null,
-   "message": "review() needs the draft text, or one public http(s) URL.",
+   "message": "text: send the draft, or one public http(s) URL.",
    "status_code": null
   },
   "requests": [],
@@ -8402,7 +8402,7 @@
    "code": "empty_list",
    "error": "LenzUsageError",
    "idempotency_key": null,
-   "message": "select requires a non-empty claims=[...]",
+   "message": "claims is required.",
    "status_code": null
   },
   "requests": [],
@@ -11578,7 +11578,7 @@
  },
  "verifications_get": {
   "outcome": {
-   "result": "Verification"
+   "result": "VerificationResult"
   },
   "requests": [
    {
@@ -11678,7 +11678,7 @@
  },
  "verifications_get_keyless": {
   "outcome": {
-   "result": "Verification"
+   "result": "VerificationResult"
   },
   "requests": [
    {
@@ -12803,7 +12803,7 @@
  },
  "verify_no_key": {
   "outcome": {
-   "result": "TaskAccepted"
+   "result": "TaskAcceptedResult"
   },
   "requests": [
    {
@@ -12861,7 +12861,7 @@
  },
  "verify_options": {
   "outcome": {
-   "result": "TaskAccepted"
+   "result": "TaskAcceptedResult"
   },
   "requests": [
    {
@@ -12923,7 +12923,7 @@
  },
  "verify_pinned": {
   "outcome": {
-   "result": "TaskAccepted"
+   "result": "TaskAcceptedResult"
   },
   "requests": [
    {
@@ -12985,7 +12985,7 @@
  },
  "verify_random_key": {
   "outcome": {
-   "result": "TaskAccepted"
+   "result": "TaskAcceptedResult"
   },
   "requests": [
    {
@@ -13200,10 +13200,10 @@
  "wait_completed_empty": {
   "outcome": {
    "code": "",
-   "error": "LenzPipelineError",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": null,
-   "message": "Pipeline completed but the result is empty.",
-   "status_code": 0
+   "message": "The API answered HTTP 200 with status completed and no result: the run ended, but its verification cannot be read.",
+   "status_code": 200
   },
   "requests": [
    {

@@ -230,6 +230,20 @@ class LenzInvalidKeyError(LenzAuthError):
     """
 
 
+class LenzMissingKeyError(LenzAuthError):
+    """No API key is configured, and the call needs one: the client (or the
+    ``with_options`` copy) was given no key (``api_key=None`` with no
+    ``LENZ_API_KEY``, or an empty or whitespace-only key). Raised before
+    anything is sent, so ``status_code`` is 0 and ``retryable`` is ``None``.
+    The public library (``library.list`` / ``library.iter``) needs no key.
+
+    A subclass of :class:`LenzAuthError`, so an ``except LenzAuthError``
+    catches it too. A key that cannot be sent is :class:`LenzInvalidKeyError`;
+    a key the server refuses (401 / 403) is a plain :class:`LenzAuthError`.
+    Since 3.2.
+    """
+
+
 class LenzQuotaExceededError(LenzError):
     """402 — you're out of balance, or your plan doesn't cover this call.
 
@@ -1378,6 +1392,7 @@ __all__ = [
     "LenzGoneError",
     "LenzInvalidKeyError",
     "LenzInvalidResponseError",
+    "LenzMissingKeyError",
     "LenzNeedsInputError",
     "LenzNotFoundError",
     "LenzPipelineError",
