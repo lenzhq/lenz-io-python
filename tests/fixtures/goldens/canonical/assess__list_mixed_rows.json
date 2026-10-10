@@ -1,0 +1,83 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "claim": "hello there",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "no_checkable_claim",
+          "detail": "No claim in the input could be checked against public evidence.",
+          "docs_url": "https://lenz.io/docs/errors#invalid-input",
+          "failure_class": "invalid_input",
+          "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
+          "retryable": false
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      },
+      {
+        "claim": "vendor is down",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "upstream_unavailable",
+          "detail": "A service the check depends on was unavailable.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      },
+      {
+        "claim": "cannot frame",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "framing_failed",
+          "detail": "The input could not be read as a claim.",
+          "docs_url": "https://lenz.io/docs/errors#invalid-input",
+          "failure_class": "invalid_input",
+          "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
+          "retryable": false
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "ok"
+  },
+  "status": 200
+}

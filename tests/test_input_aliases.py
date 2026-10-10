@@ -73,7 +73,7 @@ class TestVerify:
             route = r.post("/verify").respond(202, json={"task_id": "tsk_1", "status": "queued"})
             client.verify(CLAIM)
         # No ``webhook_url`` unless one was given: omitted means the key's default.
-        assert _body(route) == {"text": CLAIM, "source_url": ""}
+        assert _body(route) == {"text": CLAIM}
 
 
 class TestVerifyBatch:

@@ -18,6 +18,8 @@ Vocabulary (applies across every claim-shaped response):
 
 from __future__ import annotations
 
+import copy
+import typing
 from collections.abc import ItemsView, KeysView, ValuesView
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
@@ -27,12 +29,120 @@ from pydantic import (
     ConfigDict,
     Field,
     PrivateAttr,
+    ValidationError,
     ValidationInfo,
     ValidatorFunctionWrapHandler,
     field_validator,
     model_validator,
 )
-from typing_extensions import deprecated
+from typing_extensions import Self, deprecated
+
+
+def _json_copy(value: Any) -> Any:
+    """A deep copy of parsed JSON (dicts, lists and scalars), several times
+    faster than ``copy.deepcopy``; anything else is deep-copied."""
+    if isinstance(value, dict):
+        return {k: _json_copy(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_copy(v) for v in value]
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    return copy.deepcopy(value)
+
+
+def _null_reads_unsent(
+    cls: type[BaseModel], value: Any, handler: ValidatorFunctionWrapHandler, info: ValidationInfo
+) -> Any:
+    """A wrap validator for an optional field typed without ``None`` (its 3.x
+    annotation, kept) that the API can send as ``null`` (a stored replay, a
+    value it has none of): read as the field was not sent (its 3.x default),
+    or as ``None`` with ``legacy_aliases=False``; never a
+    ``ValidationError``. Registered on those fields only."""
+    if value is not None:
+        return handler(value)
+    try:
+        return handler(value)
+    except ValidationError:
+        if not _legacy(info):
+            return None
+        name = info.field_name
+        field = cls.model_fields.get(name) if name else None
+        if field is None or field.is_required():
+            raise
+        return field.get_default(call_default_factory=True)
+
+
+#: Per model class: the (attribute, JSON key) of each field that can hold a
+#: model (alone or in a list), the only ones ``_hand_out_raw`` visits.
+_NESTED_FIELDS: dict[type, tuple[tuple[str, str], ...]] = {}
+
+
+def _holds_a_model(annotation: Any) -> bool:
+    # ``list[X]`` is an instance of ``type`` on Python 3.10: check the
+    # origin first.
+    if typing.get_origin(annotation) is None and isinstance(annotation, type):
+        return issubclass(annotation, BaseModel)
+    return any(_holds_a_model(arg) for arg in typing.get_args(annotation))
+
+
+def _nested_fields(cls: type) -> tuple[tuple[str, str], ...]:
+    fields = _NESTED_FIELDS.get(cls)
+    if fields is None:
+        fields = tuple(
+            (name, field.alias or name)
+            for name, field in cls.model_fields.items()  # type: ignore[attr-defined]
+            if _holds_a_model(field.annotation)
+        )
+        _NESTED_FIELDS[cls] = fields
+    return fields
+
+
+def _hand_out_raw(model: Any, original: Any) -> None:
+    """``model``'s ``raw`` is ``original`` (its part of the body as received),
+    and each model nested in it gets the part under its own key (or index).
+    A nested model the body did not carry (filled in by the SDK) gets
+    ``None``; a model passed in already read keeps its own. In a list whose
+    length the reading changed, each item still gets the part at its index
+    when that part is an object."""
+    if not isinstance(original, dict):
+        model._raw = None
+        return
+    model._raw = original
+    values = model.__dict__
+    for name, key in _nested_fields(type(model)):
+        value = values.get(name)
+        part = original.get(key)
+        if isinstance(value, _Lax):
+            _hand_out_one(value, part)
+        elif isinstance(value, list):
+            parts = part if isinstance(part, list) else ()
+            for index, item in enumerate(value):
+                if isinstance(item, _Lax):
+                    _hand_out_one(item, parts[index] if index < len(parts) else None)
+
+
+def _part_of(parent: Any, key: str, index: int | None = None) -> Any:
+    """The part of ``parent``'s body as received under ``key`` (and at
+    ``index`` in it), or ``None``."""
+    raw = getattr(parent, "_raw", None)
+    part = raw.get(key) if isinstance(raw, dict) else None
+    if index is not None:
+        part = part[index] if isinstance(part, list) and 0 <= index < len(part) else None
+    return part
+
+
+def _as_received(built: _M, parent: Any, key: str, index: int | None = None) -> _M:
+    """``built``, a model a property of ``parent`` read from what the server
+    sent under ``key``, with its ``raw`` (and its nested models') set from
+    ``parent``'s body as received: ``None`` for a block the SDK made up."""
+    _hand_out_raw(built, _part_of(parent, key, index))
+    return built
+
+
+def _hand_out_one(value: _Lax, part: Any) -> None:
+    if isinstance(part, _Lax):
+        return  # an existing result, nested as it is: it keeps its own
+    _hand_out_raw(value, part)
 
 
 class _Lax(BaseModel):
@@ -50,6 +160,48 @@ class _Lax(BaseModel):
     #: client's ``legacy_aliases``); nested reads made by its properties
     #: follow it.
     _legacy_aliases: bool = PrivateAttr(default=True)
+
+    #: The JSON object this model was read from, as received (see ``raw``).
+    _raw: Any = PrivateAttr(default=None)
+
+    @classmethod
+    def model_validate(cls, obj: Any, **kwargs: Any) -> Self:
+        """Pydantic's ``model_validate`` (every keyword passed through), which
+        also gives the result (and every model nested in it) its ``raw``: the
+        object read, kept as it is (a read never changes its input), each
+        nested model its own part of it. Done here, once per read, rather
+        than in a validator that would run for every nested model, and on
+        the outermost read, which sees the object before any validator fills
+        in a 2.x alias."""
+        model = super().model_validate(obj, **kwargs)
+        if isinstance(obj, dict) and isinstance(model, _Lax):
+            _hand_out_raw(model, obj)
+        return model
+
+    @property
+    def raw(self) -> dict[str, Any] | None:
+        """The JSON object this result was read from, exactly as received: a
+        deep copy (plain dicts, lists, strings, numbers, booleans and
+        ``None``), with no 2.x alias, default or renamed value in it, whatever
+        the client's ``legacy_aliases``. Every access returns a new copy, so
+        changing what it returned changes nothing. It is the object the model
+        was read from, not a copy taken then: when you validate a dict of
+        your own, changing that dict in place (or a mutable unknown field of
+        the model, which shares it) changes what ``raw`` returns. A client's
+        reads hand the model a freshly parsed body.
+
+        Set on every result a client call returns and on every model nested
+        in one, each holding its own part of the body (``TaskStatus.result``,
+        each of ``AssessResponse.claims``, each of ``ReviewFull.claims``, ...).
+        A parsed webhook's models hold the object the SDK built them from
+        (the payload as received is ``event.raw``). A ``ReviewStarted`` /
+        ``CitecheckStarted`` that a 409 naming the job settled holds that 409's
+        body. ``None`` on a ``BatchItemResult`` (the SDK builds it; its
+        ``verification`` and ``status_detail`` hold theirs) and on a value
+        that is not a JSON object. ``None`` on a model built with keyword
+        arguments (``Model(field=...)``): only ``model_validate`` (what the
+        clients and ``parse_webhook`` use) reads a body. Since 3.2."""
+        return _json_copy(self._raw) if isinstance(self._raw, dict) else None
 
     @classmethod
     def _as_sent(cls, data: Any) -> Any:
@@ -308,6 +460,8 @@ class Audit(_Lax):
 class CandidateClaim(_Lax):
     """One of multiple distinct claims framing found in the submitted text."""
 
+    _null_ok = field_validator("text", mode="wrap")(classmethod(_null_reads_unsent))
+
     #: **Deprecated**, use :attr:`claim` (the same string).
     text: str = Field(default="", json_schema_extra={"deprecated": True})
     domain: str = ""
@@ -334,6 +488,8 @@ class EntityRef(_Lax):
     ``qid`` is the Wikidata Q identifier (e.g. ``Q42``) when the entity
     was resolved against Lenz's internal catalog; ``None`` otherwise.
     """
+
+    _null_ok = field_validator("name", mode="wrap")(classmethod(_null_reads_unsent))
 
     name: str = ""
     qid: str | None = None
@@ -735,7 +891,11 @@ class ExtractedClaims(_Lax):
         ``locations``, which are deprecated and kept."""
         sent = _sent(self, "claims")
         return (
-            [ExtractedClaim.model_validate(c, context=_context(self)) for c in sent if isinstance(c, dict)]
+            [
+                _as_received(ExtractedClaim.model_validate(c, context=_context(self)), self, "claims", i)
+                for i, c in enumerate(sent)
+                if isinstance(c, dict)
+            ]
             if isinstance(sent, list)
             else []
         )
@@ -772,6 +932,10 @@ class AssessClaim(_Lax):
     claims found in it are listed in ``more_claims`` (``identified_claims``,
     deprecated and kept).
     """
+
+    _null_ok = field_validator("verdict", "confidence", "error_code", "hint", mode="wrap")(
+        classmethod(_null_reads_unsent)
+    )
 
     claim: str = ""
     # Output language (ISO 639-1). Echoes the language requested on the
@@ -834,6 +998,10 @@ class AssessClaim(_Lax):
         if not _legacy(info):
             return cls._as_sent(data)
         if not _is_newer(data, "failure"):
+            if isinstance(data, dict) and data.get("verdict") is None and data.get("error_code"):
+                # The original shape's failed row with a ``null`` verdict
+                # (a stored replay): the row 2.x read, ``"Error"`` / ``"low"``.
+                return {**data, "verdict": "Error", "confidence": data.get("confidence") or "low"}
             return data
         out = dict(data)
         failed = out.get("status") == "failed"
@@ -870,7 +1038,9 @@ class AssessClaim(_Lax):
         one sentence on what to send next. Replaces ``error_code`` and
         ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
+        if not isinstance(sent, dict):
+            return None
+        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
 
     @property
     def more_claims(self) -> list[str]:
@@ -911,6 +1081,8 @@ class AssessResponse(_Lax):
     instead). The deprecated ``error`` and ``error_code`` (``'no_claim'``)
     keep their 2.x values.
     """
+
+    _null_ok = field_validator("error_code", "error", mode="wrap")(classmethod(_null_reads_unsent))
 
     claims: list[AssessClaim] = Field(default_factory=list)
     # Deprecated: use ``failure`` / ``status``. The 2.x sentence for an input
@@ -956,7 +1128,9 @@ class AssessResponse(_Lax):
         """Why the single form has no rows; ``None`` otherwise. Replaces
         ``error`` and ``error_code``, which are deprecated and kept."""
         sent = _sent(self, "failure")
-        return FailureBlock.model_validate(sent, context=_context(self)) if isinstance(sent, dict) else None
+        if not isinstance(sent, dict):
+            return None
+        return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
 
 
 class TaskAccepted(_Lax):
@@ -1110,6 +1284,10 @@ _CANCELLED_TASK_FAILURE: dict[str, Any] = {
 class TaskStatus(_Lax):
     """Returned by ``GET /verify/status/{task_id}``."""
 
+    _null_ok = field_validator(
+        "reason", "hint", "progress", "claims", "docs_url", "error", "failure_class", "failure_reason", mode="wrap"
+    )(classmethod(_null_reads_unsent))
+
     # processing | needs_input | completed | failed | cancelled. ``cancelled``
     # is a task stopped elsewhere (the website's Stop button, another
     # process): its own status since API version 2026-10-11, which the
@@ -1209,8 +1387,8 @@ class TaskStatus(_Lax):
             return None
         # A verification spelled "nothing checkable" ``not_a_claim``.
         if not self._legacy_aliases:
-            return FailureBlock.model_validate(sent, context=_context(self))
-        return FailureBlock.model_validate(_verification_failure(sent))
+            return _as_received(FailureBlock.model_validate(sent, context=_context(self)), self, "failure")
+        return _as_received(FailureBlock.model_validate(_verification_failure(sent)), self, "failure")
 
 
 class BatchItemResult(_Lax):
@@ -1244,6 +1422,13 @@ class BatchItemResult(_Lax):
         """The item's claim. Replaces ``claim_text``, which is deprecated and
         kept."""
         return self.claim_text
+
+    @property
+    def raw(self) -> dict[str, Any] | None:
+        """``None``: the SDK builds this result, it is not read from a
+        response. ``verification.raw`` and ``status_detail.raw`` are the
+        bodies it was built from. Since 3.2."""
+        return None
 
 
 class UsageCredits(_Lax):
@@ -1405,6 +1590,8 @@ class Usage(_Lax):
     of those yourself for the low-depth count — there is deliberately no
     ``verify_low`` block beside ``verify``.
     """
+
+    _null_ok = field_validator("verify", "ask", "assess", mode="wrap")(classmethod(_null_reads_unsent))
 
     #: The tier slug — ``"free"`` | ``"plus"`` | ``"pro"`` | ``"scale"``.
     #: This is the field to branch on; it is stable. The Pro plan's slug was

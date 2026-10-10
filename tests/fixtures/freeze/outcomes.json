@@ -22,7 +22,7 @@
  },
  "assess_both_forms": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "assess_claim": {
@@ -57,12 +57,12 @@
  },
  "bad_header_option": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "bad_timeout_option": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "batch_401_mid_round": {
@@ -74,10 +74,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/auth",
    "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "message": "Invalid API key.",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 401
   },
   "cause": null,
@@ -1473,10 +1475,12 @@
    "code": "conflict",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "pinned-key-1",
    "message": "HTTP 409",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 409
   },
   "cause": null,
@@ -2155,7 +2159,7 @@
  },
  "citecheck_both": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "citecheck_pairs": {
@@ -2167,7 +2171,7 @@
  },
  "citecheck_pairs_max": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "citecheck_text": {
@@ -2181,25 +2185,27 @@
   "attrs": {
    "body": null,
    "body_text": "",
-   "cause": "Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).",
+   "cause": "Every Lenz API answer has a JSON body: something else answered in its place.",
    "code": "",
    "colno": 1,
    "doc": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "headers": "<ResponseHeaders>",
    "lineno": 1,
-   "message": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.",
+   "message": "DELETE /ask/v1 answered HTTP 200 with an empty body.",
    "msg": "Expecting value",
    "pos": 0,
    "request_id": "",
    "retryable": null,
+   "served_version": null,
    "status_code": 200
   },
-  "cause": "JSONDecodeError",
-  "context": "JSONDecodeError",
+  "cause": null,
+  "context": null,
   "error": "LenzInvalidResponseError",
-  "str": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.\n  Cause:  Something other than the Lenz API answered (a proxy, a captive portal, a load balancer).\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
-  "suppress_context": true
+  "str": "DELETE /ask/v1 answered HTTP 200 with an empty body.\n  Cause:  Every Lenz API answer has a JSON body: something else answered in its place.\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "suppress_context": false
  },
  "error_404": {
   "attrs": {
@@ -2211,9 +2217,11 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help.",
+   "headers": "<ResponseHeaders>",
    "message": "nope",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 404
   },
   "cause": null,
@@ -2911,7 +2919,7 @@
  },
  "get_review_bad_view": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "get_review_issues": {
@@ -3133,7 +3141,7 @@
  },
  "library_iter_random": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "library_iter_short_page": {
@@ -3215,10 +3223,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "message": "busy",
    "request_id": "",
    "retry_after": null,
    "retryable": true,
+   "served_version": null,
    "status_code": 503
   },
   "cause": null,
@@ -3236,11 +3246,13 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "message": "busy",
    "request_id": "",
    "retry_after": null,
    "retryable": true,
+   "served_version": null,
    "status_code": 503
   },
   "cause": null,
@@ -3259,12 +3271,14 @@
    "code": "review_in_flight",
    "doc_url": "https://lenz.io/docs/rate-limits",
    "fix": "Wait Retry-After seconds and retry.",
+   "headers": "<ResponseHeaders>",
    "limit": null,
    "message": "one at a time",
    "request_id": "",
    "reset_in_seconds": null,
    "retry_after": 5,
    "retryable": true,
+   "served_version": null,
    "status_code": 429,
    "upgrade_url": ""
   },
@@ -3714,7 +3728,7 @@
  },
  "path_id_dots": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "path_ids_encoded": {
@@ -3731,10 +3745,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "message": "busy",
    "request_id": "",
    "retry_after": null,
    "retryable": true,
+   "served_version": null,
    "status_code": 503
   },
   "cause": null,
@@ -3778,10 +3794,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "pinned-key-1",
    "message": "in flight",
    "request_id": "",
    "retryable": true,
+   "served_version": null,
    "status_code": 409
   },
   "cause": null,
@@ -3808,9 +3826,11 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "message": "in flight",
    "request_id": "",
    "retryable": true,
+   "served_version": null,
    "status_code": 409
   },
   "cause": null,
@@ -3889,6 +3909,7 @@
    "code": "rate_limited",
    "doc_url": "https://lenz.io/docs/rate-limits",
    "fix": "Wait Retry-After seconds and retry.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "limit": null,
    "message": "tomorrow",
@@ -3896,6 +3917,7 @@
    "reset_in_seconds": null,
    "retry_after": 40000,
    "retryable": true,
+   "served_version": null,
    "status_code": 429,
    "upgrade_url": ""
   },
@@ -4037,10 +4059,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "message": "maintenance",
    "request_id": "",
    "retry_after": 3600,
    "retryable": true,
+   "served_version": null,
    "status_code": 503
   },
   "cause": null,
@@ -4452,10 +4476,12 @@
    "code": "not_found",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "message": "nope",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 404
   },
   "cause": null,
@@ -4898,7 +4924,7 @@
  },
  "review_empty": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "review_options": {
@@ -4910,7 +4936,7 @@
  },
  "review_selector_str": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "select": {
@@ -4922,7 +4948,7 @@
  },
  "select_empty": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "timeout_120:assess": {
@@ -7100,11 +7126,13 @@
    "code": "upstream_unavailable",
    "doc_url": "https://lenz.io/docs/errors#unavailable",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "message": "busy",
    "request_id": "",
    "retry_after": 120,
    "retryable": true,
+   "served_version": null,
    "status_code": 503
   },
   "cause": null,
@@ -7183,6 +7211,7 @@
    "doc": "<html>",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "lineno": 1,
    "message": "POST /assess answered HTTP 200 with a body that is not JSON.",
@@ -7190,6 +7219,7 @@
    "pos": 0,
    "request_id": "",
    "retryable": null,
+   "served_version": null,
    "status_code": 200
   },
   "cause": "JSONDecodeError",
@@ -7208,12 +7238,14 @@
    "doc": "<html>",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
+   "headers": "<ResponseHeaders>",
    "lineno": 1,
    "message": "GET /me/usage answered HTTP 200 with a body that is not JSON.",
    "msg": "Expecting value",
    "pos": 0,
    "request_id": "",
    "retryable": null,
+   "served_version": null,
    "status_code": 200
   },
   "cause": "JSONDecodeError",
@@ -7299,10 +7331,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Retry; if the error persists, file an issue with the Request ID.",
+   "headers": "<ResponseHeaders>",
    "message": "boom",
    "request_id": "",
    "retry_after": null,
    "retryable": true,
+   "served_version": null,
    "status_code": 500
   },
   "cause": null,
@@ -7313,23 +7347,24 @@
  },
  "verifications_delete_version_404": {
   "attrs": {
-   "api_version": "2026-05-13",
    "body": {
     "code": "not_found"
    },
-   "cause": "The response carries X-Lenz-API-Version: 2026-05-13.",
+   "cause": "HTTP 404",
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
-   "fix": "If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.",
-   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
+   "fix": "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help.",
+   "headers": "<ResponseHeaders>",
+   "message": "HTTP 404",
    "request_id": "",
    "retryable": false,
+   "served_version": "2026-05-13",
    "status_code": 404
   },
   "cause": null,
   "context": null,
-  "error": "LenzApiVersionError",
-  "str": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.\n  Cause:  The response carries X-Lenz-API-Version: 2026-05-13.\n  Fix:    If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.\n  Docs:   https://lenz.io/docs/errors",
+  "error": "LenzNotFoundError",
+  "str": "HTTP 404\n  Cause:  HTTP 404\n  Fix:    Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "verifications_get": {
@@ -7542,7 +7577,7 @@
  },
  "verifications_iter_page_0": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "verifications_list": {
@@ -7652,10 +7687,12 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check the id or key the call names: nothing with it is visible to this credential. Retrying will not help.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "<random>",
    "message": "nope",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 404
   },
   "cause": null,
@@ -7675,10 +7712,12 @@
    "doc_url": "https://lenz.io/docs/errors/validation",
    "errors": [],
    "fix": "Check the request body against the OpenAPI spec.",
+   "headers": "<ResponseHeaders>",
    "idempotency_key": "pinned-key-1",
    "message": "bad",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 422
   },
   "cause": null,
@@ -7857,9 +7896,11 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/auth",
    "fix": "Your credential is missing, invalid or expired. Check the key you passed, or get a new one at https://lenz.io/api-credentials.",
+   "headers": "<ResponseHeaders>",
    "message": "Invalid API key.",
    "request_id": "",
    "retryable": false,
+   "served_version": null,
    "status_code": 401
   },
   "cause": null,
@@ -7911,7 +7952,7 @@
  },
  "wait_empty_id": {
   "cause": null,
-  "error": "ValueError",
+  "error": "LenzUsageError",
   "idempotency_key": null
  },
  "wait_failed": {
@@ -8183,10 +8224,13 @@
    "cause": "The response carries X-Lenz-API-Version: 2026-05-13.",
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
+   "expected_version": "2026-10-11",
    "fix": "If this persists, contact support (https://lenz.io/contact) with the request id; lenz-io 2.x reads both versions.",
+   "headers": "<ResponseHeaders>",
    "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
    "request_id": "",
    "retryable": false,
+   "served_version": "2026-05-13",
    "status_code": 200
   },
   "cause": null,

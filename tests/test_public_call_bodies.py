@@ -70,13 +70,13 @@ def no_sleep(any_client: AnyClient) -> list[float]:
 # ── verify / verify_and_wait ───────────────────────────────────────────────
 
 _VERIFY_CASES: list[tuple[str, dict[str, Any], list[tuple[str, Any]]]] = [
-    ("omitted", {}, [("text", "A."), ("source_url", "")]),
+    ("omitted", {}, [("text", "A.")]),
     (
         "empty",
         {"language": "", "visibility": "", "depth": "", "source_url": "", "webhook_url": ""},
-        [("text", "A."), ("source_url", "")],
+        [("text", "A.")],
     ),
-    ("blank webhook", {"webhook_url": "   "}, [("text", "A."), ("source_url", "")]),
+    ("blank webhook", {"webhook_url": "   "}, [("text", "A.")]),
     (
         "set",
         {
@@ -120,7 +120,7 @@ class TestVerify:
         with respx.mock(base_url=BASE) as r:
             route = r.post("/verify").respond(200, json={"task_id": "t"})
             client.verify(text="A.", idempotency_key=KEY)
-        assert _ordered(route.calls.last.request.content) == [("text", "A."), ("source_url", "")]
+        assert _ordered(route.calls.last.request.content) == [("text", "A.")]
 
 
 # ── verify_batch / verify_batch_and_wait ───────────────────────────────────
@@ -200,7 +200,6 @@ class TestSyncCalls:
                 [("text", "A."), ("language", "auto"), ("suggest_rewrite", True)],
             ),
             ({"claims": ["A.", "B."]}, [("claims", ["A.", "B."])]),
-            ({"claims": []}, [("claims", [])]),
             ({"claims": ["A."], "language": "es"}, [("claims", ["A."]), ("language", "es")]),
         ],
     )

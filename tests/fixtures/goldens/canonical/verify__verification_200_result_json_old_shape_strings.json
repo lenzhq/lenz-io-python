@@ -1,0 +1,68 @@
+{
+  "body": {
+    "audit": {
+      "adjudication_summary": "",
+      "assessments": [
+        {
+          "focus_area": "",
+          "panelist_name": "Reviewer A",
+          "reasoning": "",
+          "score": null,
+          "warnings": []
+        }
+      ],
+      "debate_con": {
+        "argument": "",
+        "rebuttal": "",
+        "role": ""
+      },
+      "debate_pro": {
+        "argument": "",
+        "rebuttal": "",
+        "role": ""
+      },
+      "panel_agreement": "split"
+    },
+    "claim": "The Earth is round.",
+    "completed_at": "<completed_at#3:ts:+00:00:us>",
+    "confidence": "high",
+    "coverage": {
+      "aggregate": 500000,
+      "as_of": null,
+      "cap": 10000,
+      "certificate_id": null,
+      "certificate_url": null,
+      "currency": "EUR",
+      "reasons": [
+        "plan"
+      ],
+      "status": "uncovered",
+      "terms_version": "v1"
+    },
+    "created_at": "<created_at#2:ts:+00:00:us>",
+    "depth": "standard",
+    "domain": "Science",
+    "entities": [],
+    "executive_summary": "The claim is verified.",
+    "key_finding": "The Earth is approximately spherical in shape.",
+    "language": "en",
+    "lenz_score": 9,
+    "presumed_intent": "",
+    "sources": [
+      {
+        "date": "",
+        "snippet": "Old row.",
+        "snippet_language": null,
+        "source_name": "",
+        "title": "",
+        "url": "https://old.example/a"
+      }
+    ],
+    "suggested_rewrite": null,
+    "verdict": "True",
+    "verification_id": "<verification_id#1:hex8>",
+    "visibility": "private",
+    "warnings": []
+  },
+  "status": 200
+}

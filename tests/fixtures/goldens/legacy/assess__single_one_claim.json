@@ -1,0 +1,23 @@
+{
+  "body": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "The registry reported 4,200 filings in 2024.",
+        "confidence": "high",
+        "dissent": null,
+        "error_code": null,
+        "hint": null,
+        "identified_claims": [],
+        "language": "en",
+        "rationale": "The registry lists 4,200 filings for 2024 and has not revised the figure.",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": []
+  },
+  "status": 200
+}

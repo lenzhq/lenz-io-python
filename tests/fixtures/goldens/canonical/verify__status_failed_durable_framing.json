@@ -1,0 +1,15 @@
+{
+  "body": {
+    "failure": {
+      "code": "framing_failed",
+      "detail": "The input could not be read as a claim.",
+      "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+      "failure_class": "upstream_unavailable",
+      "hint": null,
+      "retryable": true
+    },
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

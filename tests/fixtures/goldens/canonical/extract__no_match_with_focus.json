@@ -1,0 +1,12 @@
+{
+  "body": {
+    "claims": [],
+    "domain": "",
+    "key_entities": [],
+    "language": "en",
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "",
+    "status": "no_match"
+  },
+  "status": 200
+}

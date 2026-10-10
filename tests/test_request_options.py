@@ -331,7 +331,7 @@ CALLS: dict[str, tuple[Run, Answers]] = {
     ),
     "verifications.delete": (
         lambda c, o: c.verifications.delete("v1", **o),
-        {("DELETE", "/verifications/v1"): [S503, (204, None)]},
+        {("DELETE", "/verifications/v1"): [S503, (200, {"ok": True})]},
     ),
     "verifications.related": (
         lambda c, o: c.verifications.related("v1", limit=3, **o),
@@ -342,7 +342,7 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.ask.send("v1", message="Why?", idempotency_key=PINNED, **o),
         {("POST", "/ask/v1"): [S503, ASK_REPLY]},
     ),
-    "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (204, None)]}),
+    "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (200, {"ok": True})]}),
     "library.list": (lambda c, o: c.library.list(search="x", **o), {("GET", "/library"): [S503, LIB_1]}),
     "library.iter": (
         lambda c, o: list(c.library.iter(search="x", **o)),
@@ -549,13 +549,14 @@ class TestTimeoutPrecedence:
             (30.0, lambda c: c.extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
             (30.0, lambda c: c.extract(text="Doc.", timeout=5), _all(5)),  # explicit: used as given, below the floor
             (30.0, lambda c: c.with_options(timeout=200).extract(text="Doc."), _all(200)),
-            (30.0, lambda c: c.with_options(timeout=20).extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
+            # Since 3.2 a copy's timeout is explicit too: used as given, below the floor.
+            (30.0, lambda c: c.with_options(timeout=20).extract(text="Doc."), _all(20)),
             (30.0, lambda c: c.with_options(timeout=None).extract(text="Doc."), _all(None)),
             (30.0, lambda c: c.with_options(timeout=20).extract(text="Doc.", timeout=9), _all(9)),
             (
                 30.0,
                 lambda c: c.with_options(timeout=httpx.Timeout(200, read=5)).extract(text="Doc."),
-                _all(EXTRACT_TIMEOUT),
+                {"connect": 200, "read": 5, "write": 200, "pool": 200},
             ),
             (
                 30.0,
@@ -563,7 +564,9 @@ class TestTimeoutPrecedence:
                 {"connect": 5, "read": 200, "write": 5, "pool": 5},
             ),
             (300.0, lambda c: c.extract(text="Doc."), _all(300.0)),
-            (300.0, lambda c: c.with_options(timeout=20).extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
+            (300.0, lambda c: c.with_options(timeout=20).extract(text="Doc."), _all(20)),
+            # The constructor's timeout is the client's default: still floored.
+            (10.0, lambda c: c.extract(text="Doc."), _all(EXTRACT_TIMEOUT)),
         ],
     )
     def test_extract_floor_applies_to_an_inherited_timeout_only(
@@ -572,10 +575,41 @@ class TestTimeoutPrecedence:
         client = make(api_key=API_KEY, timeout=constructor)
         assert _timeout_of(monkeypatch, lambda: build(client), _EXTRACT) == expected
 
-    def test_assess_floor_on_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_no_assess_floor_on_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Since 3.2 the floor applies to the client's default timeout only: a
+        copy's timeout and a call's are used as given (3.1 floored a copy's)."""
         client = make(api_key=API_KEY)
-        assert _timeout_of(monkeypatch, lambda: client.with_options(timeout=50).assess("A."), _ASSESS) == _all(100.0)
+        assert _timeout_of(monkeypatch, lambda: client.with_options(timeout=50).assess("A."), _ASSESS) == _all(50)
         assert _timeout_of(monkeypatch, lambda: client.assess("A.", timeout=20), _ASSESS) == _all(20)
+        assert _timeout_of(monkeypatch, lambda: client.assess("A."), _ASSESS) == _all(100.0)
+        assert _timeout_of(monkeypatch, lambda: make(api_key=API_KEY, timeout=10).assess("A."), _ASSESS) == _all(100.0)
+
+    def test_a_constructor_timeout_applies_through_a_borrowed_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Since 3.2 ``timeout=`` with a borrowed ``http_client=`` is sent on
+        each request (3.1 ignored it); the borrowed client is not changed."""
+        http = make_http(timeout=300.0)
+        client = make(api_key=API_KEY, http_client=http, timeout=12)
+        assert _timeout_of(monkeypatch, lambda: client.usage(), _USAGE) == _all(12)
+        assert _timeout_of(monkeypatch, lambda: client.extract(text="Doc."), _EXTRACT) == _all(EXTRACT_TIMEOUT)
+        assert _timeout_of(monkeypatch, lambda: client.with_options(timeout=4).usage(), _USAGE) == _all(4)
+        assert http.timeout.read == 300.0
+        # 30.0 passed explicitly counts too; ``None`` is no timeout.
+        assert _timeout_of(
+            monkeypatch, lambda: make(api_key=API_KEY, http_client=http, timeout=30.0).usage(), _USAGE
+        ) == _all(30.0)
+        assert _timeout_of(
+            monkeypatch, lambda: make(api_key=API_KEY, http_client=http, timeout=None).usage(), _USAGE
+        ) == _all(None)
+        # Left out, the borrowed client's own applies.
+        assert _timeout_of(monkeypatch, lambda: make(api_key=API_KEY, http_client=http).usage(), _USAGE) == _all(300.0)
+
+    def test_a_constructor_timeout_through_a_borrowed_client_bounds_a_waits_polls(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = make(api_key=API_KEY, http_client=make_http(timeout=300.0), timeout=httpx.Timeout(4, read=8))
+        with recorded({("GET", f"/verify/status/{TASK}"): [RUNNING_NO_HINT, DONE]}) as rec:
+            client.wait(TASK, timeout=60)
+        assert [r["timeout"] for r in rec.requests] == [{"connect": 4, "read": 8, "write": 4, "pool": 4}] * 2
 
     def test_a_borrowed_clients_own_timeout_counts_below_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = make(api_key=API_KEY, http_client=make_http(timeout=300.0))
@@ -635,9 +669,10 @@ class TestHeaders:
         accepts = [h for h in sent if h[0].lower() == "accept"]
         assert uas == [["user-agent", "mine/1"]] and accepts == [["ACCEPT", "x/y"]]
 
-    def test_content_type_is_still_sent_on_a_bodyless_request(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_content_type_is_sent_only_with_a_body(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Since 3.2 (3.1 sent it on every request)."""
         sent = _sent_headers(monkeypatch, lambda: make(api_key=API_KEY).usage(extra_headers={MARK: "m"}))
-        assert ["Content-Type", "application/json"] in sent
+        assert "content-type" not in [h[0].lower() for h in sent]
 
     def test_the_shared_client_is_never_changed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         root = make(api_key=API_KEY)

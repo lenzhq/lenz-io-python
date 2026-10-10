@@ -1,0 +1,261 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "False",
+          "verification_url": null
+        },
+        "claim": "The Eiffel Tower is in Berlin.",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "index": 0,
+        "positions": [
+          {
+            "end": 30,
+            "start": 0,
+            "text": "The Eiffel Tower is in Berlin."
+          }
+        ],
+        "result": {
+          "confidence": "high",
+          "is_issue": true,
+          "source": "verification",
+          "verdict": "False"
+        },
+        "suggested_edits": {
+          "edits": [
+            {
+              "end": 29,
+              "position": 0,
+              "replacement": "Paris",
+              "start": 23,
+              "text": "Berlin"
+            }
+          ],
+          "status": "completed"
+        },
+        "verification": {
+          "claim": "The Eiffel Tower is in Berlin.",
+          "completed_at": "<completed_at#6:ts:+00:00:us>",
+          "confidence": "high",
+          "content_status": "available",
+          "created_at": "<created_at#5:ts:+00:00:us>",
+          "depth": "standard",
+          "domain": "",
+          "entities": [],
+          "executive_summary": "Summary for The Eiffel Tower is in Berlin.",
+          "failure": null,
+          "key_finding": "Finding for The Eiffel Tower is in Berlin.",
+          "language": "en",
+          "lenz_score": 2,
+          "status": "completed",
+          "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
+          "task_id": "<task_id#4:hex32>",
+          "url": "https://lenz.io/c/the-earth-is-round-<verification_id#3:hex8>",
+          "verdict": "False",
+          "verification_id": "<verification_id#3:hex8>",
+          "verification_url": "https://lenz.io/api/v1/verifications/<verification_id#3:hex8>",
+          "visibility": "private",
+          "warnings": [
+            "w1"
+          ]
+        }
+      },
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "False",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "index": 1,
+        "positions": [
+          {
+            "end": 85,
+            "start": 45,
+            "text": "The EU AI Act took effect in March 2024."
+          }
+        ],
+        "result": {
+          "confidence": "high",
+          "is_issue": true,
+          "source": "assessment",
+          "verdict": "False"
+        },
+        "suggested_edits": {
+          "edits": null,
+          "status": "pending"
+        },
+        "verification": {
+          "claim": null,
+          "completed_at": null,
+          "confidence": null,
+          "content_status": "available",
+          "created_at": null,
+          "depth": null,
+          "domain": null,
+          "entities": [],
+          "executive_summary": null,
+          "failure": null,
+          "key_finding": null,
+          "language": null,
+          "lenz_score": null,
+          "status": "processing",
+          "suggested_rewrite": null,
+          "task_id": null,
+          "url": null,
+          "verdict": null,
+          "verification_id": null,
+          "verification_url": null,
+          "visibility": null,
+          "warnings": []
+        }
+      }
+    ],
+    "completed_at": null,
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 12
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The Eiffel Tower is in Berlin.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": {
+          "edits": [
+            {
+              "end": 29,
+              "position": 0,
+              "replacement": "Paris",
+              "start": 23,
+              "text": "Berlin"
+            }
+          ],
+          "status": "completed"
+        },
+        "suggested_rewrite": "Fixed: The Eiffel Tower is in Berlin.",
+        "url": "https://lenz.io/c/the-earth-is-round-<verification_id#3:hex8>",
+        "verdict": "False",
+        "verification_id": "<verification_id#3:hex8>",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/<verification_id#3:hex8>",
+        "verified_claim": null
+      },
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 1,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": {
+          "edits": null,
+          "status": "pending"
+        },
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "processing",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": null,
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": true,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": 15,
+    "review_id": "<review_id#1:hex8>",
+    "status": "verifying",
+    "summary": {
+      "assessments": {
+        "completed": 2,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "claims_found": 2,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 0,
+        "planned": 2
+      }
+    },
+    "view": "full"
+  },
+  "status": 200
+}

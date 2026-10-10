@@ -1,0 +1,58 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [],
+    "completed_at": null,
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 0
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": null,
+    "more_claim_locations": null,
+    "more_claims": null,
+    "outcome": null,
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": 10,
+    "review_id": "<review_id#1:hex8>",
+    "status": "queued",
+    "summary": {
+      "assessments": null,
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": null,
+      "claims_found": null,
+      "claims_selected": null,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": null
+    },
+    "view": "full"
+  },
+  "status": 200
+}

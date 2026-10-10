@@ -1,0 +1,10 @@
+{
+  "body": {
+    "candidate_claims": [],
+    "claims": [],
+    "error": "No verifiable claim detected",
+    "error_code": "no_claim",
+    "more_claims": []
+  },
+  "status": 200
+}

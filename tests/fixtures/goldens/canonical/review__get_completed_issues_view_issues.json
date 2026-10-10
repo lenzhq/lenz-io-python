@@ -1,0 +1,131 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 13
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "claim_index": 1,
+        "failure": {
+          "code": "upstream_unavailable",
+          "detail": "A service the check depends on was unavailable.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "hint": "A model provider was unavailable for this item. Retry it; nothing was charged.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "claim_index": 0,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": null,
+        "key_finding": "Finding for The EU AI Act took effect in March 2024.",
+        "rationale": null,
+        "source": "verification",
+        "suggested_edits": null,
+        "suggested_rewrite": "Fixed: The EU AI Act took effect in March 2024.",
+        "url": "https://lenz.io/c/the-earth-is-round-<verification_id#4:hex8>",
+        "verdict": "False",
+        "verification_id": "<verification_id#4:hex8>",
+        "verification_status": "completed",
+        "verification_url": "https://lenz.io/api/v1/verifications/<verification_id#4:hex8>",
+        "verified_claim": null
+      },
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 2,
+        "confidence": "high",
+        "escalation": {
+          "disposition": "planned",
+          "matched_rules": [
+            "verdict"
+          ]
+        },
+        "failure": {
+          "code": "research_empty",
+          "detail": "No sources about the claim were found.",
+          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
+          "failure_class": "insufficient_evidence",
+          "hint": null,
+          "retryable": false
+        },
+        "key_finding": null,
+        "rationale": null,
+        "source": "assessment",
+        "suggested_edits": null,
+        "suggested_rewrite": null,
+        "url": null,
+        "verdict": "False",
+        "verification_id": null,
+        "verification_status": "failed",
+        "verification_url": null,
+        "verified_claim": null
+      }
+    ],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "<review_id#1:hex8>",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 3,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "claims_found": 4,
+      "claims_selected": 4,
+      "input_truncated": false,
+      "issues": 2,
+      "verifications": {
+        "completed": 1,
+        "failed": 1,
+        "planned": 2
+      }
+    },
+    "view": "issues"
+  },
+  "status": 200
+}

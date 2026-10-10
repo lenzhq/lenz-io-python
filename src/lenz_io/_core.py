@@ -48,6 +48,8 @@ from .errors import (
     LenzPipelineError,
     LenzRequestTimeoutError,
     LenzTimeoutError,
+    LenzUsageError,
+    ResponseHeaders,
     ReviewFailed,
     ReviewTimeout,
     map_response_to_error,
@@ -212,7 +214,7 @@ def _check_timeout(value: Any, where: str) -> float | httpx.Timeout | None:
             return httpx.Timeout(value)
     elif isinstance(value, tuple) and len(value) == 4 and all(part is None or _seconds(part) for part in value):
         return httpx.Timeout(value)
-    raise ValueError(
+    raise LenzUsageError(
         f"{where}: timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an "
         f"httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got {value!r})."
     )
@@ -228,7 +230,7 @@ def _check_retries(value: Any, where: str) -> int:
         except TypeError:
             count = None
     if count is None or count < 0:
-        raise ValueError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
+        raise LenzUsageError(f"{where}: max_retries must be a whole number, 0 or more (got {value!r}).")
     return count
 
 
@@ -248,18 +250,18 @@ def _check_headers(value: Any, where: str) -> tuple[tuple[str, str | None], ...]
     if value is None:
         return ()
     if not isinstance(value, Mapping):
-        raise ValueError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
+        raise LenzUsageError(f"{where}: extra_headers must be a mapping of header names to strings (got {value!r}).")
     pairs: list[tuple[str, str | None]] = []
     for name, header in value.items():
         if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
-            raise ValueError(
+            raise LenzUsageError(
                 f"{where}: a header name must be a non-empty token of ASCII letters, digits and "
                 f"!#$%&'*+-.^_`|~ (got {name!r})."
             )
         if name.lower() in _RESERVED_HEADERS:
-            raise ValueError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
+            raise LenzUsageError(f"{where}: the {name} header is set by the SDK and cannot be passed in extra_headers.")
         if header is not None and (not isinstance(header, str) or not _HEADER_VALUE.fullmatch(header)):
-            raise ValueError(
+            raise LenzUsageError(
                 f"{where}: the value of header {name} must be a string of visible ASCII characters, with "
                 f"spaces and tabs only between them (not at either end), or None."
             )
@@ -341,29 +343,33 @@ def _resolve(
     client_timeout: httpx.Timeout,
     client_retries: int,
     floor: float | None,
+    send_client_timeout: bool = False,
 ) -> tuple[httpx.Timeout | None, int, tuple[tuple[str, str], ...]]:
     """The timeout, retry count and option headers of one request. Pure: no
     I/O, no clock.
 
     Per field, the first that is set wins: the call's option, the copy's
-    (``with_options``), the client's (the ``httpx.Client`` in use for the
-    timeout, the constructor for retries). Headers merge, the call's over the
-    copy's. A ``floor`` (``extract`` / ``assess``) applies to an inherited
-    timeout only, as it always did: when its ``read`` is bounded and shorter
-    than the floor, the floor replaces the whole timeout; otherwise the
-    inherited timeout is kept as it is. A timeout of ``None`` means "the
-    ``httpx.Client``'s own" (httpx's ``USE_CLIENT_DEFAULT``).
+    (``with_options``), the client's (the ``httpx.Client`` in use, or the
+    constructor's ``timeout`` on a borrowed client, for the timeout; the
+    constructor for retries). Headers merge, the call's over the copy's.
+
+    A ``floor`` (``extract`` / ``assess``) applies to the client's timeout
+    only (since 3.2; a copy's was floored too before): when its ``read`` is
+    bounded and shorter than the floor, the floor replaces the whole timeout.
+    A timeout the call or a copy set is used as given. A timeout of ``None``
+    means "the ``httpx.Client``'s own" (httpx's ``USE_CLIENT_DEFAULT``);
+    ``send_client_timeout`` sends the client's timeout on the request instead
+    (a borrowed ``http_client=`` with a constructor ``timeout=``).
     """
     timeout: httpx.Timeout | None
     if call.timeout is not None:
         timeout = httpx.Timeout(call.timeout)
+    elif not isinstance(layer.timeout, NotGiven):
+        timeout = httpx.Timeout(layer.timeout)
+    elif floor is not None and client_timeout.read is not None and client_timeout.read < floor:
+        timeout = httpx.Timeout(floor)
     else:
-        own = None if isinstance(layer.timeout, NotGiven) else httpx.Timeout(layer.timeout)
-        inherited = client_timeout if own is None else own
-        if floor is not None and inherited.read is not None and inherited.read < floor:
-            timeout = httpx.Timeout(floor)
-        else:
-            timeout = own
+        timeout = httpx.Timeout(client_timeout) if send_client_timeout else None
     if call.max_retries is not None:
         retries = call.max_retries
     elif not isinstance(layer.max_retries, NotGiven):
@@ -535,7 +541,7 @@ def _check_page_size(page_size: int | None) -> int | None:
     if page_size is None:
         return None
     if isinstance(page_size, bool) or not isinstance(page_size, int) or not PAGE_SIZE_MIN <= page_size <= PAGE_SIZE_MAX:
-        raise ValueError(
+        raise LenzUsageError(
             f"page_size must be a whole number from {PAGE_SIZE_MIN} to {PAGE_SIZE_MAX} (got page_size={page_size!r})."
         )
     return page_size
@@ -563,7 +569,7 @@ def _verifications_params(page: int, page_size: int | None) -> dict[str, Any]:
 def _first_page(page: int) -> int:
     """``page`` for an iterator, refused unless it is 1 or more."""
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
-        raise ValueError(f"iter starts at page 1 or later (got page={page!r}).")
+        raise LenzUsageError(f"iter starts at page 1 or later (got page={page!r}).")
     return page
 
 
@@ -573,12 +579,12 @@ def _segment(value: Any, message: str) -> str:
     URL there). ``""``, ``"."`` and ``".."`` raise ``ValueError(message)``: a
     path normaliser eats the dots, and an empty id names the collection."""
     if not isinstance(value, str) or value in ("", ".", ".."):
-        raise ValueError(message)
+        raise LenzUsageError(message)
     try:
         return quote(value, safe="")
     except UnicodeEncodeError:
         # A lone surrogate cannot be sent: the id cannot name anything.
-        raise ValueError(message) from None
+        raise LenzUsageError(message) from None
 
 
 def _call_key(idempotency_key: str | None, idempotency: bool) -> str | None:
@@ -730,11 +736,15 @@ def _review_failed(review: ReviewFull) -> ReviewFailed:
 
 
 def _check_served_version(response: httpx.Response) -> None:
-    """Refuse an answer in an API version this SDK does not read.
+    """Refuse a successful answer in an API version this SDK does not read.
 
     A response without the header proceeds (a proxy or an old server may not
-    send it). Webhook payloads never pass through here.
+    send it). An error answer (400 or above) is never refused here: it raises
+    its own error, carrying the version as ``served_version``
+    (``_after_response``). Webhook payloads never pass through here.
     """
+    if response.status_code >= 400:
+        return
     served = (response.headers.get(_VERSION_HEADER) or "").strip()
     if not served or served == API_VERSION:
         return
@@ -753,7 +763,9 @@ def _check_served_version(response: httpx.Response) -> None:
         request_id=response.headers.get("X-Request-ID") or "",
         status_code=response.status_code,
         body=parsed if isinstance(parsed, dict) else None,
-        api_version=served,
+        served_version=served,
+        expected_version=API_VERSION,
+        headers=ResponseHeaders(dict(response.headers)),
     )
 
 
@@ -762,12 +774,23 @@ def _stated_retry_after(response: httpx.Response) -> int | None:
 
     Reads the ``Retry-After`` header first, then the body's
     ``reset_in_seconds`` (429 shapes), then the body's ``retry_after``
-    (the 503 shapes carry the wait under that key). Returns None (rather
+    (the 503 shapes carry the wait under that key). A typed 503
+    (``upstream_unavailable`` / ``capacity``) reads its body's
+    ``retry_after`` / ``retry_after_seconds`` first, as its error does. Returns None (rather
     than 0) on an absent or unparseable value so the caller can tell
     "server stated no wait" apart from "server said wait 0 seconds" and
     fall back to its own backoff.
     """
     raw = response.headers.get("Retry-After")
+    if response.status_code == 503 and _body_error_code(response) in UPSTREAM_503_CODES:
+        # The API's own 503 states its wait in the body, which wins over the
+        # header, as on ``LenzUpstreamUnavailableError.retry_after``.
+        body = _json_or_none(response)
+        stated = body.get("retry_after") if isinstance(body, dict) else None
+        if stated is None or str(stated).strip() == "":
+            stated = body.get("retry_after_seconds") if isinstance(body, dict) else None
+        if stated is not None and str(stated).strip() != "":
+            raw = stated
     if raw is None or str(raw).strip() == "":
         try:
             body = response.json()
@@ -865,16 +888,22 @@ def _client_settings(
     whitespace-only ``api_key`` is no key: it never falls back to the
     environment, which on a server holding several tenants' keys would send
     one tenant's call with the process's key. A call that needs a key then
-    raises ``LenzAuthError``, as on a client given none."""
+    raises ``LenzAuthError``, as on a client given none.
+
+    Whitespace around the key (a trailing newline read from a file) is
+    dropped; what is left must be printable ASCII without spaces (no
+    whitespace, control or non-ASCII character inside it): ``LenzAuthError``
+    here, before any request (since 3.2)."""
     import os
 
     # The same rule as every request option: refused here, before the
     # client exists, rather than failing (or retrying forever) later.
-    checked_timeout = _check_timeout(timeout, where)
+    # Left out (``NOT_GIVEN``): the 30 s default.
+    checked_timeout = _check_timeout(DEFAULT_TIMEOUT if isinstance(timeout, NotGiven) else timeout, where)
     retries = _check_retries(max_retries, where)
-    key = (os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key
-    if not key.strip():
-        key = ""
+    from_env = api_key is None
+    key = ((os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key).strip(_ASCII_SPACE)
+    _check_api_key(key, where, from_env=from_env)
     url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
     return key, url, checked_timeout, retries
 
@@ -892,21 +921,70 @@ def _borrowed_user_agent(client_headers: Mapping[str, str], user_agent: str | No
     return sdk_agent
 
 
+def _check_user_agent(value: Any, where: str) -> str | None:
+    """``user_agent=``: ``None`` / ``""`` (the SDK's), or a header value
+    (visible ASCII, spaces and tabs only inside), else ``LenzUsageError``
+    before the client exists (httpx would fail to encode it on every call)."""
+    if value is None or value == "":
+        return None
+    if not isinstance(value, str) or not _HEADER_VALUE.fullmatch(value):
+        raise LenzUsageError(
+            f"{where}: user_agent must be a string of visible ASCII characters, with spaces and tabs only "
+            f"between them (got {value!r})."
+        )
+    return value
+
+
 def _check_legacy_aliases(value: Any, where: str) -> bool:
     """``legacy_aliases``: ``True`` or ``False``, else ``ValueError``."""
     if not isinstance(value, bool):
-        raise ValueError(f"{where}: legacy_aliases must be True or False (got {value!r}).")
+        raise LenzUsageError(f"{where}: legacy_aliases must be True or False (got {value!r}).")
     return value
+
+
+#: The whitespace dropped around a key: ASCII only (not a BOM, a no-break
+#: space or U+0085, which ``str.strip`` would also drop), as in the Node SDK.
+_ASCII_SPACE = " \t\n\r\f\v"
+
+#: What an API key or access token can hold: printable ASCII, no spaces.
+_API_KEY = re.compile(r"[\x21-\x7e]+")
+
+
+def _check_api_key(key: str, where: str, *, from_env: bool = False) -> None:
+    """Refuse a key (already stripped of surrounding whitespace) that cannot
+    be sent as a bearer token (a non-ASCII character, a space, a newline or
+    any other control character inside it) with ``LenzAuthError``, before
+    any request: httpx would otherwise fail to encode it, or refuse the
+    header, on every call. ``""`` (no key) passes. The key itself is never
+    put in the message."""
+    if not key or _API_KEY.fullmatch(key):
+        return
+    source = "The LENZ_API_KEY environment variable" if from_env else "The api_key"
+    raise LenzAuthError(
+        message=f"{where}: the API key is not valid.",
+        cause=(
+            f"{source} contains a character a key never has (a space, a line break, another control "
+            "character or a non-ASCII character)."
+        ),
+        fix=(
+            "Pass the key exactly as https://lenz.io/api-credentials shows it: printable ASCII, no "
+            "spaces or line breaks inside it."
+        ),
+        doc_url="https://lenz.io/docs/auth",
+    )
 
 
 def _copy_api_key(value: Any) -> str:
     """The key a ``with_options`` copy is given. Never the environment: an
-    empty or whitespace-only key, or ``None``, is no key."""
+    empty or whitespace-only key, or ``None``, is no key. Any other key is
+    checked like the constructor's (``_check_api_key``)."""
     if value is None:
         return ""
     if not isinstance(value, str):
-        raise ValueError(f"with_options(): api_key must be a string or None (got {type(value).__name__}).")
-    return value if value.strip() else ""
+        raise LenzUsageError(f"with_options(): api_key must be a string or None (got {type(value).__name__}).")
+    key = value.strip(_ASCII_SPACE)
+    _check_api_key(key, "with_options()")
+    return key
 
 
 def _results_context(legacy_aliases: bool) -> dict[str, Any] | None:
@@ -990,10 +1068,14 @@ def _verify_payload(
     visibility: str,
     depth: str,
 ) -> dict[str, Any]:
-    payload: dict[str, Any] = {
-        "text": claim or text,
-        "source_url": source_url,
-    }
+    chosen = _one_input(claim, text)
+    if not chosen or _blank(chosen):
+        raise LenzUsageError("claim is required.")
+    payload: dict[str, Any] = {"text": chosen}
+    # Omit-when-empty (since 3.2; earlier releases sent ``"source_url": ""``):
+    # an empty value means no source, which is what leaving it out says.
+    if source_url:
+        payload["source_url"] = source_url
     # Omit-when-empty: no ``webhook_url`` means the key's default webhook.
     # An empty string is never sent, so a request keeps that meaning on
     # every API version (a newer one reads ``""`` as "no webhook").
@@ -1053,9 +1135,38 @@ def _extract_payload(*, text: str, language: str, focus: str, locate: bool | Non
     return payload
 
 
+def _blank(value: Any) -> bool:
+    """An empty or whitespace-only string: only characters ``str.strip``
+    removes, the API's own rule."""
+    return isinstance(value, str) and not value.strip()
+
+
+def _one_input(claim: Any, text: Any) -> Any:
+    """The input of ``claim=`` / ``text=`` (aliases): the one with content,
+    ``claim`` first, as the API resolves the two; else ``claim or text``."""
+    if claim and not _blank(claim):
+        return claim
+    if text and not _blank(text):
+        return text
+    return claim or text
+
+
 def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None:
+    """The two forms of ``assess``, checked before any request (since 3.2 a
+    blank claim, an empty list and a blank item raise here, as on ``select``,
+    instead of a 422 from the server)."""
     if claims is not None and (claim or text):
-        raise ValueError("assess takes either one claim (claim=) or a list (claims=), not both")
+        raise LenzUsageError("assess takes either one claim (claim=) or a list (claims=), not both")
+    if claims is not None:
+        if not claims:
+            raise LenzUsageError("claims is required.")
+        for index, item in enumerate(claims):
+            if _blank(item):
+                raise LenzUsageError(f"claims[{index}] is blank.")
+        return
+    chosen = _one_input(claim, text)
+    if not chosen or _blank(chosen):
+        raise LenzUsageError("claim is required.")
 
 
 def _assess_payload(*, text: str, claims: list[str] | None, language: str, suggest_rewrite: bool) -> dict[str, Any]:
@@ -1081,7 +1192,7 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
     chosen = claims or texts
     if not chosen:
-        raise ValueError("select requires a non-empty claims=[...]")
+        raise LenzUsageError("select requires a non-empty claims=[...]")
     return chosen
 
 
@@ -1119,7 +1230,7 @@ def _library_params(
 
 def _check_library_iter_sort(sort: str) -> None:
     if sort == "random":
-        raise ValueError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
+        raise LenzUsageError('iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.')
 
 
 def _review_payload(
@@ -1137,7 +1248,7 @@ def _review_payload(
     visibility: str,
 ) -> dict[str, Any]:
     if not text or not text.strip():
-        raise ValueError("review() needs the draft text, or one public http(s) URL.")
+        raise LenzUsageError("review() needs the draft text, or one public http(s) URL.")
     payload: dict[str, Any] = {"text": text}
     if language:
         payload["language"] = language
@@ -1150,7 +1261,7 @@ def _review_payload(
         if selector is None:
             continue
         if isinstance(selector, str):
-            raise ValueError(f"{name} is a list of strings, e.g. {name}=[{selector!r}].")
+            raise LenzUsageError(f"{name} is a list of strings, e.g. {name}=[{selector!r}].")
         escalate[name] = list(selector)
     for name, value in (
         ("max_assessments", max_assessments),
@@ -1181,9 +1292,9 @@ def _citecheck_payload(
 ) -> dict[str, Any]:
     has_text = bool(text and text.strip())
     if has_text == (pairs is not None):
-        raise ValueError("citecheck() needs exactly one of text and pairs.")
+        raise LenzUsageError("citecheck() needs exactly one of text and pairs.")
     if pairs is not None and max_citations is not None:
-        raise ValueError("max_citations goes with text: every pair is checked.")
+        raise LenzUsageError("max_citations goes with text: every pair is checked.")
     payload: dict[str, Any] = {"text": text} if has_text else {"pairs": [dict(p) for p in pairs or []]}
     if max_citations is not None:
         payload["max_citations"] = max_citations
@@ -1194,10 +1305,21 @@ def _citecheck_payload(
     return payload
 
 
-def _job_key(idempotency_key: str | None) -> str:
+def _no_key(idempotency: bool) -> dict[str, Any]:
+    """``idempotency=False`` as a keyword for ``review`` / ``citecheck`` from
+    their wait helpers, only when given: an override with the 3.1 signature
+    is still called the way 3.1 called it."""
+    return {} if idempotency else {"idempotency": False}
+
+
+def _job_key(idempotency_key: str | None, idempotency: bool = True) -> str | None:
     """A review's or citation check's ``Idempotency-Key``: the caller's, else
-    a new random one (these submits always send one)."""
-    return idempotency_key or uuid.uuid4().hex
+    a new random one, else (``idempotency=False``, since 3.2) none. An empty
+    ``idempotency_key=""`` sends none, as on every other call (3.1 generated
+    one here)."""
+    if idempotency_key is not None:
+        return idempotency_key or None
+    return uuid.uuid4().hex if idempotency else None
 
 
 def _review_params(view: str) -> dict[str, Any] | None:
@@ -1206,7 +1328,7 @@ def _review_params(view: str) -> dict[str, Any] | None:
     if view == "issues":
         return {"view": "issues"}
     if view != "full":
-        raise ValueError(f"view must be 'full' or 'issues' (got {view!r}).")
+        raise LenzUsageError(f"view must be 'full' or 'issues' (got {view!r}).")
     return None
 
 
@@ -1225,7 +1347,9 @@ def _review_started_by_conflict(exc: LenzError) -> ReviewStarted | None:
     conflict = exc.body if isinstance(exc.body, dict) else {}
     review_id = conflict.get("review_id")
     if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(review_id, str) and review_id:
-        return ReviewStarted(review_id=review_id, status="queued")
+        started = ReviewStarted(review_id=review_id, status="queued")
+        started._raw = conflict  # ``raw``: the answer that settled the call
+        return started
     return None
 
 
@@ -1236,7 +1360,9 @@ def _citecheck_started_by_conflict(exc: LenzError) -> CitecheckStarted | None:
     conflict = exc.body if isinstance(exc.body, dict) else {}
     existing = conflict.get("citecheck_id")
     if exc.status_code == 409 and exc.code == "idempotency_conflict" and isinstance(existing, str) and existing:
-        return CitecheckStarted(citecheck_id=existing, status="queued")
+        check = CitecheckStarted(citecheck_id=existing, status="queued")
+        check._raw = conflict  # ``raw``: the answer that settled the call
+        return check
     return None
 
 
@@ -1245,7 +1371,7 @@ def _already_deleted(exc: LenzError) -> bool | None:
     succeeded but the network reply was lost), the call succeeded rather than
     surfacing a confusing 404. A 404 in another API version is not read as
     this one's. ``None``: the error stands."""
-    if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
+    if exc.status_code == 404 and exc.served_version in (None, API_VERSION):
         return True
     return None
 
@@ -1261,11 +1387,14 @@ def _request_settings(
     floor: float | None,
     timeout: float | httpx.Timeout | None,
     max_retries: int | None,
+    send_client_timeout: bool = False,
 ) -> tuple[httpx.Timeout | None, int, tuple[tuple[str, str], ...]]:
     """The timeout, retry count and option headers of one request
     (``_resolve``). ``timeout`` and ``max_retries`` are the SDK's own settings
     for one request (a wait's polls): when set they win over every option."""
-    resolved, retries, option_headers = _resolve(options, layer, client_timeout, client_retries, floor)
+    resolved, retries, option_headers = _resolve(
+        options, layer, client_timeout, client_retries, floor, send_client_timeout
+    )
     if timeout is not None:
         resolved = httpx.Timeout(timeout)
     if max_retries is not None:
@@ -1284,6 +1413,7 @@ def _prepare(
     auth_optional: bool,
     timeout: httpx.Timeout | None,
     user_agent: str | None = None,
+    has_body: bool = True,
 ) -> tuple[str, dict[str, str], Any]:
     """The URL, headers and timeout one request is sent with (every attempt
     of it). Raises ``LenzAuthError`` when the call needs a key and there is
@@ -1320,13 +1450,43 @@ def _prepare(
     # so a key never reaches an endpoint that doesn't need it.
     if api_key and (auth_required or auth_optional):
         req_headers["Authorization"] = f"Bearer {api_key}"
-    req_headers.setdefault("Content-Type", "application/json")
+    # Only on a request that has a body (since 3.2: a GET, a body-less POST
+    # or DELETE sends none).
+    if has_body:
+        req_headers.setdefault("Content-Type", "application/json")
     # The version is part of the request, not of the HTTP client: a client
     # passed as ``http_client=`` may carry no version header or a stale one.
     req_headers[_VERSION_HEADER] = API_VERSION
     # ``None``: the ``httpx`` client's own timeout.
     req_timeout = httpx.USE_CLIENT_DEFAULT if timeout is None else timeout
     return url, req_headers, req_timeout
+
+
+#: httpx errors a request can raise that no retry can change: the request
+#: could not be built or sent (a bad URL or scheme, a header httpx refuses to
+#: write), or its answer could not be decoded or followed.
+NOT_SENDABLE = (
+    httpx.UnsupportedProtocol,
+    httpx.LocalProtocolError,
+    httpx.InvalidURL,
+    httpx.DecodingError,
+    httpx.TooManyRedirects,
+    httpx.StreamError,
+)
+
+
+def _not_sendable(exc: Exception, method: str, path: str) -> LenzConnectionError:
+    """A ``LenzConnectionError`` (``__cause__`` the httpx error) for an httpx
+    error no retry can change: ``retryable`` ``False``."""
+    err = LenzConnectionError(
+        message=f"{method} {path} could not be completed: {exc}",
+        cause=str(exc) or type(exc).__name__,
+        fix="Check base_url (an http or https URL) and any header or transport you configured.",
+        doc_url="https://lenz.io/docs/errors",
+    )
+    err.retryable = False
+    err.__cause__ = exc
+    return err
 
 
 def _after_transport_error(exc: httpx.TransportError, attempt: int, retries: int, method: str, path: str) -> float:
@@ -1345,16 +1505,55 @@ def _after_transport_error(exc: httpx.TransportError, attempt: int, retries: int
     return _retry_sleep(attempt)
 
 
+def _invalid_answer(response: httpx.Response, message: str, cause: str, msg: str) -> LenzInvalidResponseError:
+    """``LenzInvalidResponseError`` for an answer that is not the API's JSON
+    object (its decode fields describe ``msg`` at the start of the body)."""
+    text = response.text
+    err = LenzInvalidResponseError(
+        message=message,
+        cause=cause,
+        fix="Check base_url and any proxy between you and the API; quote the request id to support.",
+        doc_url="https://lenz.io/docs/errors",
+        request_id=response.headers.get("X-Request-ID") or "",
+        status_code=response.status_code,
+        body=None,
+        body_text=text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026",
+        headers=ResponseHeaders(dict(response.headers)),
+        served_version=(response.headers.get(_VERSION_HEADER) or "").strip() or None,
+    )
+    err.msg = msg
+    err.doc = text
+    err.pos = 0
+    err.lineno = 1
+    err.colno = 1
+    return err
+
+
 def _success_body(response: httpx.Response, method: str, path: str) -> Any:
-    """A success's body: ``{}`` for a 204, a 205 or ``Content-Length: 0``,
-    else its JSON. Any other body that is not JSON (an empty one without
-    ``Content-Length: 0``, or only whitespace, included) raises
+    """A success's body: its JSON object. A redirect (the API never
+    redirects, and httpx does not follow one), an empty body (since 3.2 a
+    204, a 205 or ``Content-Length: 0`` too: no endpoint answers with none),
+    a body that is not JSON, or JSON that is not an object raises
     ``LenzInvalidResponseError`` with the real status (a proxy answering in
     the API's place, typically), never a bare decode error."""
-    if response.status_code in (204, 205) or response.headers.get("Content-Length") == "0":
-        return {}
+    if 300 <= response.status_code < 400:
+        raise _invalid_answer(
+            response,
+            f"{method} {path} answered HTTP {response.status_code}, a redirect"
+            + (f" to {response.headers['Location']}." if response.headers.get("Location") else "."),
+            "The Lenz API never redirects: something between you and it (a proxy, a load balancer, a "
+            "wrong base_url) answered in its place.",
+            "Expecting value",
+        )
+    if not response.content.strip():
+        raise _invalid_answer(
+            response,
+            f"{method} {path} answered HTTP {response.status_code} with an empty body.",
+            "Every Lenz API answer has a JSON body: something else answered in its place.",
+            "Expecting value",
+        )
     try:
-        return response.json()
+        parsed = response.json()
     except ValueError as exc:
         text = response.text
         err = LenzInvalidResponseError(
@@ -1366,6 +1565,8 @@ def _success_body(response: httpx.Response, method: str, path: str) -> Any:
             status_code=response.status_code,
             body=None,
             body_text=text if len(text) <= INVALID_BODY_TEXT_MAX else text[:INVALID_BODY_TEXT_MAX] + "\u2026",
+            headers=ResponseHeaders(dict(response.headers)),
+            served_version=(response.headers.get(_VERSION_HEADER) or "").strip() or None,
         )
         decode = exc if isinstance(exc, json.JSONDecodeError) else None
         err.msg = decode.msg if decode else str(exc)
@@ -1374,6 +1575,17 @@ def _success_body(response: httpx.Response, method: str, path: str) -> Any:
         err.lineno = decode.lineno if decode else 1
         err.colno = decode.colno if decode else 1
         raise err from exc
+    if not isinstance(parsed, dict):
+        # Valid JSON, but not the object every endpoint answers with
+        # (``null``, a list, a number, a string): unreadable as a result.
+        raise _invalid_answer(
+            response,
+            f"{method} {path} answered HTTP {response.status_code} with JSON that is not an object "
+            f"({type(parsed).__name__}).",
+            "The answer is not the JSON object the API documents for this call.",
+            "Expecting a JSON object",
+        )
+    return parsed
 
 
 #: What ``_after_response`` says: the answer's body (the call is done) or the
@@ -1390,10 +1602,14 @@ def _after_response(
     path: str,
     req_headers: Mapping[str, str],
     conflict_settles: Callable[[Any], bool] | None,
+    legacy_aliases: bool = True,
 ) -> _Done | _Again:
     """What to do with one answer: ``(True, body)`` when the call is done,
     ``(False, seconds)`` to send the same request again after sleeping that
-    long; an error to raise is raised."""
+    long; an error to raise is raised. With ``legacy_aliases`` off, an
+    error's ``code`` is the body's own."""
+    if 300 <= response.status_code < 400:
+        _success_body(response, method, path)  # raises: not an API answer
     _check_served_version(response)
 
     if response.status_code < 400:
@@ -1450,12 +1666,16 @@ def _after_response(
         if stated is None or not _aborts_on_long_stated_wait(response):
             return False, _retry_sleep(attempt)
 
-    raise map_response_to_error(
+    err = map_response_to_error(
         response.status_code,
         response.content,
         dict(response.headers),
         endpoint=(method, path),
     )
+    if not legacy_aliases:
+        # The code exactly as sent: no 2.x rewrite, none left out.
+        err.code = _body_error_code(response)
+    raise err
 
 
 def _exhausted(last_exc: Exception | None, method: str, path: str) -> LenzAPIError:

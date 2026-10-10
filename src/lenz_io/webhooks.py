@@ -37,7 +37,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from .errors import LenzWebhookSignatureError
+from .errors import LenzUsageError, LenzWebhookSignatureError
 from .models import (
     CandidateClaim,
     Citecheck,
@@ -77,7 +77,7 @@ def verify_signature(raw_body: bytes, signature: str, secret: str) -> bool:
     does: a body signed with the empty key proves nothing.
     """
     if not secret:
-        raise ValueError("verify_signature requires a non-empty secret. Get it from /api-credentials.")
+        raise LenzUsageError("verify_signature requires a non-empty secret. Get it from /api-credentials.")
     if not signature:
         raise LenzWebhookSignatureError(
             message="Missing webhook signature",
@@ -620,7 +620,7 @@ def parse_webhook(body: bytes | str | dict[str, Any]) -> WebhookEvent:
     else:
         payload = json.loads(body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body)
     if not isinstance(payload, dict):
-        raise ValueError(f"A webhook body is a JSON object, got {type(payload).__name__}.")
+        raise LenzUsageError(f"A webhook body is a JSON object, got {type(payload).__name__}.")
     return _build_event(payload)
 
 
@@ -652,7 +652,7 @@ class LenzWebhooks:
         replay_window_seconds: int = DEFAULT_REPLAY_WINDOW_SECONDS,
     ) -> None:
         if not secret:
-            raise ValueError("LenzWebhooks requires a non-empty secret. Get it from /api-credentials.")
+            raise LenzUsageError("LenzWebhooks requires a non-empty secret. Get it from /api-credentials.")
         self._secret = secret
         self._replay_window = replay_window_seconds
 

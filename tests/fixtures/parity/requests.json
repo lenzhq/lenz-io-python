@@ -61,7 +61,6 @@
     "webhook_url": "https://hooks.example.test/x"
   },
   "verify_webhook_url": {
-    "source_url": "",
     "text": "The Earth is round.",
     "webhook_url": "https://hooks.example.test/x"
   }

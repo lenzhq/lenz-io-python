@@ -1,0 +1,14 @@
+{
+  "body": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [],
+    "locations": null,
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "presumed_intent": "",
+    "status": "no_match"
+  },
+  "status": 200
+}

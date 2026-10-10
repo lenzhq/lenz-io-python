@@ -1,0 +1,14 @@
+{
+  "body": {
+    "progress": {
+      "elapsed_seconds": "<elapsed_seconds#2:int>",
+      "index": 2,
+      "poll_after_seconds": 5,
+      "step": "research",
+      "total": 5
+    },
+    "status": "processing",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

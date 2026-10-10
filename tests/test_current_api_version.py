@@ -141,7 +141,15 @@ def test_a_review_schema_422_names_the_body_parameter_as_before(client: Lenz) ->
 
 
 def test_a_blank_assess_item_keeps_blank_item(client: Lenz) -> None:
-    err = _raise(client, "POST", "/assess", "assess__422_blank_item.json", lambda: client.assess(claims=["A.", " "]))
+    # ``assess`` refuses a blank item before sending (since 3.2): the request
+    # is sent as it is to read the server's answer.
+    err = _raise(
+        client,
+        "POST",
+        "/assess",
+        "assess__422_blank_item.json",
+        lambda: client._request("POST", "/assess", json={"claims": ["A.", " "]}),
+    )
     assert err.code == "blank_item"
     assert err.errors == []
 

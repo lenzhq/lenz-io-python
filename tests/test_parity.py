@@ -293,7 +293,8 @@ def test_request_bodies_match_the_previous_release() -> None:
     """/review and /citecheck keep every body byte for byte, ``webhook_url``
     included in all three states (on those endpoints ``""`` means no webhook,
     so it must still be sent). A /verify or /verify/batch call with a webhook
-    URL is unchanged too."""
+    URL is unchanged too, except that since 3.2 /verify leaves out an empty
+    ``source_url`` (it sent ``"source_url": ""``)."""
     from parity_requests import bodies
 
     assert bodies() == json.loads((FIXTURES / "requests.json").read_text())

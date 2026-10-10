@@ -1,0 +1,12 @@
+{
+  "body": {
+    "docs_url": "https://lenz.io/docs/errors#internal",
+    "error": "Pipeline failed.",
+    "failure_class": "internal",
+    "failure_reason": "task_error",
+    "retryable": false,
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

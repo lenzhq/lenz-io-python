@@ -1,0 +1,14 @@
+{
+  "body": {
+    "candidate_claims": [],
+    "claim": "",
+    "domain": "",
+    "identified_claims": [],
+    "key_entities": [],
+    "locations": null,
+    "original_input": "What a lovely day.",
+    "presumed_intent": "",
+    "status": "not_a_claim"
+  },
+  "status": 200
+}

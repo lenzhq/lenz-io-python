@@ -1,0 +1,25 @@
+{
+  "body": {
+    "items": [
+      {
+        "claim": "The Earth is round.",
+        "completed_at": "<completed_at#3:ts:+00:00:us>",
+        "confidence": "high",
+        "created_at": "<created_at#2:ts:+00:00:us>",
+        "domain": "Science",
+        "entities": [],
+        "executive_summary": "The claim is verified.",
+        "key_finding": "The Earth is approximately spherical in shape.",
+        "language": "en",
+        "lenz_score": 9,
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_id": "<verification_id#1:hex8>"
+      }
+    ],
+    "page": 1,
+    "page_size": 20,
+    "total": 1
+  },
+  "status": 200
+}

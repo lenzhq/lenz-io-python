@@ -1,0 +1,7 @@
+{
+  "body": {
+    "status": "cancelled",
+    "task_id": "<task_id#1:hex32>"
+  },
+  "status": 200
+}

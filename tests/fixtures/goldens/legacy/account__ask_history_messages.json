@@ -1,0 +1,20 @@
+{
+  "body": {
+    "can_send": true,
+    "exchange_limit": 100,
+    "exchanges_used": 0,
+    "messages": [
+      {
+        "content": "Hello",
+        "created_at": "<created_at#1:ts:+00:00:us>",
+        "role": "user"
+      },
+      {
+        "content": "Hi there!",
+        "created_at": "<created_at#2:ts:+00:00:us>",
+        "role": "expert"
+      }
+    ]
+  },
+  "status": 200
+}

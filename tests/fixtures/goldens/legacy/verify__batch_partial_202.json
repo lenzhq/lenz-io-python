@@ -1,0 +1,13 @@
+{
+  "body": {
+    "batch_id": "<batch_id#1:hex16>",
+    "items": [
+      {
+        "claim_text": "First claim.",
+        "task_id": "<task_id#2:hex32>"
+      }
+    ],
+    "partial": true
+  },
+  "status": 202
+}

@@ -195,7 +195,7 @@ CASES: list[Case] = [
         "verifications_delete",
         "default",
         lambda c: c.verifications.delete("v1"),
-        {("DELETE", "/verifications/v1"): [(204, None)]},
+        {("DELETE", "/verifications/v1"): [(200, {"ok": True})]},
     ),
     (
         "verifications_delete_404",
@@ -216,7 +216,7 @@ CASES: list[Case] = [
         lambda c: c.ask.send("v1", message="Why?", language="auto"),
         {("POST", "/ask/v1"): [ASK_REPLY]},
     ),
-    ("ask_reset", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [(204, None)]}),
+    ("ask_reset", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [(200, {"ok": True})]}),
     ("library_list", "default", lambda c: c.library.list(), {("GET", "/library"): [LIB_1]}),
     (
         "library_list_filters",

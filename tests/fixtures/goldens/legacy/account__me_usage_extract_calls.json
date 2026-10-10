@@ -1,0 +1,61 @@
+{
+  "body": {
+    "ask": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 100,
+      "quota_total": 100,
+      "quota_used": 0,
+      "remaining": 100
+    },
+    "assess": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 100,
+      "quota_total": 100,
+      "quota_used": 0,
+      "remaining": 100
+    },
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "low": 5,
+          "standard": 10
+        }
+      }
+    },
+    "costs": {
+      "ask": 1,
+      "assess": 1,
+      "citation": 1,
+      "extract": 0,
+      "verify": 10
+    },
+    "credits": {
+      "bonus": 0,
+      "extra": 0,
+      "remaining": 100,
+      "resets_at": "<resets_at#1:ts:+00:00:s>",
+      "total": 100,
+      "used": 0
+    },
+    "extract": {
+      "calls_today": 7,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false,
+    "plan": "free",
+    "plan_label": "Free",
+    "quota_resets_at": "<quota_resets_at#1:ts:+00:00:s>",
+    "verify": {
+      "bonus": 0,
+      "credits": 0,
+      "quota_remaining": 10,
+      "quota_total": 10,
+      "quota_used": 0,
+      "remaining": 10
+    }
+  },
+  "status": 200
+}

@@ -397,16 +397,27 @@ class TestUnreadableSuccess:
                 client.usage()
         assert ei.value.status_code == 200
 
-    @pytest.mark.parametrize("status", [200, 204, 205])
-    def test_an_empty_2xx_with_no_length_or_204_205_reads_as_empty(self, client: Any, status: int) -> None:
+    @pytest.mark.parametrize("status", [200, 201, 204, 205])
+    def test_an_empty_2xx_raises_whatever_its_status_or_length(self, client: Any, status: int) -> None:
+        """Since 3.2: no endpoint answers with an empty body (3.1 read a 204,
+        a 205 or ``Content-Length: 0`` as ``{}``)."""
         with respx.mock(base_url=BASE) as r:
             r.get("/me/usage").respond(status, content=b"", headers={"Content-Length": "0"})
-            assert client.usage().plan == ""
+            with pytest.raises(LenzInvalidResponseError) as ei:
+                client.usage()
+            assert ei.value.status_code == status and "empty body" in ei.value.message
+            r.get("/me/usage").mock(return_value=httpx.Response(status, stream=httpx.ByteStream(b"")))
+            with pytest.raises(LenzInvalidResponseError):
+                client.usage()
 
-    def test_a_204_without_a_length_reads_as_empty(self, client: Any) -> None:
+    @pytest.mark.parametrize("status", [301, 302, 303, 304, 307, 308])
+    @pytest.mark.parametrize("content", [b"", b'{"ok": true}', b"<html>moved</html>"])
+    def test_a_redirect_raises_whatever_its_body(self, client: Any, status: int, content: bytes) -> None:
         with respx.mock(base_url=BASE) as r:
-            r.get("/me/usage").mock(return_value=httpx.Response(204, stream=httpx.ByteStream(b"")))
-            assert client.usage().plan == ""
+            r.get("/me/usage").respond(status, content=content, headers={"Location": "https://e.x/"})
+            with pytest.raises(LenzInvalidResponseError) as ei:
+                client.usage()
+        assert ei.value.status_code == status and "redirect" in ei.value.message
 
     @pytest.mark.parametrize("content", [b"  \n", b""])
     def test_whitespace_or_a_chunked_empty_body_raises(self, client: Any, content: bytes) -> None:

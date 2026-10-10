@@ -1,0 +1,35 @@
+{
+  "body": {
+    "cost_options": {
+      "verify": {
+        "depth": {
+          "low": 5,
+          "standard": 10
+        }
+      }
+    },
+    "costs": {
+      "ask": 1,
+      "assess": 1,
+      "citation": 1,
+      "extract": 0,
+      "verify": 10
+    },
+    "credits": {
+      "extra": 0,
+      "remaining": 100,
+      "resets_at": "<resets_at#1:ts:+00:00:s>",
+      "total": 100,
+      "used": 0
+    },
+    "extract": {
+      "calls_today": 7,
+      "daily_limit": 1000,
+      "unlimited": false
+    },
+    "has_webhook_secret": false,
+    "plan": "free",
+    "plan_label": "Free"
+  },
+  "status": 200
+}

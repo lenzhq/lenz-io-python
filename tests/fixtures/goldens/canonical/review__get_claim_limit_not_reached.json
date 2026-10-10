@@ -1,0 +1,122 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "The EU AI Act took effect in March 2024.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 0,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      },
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [],
+          "rationale": null,
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "Water boils at 100 C at sea level.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 1,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 2
+    },
+    "failure": null,
+    "failures": [],
+    "issues": [],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "clean",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 3,
+      "max_citations": 0,
+      "max_verifications": 5,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "<review_id#1:hex8>",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 2,
+        "failed": 0
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 3,
+      "claim_limit_exceeded": false,
+      "claims_found": 2,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "status": 200
+}

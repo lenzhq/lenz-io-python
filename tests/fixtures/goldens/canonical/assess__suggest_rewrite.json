@@ -1,0 +1,36 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "Venus is the closest planet to the Sun.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": "Mercury, not Venus, is the closest planet to the Sun.",
+        "status": "completed",
+        "suggested_rewrite": "Mercury is the closest planet to the Sun.",
+        "verdict": "False",
+        "verification_url": null
+      },
+      {
+        "claim": "Mercury is the closest planet to the Sun.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": "Mercury is the innermost planet.",
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "ok"
+  },
+  "status": 200
+}

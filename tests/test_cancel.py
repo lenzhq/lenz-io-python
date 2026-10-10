@@ -430,7 +430,9 @@ def test_a_cancel_answer_that_is_not_a_cancel_result_is_an_error(client: Lenz, b
         r.post(f"/verify/{TASK}/cancel").respond(200, json=body)
         with pytest.raises(LenzAPIError) as ei:
             client.cancel(TASK)
-    assert "unexpected" in ei.value.message.lower()
+    # JSON that is not an object is unreadable (``LenzInvalidResponseError``,
+    # a ``LenzAPIError``); an object that is not a cancel result is unexpected.
+    assert "unexpected" in ei.value.message.lower() or "not an object" in ei.value.message
 
 
 @pytest.mark.parametrize(

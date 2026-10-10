@@ -1,0 +1,34 @@
+{
+  "body": {
+    "candidate_claims": [],
+    "claim": "Alpha rose 5% in 2024.",
+    "domain": "Economics",
+    "identified_claims": [],
+    "key_entities": [
+      {
+        "name": "Alpha",
+        "type": "organization"
+      },
+      {
+        "name": "Beta",
+        "type": "organization"
+      }
+    ],
+    "locations": [
+      {
+        "claim": "Alpha rose 5% in 2024.",
+        "positions": [
+          {
+            "end": null,
+            "start": null,
+            "text": "Alpha rose 5% in 2024."
+          }
+        ]
+      }
+    ],
+    "original_input": "https://example.com/an-article",
+    "presumed_intent": "Verify reported figures",
+    "status": "ready"
+  },
+  "status": 200
+}
