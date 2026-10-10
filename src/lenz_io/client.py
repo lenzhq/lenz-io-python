@@ -8,7 +8,8 @@ Multi-language SDK convention:
   supported codes) to receive prose fields in that language. ``assess``,
   ``verify`` (and ``verify_and_wait``) and ``ask.send`` also take
   ``language='auto'``: the answer comes back in the language of the submitted
-  text. The other methods take the codes only.
+  text. ``extract`` takes ``'auto'`` too and reports the language it chose in
+  ``language`` on its result. The other methods take the codes only.
 * Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
   expose ``language`` populated by the server. Verdict / domain / status
   enum values stay English regardless of language; only free-form prose
@@ -897,7 +898,13 @@ class Lenz:
         1000 calls/account/day (shared across your API keys).
 
         ``language`` (optional): return extracted claims in the target
-        language. Domain / status enums stay English.
+        language. Domain / status enums stay English. Leave it out for
+        English. ``"auto"`` writes the claims in the language of ``text``
+        (for a ``text`` that is a single URL, of the fetched page); a short
+        or undetectable text, or a detector failure, gives English. A
+        concrete code always wins. The result's ``language`` says which one
+        the claims are written in: pass it on to ``assess`` or ``verify`` as
+        ``language`` to keep a chain in one language.
 
         ``focus`` (optional): narrow the result to the claims it describes,
         e.g. ``"market size, growth and competitors"``. At most 300
