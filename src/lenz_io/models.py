@@ -120,6 +120,16 @@ class _Received:
     def __reduce__(self) -> tuple[Any, ...]:
         return (_Received, (self.body, self.meta))
 
+    def __eq__(self, other: object) -> bool:
+        # Pydantic compares private attributes: two results are equal when
+        # their bodies are, whatever answer (status, headers) they came in,
+        # as when ``_raw`` held the body alone.
+        if isinstance(other, _Received):
+            return self.body == other.body
+        return self.body == other
+
+    __hash__ = None  # type: ignore[assignment]
+
 
 def _set_raw(model: Any, body: dict[str, Any] | None, meta: _Meta | None) -> None:
     """Store ``model``'s body as received, and the answer it came in. Written

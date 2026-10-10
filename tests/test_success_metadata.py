@@ -552,3 +552,17 @@ def test_an_unreadable_body_of_another_review_is_polled_again(client: Any, clock
     assert not _unreadable_end(err, ("completed",), ("review_id", "r1"))
     err.body = {"review_id": "r1", "status": "completed"}
     assert _unreadable_end(err, ("completed",), ("review_id", "r1"))
+
+
+def test_results_compare_by_value_whatever_answer_they_came_in(client: Any) -> None:
+    body = {"claims": [_ROW]}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/assess").respond(200, json=body, headers={"X-Request-ID": "a"})
+        first = client.assess("A.")
+        r.post("/assess").respond(200, json=body, headers={"X-Request-ID": "b"})
+        second = client.assess("A.")
+    assert first == second
+    assert first == first.model_copy(deep=True)
+    assert first == pickle.loads(pickle.dumps(first))
+    assert first.claims[0] == second.claims[0]
+    assert first == AssessResponse.model_validate(body)
