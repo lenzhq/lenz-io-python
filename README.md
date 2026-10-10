@@ -1478,6 +1478,7 @@ with their own Lenz API key or OAuth access token (`lat_...`):
 ```python
 shared = Lenz(api_key="")  # one pool for the process, no key of its own
 
+
 def handle(request):
     user = shared.with_options(api_key=request.user_token)
     return user.assess(claim=request.text)
