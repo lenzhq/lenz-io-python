@@ -519,6 +519,42 @@ def _walk(fetch: Callable[[int], VerificationList | LibraryList], page: int) -> 
         yield from items
 
 
+#: The page sizes ``GET /verifications`` serves (it clamps anything else).
+PAGE_SIZE_MIN, PAGE_SIZE_MAX = 1, 100
+
+
+def _check_page_size(page_size: int | None) -> int | None:
+    """``page_size`` for ``verifications.list`` / ``iter``: ``None`` (the
+    server's default, not sent) or a whole number from 1 to 100, else
+    ``ValueError`` before any request (the server would clamp it silently)."""
+    if page_size is None:
+        return None
+    if isinstance(page_size, bool) or not isinstance(page_size, int) or not PAGE_SIZE_MIN <= page_size <= PAGE_SIZE_MAX:
+        raise ValueError(
+            f"page_size must be a whole number from {PAGE_SIZE_MIN} to {PAGE_SIZE_MAX} (got page_size={page_size!r})."
+        )
+    return page_size
+
+
+class _PageSizeKw(TypedDict, total=False):
+    page_size: int
+
+
+def _page_size_kw(page_size: int | None) -> _PageSizeKw:
+    """``page_size`` as a keyword for ``list`` from ``iter``, only when given:
+    a subclass whose ``list`` predates the parameter keeps working."""
+    return {} if page_size is None else {"page_size": page_size}
+
+
+def _verifications_params(page: int, page_size: int | None) -> dict[str, Any]:
+    """The query of ``GET /verifications``: ``page_size`` only when given, so a
+    call without it sends exactly what it always did."""
+    params: dict[str, Any] = {"page": page}
+    if page_size is not None:
+        params["page_size"] = page_size
+    return params
+
+
 def _first_page(page: int) -> int:
     """``page`` for an iterator, refused unless it is 1 or more."""
     if isinstance(page, bool) or not isinstance(page, int) or page < 1:
@@ -814,16 +850,37 @@ def _client_settings(
     """The key, base URL, timeout and retries a client is built with: the
     environment fills a missing key (``LENZ_API_KEY``) and base URL
     (``LENZ_BASE_URL``), and a bad timeout or retry count raises
-    ``ValueError`` here, before the client exists."""
+    ``ValueError`` here, before the client exists.
+
+    Only an omitted key (``None``) reads ``LENZ_API_KEY``. An empty or
+    whitespace-only ``api_key`` is no key: it never falls back to the
+    environment, which on a server holding several tenants' keys would send
+    one tenant's call with the process's key. A call that needs a key then
+    raises ``LenzAuthError``, as on a client given none."""
     import os
 
     # The same rule as every request option: refused here, before the
     # client exists, rather than failing (or retrying forever) later.
     checked_timeout = _check_timeout(timeout, where)
     retries = _check_retries(max_retries, where)
-    key = api_key or os.environ.get("LENZ_API_KEY") or ""
+    key = (os.environ.get("LENZ_API_KEY") or "") if api_key is None else api_key
+    if not key.strip():
+        key = ""
     url = (base_url or os.environ.get("LENZ_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
     return key, url, checked_timeout, retries
+
+
+def _borrowed_user_agent(client_headers: Mapping[str, str], user_agent: str | None, sdk_agent: str) -> str:
+    """The User-Agent a request through a borrowed ``http_client=`` carries:
+    the caller's ``user_agent=`` when given; else the borrowed client's own
+    when it set one; else (httpx's ``python-httpx/...`` default, or none) the
+    SDK's. Sent per request, so the borrowed client's headers never change."""
+    if user_agent:
+        return user_agent
+    own = client_headers.get("User-Agent", "")
+    if own and not own.startswith("python-httpx/"):
+        return own
+    return sdk_agent
 
 
 def _default_headers(user_agent: str) -> dict[str, str]:
@@ -1170,10 +1227,12 @@ def _prepare(
     auth_required: bool,
     auth_optional: bool,
     timeout: httpx.Timeout | None,
+    user_agent: str | None = None,
 ) -> tuple[str, dict[str, str], Any]:
     """The URL, headers and timeout one request is sent with (every attempt
     of it). Raises ``LenzAuthError`` when the call needs a key and there is
-    none."""
+    none. ``user_agent``: a User-Agent to send on this request (a client
+    given ``http_client=``), under the request options' headers."""
     if auth_required and not api_key:
         raise LenzAuthError(
             message="API key required",
@@ -1186,7 +1245,9 @@ def _prepare(
         )
 
     url = f"{base_url}{path}"
-    req_headers = dict(headers or {})
+    # First, where httpx puts a client's default User-Agent.
+    req_headers = {"User-Agent": user_agent} if user_agent else {}
+    req_headers.update(headers or {})
     # The request options' headers, over the method's own (case-insensitive;
     # none is added when no option was given). httpx then puts the
     # ``httpx.Client``'s own headers under them, so an option header also

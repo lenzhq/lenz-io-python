@@ -40,8 +40,8 @@
   "verifications.delete": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'bool'",
   "verifications.get": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Verification'",
   "verifications.get_certificate": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Certificate'",
-  "verifications.iter": "(self, *, page: 'int' = 1, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[VerificationListItem]'",
-  "verifications.list": "(self, *, page: 'int' = 1, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'",
+  "verifications.iter": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[VerificationListItem]'",
+  "verifications.list": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'",
   "verifications.related": "(self, verification_id: 'str', *, limit: 'int' = 5, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'RelatedVerifications'"
  }
 }

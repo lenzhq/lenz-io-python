@@ -11,6 +11,15 @@ All notable changes to this SDK are documented here. Format follows
 - `review` / `review_and_wait` accept `language="auto"`: the review comes back in the language of the draft (one language for the whole review). Needs the API release that accepts it on `/review`; before that the API answers 422.
 - `extract` accepts `language="auto"` (on `Lenz` and `AsyncLenz`): the claims are written in the language of the text, or of the fetched page when `text` is a single URL. A short or undetectable text, or a detector failure, gives English; leaving `language` out is still English and a concrete code always wins. `verify_batch`, `citecheck` and `review` still take the codes only.
 - `ExtractedClaims.language`: the ISO 639-1 code the claims are written in. Pass it on to `assess` or `verify` as `language` to keep a chain in one language. It is `None` on a replayed response stored before the API sent it. `lenz extract` takes `--language` (a code or `auto`) and prints the language it got back.
+- `page_size=` on `verifications.list()` and `verifications.iter()` (both clients): items per page, a whole number from 1 to 100; anything else raises `ValueError` before any request (the API would clamp it silently). Omitted, nothing changes: the request is sent exactly as before and the server's default (20) applies. `iter()` sends it on every page. `library.list()` / `iter()` do not take it: the public catalog serves a fixed page size.
+
+### Changed
+
+- **`api_key=""` (or a whitespace-only key) is no key.** It used to fall back to the `LENZ_API_KEY` environment variable, so a server choosing a key per tenant could send one tenant's call with the process's key when that tenant's key was empty. Now only an omitted key (`api_key=None`) reads the environment; an empty one behaves like a client given no key: the public library works, and a call that needs a key raises `LenzAuthError`. If you relied on `api_key=""` reading `LENZ_API_KEY`, pass `None` (or nothing).
+
+### Fixed
+
+- `user_agent=` now reaches the wire when the client is given `http_client=` (it was ignored there), and such a client sends the SDK's `lenz-io-python/...` User-Agent instead of httpx's default `python-httpx/...`. It is set on each request, so the client you passed is not changed; a User-Agent you set on that client yourself is kept unless you pass `user_agent=`, and a per-call `extra_headers={"User-Agent": ...}` still wins over both.
 
 ## [3.1.0] - 2026-10-10
 

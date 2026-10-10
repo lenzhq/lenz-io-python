@@ -135,6 +135,7 @@ from ._core import (
     _batch_results as _batch_results,
     _blank_webhook_url as _blank_webhook_url,
     _body_error_code as _body_error_code,
+    _borrowed_user_agent as _borrowed_user_agent,
     _call_key as _call_key,
     _call_options as _call_options,
     _CallOptions as _CallOptions,
@@ -142,6 +143,7 @@ from ._core import (
     _check_assess_forms as _check_assess_forms,
     _check_headers as _check_headers,
     _check_library_iter_sort as _check_library_iter_sort,
+    _check_page_size as _check_page_size,
     _check_retries as _check_retries,
     _check_served_version as _check_served_version,
     _check_timeout as _check_timeout,
@@ -167,6 +169,7 @@ from ._core import (
     _library_params as _library_params,
     _merge_headers as _merge_headers,
     _names_the_job as _names_the_job,
+    _page_size_kw as _page_size_kw,
     _poll_hint as _poll_hint,
     _poll_timeout as _core_poll_timeout,
     _prepare as _prepare,
@@ -187,6 +190,7 @@ from ._core import (
     _unexpected_answer as _unexpected_answer,
     _user_agent as _user_agent,
     _verification_from_terminal as _verification_from_terminal,
+    _verifications_params as _verifications_params,
     _verify_payload as _verify_payload,
     _wait_result as _wait_result,
     _wait_task_id as _wait_task_id,
@@ -262,23 +266,31 @@ class _VerificationsNamespace:
         self,
         *,
         page: int = 1,
+        page_size: int | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> VerificationList:
         """One page of your verifications, newest first.
 
+        ``page_size`` (optional): items per page, a whole number from 1 to 100
+        (``ValueError`` otherwise, before any request). Omitted, the server's
+        default (20) applies. The page size served is echoed as
+        ``page_size`` on the result. Since 3.2.
+
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`Lenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.list()")
-        body = self._p._request("GET", "/verifications", params={"page": page}, options=options)
+        params = _verifications_params(page, _check_page_size(page_size))
+        body = self._p._request("GET", "/verifications", params=params, options=options)
         return VerificationList.model_validate(body)
 
     def iter(
         self,
         *,
         page: int = 1,
+        page_size: int | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
@@ -290,9 +302,11 @@ class _VerificationsNamespace:
         the page size from each response, and stops after a short or empty
         page, once the pages read reach the response's ``total``, or when the
         server answers another page than the one asked for. ``page`` must be
-        1 or more (``ValueError``)::
+        1 or more (``ValueError``). ``page_size`` (1 to 100, ``ValueError``
+        otherwise, since 3.2) is sent on every page request; omitted, the
+        server's default (20) applies::
 
-            for item in client.verifications.iter():
+            for item in client.verifications.iter(page_size=100):
                 print(item.verification_id, item.verdict)
 
         Since 3.0. ``list(page=...)`` reads one page.
@@ -303,7 +317,8 @@ class _VerificationsNamespace:
         """
         # Checked and snapshotted now: every page is read with these.
         options = _call_options(timeout, max_retries, extra_headers, "verifications.iter()")
-        return _walk(lambda n: self.list(page=n, **_given(options)), _first_page(page))
+        _check_page_size(page_size)
+        return _walk(lambda n: self.list(page=n, **_page_size_kw(page_size), **_given(options)), _first_page(page))
 
     def get(
         self,
@@ -650,7 +665,14 @@ class Lenz:
     sign-up). Auth-required methods on an un-keyed client raise
     ``LenzAuthError`` with a link to ``/api-credentials``.
 
-    Reads ``LENZ_API_KEY`` from the environment if no key is passed.
+    Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
+    empty or whitespace-only ``api_key`` is no key and never reads the
+    environment (auth-required methods raise ``LenzAuthError``).
+
+    ``user_agent`` replaces the SDK's User-Agent, also on requests sent
+    through a client given as ``http_client=`` (set on each request; the
+    client's own headers are not changed). Without it, such a client sends
+    the SDK's User-Agent unless it set its own.
     """
 
     def __init__(
@@ -669,12 +691,17 @@ class Lenz:
         self._timeout = timeout
         self._max_retries = max_retries
         self._owns_client = http_client is None
+        # A client given ``http_client=`` has its own default headers: the
+        # User-Agent goes on each request instead (``_borrowed_user_agent``).
+        self._borrowed = http_client is not None
+        self._user_agent = user_agent or None
+        self._sdk_user_agent = user_agent or _user_agent()
         self._options = _ClientOptions()
         # ``user_agent`` lets a wrapper (e.g. the CLI) override just the UA while
         # the SDK keeps ownership of every other default header — so a new
         # default header can't be silently dropped by a hand-copied client.
         self._client = http_client or httpx.Client(
-            timeout=httpx.Timeout(timeout), headers=_default_headers(user_agent or _user_agent())
+            timeout=httpx.Timeout(timeout), headers=_default_headers(self._sdk_user_agent)
         )
 
         # Resource namespaces (Stripe pattern for CRUD on past verifications,
@@ -2207,6 +2234,11 @@ class Lenz:
             auth_required=auth_required,
             auth_optional=auth_optional,
             timeout=timeout,
+            user_agent=(
+                _borrowed_user_agent(self._client.headers, self._user_agent, self._sdk_user_agent)
+                if self._borrowed
+                else None
+            ),
         )
         last_exc: Exception | None = None
         for attempt in range(retries + 1):
