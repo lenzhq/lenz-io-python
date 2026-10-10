@@ -18,6 +18,7 @@ Vocabulary (applies across every claim-shaped response):
 
 from __future__ import annotations
 
+import copy
 from collections.abc import ItemsView, KeysView, ValuesView
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
@@ -50,6 +51,38 @@ class _Lax(BaseModel):
     #: client's ``legacy_aliases``); nested reads made by its properties
     #: follow it.
     _legacy_aliases: bool = PrivateAttr(default=True)
+
+    #: The JSON object this model was read from, as received (see ``raw``).
+    _raw: Any = PrivateAttr(default=None)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _keep_what_was_read(cls, data: Any, handler: ValidatorFunctionWrapHandler) -> Any:
+        # The outermost validator: it sees the input before any ``before``
+        # validator fills in a 2.x alias or a default. Only a JSON object is
+        # kept; a model passed in (nesting an existing result) keeps its own.
+        model = handler(data)
+        if isinstance(data, dict) and isinstance(model, _Lax):
+            model._raw = data
+        return model
+
+    @property
+    def raw(self) -> dict[str, Any] | None:
+        """The JSON object this result was read from, exactly as received: a
+        deep copy (plain dicts, lists, strings, numbers, booleans and
+        ``None``), with no 2.x alias, default or renamed value in it, whatever
+        the client's ``legacy_aliases``. Changing it changes nothing here.
+
+        Set on every result a client call returns and on every model nested
+        in one, each holding its own part of the body (``TaskStatus.result``,
+        each of ``AssessResponse.claims``, each of ``ReviewFull.claims``, ...),
+        and on a parsed webhook's models. A ``ReviewStarted`` /
+        ``CitecheckStarted`` that a 409 naming the job settled holds that 409's
+        body. ``None`` on a ``BatchItemResult`` (the SDK builds it; its
+        ``verification`` and ``status_detail`` hold theirs) and on a value
+        that is not a JSON object. A model you build yourself holds the fields
+        you built it with. Since 3.2."""
+        return copy.deepcopy(self._raw) if isinstance(self._raw, dict) else None
 
     @classmethod
     def _as_sent(cls, data: Any) -> Any:
@@ -1244,6 +1277,13 @@ class BatchItemResult(_Lax):
         """The item's claim. Replaces ``claim_text``, which is deprecated and
         kept."""
         return self.claim_text
+
+    @property
+    def raw(self) -> dict[str, Any] | None:
+        """``None``: the SDK builds this result, it is not read from a
+        response. ``verification.raw`` and ``status_detail.raw`` are the
+        bodies it was built from. Since 3.2."""
+        return None
 
 
 class UsageCredits(_Lax):

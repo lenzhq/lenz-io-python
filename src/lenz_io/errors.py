@@ -22,12 +22,49 @@ from __future__ import annotations
 import json
 import re
 import warnings
+from collections.abc import Iterator, Mapping
 from typing import TYPE_CHECKING, Any
 
 from typing_extensions import deprecated
 
 if TYPE_CHECKING:
     from .models import Citecheck, ReviewFull
+
+
+class ResponseHeaders(Mapping[str, str]):
+    """The headers of the response an error was read from: a read-only
+    mapping whose lookups ignore case (``exc.headers["retry-after"]`` and
+    ``exc.headers["Retry-After"]`` are the same). Empty for an error that
+    had no response. Since 3.2."""
+
+    __slots__ = ("_items",)
+
+    def __init__(self, headers: Mapping[str, str] | None = None) -> None:
+        items: dict[str, tuple[str, str]] = {}
+        for name, value in (headers or {}).items():
+            items[str(name).lower()] = (str(name), str(value))
+        self._items = items
+
+    def __getitem__(self, name: str) -> str:
+        return self._items[name.lower()][1] if isinstance(name, str) else self._items[name][1]
+
+    def __iter__(self) -> Iterator[str]:
+        return (name for name, _ in self._items.values())
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __contains__(self, name: object) -> bool:
+        return isinstance(name, str) and name.lower() in self._items
+
+    def __repr__(self) -> str:
+        return f"ResponseHeaders({dict(self.items())!r})"
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (ResponseHeaders, (dict(self.items()),))
+
+
+_NO_HEADERS = ResponseHeaders()
 
 
 class LenzError(Exception):
@@ -46,9 +83,20 @@ class LenzError(Exception):
       * ``request_id`` — ``X-Request-ID`` header value; quote on support tickets
       * ``status_code``— HTTP status code (0 for client-side errors)
       * ``code``       — the server's machine-readable error code, e.g.
-        ``"no_credits"``. Present on 402, 403 and 429; ``""`` when the
-        server sent none. Branch on this rather than on message text.
-      * ``body``       — parsed JSON response body if available
+        ``"no_credits"``; ``""`` when there is none. With the default
+        ``legacy_aliases=True`` it is the code lenz-io 2.x reported for the
+        endpoint (2.x left some codes out, e.g. ``not_found`` or
+        ``validation_error``); a client built with ``legacy_aliases=False``
+        reports exactly the ``code`` the response body carries. Branch on
+        this rather than on message text.
+      * ``body``       — the parsed JSON response body as sent (``None`` or
+        ``{}`` when there was none, or it was not a JSON object). The source
+        of truth: every other field is read from it.
+      * ``headers``    — the response's headers, a read-only mapping whose
+        lookups ignore case (:class:`ResponseHeaders`); empty when there was
+        no response. Since 3.2.
+      * ``served_version`` — the ``X-Lenz-API-Version`` the response named,
+        or ``None`` when it named none (or there was no response). Since 3.2.
       * ``retryable``  — whether sending the same request again can succeed:
         ``True`` for a network failure, a transport timeout, a 429, a 5xx and
         a 409 ``idempotency_conflict`` (the first request with that key is
@@ -63,6 +111,10 @@ class LenzError(Exception):
     """
 
     retryable: bool | None
+    #: The response headers (see the class docstring). Since 3.2.
+    headers: Mapping[str, str] = _NO_HEADERS
+    #: The ``X-Lenz-API-Version`` the response named, or ``None``. Since 3.2.
+    served_version: str | None = None
     #: The ``Idempotency-Key`` the failed call sent, or ``None`` when it sent
     #: none. To resend safely, pass it back (``idempotency_key=exc.idempotency_key``):
     #: the server then replays the first answer, or reports the first request
@@ -538,26 +590,42 @@ class LenzWebhookSignatureError(LenzError):
 
 
 class LenzApiVersionError(LenzError):
-    """A response named an API version this SDK does not read.
+    """A successful response named an API version this SDK does not read.
 
     Every API response names the version that served it in the
     ``X-Lenz-API-Version`` header. lenz-io 3.x asks for ``2026-10-11`` and reads
     that version's response shape only, so an answer in another version (in
     practice ``2026-05-13``, which a reply replayed from before the account's
     version changed, or a server pinned to the older version, still sends) is
-    refused instead of being misread. Applies to every response of a client
-    call, success or error; never to webhook payloads.
+    refused instead of being misread. Applies to the successful answers
+    (status below 400) of a client call; never to webhook payloads. Since
+    3.2, an error answer (400 or above) in another version raises its own
+    error (a 402, a 429, a 503 with their waits and balances), with that
+    version on ``served_version``.
 
     Fields:
-      * ``api_version`` — the version the response named.
+      * ``served_version`` — the version the response named. Since 3.2.
+      * ``expected_version`` — the version this SDK reads (``2026-10-11``).
+        Since 3.2.
+      * ``api_version`` — the same as ``served_version`` (its older name).
       * ``status_code`` — the response's HTTP status.
       * ``body``        — the response body as sent (parsed JSON), or ``None``
         when it was not a JSON object.
     """
 
-    def __init__(self, *, api_version: str = "", **kwargs: Any) -> None:
-        super().__init__(api_version=api_version, **kwargs)
-        self.api_version = api_version
+    def __init__(
+        self,
+        *,
+        api_version: str = "",
+        served_version: str | None = None,
+        expected_version: str = "",
+        **kwargs: Any,
+    ) -> None:
+        served = served_version if served_version is not None else api_version
+        super().__init__(api_version=served or api_version, **kwargs)
+        self.api_version = served or api_version
+        self.served_version = served
+        self.expected_version = expected_version
 
     def _derived_retryable(self) -> bool | None:
         # The same request answers in the same version again.
@@ -877,6 +945,7 @@ def map_response_to_error(
     parsed = raw
     if endpoint is not None:
         parsed = _original_error(status_code, raw, *endpoint)
+    response_headers = ResponseHeaders(headers)
     headers = headers or {}
     request_id = headers.get("X-Request-ID") or headers.get("x-request-id") or ""
 
@@ -916,6 +985,8 @@ def map_response_to_error(
         code=code,
         body=raw,
     )
+    err.headers = response_headers
+    err.served_version = (response_headers.get("X-Lenz-API-Version") or "").strip() or None
 
     # Class-specific enrichment from the response body. Each is set on the
     # instance so callers can access via the documented attribute name.
@@ -1143,6 +1214,7 @@ __all__ = [
     "LenzValidationError",
     "LenzVerificationNotReadyError",
     "LenzWebhookSignatureError",
+    "ResponseHeaders",
     "ReviewFailed",
     "ReviewFailedError",
     "ReviewTimeout",

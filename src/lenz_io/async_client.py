@@ -61,10 +61,10 @@ import httpx
 from typing_extensions import Self
 
 from ._core import (
+    _CONSTRUCTOR_TIMEOUT,
     _NO_OPTIONS,
     ASSESS_TIMEOUT,
     DEFAULT_MAX_RETRIES,
-    DEFAULT_TIMEOUT,
     EXTRACT_TIMEOUT,
     NOT_GIVEN,
     WAIT_TIMEOUT,
@@ -108,6 +108,7 @@ from ._core import (
     _key_header,
     _library_params,
     _names_the_job,
+    _no_key,
     _page_size_kw,
     _page_step,
     _poll_timeout as _core_poll_timeout,
@@ -608,7 +609,14 @@ class AsyncLenz:
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
     empty or whitespace-only ``api_key`` is no key and never reads the
-    environment (auth-required methods raise ``LenzAuthError``).
+    environment (auth-required methods raise ``LenzAuthError``). Any other
+    key must be printable ASCII without spaces (a newline, a tab, another
+    control character or a non-ASCII character anywhere in it raises
+    ``LenzAuthError`` here, since 3.2).
+
+    ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass is
+    sent on each request (the client you passed is not changed); left out,
+    that client's own timeout applies.
 
     ``user_agent`` replaces the SDK's User-Agent, also on requests sent
     through a client given as ``http_client=`` (set on each request; the
@@ -623,8 +631,10 @@ class AsyncLenz:
     hold ``None``), a failed ``assess`` row keeps ``verdict`` and
     ``confidence`` ``None``, ``extract``'s ``status`` reads
     ``no_checkable_claim`` and a ``cancelled`` status with no failure block
-    has ``failure`` ``None``. Errors and webhook parsing are unchanged. The
-    README lists every field it changes.
+    has ``failure`` ``None``. Errors keep their classes and fields, except
+    that an error's ``code`` is exactly the ``code`` of the response body
+    (since 3.2); webhook parsing is unchanged. The README lists every field
+    it changes.
 
     The asyncio client: every method of :class:`lenz_io.Lenz`, with the same parameters, defaults
     and results, as a coroutine. Use it as ``async with AsyncLenz() as client:`` or close it with
@@ -638,12 +648,13 @@ class AsyncLenz:
         *,
         api_key: str | None = None,
         base_url: str | None = None,
-        timeout: float | httpx.Timeout | None = DEFAULT_TIMEOUT,
+        timeout: float | httpx.Timeout | None = _CONSTRUCTOR_TIMEOUT,
         max_retries: int = DEFAULT_MAX_RETRIES,
         http_client: httpx.AsyncClient | None = None,
         user_agent: str | None = None,
         legacy_aliases: bool = True,
     ) -> None:
+        given_timeout = timeout
         self._api_key, self._base_url, timeout, max_retries = _client_settings(
             api_key, base_url, timeout, max_retries, "AsyncLenz()"
         )
@@ -655,6 +666,10 @@ class AsyncLenz:
         # A client given ``http_client=`` has its own default headers: the
         # User-Agent goes on each request instead (``_borrowed_user_agent``).
         self._borrowed = http_client is not None
+        # A ``timeout=`` given with a borrowed ``http_client=`` is sent on each
+        # request (the borrowed client is not changed); left out, the borrowed
+        # client's own timeout applies.
+        self._send_timeout = self._borrowed and given_timeout is not _CONSTRUCTOR_TIMEOUT
         self._user_agent = user_agent or None
         self._sdk_user_agent = user_agent or _async_user_agent()
         self._options = _ClientOptions()
@@ -719,7 +734,8 @@ class AsyncLenz:
           on the whole call. Here ``None`` means no timeout, as on
           ``AsyncLenz(timeout=None)``; on a single call ``timeout=None`` keeps
           the client's. ``extract`` and ``assess`` take at least 150 s / 100 s
-          when the timeout is inherited from a copy or the client.
+          when the timeout is the client's own; a copy's (since 3.2) or a
+          call's is used as given.
         * ``max_retries``: how often a request that failed in a way worth
           retrying (a 5xx, a 429, a dropped connection) is sent again.
         * ``extra_headers``: headers added to every request, merged over the
@@ -727,11 +743,12 @@ class AsyncLenz:
           a header a copy added. The SDK's own headers are refused.
         * ``api_key`` (since 3.2): the copy's own key, for example one user's
           OAuth access token (``lat_...``) on a server acting for several
-          users, sharing the pool. Any string is sent as given; an empty or
-          whitespace-only key, or ``None``, gives a copy with no key (a call
-          that needs one raises ``LenzAuthError`` before sending). A copy
-          never reads ``LENZ_API_KEY``. Left out, the copy keeps the key it
-          was made from.
+          users, sharing the pool. A key is sent as given; one that is not
+          printable ASCII without spaces raises ``LenzAuthError`` here (since
+          3.2). An empty or whitespace-only key, or ``None``, gives a copy
+          with no key (a call that needs one raises ``LenzAuthError`` before
+          sending). A copy never reads ``LENZ_API_KEY``. Left out, the copy
+          keeps the key it was made from.
 
         A copy reads results with the client's ``legacy_aliases`` (set on the
         constructor only).
@@ -808,8 +825,10 @@ class AsyncLenz:
         too, or pass ``idempotency=False`` to send none. Never derived from
         the claim: the same claim sent again later is a new verification.
 
+        A blank claim raises ``ValueError`` before sending (since 3.2).
+
         ``source_url`` (optional): where the claim was found, kept with the
-        verification. ``webhook_url`` (optional): where to send this
+        verification; sent only when not empty (since 3.2). ``webhook_url`` (optional): where to send this
         verification's ``verification.*`` events; leave it out (or blank) for
         your key's default webhook URL.
 
@@ -937,9 +956,10 @@ class AsyncLenz:
 
         ``timeout`` (optional): per-call HTTP timeout in seconds (or an
         ``httpx.Timeout``), overriding the client default for this one
-        request, used as given. Otherwise ``extract`` uses
-        ``EXTRACT_TIMEOUT`` (150s), or your client timeout when you configured
-        a longer one: a long input can take more than a minute to extract.
+        request, used as given, and so is a copy's (``with_options``, since
+        3.2). Otherwise ``extract`` uses ``EXTRACT_TIMEOUT`` (150s), or your
+        client timeout when you configured a longer one: a long input can
+        take more than a minute to extract.
         ``max_retries`` and ``extra_headers``: see :meth:`AsyncLenz.with_options`.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
@@ -993,7 +1013,9 @@ class AsyncLenz:
                        for row in (await client.assess(claims=claims[i : i + 20])).claims]
 
           The two forms are mutually exclusive — passing ``claims`` together
-          with a non-empty ``claim`` / ``text`` raises ``ValueError``.
+          with a non-empty ``claim`` / ``text`` raises ``ValueError``. So do
+          (since 3.2, before sending) a blank ``claim``, an empty ``claims``
+          list and a blank item in it.
 
         Each ``AssessClaim`` has a ``verdict`` ("True" / "Mostly True" /
         "Mixed" / "Mostly False" / "False" / "Error"), a categorical
@@ -1036,9 +1058,9 @@ class AsyncLenz:
 
         ``timeout`` (optional): per-call HTTP timeout in seconds (or an
         ``httpx.Timeout``), overriding the client default for this one
-        request, used as given. Both forms otherwise use
-        ``ASSESS_TIMEOUT`` (100s), or your client timeout when you configured a
-        longer one — the server runs framing and a 3-model panel inside one
+        request, used as given, and so is a copy's (``with_options``, since
+        3.2). Both forms otherwise use ``ASSESS_TIMEOUT`` (100s), or your
+        client timeout when you configured a longer one — the server runs framing and a 3-model panel inside one
         request, and a long text can use the server's whole 90s budget.
         ``max_retries`` and ``extra_headers``: see :meth:`AsyncLenz.with_options`.
 
@@ -1460,6 +1482,7 @@ class AsyncLenz:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        idempotency: bool = True,
     ) -> ReviewStarted:
         """Start a review of a draft. Returns at once with a ``review_id``;
         the review takes two to four minutes. Use ``review_and_wait`` to
@@ -1508,10 +1531,16 @@ class AsyncLenz:
         ``review.failed`` to your credential's default webhook URL, ``""``
         sends none, a URL sends them there.
 
-        An ``Idempotency-Key`` is generated when you pass none, so a retried
-        submit cannot start a second review; a resend with the same key
-        within 24 hours returns the same review, and a new key is a new
-        review.
+        ``idempotency`` (default ``True``): an ``Idempotency-Key`` is
+        generated when you pass none, so a retried submit cannot start a
+        second review; a resend with the same key within 24 hours returns the
+        same review, and a new key is a new review. Pin your own with
+        ``idempotency_key=``, or pass ``idempotency=False`` (since 3.2) to
+        send none. Unlike the other calls, a resend that lands while the
+        first submit with its key is still being created (409
+        ``idempotency_conflict`` naming the ``review_id``) is not an error:
+        the review exists, and it is returned as a ``ReviewStarted``
+        (``status`` ``"queued"``).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`AsyncLenz.with_options`.
@@ -1530,7 +1559,8 @@ class AsyncLenz:
             webhook_url=webhook_url,
             visibility=visibility,
         )
-        headers = {"Idempotency-Key": _job_key(idempotency_key)}
+        job_key = _job_key(idempotency_key, idempotency)
+        headers = _key_header(job_key)
         # A 409 naming the review a resend started settles the call
         # (``_review_started_by_conflict``).
         body = await self._recovering(
@@ -1544,7 +1574,7 @@ class AsyncLenz:
         )
         if isinstance(body, ReviewStarted):
             return body
-        with _carrying_key(headers["Idempotency-Key"], unreadable=True):
+        with _carrying_key(job_key, unreadable=True):
             return ReviewStarted.model_validate(body, context=self._results)
 
     @overload
@@ -1663,6 +1693,7 @@ class AsyncLenz:
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
         cancel_on_abort: bool = False,
+        idempotency: bool = True,
     ) -> ReviewFull:
         """Start a review (``review(text, ...)``, which documents every option
         but ``timeout`` and ``on_update``) and poll it until it ends.
@@ -1704,7 +1735,7 @@ class AsyncLenz:
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "review_and_wait()")
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
-        key = _job_key(idempotency_key)
+        key = _job_key(idempotency_key, idempotency)
         with _carrying_key(key):
             started = await self.review(
                 text,
@@ -1721,6 +1752,7 @@ class AsyncLenz:
                 idempotency_key=key,
                 # Only the options given, so a 2.21 ``review`` override is still called.
                 **_given(options),
+                **_no_key(idempotency),
             )
             logger.info("Submitted review: %s", started.review_id)
             return await self._wait_review(
@@ -1745,6 +1777,7 @@ class AsyncLenz:
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
+        idempotency: bool = True,
     ) -> CitecheckStarted:
         """Start a citation check. Returns at once with a ``citecheck_id``;
         use ``citecheck_and_wait`` to block until it ends, or
@@ -1766,9 +1799,16 @@ class AsyncLenz:
         passage and the quote stay verbatim in the page's language.
         ``webhook_url``: ``None`` (default) sends
         ``citecheck.completed`` / ``citecheck.failed`` to your credential's
-        default webhook URL, ``""`` sends none, a URL sends them there. An
-        ``Idempotency-Key`` is generated when you pass none: a resend with the
-        same key within 24 hours returns the same check.
+        default webhook URL, ``""`` sends none, a URL sends them there.
+
+        ``idempotency`` (default ``True``): an ``Idempotency-Key`` is
+        generated when you pass none: a resend with the same key within 24
+        hours returns the same check. Pin your own with ``idempotency_key=``,
+        or pass ``idempotency=False`` (since 3.2) to send none. Unlike the
+        other calls, a resend that lands while the first submit with its key
+        is still being created (409 ``idempotency_conflict`` naming the
+        ``citecheck_id``) is not an error: the check exists, and it is
+        returned as a ``CitecheckStarted`` (``status`` ``"queued"``).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`AsyncLenz.with_options`.
@@ -1777,7 +1817,8 @@ class AsyncLenz:
         payload = _citecheck_payload(
             text=text, pairs=pairs, max_citations=max_citations, language=language, webhook_url=webhook_url
         )
-        headers = {"Idempotency-Key": _job_key(idempotency_key)}
+        job_key = _job_key(idempotency_key, idempotency)
+        headers = _key_header(job_key)
         # A 409 naming the check a resend started settles the call
         # (``_citecheck_started_by_conflict``).
         body = await self._recovering(
@@ -1791,7 +1832,7 @@ class AsyncLenz:
         )
         if isinstance(body, CitecheckStarted):
             return body
-        with _carrying_key(headers["Idempotency-Key"], unreadable=True):
+        with _carrying_key(job_key, unreadable=True):
             return CitecheckStarted.model_validate(body, context=self._results)
 
     async def get_citecheck(
@@ -1862,6 +1903,7 @@ class AsyncLenz:
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
         cancel_on_abort: bool = False,
+        idempotency: bool = True,
     ) -> Citecheck:
         """Start a citation check (``citecheck(text, ...)``, which documents
         every option but ``timeout`` and ``on_update``) and poll it until
@@ -1900,7 +1942,7 @@ class AsyncLenz:
         # Checked and snapshotted once: the submit and every poll use these.
         options = _call_options(None, max_retries, extra_headers, "citecheck_and_wait()")
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
-        key = _job_key(idempotency_key)
+        key = _job_key(idempotency_key, idempotency)
         with _carrying_key(key):
             started = await self.citecheck(
                 text,
@@ -1911,6 +1953,7 @@ class AsyncLenz:
                 idempotency_key=key,
                 # Only the options given, so a 2.21 ``citecheck`` override is still called.
                 **_given(options),
+                **_no_key(idempotency),
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
             return await self._wait_citecheck(
@@ -2308,7 +2351,13 @@ class AsyncLenz:
         Reads the client actually in use, so ``Lenz(timeout=None)``, an
         ``httpx.Timeout`` and an ``httpx.AsyncClient`` passed as ``http_client=``
         all work, and so does a copy's timeout (``with_options``)."""
-        return _core_poll_timeout(self._options.timeout, self._client.timeout, remaining)
+        return _core_poll_timeout(self._options.timeout, self._client_timeout(), remaining)
+
+    def _client_timeout(self) -> httpx.Timeout:
+        """The client's own timeout: the constructor's when it was given with a
+        borrowed ``http_client=`` (sent on each request), else the timeout of
+        the ``httpx`` client in use."""
+        return httpx.Timeout(self._timeout) if self._send_timeout else self._client.timeout
 
     async def _extract(
         self,
@@ -2411,7 +2460,14 @@ class AsyncLenz:
         polls): when set they win over every option."""
         key = (headers or {}).get("Idempotency-Key") or None
         resolved, retries, option_headers = _request_settings(
-            options, self._options, self._client.timeout, self._max_retries, floor, timeout, max_retries
+            options,
+            self._options,
+            self._client_timeout(),
+            self._max_retries,
+            floor,
+            timeout,
+            max_retries,
+            self._send_timeout,
         )
         with _carrying_key(key, unreadable=True):
             return await self._send(
@@ -2475,7 +2531,9 @@ class AsyncLenz:
                 last_exc = exc
                 await _sleep(_after_transport_error(exc, attempt, retries, method, path))
                 continue
-            done, value = _after_response(response, attempt, retries, method, path, req_headers, conflict_settles)
+            done, value = _after_response(
+                response, attempt, retries, method, path, req_headers, conflict_settles, self._legacy_aliases
+            )
             if done:
                 return value  # type: ignore[return-value]
             await _sleep(value)

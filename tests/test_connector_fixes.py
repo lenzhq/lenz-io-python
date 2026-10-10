@@ -1,0 +1,348 @@
+"""Fixes for callers that act for many users (a connector, a gateway), on
+both clients:
+
+* An error answer in another API version raises its own error, with
+  ``served_version``; ``LenzApiVersionError`` names both versions.
+* ``legacy_aliases=False``: an error's ``code`` is the body's own.
+* Every error read from a response carries its ``headers``.
+* A 2xx whose JSON is not an object raises ``LenzInvalidResponseError``.
+* An API key that cannot be sent raises ``LenzAuthError`` before any request.
+* Blank input is refused before sending; an empty ``source_url`` is left out.
+* ``review`` / ``citecheck`` take ``idempotency=False``.
+* Every result carries ``raw``, the JSON object it was read from.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterator
+from typing import Any
+
+import pytest
+import respx
+from conftest import make_client
+
+from lenz_io import (
+    LenzAPIError,
+    LenzAuthError,
+    LenzError,
+    LenzInvalidResponseError,
+    LenzNotFoundError,
+    LenzValidationError,
+)
+from lenz_io.errors import ResponseHeaders
+
+pytestmark = pytest.mark.usefixtures("any_client")
+
+BASE = "https://lenz.io/api/v1"
+KEY = "lenz_test_abc123"
+_USAGE = {"plan": "free", "credits": {"total": 100, "used": 40, "remaining": 60, "extra": 5}, "costs": {"verify": 10}}
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key=KEY, max_retries=0) as c:
+        yield c
+
+
+@pytest.fixture()
+def wire() -> Iterator[Any]:
+    with make_client(api_key=KEY, max_retries=0, legacy_aliases=False) as c:
+        yield c
+
+
+# ── 1. legacy_aliases=False: the code as sent ─────────────────────────────
+
+
+_CODES = [
+    ("GET", "/verifications/v1", 404, "not_found", lambda c: c.verifications.get("v1")),
+    ("POST", "/verify", 409, "idempotency_conflict", lambda c: c.verify("A.", idempotency=False)),
+    ("POST", "/verify", 422, "validation_error", lambda c: c.verify("A.")),
+    ("POST", "/assess", 422, "blank_input", lambda c: c.assess("A.")),
+    ("POST", "/assess", 422, "unsupported_language", lambda c: c.assess("A.", language="xx")),
+    ("POST", "/assess", 422, "too_many_items", lambda c: c.assess(claims=["A."])),
+    ("POST", "/extract", 400, "invalid_request", lambda c: c.extract(text="A.")),
+    ("GET", "/me/usage", 500, "internal_error", lambda c: c.usage()),
+    ("GET", "/me/usage", 401, "not_authenticated", lambda c: c.usage()),
+    ("POST", "/ask/v1", 409, "verification_not_ready", lambda c: c.ask.send("v1", message="Why?")),
+    ("POST", "/review", 401, "not_authenticated", lambda c: c.review("Draft.")),
+]
+
+
+@pytest.mark.parametrize(("method", "path", "status", "code", "call"), _CODES)
+def test_without_legacy_aliases_the_code_is_the_bodys(
+    wire: Any, method: str, path: str, status: int, code: str, call: Any
+) -> None:
+    body = {"detail": "Refused.", "code": code}
+    if status == 422:
+        body["errors"] = [{"type": code, "loc": ["body", "claim"], "msg": "Refused."}]
+    with respx.mock(base_url=BASE) as r:
+        getattr(r, method.lower())(path).respond(status, json=body)
+        with pytest.raises(LenzError) as ei:
+            call(wire)
+    assert ei.value.code == code
+    assert ei.value.body == body
+
+
+def test_with_legacy_aliases_the_code_is_the_2x_one(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verifications/v1").respond(404, json={"detail": "Not found.", "code": "not_found"})
+        with pytest.raises(LenzNotFoundError) as ei:
+            client.verifications.get("v1")
+    assert ei.value.code == ""
+    assert ei.value.body == {"detail": "Not found.", "code": "not_found"}
+
+
+def test_without_legacy_aliases_a_bodys_missing_or_odd_code_reads_empty(wire: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.get("/me/usage").respond(500, json={"detail": "x", "code": 42})
+        with pytest.raises(LenzAPIError) as ei:
+            wire.usage()
+        assert ei.value.code == ""
+        r.get("/me/usage").respond(502, content=b"<html>")
+        with pytest.raises(LenzAPIError) as ei:
+            wire.usage()
+        assert ei.value.code == ""
+
+
+def test_without_legacy_aliases_a_validation_error_keeps_its_class(wire: Any) -> None:
+    body = {
+        "detail": "depth: Input should be 'standard' or 'low'",
+        "code": "validation_error",
+        "errors": [{"type": "literal_error", "loc": ["body", "depth"], "msg": "Input should be 'standard' or 'low'"}],
+    }
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify").respond(422, json=body)
+        with pytest.raises(LenzValidationError) as ei:
+            wire.verify("A.", depth="deep")
+    assert ei.value.code == "validation_error"
+
+
+# ── 2. headers on an error ────────────────────────────────────────────────
+
+
+def test_an_error_carries_the_response_headers(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.get("/me/usage").respond(
+            429, json={"detail": "slow", "code": "rate_limited"}, headers={"Retry-After": "90", "X-Request-ID": "rq1"}
+        )
+        with pytest.raises(LenzError) as ei:
+            client.usage()
+    headers = ei.value.headers
+    assert isinstance(headers, ResponseHeaders)
+    assert headers["retry-after"] == headers["Retry-After"] == "90"
+    assert "x-request-id" in headers and "X-Missing" not in headers
+    assert ei.value.retry_after == 90
+    with pytest.raises(TypeError):
+        headers["X-New"] = "1"  # type: ignore[index]
+
+
+def test_an_error_without_a_response_has_no_headers() -> None:
+    assert dict(LenzError(message="m").headers) == {}
+    assert LenzError(message="m").served_version is None
+
+
+def test_response_headers_pickle() -> None:
+    import pickle
+
+    headers = ResponseHeaders({"Retry-After": "5"})
+    assert pickle.loads(pickle.dumps(headers))["retry-after"] == "5"
+
+
+# ── 7. a 2xx whose JSON is not an object ──────────────────────────────────
+
+
+@pytest.mark.parametrize("content", [b"null", b"[]", b"[1, 2]", b"42", b'"x"', b"true"])
+def test_json_that_is_not_an_object_is_an_invalid_response(client: Any, content: bytes) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.get("/me/usage").respond(200, content=content, headers={"X-Request-ID": "rq9"})
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            client.usage()
+    exc = ei.value
+    assert exc.status_code == 200
+    assert exc.body is None
+    assert exc.body_text == content.decode()
+    assert exc.request_id == "rq9"
+    assert "not an object" in exc.message
+    assert isinstance(exc, json.JSONDecodeError) and isinstance(exc, LenzAPIError)
+
+
+def test_a_submit_answered_with_a_list_says_which_key_it_sent(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.post("/assess").respond(200, json=[])
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            client.assess("A.", idempotency_key="pinned")
+    assert ei.value.idempotency_key == "pinned"
+
+
+# ── 8. an API key that cannot be sent ─────────────────────────────────────
+
+
+_BAD_KEYS = ["lenz_abc\n", "lenz_a bc", "lenz_abc\t", "lenz_\x00abc", "lenz_abcé", "lenz_abc\u2028", " lenz_abc"]
+
+
+@pytest.mark.parametrize("key", _BAD_KEYS)
+def test_a_bad_key_is_refused_by_the_constructor(key: str) -> None:
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        route = r.get("/me/usage").respond(200, json=_USAGE)
+        with pytest.raises(LenzAuthError) as ei:
+            make_client(api_key=key)
+    assert not route.called
+    assert key.strip() not in str(ei.value)
+    assert ei.value.status_code == 0
+
+
+@pytest.mark.parametrize("key", _BAD_KEYS)
+def test_a_bad_key_is_refused_by_with_options(client: Any, key: str) -> None:
+    with pytest.raises(LenzAuthError):
+        client.with_options(api_key=key)
+
+
+def test_a_bad_key_in_the_environment_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LENZ_API_KEY", "lenz_abc\n")
+    with pytest.raises(LenzAuthError) as ei:
+        make_client()
+    assert "LENZ_API_KEY" in str(ei.value)
+
+
+@pytest.mark.parametrize("key", ["", "   ", "\n", None])
+def test_a_blank_key_is_still_no_key(key: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LENZ_API_KEY", raising=False)
+    with make_client(api_key=key) as c, pytest.raises(LenzAuthError) as ei:
+        c.usage()
+    assert ei.value.message == "API key required"
+
+
+def test_any_printable_ascii_key_is_sent(client: Any) -> None:
+    key = "lat_" + "".join(chr(c) for c in range(0x21, 0x7F))
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/me/usage").respond(200, json=_USAGE)
+        client.with_options(api_key=key).usage()
+    assert route.calls.last.request.headers["Authorization"] == f"Bearer {key}"
+
+
+# ── 10. blank input and empty optional fields ─────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        lambda c: c.assess(""),
+        lambda c: c.assess("   "),
+        lambda c: c.assess(text="\n"),
+        lambda c: c.assess(claims=[]),
+        lambda c: c.assess(claims=["A.", " "]),
+        lambda c: c.assess(claims=[""]),
+        lambda c: c.verify(""),
+        lambda c: c.verify(text="  "),
+        lambda c: c.verify_and_wait("\t"),
+    ],
+)
+def test_blank_input_is_refused_before_sending(client: Any, call: Any) -> None:
+    with respx.mock(base_url=BASE, assert_all_called=False) as r:
+        sent = r.route().respond(200, json={})
+        with pytest.raises(ValueError, match="claim"):
+            call(client)
+    assert not sent.called
+
+
+def test_verify_sends_source_url_only_when_given(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.post("/verify").respond(202, json={"task_id": "t1", "claim": "A."})
+        client.verify("A.", idempotency=False)
+        client.verify("A.", source_url="https://e.x/a", idempotency=False)
+    assert [json.loads(c.request.content) for c in route.calls] == [
+        {"text": "A."},
+        {"text": "A.", "source_url": "https://e.x/a"},
+    ]
+
+
+# ── 9. review / citecheck: idempotency=False ──────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("path", "answer", "call"),
+    [
+        ("/review", {"review_id": "r1", "status": "queued"}, lambda c, **kw: c.review("Draft.", **kw)),
+        ("/citecheck", {"citecheck_id": "c1", "status": "queued"}, lambda c, **kw: c.citecheck("Draft.", **kw)),
+    ],
+)
+def test_a_job_submit_sends_a_key_unless_told_not_to(client: Any, path: str, answer: Any, call: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.post(path).respond(202, json=answer)
+        call(client)
+        call(client, idempotency_key="pinned")
+        call(client, idempotency=False)
+        call(client, idempotency=False, idempotency_key="pinned")
+    keys = [c.request.headers.get("Idempotency-Key") for c in route.calls]
+    assert len(keys[0] or "") == 32
+    assert keys[1:] == ["pinned", None, "pinned"]
+
+
+def test_review_and_wait_passes_idempotency_false_on(client: Any) -> None:
+    done = json.loads(
+        (__import__("pathlib").Path(__file__).parent / "fixtures" / "contract" / "review_completed.json").read_text()
+    )
+    with respx.mock(base_url=BASE) as r:
+        submit = r.post("/review").respond(202, json={"review_id": done["review_id"], "status": "queued"})
+        r.get(f"/reviews/{done['review_id']}").respond(200, json=done)
+        client.review_and_wait("Draft.", idempotency=False)
+    assert "Idempotency-Key" not in submit.calls.last.request.headers
+
+
+def test_a_409_naming_the_job_is_the_started_job_with_that_body_as_raw(client: Any) -> None:
+    conflict = {"detail": "in flight", "code": "idempotency_conflict", "review_id": "r9"}
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review").respond(409, json=conflict)
+        started = client.review("Draft.", idempotency_key="pinned")
+    assert (started.review_id, started.status) == ("r9", "queued")
+    assert started.raw == conflict
+
+
+# ── 3. raw ────────────────────────────────────────────────────────────────
+
+
+def test_raw_is_the_body_as_received_whatever_legacy_aliases(client: Any, wire: Any) -> None:
+    body = {
+        "claims": [
+            {"claim": "A.", "status": "failed", "failure": {"code": "timeout", "hint": "Retry."}, "future": [1]},
+        ],
+        "more_claims": [],
+    }
+    for c in (client, wire):
+        with respx.mock(base_url=BASE) as r:
+            r.post("/assess").respond(200, json=body)
+            out = c.assess("A.")
+        assert out.raw == body
+        assert out.claims[0].raw == body["claims"][0]
+        # A deep copy: changing it changes nothing.
+        copy = out.raw
+        copy["claims"][0]["claim"] = "B."
+        assert out.raw == body
+        assert "error_code" not in out.claims[0].raw
+    # The 2.x reading (the default) filled in a field the body did not carry.
+    with respx.mock(base_url=BASE) as r:
+        r.post("/assess").respond(200, json=body)
+        assert client.assess("A.").claims[0].error_code == "timeout"
+
+
+def test_raw_on_a_poll_result_and_its_nested_verification(client: Any) -> None:
+    body = {"status": "completed", "task_id": "t1", "result": {"verification_id": "v1", "claim": "A.", "x": None}}
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=body)
+        status = client.get_status("t1")
+    assert status.raw == body
+    assert status.result is not None and status.result.raw == body["result"]
+
+
+def test_a_batch_item_has_no_raw() -> None:
+    from lenz_io.models import BatchItemResult
+
+    assert BatchItemResult(task_id="t", status="timeout").raw is None
+
+
+def test_a_model_built_in_code_holds_its_fields() -> None:
+    from lenz_io.models import ReviewStarted, TaskAccepted
+
+    assert ReviewStarted(review_id="r1", status="queued").raw == {"review_id": "r1", "status": "queued"}
+    assert TaskAccepted.model_validate({"task_id": "t", "claim": "A."}).raw == {"task_id": "t", "claim": "A."}

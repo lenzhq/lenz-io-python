@@ -13,7 +13,7 @@ from conftest import make_client, make_http
 from parity_observe import load
 
 import lenz_io
-from lenz_io import Lenz, LenzApiVersionError, LenzError
+from lenz_io import Lenz, LenzApiVersionError, LenzError, LenzNotFoundError, LenzQuotaExceededError
 from lenz_io.client import API_VERSION, DEFAULT_BASE_URL
 from lenz_io.webhooks import parse_webhook
 
@@ -80,14 +80,61 @@ def test_an_answer_in_another_version_raises(client: Lenz) -> None:
     assert "lenz-io 2.x reads both versions" in exc.fix
 
 
-def test_an_error_answered_in_another_version_raises_the_version_error(client: Lenz) -> None:
-    body = {"detail": "No remaining credits.", "code": "no_credits"}
+def test_the_version_error_names_both_versions(client: Lenz) -> None:
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        mock.get("/me/usage").respond(200, json={}, headers={"X-Lenz-API-Version": OLD})
+        with pytest.raises(LenzApiVersionError) as info:
+            client.usage()
+    exc = info.value
+    assert (exc.served_version, exc.expected_version, exc.api_version) == (OLD, API_VERSION, OLD)
+    assert exc.message == f"The API answered {OLD}; this SDK reads 2026-10-11 only."
+    assert exc.headers["x-lenz-api-version"] == OLD
+
+
+def test_an_error_answered_in_another_version_raises_the_real_error(client: Lenz) -> None:
+    """Since 3.2: a 402 keeps its balance, whatever version answered it."""
+    body = {"detail": "No remaining credits.", "code": "no_credits", "credits_remaining": 4, "cost": 10}
     with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
         mock.post("/verify").respond(402, json=body, headers={"X-Lenz-API-Version": OLD})
-        with pytest.raises(LenzApiVersionError) as info:
+        with pytest.raises(LenzQuotaExceededError) as info:
             client.verify("A.")
+    assert not isinstance(info.value, LenzApiVersionError)
     assert info.value.status_code == 402
     assert info.value.body == body
+    assert info.value.code == "no_credits"
+    assert info.value.credit_balance == 4
+    assert info.value.served_version == OLD
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "headers", "cls", "wait"),
+    [
+        (429, {"detail": "slow", "code": "rate_limited"}, {"Retry-After": "7200"}, "LenzRateLimitError", 7200),
+        (503, {"detail": "busy", "code": "capacity", "retry_after": 120}, {}, "LenzUpstreamUnavailableError", 120),
+    ],
+)
+def test_a_wait_answered_in_another_version_keeps_its_retry_after(
+    client: Lenz, status: int, body: dict[str, Any], headers: dict[str, str], cls: str, wait: int
+) -> None:
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        mock.post("/assess").respond(status, json=body, headers={**headers, "X-Lenz-API-Version": OLD})
+        with pytest.raises(LenzError) as info:
+            client.assess("A.")
+    assert type(info.value).__name__ == cls
+    assert info.value.retry_after == wait
+    assert info.value.served_version == OLD
+
+
+def test_an_error_in_the_current_version_names_it(client: Lenz) -> None:
+    with respx.mock(base_url=DEFAULT_BASE_URL) as mock:
+        mock.get("/me/usage").respond(401, json={"detail": "no"}, headers={"X-Lenz-API-Version": API_VERSION})
+        with pytest.raises(LenzError) as info:
+            client.usage()
+        assert info.value.served_version == API_VERSION
+        mock.get("/me/usage").respond(401, json={"detail": "no"})
+        with pytest.raises(LenzError) as info:
+            client.usage()
+        assert info.value.served_version is None
 
 
 def test_a_404_delete_in_another_version_is_not_read_as_already_deleted(client: Lenz) -> None:
@@ -95,8 +142,9 @@ def test_a_404_delete_in_another_version_is_not_read_as_already_deleted(client: 
         mock.delete("/verifications/v1").respond(
             404, json={"detail": "Not found."}, headers={"X-Lenz-API-Version": OLD}
         )
-        with pytest.raises(LenzApiVersionError):
+        with pytest.raises(LenzNotFoundError) as info:
             client.verifications.delete("v1")
+    assert info.value.served_version == OLD
 
 
 def test_a_non_json_answer_in_another_version_still_raises(client: Lenz) -> None:

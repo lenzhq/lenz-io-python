@@ -4620,7 +4620,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -4668,7 +4668,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -4682,7 +4682,7 @@
    },
    {
     "at": 1.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -4730,7 +4730,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -5611,7 +5611,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -5651,7 +5651,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -5665,7 +5665,7 @@
    },
    {
     "at": 2.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -5705,7 +5705,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -12065,9 +12065,9 @@
  "verifications_delete_version_404": {
   "outcome": {
    "code": "",
-   "error": "LenzApiVersionError",
+   "error": "LenzNotFoundError",
    "idempotency_key": null,
-   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
+   "message": "HTTP 404",
    "status_code": 404
   },
   "requests": [
@@ -12615,7 +12615,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -12655,7 +12655,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -12822,7 +12822,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -12862,7 +12862,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -12934,7 +12934,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -12974,7 +12974,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -13000,7 +13000,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -13040,7 +13040,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -13424,7 +13424,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -13460,7 +13460,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -13544,7 +13544,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -13584,7 +13584,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
@@ -13606,7 +13606,7 @@
   "requests": [
    {
     "at": 0.0,
-    "body": "{\"text\":\"A.\",\"source_url\":\"\"}",
+    "body": "{\"text\":\"A.\"}",
     "headers": [
      [
       "Host",
@@ -13646,7 +13646,7 @@
      ],
      [
       "Content-Length",
-      "29"
+      "13"
      ]
     ],
     "method": "POST",
