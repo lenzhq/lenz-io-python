@@ -1138,11 +1138,12 @@ https://lenz.io/contact.
 
 ### Answer in the language of the text
 
-`language="auto"` on `assess`, `verify` / `verify_and_wait` and `ask.send` answers
-in the language of the text you submitted (on `ask.send`, the language of the claim
-being discussed). A concrete code always wins, and leaving `language` out still
-means English. The other methods (`extract`, `verify_batch`, `citecheck`, `review`)
-take the codes above, not `auto`.
+`language="auto"` on `assess`, `verify` / `verify_and_wait`, `review` /
+`review_and_wait` and `ask.send` answers in the language of the text you submitted
+(on `ask.send`, the language of the claim being discussed; on a review, one language
+for the whole draft). A concrete code always wins, and leaving `language` out still
+means English. The other methods (`extract`, `verify_batch`, `citecheck`) take the
+codes above, not `auto`.
 
 ```python
 r = client.assess(claim="Die Erde ist flach.", language="auto")
