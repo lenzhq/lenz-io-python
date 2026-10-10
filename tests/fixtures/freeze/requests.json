@@ -163,7 +163,7 @@
  },
  "assess_both_forms": {
   "outcome": {
-   "code": null,
+   "code": "conflicting_input",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "assess takes either one claim (claim=) or a list (claims=), not both",
@@ -360,7 +360,7 @@
  },
  "bad_header_option": {
   "outcome": {
-   "code": null,
+   "code": "invalid_header",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "usage(): the Authorization header is set by the SDK and cannot be passed in extra_headers.",
@@ -371,7 +371,7 @@
  },
  "bad_timeout_option": {
   "outcome": {
-   "code": null,
+   "code": "invalid_option",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "usage(): timeout must be a number of seconds greater than 0 and at most 2,147,483, None, an httpx.Timeout or a (connect, read, write, pool) tuple of such numbers or None (got 0).",
@@ -3161,7 +3161,7 @@
  },
  "citecheck_both": {
   "outcome": {
-   "code": null,
+   "code": "conflicting_input",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "citecheck() needs exactly one of text and pairs.",
@@ -3234,7 +3234,7 @@
  },
  "citecheck_pairs_max": {
   "outcome": {
-   "code": null,
+   "code": "conflicting_input",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "max_citations goes with text: every pair is checked.",
@@ -3763,7 +3763,7 @@
  },
  "get_review_bad_view": {
   "outcome": {
-   "code": null,
+   "code": "invalid_argument",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "view must be 'full' or 'issues' (got 'nope').",
@@ -3972,7 +3972,7 @@
  },
  "library_iter_random": {
   "outcome": {
-   "code": null,
+   "code": "invalid_argument",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "iter cannot walk sort=\"random\" (each page is a fresh sample); call library.list instead.",
@@ -4905,7 +4905,7 @@
  },
  "path_id_dots": {
   "outcome": {
-   "code": null,
+   "code": "invalid_id",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "verifications.get() needs a verification_id.",
@@ -8253,7 +8253,7 @@
  },
  "review_empty": {
   "outcome": {
-   "code": null,
+   "code": "blank_input",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "review() needs the draft text, or one public http(s) URL.",
@@ -8326,7 +8326,7 @@
  },
  "review_selector_str": {
   "outcome": {
-   "code": null,
+   "code": "invalid_argument",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "verdicts is a list of strings, e.g. verdicts=['False'].",
@@ -8399,7 +8399,7 @@
  },
  "select_empty": {
   "outcome": {
-   "code": null,
+   "code": "empty_list",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "select requires a non-empty claims=[...]",
@@ -11869,7 +11869,7 @@
  },
  "verifications_iter_page_0": {
   "outcome": {
-   "code": null,
+   "code": "invalid_page",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "iter starts at page 1 or later (got page=0).",
@@ -13253,7 +13253,7 @@
  },
  "wait_empty_id": {
   "outcome": {
-   "code": null,
+   "code": "invalid_id",
    "error": "LenzUsageError",
    "idempotency_key": null,
    "message": "wait() requires a non-empty task_id (got an empty TaskAccepted.task_id).",
@@ -13318,11 +13318,7 @@
  },
  "wait_garbage_hints": {
   "outcome": {
-   "code": null,
-   "error": "ValidationError",
-   "idempotency_key": null,
-   "message": "1 validation error for TaskStatus\nprogress.poll_after_seconds\n  Input should be a valid integer, got a number with a fractional part [type=int_from_float, input_value=0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/<version>/v/int_from_float",
-   "status_code": null
+   "result": "Verification"
   },
   "requests": [
    {
@@ -13366,9 +13362,139 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 2.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 9.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
    }
   ],
-  "sleeps": []
+  "sleeps": [
+   2.0,
+   4.0,
+   3.0
+  ]
  },
  "wait_needs_input": {
   "outcome": {
@@ -14348,11 +14474,11 @@
  },
  "wait_unreadable_poll": {
   "outcome": {
-   "code": null,
-   "error": "ValidationError",
+   "code": "",
+   "error": "LenzTimeoutError",
    "idempotency_key": null,
-   "message": "1 validation error for TaskStatus\nstatus\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/<version>/v/string_type",
-   "status_code": null
+   "message": "wait timed out after 30s",
+   "status_code": 0
   },
   "requests": [
    {
@@ -14396,9 +14522,183 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 2.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 28.0,
+     "pool": 28.0,
+     "read": 28.0,
+     "write": 28.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 24.0,
+     "pool": 24.0,
+     "read": 24.0,
+     "write": 24.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 14.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 16.0,
+     "pool": 16.0,
+     "read": 16.0,
+     "write": 16.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 22.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 8.0,
+     "pool": 8.0,
+     "read": 8.0,
+     "write": 8.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
    }
   ],
-  "sleeps": []
+  "sleeps": [
+   2.0,
+   4.0,
+   8.0,
+   8.0,
+   8.0
+  ]
  },
  "wait_version": {
   "outcome": {

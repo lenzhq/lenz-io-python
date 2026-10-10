@@ -202,6 +202,19 @@ class LenzAuthError(LenzError):
     """
 
 
+class LenzInvalidKeyError(LenzAuthError):
+    """The API key (``api_key=``, ``LENZ_API_KEY`` or ``with_options(api_key=)``)
+    cannot be sent as a bearer token: a space, a line break, another control
+    character or a non-ASCII character inside it. Raised when the client (or
+    the copy) is built, before any request, so ``status_code`` is 0 and
+    ``retryable`` is ``None``. The message never contains the key.
+
+    A subclass of :class:`LenzAuthError`, so an ``except LenzAuthError``
+    catches it too. A key the server refuses (401 / 403) is a plain
+    :class:`LenzAuthError`. Since 3.2.
+    """
+
+
 class LenzQuotaExceededError(LenzError):
     """402 — you're out of balance, or your plan doesn't cover this call.
 
@@ -634,18 +647,65 @@ class LenzApiVersionError(LenzError):
         return False
 
 
+#: The ``code`` values of :class:`LenzUsageError` (the Node SDK's ``code``
+#: values are the same strings).
+USAGE_ERROR_CODES = (
+    "blank_input",
+    "blank_item",
+    "empty_list",
+    "invalid_page_size",
+    "invalid_page",
+    "invalid_id",
+    "invalid_header",
+    "invalid_option",
+    "conflicting_input",
+    "invalid_argument",
+)
+
+
 class LenzUsageError(ValueError):
     """A call refused before anything was sent, because of its own arguments:
     a blank claim, a bad ``page_size``, ``timeout`` or ``max_retries``, a
     header ``extra_headers`` may not set, an empty id, two arguments that
     exclude each other, ... (an API key that cannot be sent is
-    :class:`LenzAuthError` instead).
+    :class:`LenzInvalidKeyError` instead).
 
     A ``ValueError``, which is what 3.1 and earlier raised, so an existing
     ``except ValueError`` keeps catching it. Deliberately not a
     :class:`LenzError`: nothing was sent, no request failed, and an
     ``except LenzError`` that handles API answers is not handed a bug in the
-    call. Since 3.2."""
+    call. Since 3.2.
+
+    Fields (branch on these, never on the message):
+      * ``code``  — what is wrong, one of ``blank_input`` (a blank claim or
+        text), ``blank_item`` (a blank item in a list), ``empty_list``,
+        ``invalid_page_size``, ``invalid_page``, ``invalid_id`` (an id that
+        cannot name anything: empty, ``.``, ``..``, a lone surrogate),
+        ``invalid_header`` (``extra_headers`` / ``user_agent``),
+        ``invalid_option`` (a client or ``with_options`` option, or a call's
+        ``timeout`` / ``max_retries``), ``conflicting_input`` (two arguments
+        that exclude each other) and ``invalid_argument`` (anything else).
+        The same strings as the Node SDK's.
+      * ``param`` — the argument at fault, e.g. ``"claim"``,
+        ``"claims[2]"``, ``"page_size"``, ``"task_id"``; ``None`` when no
+        one argument is.
+    """
+
+    code: str
+    param: str | None
+
+    def __init__(self, message: str = "", *, code: str = "invalid_argument", param: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
+        self.param = param
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (_usage_error, (str(self.args[0]) if self.args else "", self.code, self.param))
+
+
+def _usage_error(message: str, code: str, param: str | None) -> LenzUsageError:
+    """Rebuilds a pickled :class:`LenzUsageError`."""
+    return LenzUsageError(message, code=code, param=param)
 
 
 #: The job errors under the names the other error classes follow (``...Error``),
@@ -1208,6 +1268,7 @@ __all__ = [
     "MAX_RETRY_AFTER_SLEEP",
     "NO_RETRY_429_CODES",
     "UPSTREAM_503_CODES",
+    "USAGE_ERROR_CODES",
     "CitecheckFailed",
     "CitecheckFailedError",
     "CitecheckTimeout",
@@ -1218,6 +1279,7 @@ __all__ = [
     "LenzConnectionError",
     "LenzError",
     "LenzGoneError",
+    "LenzInvalidKeyError",
     "LenzInvalidResponseError",
     "LenzNeedsInputError",
     "LenzNotFoundError",

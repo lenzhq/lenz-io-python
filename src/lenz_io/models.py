@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import copy
 import typing
-from collections.abc import ItemsView, KeysView, ValuesView
+from collections.abc import Callable, ItemsView, KeysView, Mapping, ValuesView
 from datetime import datetime, timezone
 from typing import Any, Literal, TypeVar
 
@@ -48,6 +48,33 @@ def _json_copy(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     return copy.deepcopy(value)
+
+
+class _Body(dict[str, Any]):
+    """A response body as the client parsed it (a JSON object), with the
+    answer it came in: ``http_status``, ``headers`` and ``unreadable``, which
+    turns a pydantic ``ValidationError`` met reading it into the error to
+    raise. Only the outermost ``model_validate`` of a read sees one, so only
+    the result a call returns carries the answer's status and headers.
+    Pickled and copied as a plain ``dict``."""
+
+    __slots__ = ("headers", "http_status", "unreadable")
+
+    def __init__(
+        self,
+        parsed: dict[str, Any],
+        *,
+        http_status: int,
+        headers: Mapping[str, str],
+        unreadable: Callable[[ValidationError], Exception] | None = None,
+    ) -> None:
+        super().__init__(parsed)
+        self.http_status = http_status
+        self.headers = headers
+        self.unreadable = unreadable
+
+    def __reduce__(self) -> tuple[Any, ...]:
+        return (dict, (dict(self),))
 
 
 def _null_reads_unsent(
@@ -107,7 +134,7 @@ def _hand_out_raw(model: Any, original: Any) -> None:
     if not isinstance(original, dict):
         model._raw = None
         return
-    model._raw = original
+    model._raw = dict(original) if isinstance(original, _Body) else original
     values = model.__dict__
     for name, key in _nested_fields(type(model)):
         value = values.get(name)
@@ -164,6 +191,11 @@ class _Lax(BaseModel):
     #: The JSON object this model was read from, as received (see ``raw``).
     _raw: Any = PrivateAttr(default=None)
 
+    #: The HTTP status and headers of the answer this result was read from
+    #: (see ``http_status`` / ``headers``); ``None`` when it was not.
+    _http_status: int | None = PrivateAttr(default=None)
+    _headers: Mapping[str, str] | None = PrivateAttr(default=None)
+
     @classmethod
     def model_validate(cls, obj: Any, **kwargs: Any) -> Self:
         """Pydantic's ``model_validate`` (every keyword passed through), which
@@ -173,10 +205,41 @@ class _Lax(BaseModel):
         than in a validator that would run for every nested model, and on
         the outermost read, which sees the object before any validator fills
         in a 2.x alias."""
-        model = super().model_validate(obj, **kwargs)
+        try:
+            model = super().model_validate(obj, **kwargs)
+        except ValidationError as exc:
+            # A field of an answer this release cannot read (``{"claims": "x"}``):
+            # the client's error for an unreadable answer, with the response.
+            if isinstance(obj, _Body) and obj.unreadable is not None:
+                raise obj.unreadable(exc) from exc
+            raise
         if isinstance(obj, dict) and isinstance(model, _Lax):
             _hand_out_raw(model, obj)
+            if isinstance(obj, _Body):
+                model._http_status = obj.http_status
+                model._headers = obj.headers
         return model
+
+    @property
+    def http_status(self) -> int | None:
+        """The HTTP status of the answer this result was read from (``200``,
+        or ``202`` for a receipt such as ``TaskAccepted`` or
+        ``ReviewStarted``; ``409`` for a ``ReviewStarted`` / ``CitecheckStarted``
+        a 409 naming the job settled). ``None`` on a model nested in a result
+        (``TaskStatus.result``, an ``AssessResponse.claims`` row, ...), on a
+        result the SDK builds (``BatchItemResult``), on a webhook's models and
+        on a model you validate yourself. Not part of ``model_dump()``.
+        Since 3.2."""
+        return self._http_status
+
+    @property
+    def headers(self) -> Mapping[str, str] | None:
+        """The headers of the answer this result was read from, as a
+        read-only mapping whose lookups ignore case (the type errors carry as
+        ``exc.headers``): ``result.headers["x-request-id"]``, or a receipt's
+        ``Location`` and ``Retry-After``. ``None`` wherever ``http_status``
+        is. Not part of ``model_dump()``. Since 3.2."""
+        return self._headers
 
     @property
     def raw(self) -> dict[str, Any] | None:
@@ -1767,6 +1830,18 @@ class ReviewStarted(_Lax):
     review_id: str = ""
     status: str = "queued"
 
+    #: Whether a 409 ``idempotency_conflict`` naming the review settled the call.
+    _settled_by_conflict: bool = PrivateAttr(default=False)
+
+    @property
+    def settled_by_conflict(self) -> bool:
+        """``True`` when this receipt is a 409 ``idempotency_conflict`` that
+        named the review (a resend with the same key landed while the first
+        submit's review was being created: this call started it, and
+        ``http_status`` is 409); ``False`` on the usual 202 receipt. Not part
+        of ``model_dump()``. Since 3.2."""
+        return self._settled_by_conflict
+
 
 class FailureBlock(_Lax):
     """Why a review, or one claim's work inside it, failed.
@@ -2393,6 +2468,18 @@ class CitecheckStarted(_Lax):
 
     citecheck_id: str = ""
     status: str = "queued"
+
+    #: Whether a 409 ``idempotency_conflict`` naming the check settled the call.
+    _settled_by_conflict: bool = PrivateAttr(default=False)
+
+    @property
+    def settled_by_conflict(self) -> bool:
+        """``True`` when this receipt is a 409 ``idempotency_conflict`` that
+        named the check (a resend with the same key landed while the first
+        submit's check was being created: this call started it, and
+        ``http_status`` is 409); ``False`` on the usual 202 receipt. Not part
+        of ``model_dump()``. Since 3.2."""
+        return self._settled_by_conflict
 
 
 class CitecheckPolicy(_Lax):

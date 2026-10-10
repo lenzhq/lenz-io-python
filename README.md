@@ -588,6 +588,28 @@ hand the model a freshly parsed body, so nothing else holds it; when you
 validate a dict of your own, changing that dict in place changes what `raw`
 returns.
 
+**The answer's status and headers: `.http_status` and `.headers`** (since
+3.2). The result a call returns also carries the HTTP status of the answer it
+was read from (`200`, or `202` for a receipt such as `TaskAccepted`,
+`BatchAccepted`, `ReviewStarted` or `CitecheckStarted`) and its headers, as
+the same read-only, case-insensitive mapping errors carry (`exc.headers`):
+
+```python
+accepted = client.verify("The Eiffel Tower is in Paris.")
+accepted.http_status  # 202
+accepted.headers["location"]  # the poll URL, when the answer names one
+accepted.headers.get("retry-after")  # None when it states no wait
+client.assess("A.").headers["x-request-id"]  # quote it to support
+```
+
+Only the top-level result has them: a model nested in it (`TaskStatus.result`,
+an `AssessResponse.claims` row, ...), a result the SDK builds
+(`BatchItemResult`), a webhook's models and a model you validate yourself
+have `None` for both. A result a wait helper returns carries its last poll's
+(`review_and_wait`, `citecheck_and_wait`); `verify_and_wait` returns the
+poll's nested `result`, so its `Verification` has `None`. Like `raw`, they are
+not part of `model_dump()` or `--json`.
+
 ### A suggested rewrite (`suggested_rewrite`)
 
 A verification can carry `suggested_rewrite`: a suggested rewrite of its
@@ -912,9 +934,39 @@ raise `LenzUsageError` before anything is sent (since 3.2). It is a
 `except LenzError` that handles API answers never catches a bug in the call.
 A blank claim is refused with the API's own sentence (`claim is required.`,
 `claims[1] is blank.`); "blank" is what `str.strip()` removes, the API's rule.
-When both `claim=` and `text=` are given, the one with content is sent. An
-API key that cannot be sent (see [Configuration](#configuration)) raises
-`LenzAuthError` before any request.
+When both `claim=` and `text=` are given, the one with content is sent.
+
+`LenzUsageError` carries `code` (what is wrong) and `param` (the argument at
+fault, or `None`): branch on these, never on the message. The codes are the
+Node SDK's, string for string:
+
+| `code` | When | `param`, e.g. |
+|---|---|---|
+| `blank_input` | a blank claim or text (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs) | `"claim"`, `"text"` |
+| `blank_item` | a blank item in a list | `"claims[2]"` |
+| `empty_list` | an empty list (`assess(claims=[])`, `select`) | `"claims"` |
+| `invalid_page_size` | `page_size` outside 1 to 100 | `"page_size"` |
+| `invalid_page` | an iterator's `page` below 1 | `"page"` |
+| `invalid_id` | an id that cannot name anything: empty, `.`, `..`, a lone surrogate | `"task_id"`, `"verification_id"`, `"review_id"`, `"citecheck_id"` |
+| `invalid_header` | `extra_headers` (a reserved or malformed header) or `user_agent` | `"extra_headers"`, `"user_agent"` |
+| `invalid_option` | a client or `with_options` option, or a call's `timeout` / `max_retries` | `"timeout"`, `"max_retries"`, `"api_key"`, `"legacy_aliases"` |
+| `conflicting_input` | two arguments that exclude each other | `"claims"`, `"text"`, `"max_citations"` |
+| `invalid_argument` | anything else | `"view"`, `"sort"`, `"verdicts"` |
+
+```python
+from lenz_io import LenzUsageError
+
+try:
+    client.assess(claims=rows)
+except LenzUsageError as exc:
+    if exc.code == "blank_item":
+        print(f"{exc.param} is empty")  # claims[2] is empty
+```
+
+An API key that cannot be sent (see [Configuration](#configuration)) raises
+`LenzInvalidKeyError` before any request (since 3.2): a `LenzAuthError`, so
+an `except LenzAuthError` catches it too, with `status_code` `0`. A key the
+server refuses (401 / 403) is a plain `LenzAuthError`.
 
 A request that could not be built or sent at all (a `base_url` that is not
 http(s), a request httpx refuses to write), or whose answer could not be
@@ -1021,6 +1073,12 @@ without a body), a body that is JSON but not an object (`null`, a list, a
 number, a string: every endpoint answers with an object; its message says
 "not an object"), and any 3xx, with or without a body (the API never
 redirects and httpx does not follow one; the message names the `Location`).
+It is also raised for a JSON object with a field of the wrong type
+(`{"claims": "x"}`, `{"claims": [42]}`), where earlier releases let pydantic's
+`ValidationError` escape (it is the error's `__cause__`): then `body` is the
+object as parsed, `body_text` its text, and the message names the field. A
+`null` the SDK tolerates (see the changelog) is still read as unsent first. A
+poll inside a wait helper that meets one polls again, as after a 5xx.
 
 **Replays of requests made before the switch.** An idempotent request first
 sent before lenz.io served `2026-10-11`, and replayed with the same
@@ -1172,8 +1230,9 @@ a second key to get past it.
 `review` and `citecheck` differ here: a 409 `idempotency_conflict` that names
 the job (`review_id` / `citecheck_id`) means the first submit with that key
 created it, so the call returns it as a `ReviewStarted` / `CitecheckStarted`
-(`status` `"queued"`, `.raw` the 409's body) instead of raising or sending
-again. Read or wait for it by its id as usual.
+(`status` `"queued"`, `.raw` the 409's body, `http_status` `409` and
+`settled_by_conflict` `True`, since 3.2; a normal 202 receipt has
+`settled_by_conflict` `False`) instead of raising or sending again. Read or wait for it by its id as usual.
 
 Every error of a call that sent a key carries
 it as `exc.idempotency_key`: resend with that key, never as a plain new call,
@@ -1470,10 +1529,11 @@ its user's key with `with_options(api_key=...)` (see
 
 ASCII whitespace around a key (space, tab, line breaks, form feed, vertical
 tab: a trailing newline read from a file or an environment variable) is
-dropped (since 3.2); a BOM or a no-break space is not. What is left is printable ASCII
+dropped silently, with no warning or error (since 3.2); a BOM or a no-break
+space is not. What is left is printable ASCII
 without spaces: a key with a space, a line break, another control character
-or a non-ASCII character inside it raises `LenzAuthError` when the client (or
-the `with_options` copy) is built, before any request (since 3.2; before, it
+or a non-ASCII character inside it raises `LenzInvalidKeyError` (a
+`LenzAuthError`) when the client (or the `with_options` copy) is built, before any request (since 3.2; before, it
 failed on every call with an encoding or transport error). The message never
 contains the key.
 
@@ -1690,9 +1750,9 @@ def handle(user, text):
 - **Per-user keys**: `with_options(api_key=...)` per request, on the shared
   pool. A copy never reads `LENZ_API_KEY`; an empty key, or `None`, gives a
   copy with no key, and a call that needs one raises `LenzAuthError` before
-  sending. Whitespace around a key is dropped; a key with a space, a
-  control or a non-ASCII character inside it raises `LenzAuthError` there,
-  before sending. Copies with different keys can run
+  sending. ASCII whitespace around a key is dropped silently; a key with a
+  space, a control or a non-ASCII character inside it raises
+  `LenzInvalidKeyError` (a `LenzAuthError`) there, before sending. Copies with different keys can run
   at once (threads, or tasks on `AsyncLenz`).
 - **`legacy_aliases=False`** is a constructor argument only: every copy
   reads like its client. Results carry what the API sent, and `exc.code` is
@@ -1718,8 +1778,9 @@ def handle(user, text):
   retry budget; the SDK then sends each request once. A resend should reuse
   `exc.idempotency_key`.
 - **Raw bodies**: `result.raw` is the JSON object a result was read from
-  (nested results too; the Node SDK sets it on top-level results only);
-  `exc.body` is an error's; `exc.headers` its response headers
+  (nested results too; the Node SDK sets it on top-level results only),
+  and `result.http_status` / `result.headers` the answer's status and
+  headers (top-level results only); `exc.body` is an error's; `exc.headers` its response headers
   (`retry-after`, `x-request-id`, ...), and `exc.retry_after` the parsed wait
   (see [Errors](#errors) for which wins).
 - **Errors as text**: `str(exc)` is the message plus `Cause:`, `Fix:`,

@@ -291,7 +291,7 @@ class _AsyncVerificationsNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get()")
-        vid = _segment(verification_id, "verifications.get() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.get() needs a verification_id.", "verification_id")
         body = await self._p._request(
             "GET",
             f"/verifications/{vid}",
@@ -330,7 +330,7 @@ class _AsyncVerificationsNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.get_certificate()")
-        vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.get_certificate() needs a verification_id.", "verification_id")
         body = await self._p._request("GET", f"/verifications/{vid}/certificate", options=options)
         return Certificate.model_validate(body, context=self._p._results)
 
@@ -348,7 +348,7 @@ class _AsyncVerificationsNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.delete()")
-        vid = _segment(verification_id, "verifications.delete() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.delete() needs a verification_id.", "verification_id")
         # Idempotent DELETE: a 404 (the row already gone, e.g. the reply to an
         # earlier delete was lost) is a success (``_already_deleted``).
         await self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
@@ -379,7 +379,7 @@ class _AsyncVerificationsNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
-        vid = _segment(verification_id, "verifications.related() needs a verification_id.")
+        vid = _segment(verification_id, "verifications.related() needs a verification_id.", "verification_id")
         body = await self._p._request(
             "GET",
             f"/verifications/{vid}/related",
@@ -417,7 +417,7 @@ class _AsyncAskNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
-        vid = _segment(verification_id, "ask.history() needs a verification_id.")
+        vid = _segment(verification_id, "ask.history() needs a verification_id.", "verification_id")
         body = await self._p._request("GET", f"/ask/{vid}", options=options)
         return AskHistory.model_validate(body, context=self._p._results)
 
@@ -470,7 +470,7 @@ class _AsyncAskNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
-        vid = _segment(verification_id, "ask.send() needs a verification_id.")
+        vid = _segment(verification_id, "ask.send() needs a verification_id.", "verification_id")
         payload = _ask_payload(message, language)
         key = _call_key(idempotency_key, idempotency)
         headers = _key_header(key)
@@ -498,7 +498,7 @@ class _AsyncAskNamespace:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
-        vid = _segment(verification_id, "ask.reset() needs a verification_id.")
+        vid = _segment(verification_id, "ask.reset() needs a verification_id.", "verification_id")
         await self._p._request("DELETE", f"/ask/{vid}", options=options)
         return True
 
@@ -614,11 +614,13 @@ class AsyncLenz:
 
     Reads ``LENZ_API_KEY`` from the environment if no key is passed. An
     empty or whitespace-only ``api_key`` is no key and never reads the
-    environment (auth-required methods raise ``LenzAuthError``). Whitespace
-    around a key is dropped (since 3.2); what is left must be printable
-    ASCII without spaces (a space, a tab, a line break, another control
-    character or a non-ASCII character inside it raises ``LenzAuthError``
-    here, since 3.2).
+    environment (auth-required methods raise ``LenzAuthError``). ASCII
+    whitespace around a key (a trailing newline from a file or an
+    environment variable, say) is dropped silently, with no warning (since
+    3.2); what is left must be printable ASCII without spaces (a space, a
+    tab, a line break, another control character or a non-ASCII character
+    inside it raises ``LenzInvalidKeyError``, a ``LenzAuthError``, here,
+    since 3.2).
 
     ``timeout`` with ``http_client=``: since 3.2 a ``timeout`` you pass
     (``30.0`` included) is sent on each request (the client you passed is not
@@ -1221,7 +1223,7 @@ class AsyncLenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel()")
-        tid = _segment(task_id, "cancel() needs a task_id.")
+        tid = _segment(task_id, "cancel() needs a task_id.", "task_id")
         path = f"/verify/{tid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_cancel_body(body, task_id):
@@ -1550,7 +1552,8 @@ class AsyncLenz:
         first submit with its key is still being created (409
         ``idempotency_conflict`` naming the ``review_id``) is not an error:
         the review exists, and it is returned as a ``ReviewStarted``
-        (``status`` ``"queued"``).
+        (``status`` ``"queued"``, ``settled_by_conflict`` ``True`` and
+        ``http_status`` 409, since 3.2).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`AsyncLenz.with_options`.
@@ -1639,7 +1642,7 @@ class AsyncLenz:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_review()")
-        rid = _segment(review_id, "get_review() needs a review_id.")
+        rid = _segment(review_id, "get_review() needs a review_id.", "review_id")
         params = _review_params(view)
         if params is not None:
             return ReviewIssues.model_validate(
@@ -1676,7 +1679,7 @@ class AsyncLenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_review()")
-        rid = _segment(review_id, "cancel_review() needs a review_id.")
+        rid = _segment(review_id, "cancel_review() needs a review_id.", "review_id")
         path = f"/reviews/{rid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_full_review_body(body, review_id):
@@ -1818,7 +1821,8 @@ class AsyncLenz:
         other calls, a resend that lands while the first submit with its key
         is still being created (409 ``idempotency_conflict`` naming the
         ``citecheck_id``) is not an error: the check exists, and it is
-        returned as a ``CitecheckStarted`` (``status`` ``"queued"``).
+        returned as a ``CitecheckStarted`` (``status`` ``"queued"``,
+        ``settled_by_conflict`` ``True`` and ``http_status`` 409, since 3.2).
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`AsyncLenz.with_options`.
@@ -1860,7 +1864,7 @@ class AsyncLenz:
         see :meth:`AsyncLenz.with_options`.
         """
         options = _call_options(timeout, max_retries, extra_headers, "get_citecheck()")
-        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.")
+        cid = _segment(citecheck_id, "get_citecheck() needs a citecheck_id.", "citecheck_id")
         return Citecheck.model_validate(
             await self._request("GET", f"/citechecks/{cid}", options=options), context=self._results
         )
@@ -1892,7 +1896,7 @@ class AsyncLenz:
         Since 3.0.
         """
         options = _call_options(timeout, max_retries, extra_headers, "cancel_citecheck()")
-        cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.")
+        cid = _segment(citecheck_id, "cancel_citecheck() needs a citecheck_id.", "citecheck_id")
         path = f"/citechecks/{cid}/cancel"
         body = await self._request("POST", path, options=options)
         if not _is_citecheck_body(body, citecheck_id):
@@ -2422,7 +2426,7 @@ class AsyncLenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> BatchAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "select()")
-        tid = _segment(task_id, "select() needs a task_id.")
+        tid = _segment(task_id, "select() needs a task_id.", "task_id")
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
             body = await self._request(
@@ -2439,7 +2443,7 @@ class AsyncLenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> TaskStatus:
         options = _call_options(timeout, max_retries, extra_headers, "get_status()")
-        tid = _segment(task_id, "get_status() needs a task_id.")
+        tid = _segment(task_id, "get_status() needs a task_id.", "task_id")
         body = await self._request("GET", f"/verify/status/{tid}", options=options)
         return TaskStatus.model_validate(body, context=self._results)
 
