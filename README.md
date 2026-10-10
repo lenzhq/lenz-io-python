@@ -631,7 +631,10 @@ The calls are annotated with these subclasses: `AssessResponse`,
 models are also nested in other results, so the calls returning them at the
 top level return a subclass of their own: `verify` returns a
 `TaskAcceptedResult` (a `TaskAccepted`) and `verifications.get` a
-`VerificationResult` (a `Verification`). A `Result` not read from an answer
+`VerificationResult` (a `Verification`). Each compares equal to the base
+model read from the same body (`client.verifications.get(v) ==
+status.result`), and `isinstance(r, Verification)` holds, but
+`type(r) is Verification` no longer does. A `Result` not read from an answer
 (one you validate yourself, a webhook's `review` or `citecheck`) has
 `http_status` `0` and empty `headers`.
 
@@ -1000,14 +1003,19 @@ it reads the same whether the SDK or the API refused it:
 |---|---|---|
 | `verify("")`, `verify_and_wait("")`, `assess("")` | `blank_input` | `claim is required.` |
 | `assess(claims=[])` | `empty_list` | `claim: Field required` (the API reads an empty list as no input) |
-| `assess(claims=["A.", " "])`, `select(task_id, claims=["A.", " "])` | `blank_item` | `claims[1] is blank.` |
+| `assess(claims=["A.", " "])`, `select(task_id, claims=["A.", " "])` (a list or a tuple) | `blank_item` | `claims[1] is blank.` |
 | `select(task_id, claims=[])` | `empty_list` | `claims is required.` |
 | `review("")`, `review_and_wait("")` | `blank_input` | `text: send the draft, or one public http(s) URL.` |
 | `citecheck("")` (no pairs) | `blank_input` | `payload: Value error, send exactly one of text and pairs` |
 | `ask.send(id, message="")` | `blank_input` | `Message cannot be empty.` |
 
 The other codes carry the SDK's own message. A blank `select` item is refused
-since 3.2 (the API drops it silently).
+since 3.2 (the API drops it silently). Called with `texts=` (the alias), `select`
+names it: `texts is required.`, `texts[i] is blank.`, `param` `"texts[i]"`.
+
+Not every blank input is refused locally: `verify_batch` / `verify_batch_and_wait`
+with an empty list or a blank item, and `citecheck(pairs=[])`, are sent, and the
+API's 422 answers them (a `LenzValidationError`).
 
 ```python
 from lenz_io import LenzUsageError
@@ -1144,7 +1152,10 @@ result reads only when you ask for it (`ExtractedClaims.claims`, a `failure`
 on a status, an `assess` response or row, `status`, `more_claims`,
 `completed_at`, `claim`, `code`, `detail`, a review summary's counts, ...)
 raises the same error on that read for a value of the wrong type (`"failure":
-"x"`, `"status": 1`), with the answer's status and headers; since 3.2 none
+"x"`, `"status": 1`), with the answer's status and headers. Its message names
+the field by its path in the model read (a top-level result's `failure`, or
+`failure` for an `assess` row's, not `claims[0].failure`), and its `body` is
+that model's part of the answer (`row.raw` for a row). Since 3.2 none
 reads such a value as not sent (`null` and an absent key still read as not
 sent). A `completed` poll with no `result` (absent or `null`) is a run that
 ended but cannot be read: `wait` / `verify_and_wait` raise this error for it

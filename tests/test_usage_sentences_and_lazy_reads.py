@@ -84,7 +84,15 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
         "claims[1]",
         "claims[1] is blank.",
     ),
-    ("select_blank_alias", lambda c: c.select("t1", texts=[""]), "blank_item", "claims[0]", "claims[0] is blank."),
+    ("select_blank_alias", lambda c: c.select("t1", texts=[""]), "blank_item", "texts[0]", "texts[0] is blank."),
+    ("select_empty_alias", lambda c: c.select("t1", texts=[]), "empty_list", "texts", "texts is required."),
+    (
+        "select_blank_tuple",
+        lambda c: c.select("t1", claims=("A.", " ")),
+        "blank_item",
+        "claims[1]",
+        "claims[1] is blank.",
+    ),
     (
         "review",
         lambda c: c.review("  "),
@@ -513,3 +521,22 @@ def test_a_needs_input_poll_with_a_bad_failure_still_raises_needs_input(client: 
         r.get("/verify/status/t1").respond(200, json=body)
         (row,) = client.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=30)
     assert row.status == "needs_input" and row.error is None
+
+
+def test_a_top_level_result_equals_the_base_model_from_the_same_body(client: Any) -> None:
+    body = {"verification_id": "v1", "claim": "A."}
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verifications/v1").respond(200, json=body)
+        r.get("/verify/status/t1").respond(200, json={"status": "completed", "task_id": "t1", "result": body})
+        r.post("/verify").respond(202, json=_ACCEPTED)
+        r.post("/verify/batch").respond(202, json={"batch_id": "b1", "items": [_ACCEPTED]})
+        got = client.verifications.get("v1")
+        nested = client.get_status("t1").result
+        accepted = client.verify("A.")
+        batch_item = client.verify_batch(claims=[{"claim": "A."}]).items[0]
+    assert type(got) is VerificationResult and type(nested) is Verification
+    assert got == nested and nested == got
+    assert accepted == batch_item and batch_item == accepted
+    assert isinstance(got, Verification) and type(got) is not Verification
+    other = Verification.model_validate({"verification_id": "v2", "claim": "A."})
+    assert got != other and other != got

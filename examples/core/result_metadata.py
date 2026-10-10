@@ -32,7 +32,10 @@ def main() -> None:
         print("Set LENZ_API_KEY first.")
         return
     log_answer("verify", accepted)  # HTTP 202
-    print("poll at:", accepted.headers.get("location"))
+
+    started = client.review("The Eiffel Tower is in Paris. It opened in 1889.")
+    log_answer("review", started)  # HTTP 202
+    print("read it at:", started.headers.get("location"))  # a review receipt names it
 
     assessed = client.assess("Water boils at 100 C at sea level.")
     log_answer("assess", assessed)  # HTTP 200

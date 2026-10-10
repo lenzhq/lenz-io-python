@@ -948,10 +948,31 @@ class Verification(_Lax):
         return _sent_as(self, "completed_at", _STR)
 
 
+def _equal_to_base(model: BaseModel, other: object, base: type[BaseModel]) -> bool | None:
+    """Whether ``model`` (a top-level subclass of ``base``) equals ``other``,
+    a ``base`` of another class read from the same body; ``None`` when
+    ``other`` is not one (pydantic's own comparison decides)."""
+    if not isinstance(other, base) or type(other) is type(model):
+        return None
+    return (
+        model.__dict__ == other.__dict__
+        and (model.__pydantic_extra__ or {}) == (other.__pydantic_extra__ or {})
+        and getattr(model, "__pydantic_private__", None) == getattr(other, "__pydantic_private__", None)
+    )
+
+
 class VerificationResult(Verification, Result):
     """A ``Verification`` a call returned (``verifications.get``): its
     ``http_status`` and ``headers`` are always set. Everything else is
-    ``Verification``'s. Since 3.2."""
+    ``Verification``'s, and it equals a ``Verification`` read from the same
+    body (``isinstance(v, Verification)`` holds; ``type(v) is Verification``
+    does not). Since 3.2."""
+
+    def __eq__(self, other: object) -> bool:
+        same = _equal_to_base(self, other, Verification)
+        return super().__eq__(other) if same is None else same
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 class VerificationListItem(_Lax):
@@ -1427,8 +1448,16 @@ class TaskAccepted(_Lax):
 
 class TaskAcceptedResult(TaskAccepted, Result):
     """The ``TaskAccepted`` receipt ``verify`` returns: its ``http_status``
-    and ``headers`` are always set. Everything else is ``TaskAccepted``'s.
-    Since 3.2."""
+    and ``headers`` are always set. Everything else is ``TaskAccepted``'s,
+    and it equals a ``TaskAccepted`` read from the same body
+    (``isinstance`` holds; ``type(r) is TaskAccepted`` does not). Since
+    3.2."""
+
+    def __eq__(self, other: object) -> bool:
+        same = _equal_to_base(self, other, TaskAccepted)
+        return super().__eq__(other) if same is None else same
+
+    __hash__ = None  # type: ignore[assignment]
 
 
 class BatchAccepted(Result):

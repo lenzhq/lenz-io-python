@@ -1126,7 +1126,6 @@ def _with_options_layer(
 #: (``2026-10-11``) gives for the same request, so the message reads the same
 #: whether the SDK or the API refused it (a blank claim is ``claim is
 #: required.``, a blank ``assess`` item ``claims[i] is blank.``).
-_API_CLAIMS_EMPTY = "claims is required."
 #: ``"claims": []`` is read as no input at all: neither ``claim`` nor ``text``.
 _API_ASSESS_NO_INPUT = "claim: Field required"
 _API_ASK_BLANK = "Message cannot be empty."
@@ -1285,16 +1284,19 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
 
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
     chosen = claims or texts
+    # The argument the caller used names the error: ``texts`` when only the
+    # alias was given (as the Node SDK names it).
+    name = "texts" if not claims and texts is not None else "claims"
     if not chosen:
-        raise LenzUsageError(_API_CLAIMS_EMPTY, code="empty_list", param="claims")
-    # Only a list is checked: anything else is sent as before, for the API
-    # to answer.
-    for index, item in enumerate(chosen if isinstance(chosen, list) else ()):
+        raise LenzUsageError(f"{name} is required.", code="empty_list", param=name)
+    # Only a list or a tuple is checked: anything else is sent as before, for
+    # the API to answer.
+    for index, item in enumerate(chosen if isinstance(chosen, (list, tuple)) else ()):
         # Since 3.2 a blank item is refused, as ``assess`` refuses one (the
         # API drops it silently, and answers ``claims is required.`` only
         # when every item is blank).
         if _blank(item):
-            raise LenzUsageError(f"claims[{index}] is blank.", code="blank_item", param=f"claims[{index}]")
+            raise LenzUsageError(f"{name}[{index}] is blank.", code="blank_item", param=f"{name}[{index}]")
     return chosen
 
 
