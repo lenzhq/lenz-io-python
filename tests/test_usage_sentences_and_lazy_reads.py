@@ -77,22 +77,10 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
     ("assess_blank_item", lambda c: c.assess(claims=["A.", " "]), "blank_item", "claims[1]", "claims[1] is blank."),
     ("select_empty", lambda c: c.select("t1", claims=[]), "empty_list", "claims", "claims is required."),
     ("select_none", lambda c: c.select("t1"), "empty_list", "claims", "claims is required."),
-    (
-        "select_blank_item",
-        lambda c: c.select("t1", claims=["A.", "  "]),
-        "blank_item",
-        "claims[1]",
-        "claims[1] is blank.",
-    ),
-    ("select_blank_alias", lambda c: c.select("t1", texts=[""]), "blank_item", "texts[0]", "texts[0] is blank."),
+    ("select_all_blank", lambda c: c.select("t1", claims=[" ", ""]), "empty_list", "claims", "claims is required."),
+    ("select_all_blank_alias", lambda c: c.select("t1", texts=[""]), "empty_list", "texts", "claims is required."),
     ("select_empty_alias", lambda c: c.select("t1", texts=[]), "empty_list", "texts", "claims is required."),
-    (
-        "select_blank_tuple",
-        lambda c: c.select("t1", claims=("A.", " ")),
-        "blank_item",
-        "claims[1]",
-        "claims[1] is blank.",
-    ),
+    ("select_all_blank_tuple", lambda c: c.select("t1", claims=(" ",)), "empty_list", "claims", "claims is required."),
     (
         "review",
         lambda c: c.review("  "),
@@ -177,6 +165,17 @@ def test_other_codes_keep_the_sdks_message(client: Any) -> None:
         client.citecheck("Draft [1].", pairs=[{"statement": "A.", "url": "https://example.com"}])
     assert ei.value.code == "conflicting_input"
     assert str(ei.value) == "citecheck() needs exactly one of text and pairs."
+
+
+@pytest.mark.parametrize("items", [["A.", "  "], ("A.", ""), ["", "B."]])
+def test_select_with_some_blank_items_is_sent_unchanged(client: Any, items: Any) -> None:
+    """The API drops blank items: the SDK sends them, as it always did."""
+    import json
+
+    with respx.mock(base_url=BASE) as r:
+        route = r.post("/verify/t1/select").respond(200, json={"items": []})
+        client.select("t1", claims=items)
+    assert json.loads(route.calls[0].request.content) == {"texts": list(items)}
 
 
 def test_select_with_every_item_filled_is_sent_unchanged(client: Any) -> None:
@@ -540,3 +539,36 @@ def test_a_top_level_result_equals_the_base_model_from_the_same_body(client: Any
     assert isinstance(got, Verification) and type(got) is not Verification
     other = Verification.model_validate({"verification_id": "v2", "claim": "A."})
     assert got != other and other != got
+
+
+# ── a completed status with no result, wherever a status is read ──────────
+
+
+@pytest.mark.parametrize("result", ["absent", None])
+def test_get_status_raises_for_a_completed_status_with_no_result(client: Any, result: Any) -> None:
+    body: dict[str, Any] = {"status": "completed", "task_id": "t1"}
+    if result != "absent":
+        body["result"] = result
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=body, headers={"X-Request-ID": "req_s"})
+        with pytest.raises(LenzInvalidResponseError) as ei:
+            client.get_status("t1")
+    err = ei.value
+    assert err.status_code == 200
+    assert err.request_id == "req_s"
+    assert err.headers["x-request-id"] == "req_s"
+    assert err.body == body
+    assert err.message == (
+        "The API answered HTTP 200 with status completed and no result: "
+        "the run ended, but its verification cannot be read."
+    )
+
+
+def test_a_batch_row_completed_without_result_keeps_its_poll(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify/batch").respond(202, json={"batch_id": "b1", "items": [_ACCEPTED]})
+        r.get("/verify/status/t1").respond(200, json={"status": "completed", "task_id": "t1"})
+        (row,) = client.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=30)
+    assert row.status == "failed"
+    assert isinstance(row.error, LenzInvalidResponseError)
+    assert row.status_detail is not None and row.status_detail.status == "completed"

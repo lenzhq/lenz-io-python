@@ -180,6 +180,7 @@ from ._core import (
     _poll_hint as _poll_hint,
     _poll_timeout as _core_poll_timeout,
     _prepare as _prepare,
+    _read_status as _read_status,
     _request_settings as _request_settings,
     _resolve as _resolve,
     _results_context as _results_context,
@@ -1203,9 +1204,10 @@ class Lenz:
 
         Selection is by text, not index. Every claim must match one that was
         offered in the prior interrupt — the server rejects anything else with
-        a 422. To resolve a single claim, pass a one-element list. An empty
-        list, or a blank item, raises ``LenzUsageError`` before sending
-        (``empty_list`` / ``blank_item``; a blank item since 3.2).
+        a 422. To resolve a single claim, pass a one-element list. Blank items
+        are sent (the API drops them); an empty list, or one with every item
+        blank, raises ``LenzUsageError`` (``empty_list``) before sending, with
+        the API's sentence.
 
         ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so a
         retry after a network drop returns the tasks the first attempt started
@@ -1239,7 +1241,9 @@ class Lenz:
 
         Raises :class:`LenzGoneError` (HTTP 410) when the task completed and the
         account's retention period has since removed its verification; a task
-        that is still running never answers 410.
+        that is still running never answers 410. Raises
+        :class:`LenzInvalidResponseError` for a ``completed`` status with no
+        ``result`` (the API never sends one), since 3.2.
 
         Request options (``timeout``, ``max_retries``, ``extra_headers``):
         see :meth:`Lenz.with_options`.
@@ -2281,7 +2285,7 @@ class Lenz:
         options = _call_options(timeout, max_retries, extra_headers, "get_status()")
         tid = _segment(task_id, "get_status() needs a task_id.", "task_id")
         body = self._request("GET", f"/verify/status/{tid}", options=options)
-        return TaskStatus.model_validate(body, context=self._results)
+        return _read_status(body, self._results)
 
     # ── HTTP plumbing ──
 

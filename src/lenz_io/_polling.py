@@ -39,7 +39,7 @@ from .errors import (
     LenzNotFoundError,
     LenzRateLimitError,
 )
-from .models import Citecheck, Progress, ReviewFull, TaskStatus
+from .models import Citecheck, Progress, ReviewFull, TaskStatus, _no_result
 
 logger = logging.getLogger("lenz_io")
 
@@ -168,6 +168,13 @@ class TaskPoll:
         """Record a poll's status. ``True``: the task is still running, so
         ``on_progress`` fires for it."""
         self.unreadable.pop(task_id, None)
+        if status.status == "completed" and status.result is None:
+            # Ended, but unreadable: the error ``get_status`` raises for it
+            # (``_read_status``). Kept with its status, a batch row's
+            # ``status_detail``.
+            self.stopped[task_id] = _no_result(status)
+            self.terminal[task_id] = status
+            return False
         if status.status in _TERMINAL_STATUSES:
             self.terminal[task_id] = status
             return False

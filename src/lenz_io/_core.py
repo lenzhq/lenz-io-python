@@ -1287,17 +1287,13 @@ def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str
     # The argument the caller used names the error: ``texts`` when only the
     # alias was given (as the Node SDK names it).
     name = "texts" if not claims and texts is not None else "claims"
-    if not chosen:
-        # The API's sentence names ``claims`` whichever spelling was sent.
+    # Refused only where the API refuses, in its words: it drops blank items
+    # and answers ``claims is required.`` (whichever spelling was sent) when
+    # none is left. A list with some blank items is sent as it is. Only a
+    # list or a tuple is looked into: anything else goes to the API.
+    items = chosen if isinstance(chosen, (list, tuple)) else None
+    if not chosen or (items is not None and all(_blank(item) for item in items)):
         raise LenzUsageError("claims is required.", code="empty_list", param=name)
-    # Only a list or a tuple is checked: anything else is sent as before, for
-    # the API to answer.
-    for index, item in enumerate(chosen if isinstance(chosen, (list, tuple)) else ()):
-        # Since 3.2 a blank item is refused, as ``assess`` refuses one (the
-        # API drops it silently, and answers ``claims is required.`` only
-        # when every item is blank).
-        if _blank(item):
-            raise LenzUsageError(f"{name}[{index}] is blank.", code="blank_item", param=f"{name}[{index}]")
     return chosen
 
 
@@ -1857,14 +1853,25 @@ def _poll_timeout(
 # ── results of the wait helpers ──
 
 
+def _read_status(body: Any, context: dict[str, Any] | None) -> TaskStatus:
+    """A ``GET /verify/status`` answer read, for ``get_status`` and every
+    poll. A ``completed`` status with no ``result`` (absent or ``null``; the
+    API never sends one) raises ``LenzInvalidResponseError`` here, with the
+    answer's status, headers and body: the run ended, but its verification
+    cannot be read. A wait's poll applies the same rule as it records the
+    answer (``TaskPoll.answered``), so the error is the same everywhere."""
+    status = TaskStatus.model_validate(body, context=context)
+    if status.status == "completed" and status.result is None:
+        raise _no_result(status)
+    return status
+
+
 def _verification_from_terminal(status: TaskStatus, task_id: str) -> Verification:
     """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
     matching typed error."""
-    if status.status == "completed":
-        if status.result is None:
-            # The run ended, but there is nothing to read (since 3.2; 3.1
-            # raised ``LenzPipelineError``).
-            raise _no_result(status)
+    if status.status == "completed" and status.result is not None:
+        # A completed status always has one: ``_read_status`` refuses one
+        # without (``LenzInvalidResponseError``) where it is read.
         return status.result
     # The error is built from the 2.x reading, whatever ``legacy_aliases``.
     status = _legacy_view(status)
@@ -1979,8 +1986,16 @@ def _batch_results(
             # answer in another API version, or an unreadable answer whose
             # status says the run ended. Terminal, with no status; the
             # error is the item's ``error``.
-            item = BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed")
-            item._error = stopped[it.task_id]
+            err = stopped[it.task_id]
+            item = BatchItemResult(
+                task_id=it.task_id,
+                claim_text=it.claim_text or it.claim,
+                status="failed",
+                # A completed status with no result: the poll it was read
+                # from (``None`` for any other error).
+                status_detail=status,
+            )
+            item._error = err
             results.append(item)
         elif not it.task_id or it.task_id in timed_out or status is None:
             results.append(BatchItemResult(task_id=it.task_id, claim_text=it.claim_text or it.claim, status="timeout"))
@@ -2001,14 +2016,13 @@ def _batch_results(
                 )
             )
         else:
-            # failed, or completed-without-result (treated as failed: the run
-            # ended, but its result cannot be read, which ``error`` says).
-            item = BatchItemResult(
-                task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed", status_detail=status
+            # failed (a completed status without a result never gets here:
+            # reading it raised, and it is in ``stopped``).
+            results.append(
+                BatchItemResult(
+                    task_id=it.task_id, claim_text=it.claim_text or it.claim, status="failed", status_detail=status
+                )
             )
-            if status.status == "completed":
-                item._error = _no_result(status)
-            results.append(item)
     return results
 
 
