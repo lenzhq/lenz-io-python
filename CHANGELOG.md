@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-10
+
 ### Added
 
 - `.http_status` and `.headers` on every result a call returns (both clients): the HTTP status of the answer it was read from (`200`; `202` for a receipt such as `TaskAccepted`, `BatchAccepted`, `ReviewStarted`, `CitecheckStarted`) and its headers, as the read-only case-insensitive mapping errors carry (`lenz_io.errors.ResponseHeaders`, typed `ResponseHeaders | None`), so a review's or citation check's receipt `Location`, a `Retry-After`, or any answer's `X-Request-ID` are readable. On the top-level result only: a nested model (`TaskStatus.result`, an `AssessResponse.claims` row, the items an `iter()` yields, ...) and a result the SDK builds (`BatchItemResult`, and `verify_and_wait`'s `Verification`, the poll's nested `result`) have `None`; a `Result` (below) not read from an answer has `0` and empty headers. Like `.raw`, neither is part of `model_dump()` or the CLI's `--json`.
