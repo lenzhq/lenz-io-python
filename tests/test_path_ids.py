@@ -10,15 +10,33 @@ before.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 from urllib.parse import quote
 
 import httpx
 import pytest
 import respx
+from conftest import make_client
 
 from lenz_io import Lenz
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 BASE = "https://lenz.io/api/v1"
 HOSTILE = [
@@ -65,7 +83,10 @@ IDS = [c[0] for c in CALLS]
 
 
 def _send(call: Callable[[Lenz, str], Any], ident: str) -> list[httpx.Request]:
-    with Lenz(api_key="lenz_test_abc123", max_retries=0) as client, respx.mock(assert_all_called=False) as router:
+    with (
+        make_client(api_key="lenz_test_abc123", max_retries=0) as client,
+        respx.mock(assert_all_called=False) as router,
+    ):
         router.route().respond(200, json={})
         try:
             call(client, ident)
@@ -108,7 +129,10 @@ def test_the_traversal_examples(call: Callable[[Lenz], Any], path: str) -> None:
 def test_an_empty_dot_or_dotdot_id_is_refused_before_any_request(
     label: str, call: Callable[[Lenz, str], Any], method: str, template: str, ident: str
 ) -> None:
-    with Lenz(api_key="lenz_test_abc123", max_retries=0) as client, respx.mock(assert_all_called=False) as router:
+    with (
+        make_client(api_key="lenz_test_abc123", max_retries=0) as client,
+        respx.mock(assert_all_called=False) as router,
+    ):
         router.route().respond(200, json={})
         with pytest.raises(ValueError):
             call(client, ident)

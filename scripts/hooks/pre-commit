@@ -41,6 +41,10 @@ step "ruff format --check"
 uv run ruff format --check . || fail "ruff format (run: uv run ruff format .)"
 done_ok "ruff format"
 
+step "async docstrings"
+uv run python scripts/sync_async_docstrings.py --check || fail "async docstrings (run: uv run python scripts/sync_async_docstrings.py --write)"
+done_ok "async docstrings"
+
 step "mypy (strict)"
 uv run mypy src/lenz_io || fail "mypy"
 uv run mypy examples || fail "mypy (examples)"

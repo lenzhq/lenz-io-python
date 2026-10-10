@@ -8,12 +8,14 @@ The bodies are the API's own (``tests/fixtures/contract/cancel_*.json`` and
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
 import respx
+from conftest import AnyClient, make_client
 
 from lenz_io import (
     CancelResult,
@@ -27,6 +29,23 @@ from lenz_io import (
     ReviewFull,
 )
 
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
+
 BASE = "https://lenz.io/api/v1"
 FIXTURES = Path(__file__).parent / "fixtures" / "contract"
 TASK = "3f2a9c1e5b7d4a608c1d2e3f4a5b6c7d"
@@ -39,10 +58,8 @@ def _load(name: str) -> dict[str, Any]:
 
 
 @pytest.fixture()
-def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    calls: list[float] = []
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: calls.append(s))
-    return calls
+def slept(any_client: AnyClient) -> list[float]:
+    return any_client.slept
 
 
 # ── cancel(task_id) ──

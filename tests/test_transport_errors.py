@@ -7,11 +7,32 @@ exception."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from typing import Any
+
 import httpx
 import pytest
 import respx
+from conftest import AnyClient, make_client
 
 from lenz_io import Lenz, LenzAPIError, LenzConnectionError, LenzRequestTimeoutError
+
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
 
 BASE = "https://lenz.io/api/v1"
 _USAGE = {"credits": {"remaining": 1}}
@@ -19,8 +40,8 @@ _DONE = {"status": "completed", "task_id": "t", "result": {"verification_id": "v
 
 
 @pytest.fixture(autouse=True)
-def _no_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: None)
+def _no_sleep(any_client: AnyClient) -> None:
+    """``any_client`` records sleeps instead of sleeping."""
 
 
 _TRANSIENT = [

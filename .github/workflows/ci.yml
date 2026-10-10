@@ -33,6 +33,8 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
+          # AsyncLenz's docstrings are Lenz's, rewritten for asyncio.
+          python scripts/sync_async_docstrings.py --check
       - name: Type-check
         # mypy strict only on hand-written code; generated _generated/ (if added later) is excluded via pyproject.
         # The examples too: they are what people copy, so a renamed field or a

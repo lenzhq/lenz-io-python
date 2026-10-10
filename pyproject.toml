@@ -143,4 +143,5 @@ asyncio_mode = "auto"
 addopts = "-q --strict-markers --cov=lenz_io --cov-branch --cov-report=term-missing --cov-fail-under=87"
 markers = [
   "smoke: opt-in tests that hit a real Lenz staging environment (require LENZ_E2E_KEY)",
+  "sync_only: in a file run on both clients, a test of the sync client only",
 ]

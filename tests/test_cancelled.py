@@ -10,11 +10,13 @@ instead of polling to its timeout. The recorded bodies are the API's own
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
 import pytest
 import respx
+from conftest import AnyClient, make_client
 from parity_observe import load
 
 from lenz_io import (
@@ -32,6 +34,23 @@ from lenz_io import (
 )
 from lenz_io.models import Citecheck, ReviewFull
 
+# Every test here runs on both clients (``any_client`` in conftest.py): the
+# same calls and assertions against ``Lenz`` and ``AsyncLenz``.
+pytestmark = pytest.mark.usefixtures("any_client")
+
+
+@pytest.fixture()
+def client() -> Iterator[Any]:
+    with make_client(api_key="lenz_test_abc123") as c:
+        yield c
+
+
+@pytest.fixture()
+def unauth_client() -> Iterator[Any]:
+    with make_client() as c:
+        yield c
+
+
 BASE = "https://lenz.io/api/v1"
 _RUNNING = {"status": "processing", "task_id": "t", "progress": {"step": "research"}}
 _DONE = {"status": "completed", "task_id": "u", "result": {"verification_id": "v1", "claim": "A."}}
@@ -42,10 +61,8 @@ def _body(name: str, shape: str = "canonical") -> dict[str, Any]:
 
 
 @pytest.fixture()
-def slept(monkeypatch: pytest.MonkeyPatch) -> list[float]:
-    calls: list[float] = []
-    monkeypatch.setattr("lenz_io.client.time.sleep", lambda s: calls.append(s))
-    return calls
+def slept(any_client: AnyClient) -> list[float]:
+    return any_client.slept
 
 
 # ── /verify/status ──
