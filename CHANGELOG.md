@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-10-10
+
 ### What's new in 3.0
 
 - **Stop a run**: `cancel(task_id)`, `cancel_review(review_id)` and
