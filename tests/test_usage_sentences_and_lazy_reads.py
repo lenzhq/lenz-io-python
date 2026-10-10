@@ -72,7 +72,8 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
     ("verify_and_wait", lambda c: c.verify_and_wait(" "), "blank_input", "claim", "claim is required."),
     ("assess", lambda c: c.assess(""), "blank_input", "claim", "claim is required."),
     ("assess_text", lambda c: c.assess(text="\n"), "blank_input", "claim", "claim is required."),
-    ("assess_empty_list", lambda c: c.assess(claims=[]), "empty_list", "claims", "claims is required."),
+    # The API reads ``"claims": []`` as no input at all.
+    ("assess_empty_list", lambda c: c.assess(claims=[]), "empty_list", "claims", "claim: Field required"),
     ("assess_blank_item", lambda c: c.assess(claims=["A.", " "]), "blank_item", "claims[1]", "claims[1] is blank."),
     ("select_empty", lambda c: c.select("t1", claims=[]), "empty_list", "claims", "claims is required."),
     ("select_none", lambda c: c.select("t1"), "empty_list", "claims", "claims is required."),
@@ -468,3 +469,47 @@ def test_a_batch_row_completed_with_no_result_fails_with_the_error(client: Any) 
         r.get("/verify/status/t3").respond(200, json={"status": "failed", "task_id": "t3"})
         (failed,) = client.verify_batch_and_wait(claims=[{"claim": "C."}], timeout=30)
     assert failed.status == "failed" and failed.error is None
+
+
+# ── a malformed failure block is read only on a failed or cancelled run ───
+
+_BAD_FAILURE: Any = "not an object"
+_COMPLETED_BAD = {
+    "status": "completed",
+    "task_id": "t1",
+    "failure": _BAD_FAILURE,
+    "result": {"verification_id": "v1", "claim": "A."},
+}
+
+
+def test_a_completed_poll_with_a_bad_failure_still_returns_its_verification(client: Any) -> None:
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=_COMPLETED_BAD)
+        out = client.wait("t1", timeout=30)
+    assert out.verification_id == "v1"
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify").respond(202, json=_ACCEPTED)
+        r.get("/verify/status/t1").respond(200, json=_COMPLETED_BAD)
+        out = client.verify_and_wait("A.", timeout=30)
+    assert out.verification_id == "v1"
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify/batch").respond(202, json={"batch_id": "b1", "items": [_ACCEPTED]})
+        r.get("/verify/status/t1").respond(200, json=_COMPLETED_BAD)
+        (row,) = client.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=30)
+    assert row.status == "completed" and row.error is None
+    assert row.verification is not None and row.verification.verification_id == "v1"
+
+
+def test_a_needs_input_poll_with_a_bad_failure_still_raises_needs_input(client: Any) -> None:
+    from lenz_io import LenzNeedsInputError
+
+    body = {"status": "needs_input", "task_id": "t1", "reason": "multi_claim", "failure": _BAD_FAILURE}
+    with respx.mock(base_url=BASE) as r:
+        r.get("/verify/status/t1").respond(200, json=body)
+        with pytest.raises(LenzNeedsInputError):
+            client.wait("t1", timeout=30)
+    with respx.mock(base_url=BASE) as r:
+        r.post("/verify/batch").respond(202, json={"batch_id": "b1", "items": [_ACCEPTED]})
+        r.get("/verify/status/t1").respond(200, json=body)
+        (row,) = client.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=30)
+    assert row.status == "needs_input" and row.error is None

@@ -1127,6 +1127,8 @@ def _with_options_layer(
 #: whether the SDK or the API refused it (a blank claim is ``claim is
 #: required.``, a blank ``assess`` item ``claims[i] is blank.``).
 _API_CLAIMS_EMPTY = "claims is required."
+#: ``"claims": []`` is read as no input at all: neither ``claim`` nor ``text``.
+_API_ASSESS_NO_INPUT = "claim: Field required"
 _API_ASK_BLANK = "Message cannot be empty."
 _API_REVIEW_BLANK = "text: send the draft, or one public http(s) URL."
 _API_CITECHECK_BLANK = "payload: Value error, send exactly one of text and pairs"
@@ -1245,7 +1247,7 @@ def _check_assess_forms(claim: str, text: str, claims: list[str] | None) -> None
         )
     if claims is not None:
         if not claims:
-            raise LenzUsageError(_API_CLAIMS_EMPTY, code="empty_list", param="claims")
+            raise LenzUsageError(_API_ASSESS_NO_INPUT, code="empty_list", param="claims")
         for index, item in enumerate(claims):
             if not isinstance(item, str):
                 raise LenzUsageError(
