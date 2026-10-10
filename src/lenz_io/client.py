@@ -1200,7 +1200,8 @@ class Lenz:
         selected claim fans out into its own pipeline; the returned
         ``BatchAccepted`` carries one ``items`` entry (each with its own
         ``task_id``) per claim. Poll each via ``get_status`` / ``wait``.
-        ``texts=`` is accepted as an alias (``claims`` wins if both are given).
+        ``texts=`` is accepted as an alias. Given both, the one the API would
+        read is sent: ``texts`` when it has a non-blank item, else ``claims``.
 
         Selection is by text, not index. Every claim must match one that was
         offered in the prior interrupt — the server rejects anything else with

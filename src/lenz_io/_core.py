@@ -1282,11 +1282,24 @@ def _assess_payload(*, text: str, claims: list[str] | None, language: str, sugge
     return payload
 
 
+def _has_content(value: Any) -> bool:
+    """The API's rule for which of two alias fields it reads: a string with
+    non-whitespace, or a list or tuple holding at least one such string."""
+    if isinstance(value, str):
+        return bool(value.strip())
+    if isinstance(value, (list, tuple)):
+        return any(isinstance(v, str) and v.strip() for v in value)
+    return bool(value)
+
+
 def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str]:
-    chosen = claims or texts
-    # The argument the caller used names the error: ``texts`` when only the
-    # alias was given (as the Node SDK names it).
-    name = "texts" if not claims and texts is not None else "claims"
+    # The list the API would read, by its own rule: ``texts`` when it has
+    # content, else ``claims``. Only one is sent, so it is chosen here. The
+    # field chosen names the error (``texts`` when only the alias was given).
+    if _has_content(texts) or (claims is None and texts is not None):
+        chosen, name = texts, "texts"
+    else:
+        chosen, name = claims, "claims"
     # Refused only where the API refuses, in its words: it drops blank items
     # and answers ``claims is required.`` (whichever spelling was sent) when
     # none is left. A list with some blank items is sent as it is. Only a
@@ -1869,9 +1882,11 @@ def _read_status(body: Any, context: dict[str, Any] | None) -> TaskStatus:
 def _verification_from_terminal(status: TaskStatus, task_id: str) -> Verification:
     """Map a terminal ``TaskStatus`` to a ``Verification`` or raise the
     matching typed error."""
-    if status.status == "completed" and status.result is not None:
-        # A completed status always has one: ``_read_status`` refuses one
-        # without (``LenzInvalidResponseError``) where it is read.
+    if status.status == "completed":
+        if status.result is None:
+            # A backstop: ``_read_status`` and the polls already refuse a
+            # completed status without one where it is read.
+            raise _no_result(status)
         return status.result
     # The error is built from the 2.x reading, whatever ``legacy_aliases``.
     status = _legacy_view(status)

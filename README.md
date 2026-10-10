@@ -996,8 +996,11 @@ string:
 | `invalid_argument` | anything else (an `assess` list item that is not a string, ...) | `"claims[0]"`, `"view"`, `"sort"`, `"verdicts"` |
 
 For the codes that mirror the API's (`blank_input`, `blank_item`,
-`empty_list`), the message is the API's own sentence for the same request, so
-it reads the same whether the SDK or the API refused it:
+`empty_list`), the message is the API's own sentence (its `2026-10-11` 422
+`detail`) for the request the SDK would have sent. With the default
+`legacy_aliases=True` a 422 the API itself sends is read with its 2.x wording
+on some endpoints (`select`'s reads `texts is required and must be
+non-empty.`), so the two can differ there:
 
 | Call | `code` | Message |
 |---|---|---|
@@ -1012,8 +1015,10 @@ it reads the same whether the SDK or the API refused it:
 The other codes carry the SDK's own message. The rule: the SDK refuses locally
 only what the API would refuse, in the API's words. So `select` sends a list
 with some blank items as it is (the API drops them) and refuses only an empty
-or all-blank list; called with `texts=` (the alias), `param` is `"texts"` and
-the message is still the API's `claims is required.`.
+or all-blank list (`param` names the list the API would read). Given both
+`claims=` and `texts=` (the alias), the SDK sends the one the API would read:
+`texts` when it has a non-blank item, else `claims`. The message is always the
+API's `claims is required.`.
 
 Not every blank input is refused locally: `verify_batch` / `verify_batch_and_wait`
 with an empty list or a blank item, and `citecheck(pairs=[])`, are sent, and the

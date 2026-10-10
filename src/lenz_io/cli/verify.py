@@ -27,7 +27,7 @@ from typing import Any
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzApiVersionError, LenzError, LenzGoneError
+from lenz_io.errors import LenzApiVersionError, LenzError, LenzGoneError, LenzInvalidResponseError
 from lenz_io.models import TaskStatus
 
 from ._run import execute, read_text_arg
@@ -346,6 +346,11 @@ def _poll_all(
                 except LenzGoneError as exc:
                     # Removed by its account's retention period: that row is
                     # done, the rest keep polling.
+                    st = TaskStatus(task_id=tid, status="failed", error=exc.message or str(exc))
+                except LenzInvalidResponseError as exc:
+                    # An answer this release cannot read (a completed status
+                    # with no result, a field of the wrong type): that row
+                    # fails, the rest keep polling, as batch rows do.
                     st = TaskStatus(task_id=tid, status="failed", error=exc.message or str(exc))
                 statuses[tid] = st
                 if st.status != "processing":

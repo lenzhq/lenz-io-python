@@ -3,7 +3,8 @@
 * A blank input or an empty list is refused before sending with the sentence
   the API's ``2026-10-11`` 422 gives for the same request (``code`` and
   ``param`` are the SDK's own).
-* ``select`` refuses a blank item, ``ask.send`` a blank message.
+* ``select`` refuses only an empty or all-blank list (the one the API would
+  read), ``ask.send`` a blank message.
 * Every property that reads a block on access raises
   ``LenzInvalidResponseError`` for a value of the wrong type, instead of
   reading it as not sent.
@@ -572,3 +573,32 @@ def test_a_batch_row_completed_without_result_keeps_its_poll(client: Any) -> Non
     assert row.status == "failed"
     assert isinstance(row.error, LenzInvalidResponseError)
     assert row.status_detail is not None and row.status_detail.status == "completed"
+
+
+# ── select: the list the API would read ───────────────────────────────────
+
+
+def test_select_sends_texts_when_it_has_content_and_claims_does_not(client: Any) -> None:
+    import json
+
+    with respx.mock(base_url=BASE) as r:
+        route = r.post("/verify/t1/select").respond(200, json={"items": []})
+        client.select("t1", claims=[" "], texts=["x"])
+        client.select("t1", claims=["A."], texts=[" "])
+        client.select("t1", claims=["A."], texts=["B."])
+    sent = [json.loads(call.request.content) for call in route.calls]
+    assert sent == [{"texts": ["x"]}, {"texts": ["A."]}, {"texts": ["B."]}]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "param"),
+    [
+        ({"claims": [" "], "texts": [""]}, "claims"),
+        ({"texts": [" "]}, "texts"),
+        ({"claims": [], "texts": []}, "claims"),
+    ],
+)
+def test_select_names_the_list_the_api_would_read(client: Any, kwargs: dict[str, Any], param: str) -> None:
+    with pytest.raises(LenzUsageError) as ei:
+        client.select("t1", **kwargs)
+    assert (str(ei.value), ei.value.code, ei.value.param) == ("claims is required.", "empty_list", param)
