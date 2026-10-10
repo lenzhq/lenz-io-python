@@ -7,7 +7,7 @@
  "signatures": {
   "Lenz.__enter__": "(self) -> 'Self'",
   "Lenz.__exit__": "(self, *exc_info: 'Any') -> 'None'",
-  "Lenz.__init__": "(self, *, api_key: 'str | None' = None, base_url: 'str | None' = None, timeout: 'float | httpx.Timeout | None' = 30.0, max_retries: 'int' = 3, http_client: 'httpx.Client | None' = None, user_agent: 'str | None' = None) -> 'None'",
+  "Lenz.__init__": "(self, *, api_key: 'str | None' = None, base_url: 'str | None' = None, timeout: 'float | httpx.Timeout | None' = 30.0, max_retries: 'int' = 3, http_client: 'httpx.Client | None' = None, user_agent: 'str | None' = None, legacy_aliases: 'bool' = True) -> 'None'",
   "Lenz.assess": "(self, claim: 'str' = '', *, text: 'str' = '', claims: 'list[str] | None' = None, language: 'str' = '', suggest_rewrite: 'bool' = False, timeout: 'float | httpx.Timeout | None' = None, idempotency: 'bool' = True, idempotency_key: 'str | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'AssessResponse'",
   "Lenz.cancel": "(self, task_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'CancelResult'",
   "Lenz.cancel_citecheck": "(self, citecheck_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Citecheck'",
@@ -28,7 +28,7 @@
   "Lenz.verify_batch": "(self, *, claims: 'Sequence[VerifyBatchItem | dict[str, Any]]', webhook_url: 'str' = '', language: 'str' = '', visibility: 'str' = '', depth: 'str' = '', idempotency_key: 'str | None' = None, idempotency: 'bool' = True, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'BatchAccepted'",
   "Lenz.verify_batch_and_wait": "(self, *, claims: 'Sequence[VerifyBatchItem | dict[str, Any]]', webhook_url: 'str' = '', language: 'str' = '', visibility: 'str' = '', depth: 'str' = '', idempotency_key: 'str | None' = None, timeout: 'float' = 300.0, on_progress: 'Callable[[str, Progress], None] | None' = None, idempotency: 'bool' = True, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'list[BatchItemResult]'",
   "Lenz.wait": "(self, task: 'str | TaskAccepted', *, timeout: 'float' = 300.0, on_progress: 'Callable[[str, Progress], None] | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Verification'",
-  "Lenz.with_options": "(self: '_Client', *, timeout: 'float | httpx.Timeout | NotGiven | None' = NOT_GIVEN, max_retries: 'int | NotGiven' = NOT_GIVEN, extra_headers: 'Mapping[str, str | None] | None' = None) -> '_Client'",
+  "Lenz.with_options": "(self: '_Client', *, timeout: 'float | httpx.Timeout | NotGiven | None' = NOT_GIVEN, max_retries: 'int | NotGiven' = NOT_GIVEN, extra_headers: 'Mapping[str, str | None] | None' = None, api_key: 'str | NotGiven | None' = NOT_GIVEN) -> '_Client'",
   "ask.__init__": "(self, parent: 'Lenz') -> 'None'",
   "ask.history": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'AskHistory'",
   "ask.reset": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'bool'",
@@ -40,8 +40,8 @@
   "verifications.delete": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'bool'",
   "verifications.get": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Verification'",
   "verifications.get_certificate": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Certificate'",
-  "verifications.iter": "(self, *, page: 'int' = 1, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[VerificationListItem]'",
-  "verifications.list": "(self, *, page: 'int' = 1, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'",
+  "verifications.iter": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[VerificationListItem]'",
+  "verifications.list": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'",
   "verifications.related": "(self, verification_id: 'str', *, limit: 'int' = 5, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'RelatedVerifications'"
  }
 }

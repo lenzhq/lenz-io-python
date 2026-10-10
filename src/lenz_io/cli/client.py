@@ -20,6 +20,6 @@ def cli_user_agent() -> str:
 
 
 def build_client(*, api_key: str, base_url: str) -> Lenz:
-    # api_key="" → SDK would fall back to env; we pass the already-resolved key
-    # (or None to let auth-required calls raise LenzAuthError cleanly).
+    # We pass the already-resolved key (the CLI read the flag, LENZ_API_KEY and
+    # the config file), or None: auth-required calls then raise LenzAuthError.
     return Lenz(api_key=api_key or None, base_url=base_url or None, user_agent=cli_user_agent())

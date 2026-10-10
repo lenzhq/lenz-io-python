@@ -1170,7 +1170,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1232,7 +1232,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1294,7 +1294,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1356,7 +1356,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1410,7 +1410,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1456,7 +1456,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1512,7 +1512,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1570,7 +1570,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1616,7 +1616,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1662,7 +1662,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -1720,7 +1720,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1782,7 +1782,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1844,7 +1844,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1906,7 +1906,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Idempotency-Key",
@@ -1960,7 +1960,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -2006,7 +2006,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -2062,7 +2062,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -2120,7 +2120,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -2166,7 +2166,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -2212,7 +2212,7 @@
      ],
      [
       "User-Agent",
-      "python-httpx/0.28.1"
+      "<sdk user agent>"
      ],
      [
       "Authorization",
@@ -3463,7 +3463,11 @@
  },
  "empty_200": {
   "outcome": {
-   "result": "bool"
+   "code": "",
+   "error": "LenzInvalidResponseError",
+   "idempotency_key": null,
+   "message": "DELETE /ask/v1 answered HTTP 200 with a body that is not JSON.",
+   "status_code": 200
   },
   "requests": [
    {
@@ -11716,11 +11720,11 @@
  },
  "unreadable_200": {
   "outcome": {
-   "code": null,
-   "error": "JSONDecodeError",
+   "code": "",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": "<random>",
-   "message": "Expecting value: line 1 column 1 (char 0)",
-   "status_code": null
+   "message": "POST /assess answered HTTP 200 with a body that is not JSON.",
+   "status_code": 200
   },
   "requests": [
    {
@@ -11782,11 +11786,11 @@
  },
  "unreadable_200_no_key": {
   "outcome": {
-   "code": null,
-   "error": "JSONDecodeError",
+   "code": "",
+   "error": "LenzInvalidResponseError",
    "idempotency_key": null,
-   "message": "Expecting value: line 1 column 1 (char 0)",
-   "status_code": null
+   "message": "GET /me/usage answered HTTP 200 with a body that is not JSON.",
+   "status_code": 200
   },
   "requests": [
    {
@@ -12063,7 +12067,7 @@
    "code": "",
    "error": "LenzApiVersionError",
    "idempotency_key": null,
-   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
    "status_code": 404
   },
   "requests": [
@@ -15125,7 +15129,7 @@
    "code": "",
    "error": "LenzApiVersionError",
    "idempotency_key": null,
-   "message": "The API answered in version 2026-05-13; lenz-io 3.x reads 2026-10-11 only.",
+   "message": "The API answered 2026-05-13; this SDK reads 2026-10-11 only.",
    "status_code": 200
   },
   "requests": [

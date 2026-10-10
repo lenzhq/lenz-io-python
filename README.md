@@ -431,7 +431,7 @@ your own claims. Use webhooks for production async flows.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
-- **`client.verifications.{list,iter,get,delete,related}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
+- **`client.verifications.{list,iter,get,delete,related}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). Both take `page_size=` (1-100, default 20 on the server; anything else raises `ValueError` before the request): `client.verifications.iter(page_size=100)` reads 100 a page. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.library.list(...)`** / **`client.library.iter(...)`** → browse the public catalog (no API key needed); `iter` walks every page lazily and refuses `sort="random"`, which is not exhaustive.
 - **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
@@ -898,7 +898,21 @@ on the older version, or a reply replayed from an idempotent request stored
 before the change) is refused rather than misread. It carries `api_version`
 (what the response named), `status_code` and `body` as sent. If it persists,
 contact support with the request id; lenz-io 2.x reads both versions. A response without the header is read as usual, and webhook
-payloads are never refused (they are parsed in either shape).
+payloads are never refused (they are parsed in either shape). Its message
+names the version: "The API answered 2026-05-13; this SDK reads 2026-10-11
+only."
+
+`LenzInvalidResponseError` (a `LenzAPIError`, since 3.2) is raised when a
+status below 400 (a 2xx, or a redirect httpx did not follow, such as an HTML
+302) carries a body that is not JSON, typically a proxy,
+captive portal or load balancer answering in the API's place. It carries the
+real `status_code` (`0` stays reserved for a request that got no answer), the
+`request_id` if one came back, `body` `None`, `body_text` (the body as text:
+its first 1,000 characters, followed by `…` when it was longer) and
+`retryable` `None`. It is also a `json.JSONDecodeError`, which is what 3.1 and
+earlier raised there, so existing `except json.JSONDecodeError` blocks keep
+working. A 204, a 205 or a 2xx with `Content-Length: 0` still reads as `{}`;
+any other empty or whitespace-only 2xx body raises it.
 
 **Replays of requests made before the switch.** An idempotent request first
 sent before lenz.io served `2026-10-11`, and replayed with the same
@@ -1310,17 +1324,70 @@ Lenz(
     base_url="https://lenz.io/api/v1",  # override for staging / local
     timeout=30.0,  # seconds per request; also None or an httpx.Timeout
     max_retries=3,
+    legacy_aliases=True,  # False: results exactly as the API sent them (since 3.2)
 )
 ```
+
+Request strings are sent as well-formed UTF-8: a lone UTF-16 surrogate (half
+of a pair, `"\ud800"`) in a claim, a text or a query value goes out as U+FFFD
+(`�`), as the Node SDK sends it, instead of raising `UnicodeEncodeError`.
+Valid text is sent unchanged.
 
 `AsyncLenz(...)` takes the same arguments, with an `httpx.AsyncClient` as `http_client=`.
 
 Environment variables:
 
-- `LENZ_API_KEY` — read if `api_key=` is not passed
+- `LENZ_API_KEY` — read if `api_key=` is not passed (an explicit `api_key=""` or whitespace is no key and never reads it: calls that need a key raise `LenzAuthError`)
 - `LENZ_BASE_URL` — read if `base_url=` is not passed
 
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
+
+### Results exactly as sent: `legacy_aliases=False`
+
+Since 3.0 the SDK reads the API's `2026-10-11` response shape and, by default,
+also fills in every deprecated 2.x field from it, so 2.x code runs unchanged.
+`legacy_aliases=False` on the constructor (both clients, since 3.2) turns that off:
+results carry exactly what the API sent. Read the current names (`claim`,
+`status`, `failure`, `more_claims`, `completed_at`, `claims`, `credits`,
+`costs`, ...). The default, `True`, is 3.x behaviour, unchanged.
+
+With `legacy_aliases=False`:
+
+| Model | Field | Default (`True`) | `legacy_aliases=False` |
+|---|---|---|---|
+| `AssessClaim` (failed row) | `verdict` | `"Error"` | `None`, as sent |
+| `AssessClaim` (failed row) | `confidence` | `"low"` | `None`, as sent |
+| `AssessClaim` | `error_code`, `hint`, `identified_claims` | from `failure`, `more_claims` | `None`, `None`, `[]` |
+| `AssessResponse` | `error`, `error_code` | from `failure` | `None`, `""` |
+| `ExtractedClaims` | `status` | `no_checkable_claim` read as `"not_a_claim"` | as sent (`"no_checkable_claim"`) |
+| `ExtractedClaims` | `claim`, `identified_claims`, `locations` | from `claims` | `""`, `[]`, `None` |
+| `CandidateClaim` (picker / needs-input option) | `text` | from `claim` | `""` |
+| `TaskAccepted` | `claim_text` | from `claim` | `""` |
+| `TaskStatus` | `error`, `failure_reason`, `failure_class`, `docs_url`, `hint` | from `failure` | `""` unless sent |
+| `TaskStatus` | `retryable` | from `failure` | `None` unless sent |
+| `TaskStatus` (`cancelled`, no block sent) | `failure` | the 2.x cancelled block | `None` |
+| `FailureBlock` (every failure block) | `failure_reason` | from `code` | `""` unless sent |
+| `Verification`, `VerificationListItem`, `LibraryItem`, `ReviewVerification` | `modified_at` | from `completed_at` | `None` |
+| `ReviewAssessment` | `identified_claims`, `error_code`, `hint` | from `more_claims`, `failure` | `[]`, `None`, `None` |
+| `ReviewSummary` | `claim_limit_reached`, `citation_limit_reached` | from the `*_exceeded` fields | `None` |
+| `CitecheckSummary` | `citation_limit_reached` | from `citation_limit_exceeded` | `None` |
+| `Usage` | `verify`, `ask`, `assess` | computed from `credits` and `costs` | `None` unless sent |
+| `Usage` | `quota_resets_at` | from `credits.resets_at` | `None` |
+| `UsageCredits` | `bonus` | from `extra` | `None` unless sent |
+| `UsageCapacity` | `credits` | from `bonus` | `None` unless sent |
+
+`AssessClaim.verdict` / `confidence` and the numeric `Usage` aliases keep their
+3.x annotations (`str`, `int`, `UsageCapacity`), so with `legacy_aliases=False`
+read them as `... | None`. The deprecated attributes still exist on the models.
+A field the response leaves out still reads its declared default, as in every
+3.x release. `model_dump(exclude_unset=True)` is the body as sent (the
+`Usage` aliases that read `None` are not marked set). Errors (classes and
+fields) and webhook parsing are the same either way, and so is
+`BatchItemResult.claim_text`, which the SDK builds itself. Results attached to
+an error are results: the `partial` of a `ReviewTimeout` / `CitecheckTimeout`
+and the `review` / `citecheck` of a `ReviewFailed` / `CitecheckFailed` are read
+with the client's setting, so with `legacy_aliases=False` they carry the body
+as sent.
 
 `timeout` must be a number of seconds greater than 0 and at most 2,147,483, `None` (no timeout), an
 `httpx.Timeout` or httpx's `(connect, read, write, pool)` tuple; `max_retries` a
@@ -1405,6 +1472,27 @@ closed-client error), and a client given `http_client=` never closes it. A
 copy is as safe to share across threads as the client. The copy is shallow:
 attributes a subclass of `Lenz` adds are shared with the client it was made
 from.
+
+**One key per copy** (since 3.2). `with_options(api_key=...)` gives the copy
+its own key on the same pool, for a server that acts for several users, each
+with their own Lenz API key or OAuth access token (`lat_...`):
+
+```python
+shared = Lenz(api_key="")  # one pool for the process, no key of its own
+
+
+def handle(request):
+    user = shared.with_options(api_key=request.user_token)
+    return user.assess(claim=request.text)
+```
+
+Any string is sent as given. An empty or whitespace-only key, or `None`, gives
+a copy with no key: a call that needs one raises `LenzAuthError` before
+anything is sent. A copy never reads `LENZ_API_KEY`, and leaving `api_key` out
+keeps the key the copy was made from. Copies with different keys can run at
+the same time on one pool (threads, or tasks on `AsyncLenz`). `legacy_aliases`
+is set on the constructor only: a copy reads results the way its client does,
+and `with_options(legacy_aliases=...)` raises `TypeError`.
 
 ## Compatibility
 
