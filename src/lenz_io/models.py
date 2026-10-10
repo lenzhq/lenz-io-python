@@ -137,8 +137,9 @@ class _Lax(BaseModel):
 
         Set on every result a client call returns and on every model nested
         in one, each holding its own part of the body (``TaskStatus.result``,
-        each of ``AssessResponse.claims``, each of ``ReviewFull.claims``, ...),
-        and on a parsed webhook's models. A ``ReviewStarted`` /
+        each of ``AssessResponse.claims``, each of ``ReviewFull.claims``, ...).
+        A parsed webhook's models hold the object the SDK built them from
+        (the payload as received is ``event.raw``). A ``ReviewStarted`` /
         ``CitecheckStarted`` that a 409 naming the job settled holds that 409's
         body. ``None`` on a ``BatchItemResult`` (the SDK builds it; its
         ``verification`` and ``status_detail`` hold theirs) and on a value

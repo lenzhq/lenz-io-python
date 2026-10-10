@@ -469,3 +469,13 @@ def test_content_type_goes_only_with_a_body(client: Any) -> None:
     assert "content-type" not in get.calls.last.request.headers
     assert "content-type" not in post.calls.last.request.headers
     assert ver.calls.last.request.headers["content-type"] == "application/json"
+
+
+def test_a_wait_on_a_client_that_cannot_send_raises_at_once(client: Any) -> None:
+    from lenz_io import LenzConnectionError
+
+    with make_client(api_key=KEY, base_url="ftp://lenz.io/api/v1") as c:
+        with pytest.raises(LenzConnectionError):
+            c.wait("t1", timeout=60)
+        with pytest.raises(LenzConnectionError):
+            c._wait_review("r1", timeout=60)

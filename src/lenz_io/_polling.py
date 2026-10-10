@@ -29,6 +29,7 @@ from .errors import (
     LenzAPIError,
     LenzApiVersionError,
     LenzAuthError,
+    LenzConnectionError,
     LenzError,
     LenzGoneError,
     LenzNotFoundError,
@@ -40,6 +41,12 @@ logger = logging.getLogger("lenz_io")
 
 #: An async job the poll loop waits on: a review or a citation check.
 _Job = TypeVar("_Job", ReviewFull, Citecheck)
+
+
+def _never_sendable(exc: Exception) -> bool:
+    """A request that could not be sent at all (a bad ``base_url``, ...): no
+    later poll can change it, so the wait raises it at once."""
+    return isinstance(exc, LenzConnectionError) and exc.retryable is False
 
 
 def _progress_copy(status: TaskStatus) -> Progress:
@@ -101,7 +108,7 @@ class TaskPoll:
         error are terminal for this id. Any other ``LenzError`` is read again
         next round, after the wait it stated (capped like the retry ladder
         caps it). Anything else is not a poll failure and propagates."""
-        if isinstance(exc, LenzAuthError):
+        if isinstance(exc, LenzAuthError) or _never_sendable(exc):
             return True
         if isinstance(exc, (LenzGoneError, LenzNotFoundError, LenzApiVersionError)):
             self.stopped[task_id] = exc
@@ -219,7 +226,7 @@ class JobPoll(Generic[_Job]):
         A 5xx, a network error or a 429 is read again next round, after the
         wait it stated, capped like the retry ladder caps it (an untyped
         proxy 503 can state an hour). Anything else (404, 403, 410) raises."""
-        if isinstance(exc, UnicodeEncodeError):
+        if isinstance(exc, UnicodeEncodeError) or _never_sendable(exc):
             return True
         if isinstance(exc, ValueError):
             logger.debug("unreadable body for %s", self.path, exc_info=True)

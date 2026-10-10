@@ -573,7 +573,10 @@ status.result.raw if status.result else None  # the verification's object
 
 Covered: every result a call returns and every model nested in one
 (`TaskStatus.result`, `AssessResponse.claims`, `ReviewFull.claims` /
-`issues` / `citations`, ...), and the models of a parsed webhook. A
+`issues` / `citations`, ...). A webhook's payload as received is
+`event.raw`; the models `parse_webhook` builds from it (`event.verification`,
+...) hold the object the SDK built them from, which can leave out a `null`
+the payload carried. A
 `ReviewStarted` / `CitecheckStarted` that a 409 naming the job settled (see
 [Idempotency](#idempotency)) holds that 409's body. `BatchItemResult` is built
 by the SDK, so its `raw` is `None` (its `verification.raw` and
