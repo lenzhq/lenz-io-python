@@ -157,6 +157,12 @@ def recording(
         yield rec
 
 
+def _unversioned(message: str) -> str:
+    """A message without the pydantic version in the documentation link a
+    ``ValidationError`` carries (it depends on the installed pydantic)."""
+    return re.sub(r"errors\.pydantic\.dev/[0-9.]+/", "errors.pydantic.dev/<version>/", message)
+
+
 def outcome(call: Callable[[], Any]) -> dict[str, Any]:
     """What a call ended with: the result's type, or the error's class and
     the fields a caller reads."""
@@ -170,7 +176,7 @@ def outcome(call: Callable[[], Any]) -> dict[str, Any]:
             "error": type(exc).__name__,
             "status_code": getattr(exc, "status_code", None),
             "code": getattr(exc, "code", None),
-            "message": str(getattr(exc, "message", exc)),
+            "message": _unversioned(str(getattr(exc, "message", exc))),
             "idempotency_key": key,
         }
     if isinstance(result, list):

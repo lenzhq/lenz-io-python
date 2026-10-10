@@ -24,7 +24,17 @@ import lenz_io.client
 GOLDEN = Path(__file__).parent / "fixtures" / "freeze" / "names.json"
 
 
+_TYPING = ("typing", "typing_extensions")
+
+
 def _kind(value: Any) -> str:
+    if inspect.isclass(value) and value.__module__ not in _TYPING:
+        return "class"
+    if getattr(value, "__module__", None) in _TYPING or type(value).__module__ in _TYPING:
+        # A typing construct (``Any``, ``Literal[...]``, ``Final``, a
+        # ``TypeVar``, ``overload``): what it is made of differs between
+        # Python versions.
+        return "typing"
     if inspect.isclass(value):
         return "class"
     if inspect.isfunction(value) or inspect.isbuiltin(value):

@@ -13953,7 +13953,7 @@
    "code": null,
    "error": "ValidationError",
    "idempotency_key": null,
-   "message": "1 validation error for TaskStatus\nprogress.poll_after_seconds\n  Input should be a valid integer, got a number with a fractional part [type=int_from_float, input_value=0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/2.13/v/int_from_float",
+   "message": "1 validation error for TaskStatus\nprogress.poll_after_seconds\n  Input should be a valid integer, got a number with a fractional part [type=int_from_float, input_value=0.1, input_type=float]\n    For further information visit https://errors.pydantic.dev/<version>/v/int_from_float",
    "status_code": null
   },
   "requests": [
@@ -14117,6 +14117,249 @@
    }
   ],
   "sleeps": []
+ },
+ "wait_out_of_range_hints": {
+  "outcome": {
+   "result": "Verification"
+  },
+  "requests": [
+   {
+    "at": 0.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 2.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 6.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 7.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   },
+   {
+    "at": 10.0,
+    "body": "",
+    "headers": [
+     [
+      "Host",
+      "lenz.io"
+     ],
+     [
+      "Accept-Encoding",
+      "<httpx default>"
+     ],
+     [
+      "Connection",
+      "keep-alive"
+     ],
+     [
+      "User-Agent",
+      "<sdk user agent>"
+     ],
+     [
+      "Accept",
+      "application/json"
+     ],
+     [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
+      "Content-Type",
+      "application/json"
+     ],
+     [
+      "X-Lenz-API-Version",
+      "2026-10-11"
+     ]
+    ],
+    "method": "GET",
+    "timeout": {
+     "connect": 30.0,
+     "pool": 30.0,
+     "read": 30.0,
+     "write": 30.0
+    },
+    "url": "https://lenz.io/api/v1/verify/status/t1"
+   }
+  ],
+  "sleeps": [
+   2.0,
+   4.0,
+   1.0,
+   3.0
+  ]
  },
  "wait_poll_errors": {
   "outcome": {
@@ -14824,7 +15067,7 @@
    "code": null,
    "error": "ValidationError",
    "idempotency_key": null,
-   "message": "1 validation error for TaskStatus\nstatus\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/2.13/v/string_type",
+   "message": "1 validation error for TaskStatus\nstatus\n  Input should be a valid string [type=string_type, input_value=5, input_type=int]\n    For further information visit https://errors.pydantic.dev/<version>/v/string_type",
    "status_code": null
   },
   "requests": [

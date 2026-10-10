@@ -469,6 +469,20 @@ CASES += [
         {("GET", f"/verify/status/{TASK}"): [GARBAGE_HINT, HUGE_HINT, RUNNING, DONE]},
     ),
     (
+        "wait_out_of_range_hints",
+        "default",
+        lambda c: c.wait(TASK, timeout=60),
+        {
+            ("GET", f"/verify/status/{TASK}"): [
+                (200, {**RUNNING[1], "progress": {"step": "x", "poll_after_seconds": 0}}),
+                HUGE_HINT,
+                (200, {**RUNNING[1], "progress": {"step": "x", "poll_after_seconds": True}}),
+                RUNNING,
+                DONE,
+            ]
+        },
+    ),
+    (
         "wait_stated_wait_beats_hint",
         "default",
         lambda c: c.wait(TASK, timeout=120),

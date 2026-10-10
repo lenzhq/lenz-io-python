@@ -7950,6 +7950,37 @@
    "warnings": []
   }
  },
+ "wait_out_of_range_hints": {
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "result": {
+   "audit": {
+    "adjudication_summary": "",
+    "assessments": [],
+    "debate_con": null,
+    "debate_pro": null,
+    "panel_agreement": ""
+   },
+   "claim": "A.",
+   "confidence": "low",
+   "coverage": null,
+   "created_at": null,
+   "depth": "",
+   "domain": "",
+   "entities": [],
+   "executive_summary": "",
+   "key_finding": "",
+   "language": "en",
+   "lenz_score": null,
+   "modified_at": null,
+   "presumed_intent": "",
+   "sources": [],
+   "suggested_rewrite": null,
+   "verdict": "",
+   "verification_id": "v1",
+   "visibility": "",
+   "warnings": []
+  }
+ },
  "wait_poll_errors": {
   "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
