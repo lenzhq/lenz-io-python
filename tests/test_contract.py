@@ -42,6 +42,7 @@ from lenz_io.models import (
     ExtractedClaims,
     LibraryList,
     Position,
+    ReviewAssessment,
     ReviewFull,
     ReviewIssues,
     ReviewStarted,
@@ -673,3 +674,37 @@ def test_review_webhook_payload_is_fully_typed(fixture_name):
     errors = _check(payload["review"], ReviewFull, "review")
     if errors:
         pytest.fail("\n".join(errors))
+
+
+def test_assess_rows_carry_searched_pages():
+    """``searched_pages`` is the pages the reviewers looked at, as title and
+    link: a list on every row, ``[]`` on a failed one."""
+    parsed = AssessResponse.model_validate(_load("assess_claims_list.json"))
+    plain, compound, no_claim, timed_out = parsed.claims
+
+    assert [(p.title, p.url) for p in plain.searched_pages] == [
+        ("Boiling point", "https://en.wikipedia.org/wiki/Boiling_point"),
+        ("Phase transitions", "https://openstax.org/books/chemistry-2e/pages/10-3-phase-transitions"),
+    ]
+    assert len(compound.searched_pages) == 1
+    for row in (no_claim, timed_out):
+        assert row.searched_pages == []
+
+
+def test_assess_rows_without_searched_pages_still_parse():
+    """A response stored before the API added the key is replayed as stored:
+    the row reads an empty list."""
+    parsed = AssessResponse.model_validate(_load("assess_single_claim.json"))
+    assert parsed.claims
+    for row in parsed.claims:
+        assert "searched_pages" not in row.model_fields_set
+        assert row.searched_pages == []
+
+
+def test_review_rows_carry_searched_pages():
+    """A review's quick check carries the same list as an /assess row, and a
+    review body from before the field reads an empty one."""
+    page = {"title": "Tower history", "url": "https://tower.example/history"}
+    with_pages = ReviewAssessment.model_validate({"status": "completed", "verdict": "False", "searched_pages": [page]})
+    assert [(p.title, p.url) for p in with_pages.searched_pages] == [(page["title"], page["url"])]
+    assert ReviewAssessment.model_validate({"status": "completed", "verdict": "True"}).searched_pages == []

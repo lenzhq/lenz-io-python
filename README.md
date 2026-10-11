@@ -375,6 +375,10 @@ reviewer's note, not a checked source; for sourced evidence, call `verify`.
 Read it as optional: it can be `None`. (`dissent` is deprecated: it is always
 `None` and is kept only so code that reads it keeps working.)
 
+`searched_pages` lists the pages the reviewers looked at, each with a `title`
+and a `url`. What they say has not been checked: for sourced evidence, call
+`verify`. It is `[]` when there is nothing to show, including on a failed row.
+
 **Suggested rewrite.** `suggest_rewrite=True` also writes, on each row the
 check found `False` or `Mostly False` with high confidence, the claim with its
 wrong part corrected (`suggested_rewrite`, else `None`), at no extra credit.
