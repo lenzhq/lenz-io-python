@@ -91,7 +91,7 @@
   "UsageCapacity": "class",
   "UsageCredits": "class",
   "UsageExtract": "class",
-  "Verdict": "typing:Literal['True', 'Mostly True', 'Mixed', 'Mostly False', 'False', 'Error']",
+  "Verdict": "typing:Literal['True', 'Mostly True', 'Mixed', 'Mostly False', 'False', 'No Public Record', 'Error']",
   "VerdictLabel": "typing:Literal['True', 'Mostly True', 'Mixed', 'Mostly False', 'False']",
   "Verification": "class",
   "VerificationCancelled": "class",

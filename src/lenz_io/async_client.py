@@ -995,6 +995,12 @@ class AsyncLenz:
         daily cap — again. The key is random per call and reused across its
         retries; pin your own with ``idempotency_key=``, or pass
         ``idempotency=False`` to send none. Never derived from the text.
+
+        When ``text`` is one URL and the page behind it cannot be read, the
+        call raises :class:`LenzValidationError` (HTTP 422) with ``code``
+        ``"page_unreadable"`` and ``fix`` ``"Paste the page's text
+        instead."``; it is not retried. Work that failed on our side is a 502
+        with ``code`` ``"internal"``.
         """
         _call_options(timeout, max_retries, extra_headers, "extract()")
         return await self._extract(
@@ -1045,7 +1051,9 @@ class AsyncLenz:
           list and a blank item in it.
 
         Each ``AssessClaim`` has a ``verdict`` ("True" / "Mostly True" /
-        "Mixed" / "Mostly False" / "False" / "Error"), a categorical
+        "Mixed" / "Mostly False" / "False", "No Public Record" when the
+        reviewers found no public record that would show the claim, or
+        "Error"), a categorical
         ``confidence`` ("high" / "medium" / "low"), and an optional
         ``verification_url`` pointing at the deep ``Verification`` when
         /assess found a matching stored claim.
@@ -1053,13 +1061,20 @@ class AsyncLenz:
         A row with ``status == "failed"`` could not be given a verdict (its
         ``verdict`` reads ``"Error"``). It stays in position, is not charged,
         and says why: ``failure.code`` is ``no_checkable_claim`` /
-        ``framing_failed`` / ``upstream_unavailable`` / ``timeout`` (an open
-        set; the last two are worth resending as-is), and ``failure.hint`` is
-        one sentence on what to send next. A compound list item is assessed on
-        its main claim; the other claims found in it are listed on that row in
-        ``more_claims`` — send them as their own items to check the rest.
-        (The deprecated ``error_code``, ``hint`` and ``identified_claims`` keep
-        their original meaning.)
+        ``upstream_unavailable`` / ``internal`` (an open set; resend a row
+        when ``failure.retryable`` is true), ``failure.detail`` names the
+        cause, and ``failure.hint`` is one sentence on what to send next. A
+        compound list item is assessed on its main claim; the other claims
+        found in it are listed on that row in ``more_claims`` — send them as
+        their own items to check the rest. (The deprecated ``error_code``
+        carries the same code as ``failure.code``; ``hint`` and
+        ``identified_claims`` keep their original meaning.)
+
+        A "No Public Record" row is a completed quick check: it has a
+        ``confidence`` of ``"medium"`` or ``"low"`` (never ``"high"``), no
+        score and no ``suggested_rewrite``. A quick check whose reviewers did
+        not reach an answer is a failed row instead: free,
+        ``upstream_unavailable`` and retryable.
 
         Use ``confidence`` to decide when to escalate: ``"low"`` rows are
         worth re-running through ``verify_batch_and_wait`` for the deep
@@ -1530,7 +1545,7 @@ class AsyncLenz:
         Every claim in the draft gets a quick verdict (up to
         ``max_assessments``, default 20, most check-worthy first). The ones
         whose quick verdict is in ``verdicts`` (default ``["False",
-        "Mostly False", "Mixed"]``) OR whose confidence is in ``confidence``
+        "Mostly False", "Mixed", "No Public Record"]``) OR whose confidence is in ``confidence``
         (default ``["low"]``) get a deep check, up to ``max_verifications``
         (default 5; ``0`` makes a quick-only review) at ``depth``
         (``"standard"``, the default, or ``"low"``). ``None`` leaves a knob at

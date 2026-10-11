@@ -1,0 +1,25 @@
+{
+  "body": {
+    "claims": [
+      {
+        "candidate_claims": [],
+        "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+        "confidence": "low",
+        "dissent": null,
+        "error_code": "upstream_unavailable",
+        "hint": "The quick check did not settle this item; nothing was charged. Retry it, or run a deep check.",
+        "identified_claims": [],
+        "language": "en",
+        "rationale": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "verdict": "Error",
+        "verification_url": null
+      }
+    ],
+    "error": null,
+    "more_claims": [],
+    "status": "error"
+  },
+  "status": 200
+}

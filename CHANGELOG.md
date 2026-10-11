@@ -13,6 +13,11 @@ All notable changes to this SDK are documented here. Format follows
 - `Verification.has_score` and `Verification.is_no_public_record` (and the same on `VerificationListItem`): whether a 1-10 score is present, and whether the verdict is `"No Public Record"`.
 - The CLI prints `No Public Record` in a neutral colour with no `/10`, confidence kept.
 - `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
+- **`"No Public Record"` on a quick check.** An `assess` row and a review's quick check can complete with `verdict == "No Public Record"`: no public record found that would show the claim. It has a `confidence` of `"medium"` or `"low"` (never `"high"`), no score and `suggested_rewrite` `None`. In a review a final quick `"No Public Record"` is an issue (`is_issue`, `outcome` `issues_found`), and the default `verdicts` that get a deep check include it. A quick check whose reviewers did not reach an answer is a failed row (`upstream_unavailable`, retryable, free), not a `"No Public Record"` row. `Verdict` (exported) now lists `"No Public Record"`; the `verdict` fields stay `str`. Needs the API release that serves it.
+- **One failure vocabulary** on the `2026-10-11` shape: a failed `assess` row, review, citation check and their rows say `no_checkable_claim`, `page_unreadable`, `upstream_unavailable`, `internal`, `cancelled`, `no_citations` or `insufficient_credits`, with `detail` for the cause and `retryable` for whether to resend. `timeout` reads `upstream_unavailable`, `framing_failed`, `assessment_failed` (some cases) and `citation_check_failed` read `internal`, `invalid_input` on a review of a link reads `page_unreadable`. The deprecated `error_code` carries the same code. The README's Errors section has the table.
+- `/extract` on a link whose page cannot be read raises `LenzValidationError` (HTTP 422) with `code == "page_unreadable"`, `retryable` false and `fix == "Paste the page's text instead."`, where it used to be a 502 the SDK retried. Work that failed on our side is a 502 with `code == "internal"`. The `lenz` CLI reports the 422 under the error code `page_unreadable`.
+- The `lenz review` summary counts a quick `"No Public Record"` as an issue, and a review that failed with `page_unreadable` prints "Paste the page's text instead.".
+- Contract goldens refreshed from the API for the failure codes and the quick `"No Public Record"`, and fixtures for both.
 
 ### Deprecated
 
@@ -20,6 +25,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Changed
 
+- **A 5xx that says sending it again cannot succeed is not retried.** An answer in the `2026-10-11` shape with `retryable: false` in its body (or its `failure` block), or the code `internal`, raises on the first answer, with `retryable` false. A gateway 5xx, a 5xx in another API version and the generic 500 keep the retry ladder.
 - The CLI full view (`lenz show`) leaves out a Debate block whose sides say nothing, as on a "No Public Record" result.
 - `FailureClass` no longer lists `insufficient_evidence`: a check that finds no sources completes as `"No Public Record"` instead of failing. It is a documentation alias, so a server that still sends the class reads as before. The documented `failure.code` set on a failed verification is `no_checkable_claim` | `upstream_unavailable` | `internal` | `cancelled`; the field stays an open `str`.
 

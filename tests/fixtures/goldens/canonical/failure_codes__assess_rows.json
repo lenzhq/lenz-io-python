@@ -1,0 +1,66 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "The EU AI Act took effect in March 2024.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "searched_pages": [],
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      },
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "upstream_unavailable",
+          "detail": "The check did not finish inside its time budget.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call.",
+          "retryable": true
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "searched_pages": [],
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      },
+      {
+        "claim": "cannot frame",
+        "confidence": null,
+        "dissent": null,
+        "failure": {
+          "code": "internal",
+          "detail": "The input could not be read as a claim.",
+          "docs_url": "https://lenz.io/docs/errors#internal",
+          "failure_class": "internal",
+          "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
+          "retryable": false
+        },
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "searched_pages": [],
+        "status": "failed",
+        "suggested_rewrite": null,
+        "verdict": null,
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "ok"
+  },
+  "status": 200
+}

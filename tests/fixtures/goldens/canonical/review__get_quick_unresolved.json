@@ -1,0 +1,138 @@
+{
+  "body": {
+    "citation_failures": [],
+    "citation_issues": [],
+    "citations": [],
+    "claims": [
+      {
+        "assessment": {
+          "confidence": null,
+          "dissent": null,
+          "failure": {
+            "code": "upstream_unavailable",
+            "detail": "The reviewers did not reach an answer.",
+            "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+            "failure_class": "upstream_unavailable",
+            "hint": "The quick check did not settle this item; nothing was charged. Retry it, or run a deep check.",
+            "retryable": true
+          },
+          "more_claims": [],
+          "rationale": null,
+          "searched_pages": [],
+          "status": "failed",
+          "suggested_rewrite": null,
+          "verdict": null,
+          "verification_url": null
+        },
+        "claim": "The Eiffel Tower is in Berlin.",
+        "escalation": null,
+        "index": 0,
+        "positions": null,
+        "result": null,
+        "suggested_edits": null,
+        "verification": null
+      },
+      {
+        "assessment": {
+          "confidence": "high",
+          "dissent": null,
+          "failure": null,
+          "more_claims": [],
+          "rationale": null,
+          "searched_pages": [],
+          "status": "completed",
+          "suggested_rewrite": null,
+          "verdict": "True",
+          "verification_url": null
+        },
+        "claim": "Water boils at 100 C at sea level.",
+        "escalation": {
+          "disposition": "not_selected",
+          "matched_rules": []
+        },
+        "index": 1,
+        "positions": null,
+        "result": {
+          "confidence": "high",
+          "is_issue": false,
+          "source": "assessment",
+          "verdict": "True"
+        },
+        "suggested_edits": null,
+        "verification": null
+      }
+    ],
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "created_at": "<created_at#2:ts:Z:us>",
+    "credits": {
+      "charged": 1
+    },
+    "failure": null,
+    "failures": [
+      {
+        "claim": "The Eiffel Tower is in Berlin.",
+        "claim_index": 0,
+        "failure": {
+          "code": "upstream_unavailable",
+          "detail": "The reviewers did not reach an answer.",
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
+          "failure_class": "upstream_unavailable",
+          "hint": "The quick check did not settle this item; nothing was charged. Retry it, or run a deep check.",
+          "retryable": true
+        },
+        "stage": "assessment"
+      }
+    ],
+    "issues": [],
+    "language": "en",
+    "more_citations": [],
+    "more_claim_locations": [],
+    "more_claims": [],
+    "outcome": "incomplete",
+    "policy": {
+      "confidence": [
+        "low"
+      ],
+      "depth": "standard",
+      "max_assessments": 20,
+      "max_citations": 0,
+      "max_verifications": 0,
+      "suggest_edits": false,
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed",
+        "No Public Record"
+      ]
+    },
+    "poll_after_seconds": null,
+    "review_id": "<review_id#1:hex8>",
+    "status": "completed",
+    "summary": {
+      "assessments": {
+        "completed": 1,
+        "failed": 1
+      },
+      "citation_checks": null,
+      "citation_issues": 0,
+      "citation_limit": null,
+      "citation_limit_exceeded": null,
+      "citations_found": null,
+      "citations_selected": null,
+      "citations_skipped": null,
+      "claim_limit": 20,
+      "claim_limit_exceeded": false,
+      "claims_found": 2,
+      "claims_selected": 2,
+      "input_truncated": false,
+      "issues": 0,
+      "verifications": {
+        "completed": 0,
+        "failed": 0,
+        "planned": 0
+      }
+    },
+    "view": "full"
+  },
+  "status": 200
+}

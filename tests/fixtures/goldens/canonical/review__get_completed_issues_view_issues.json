@@ -58,10 +58,10 @@
           ]
         },
         "failure": {
-          "code": "research_empty",
+          "code": "internal",
           "detail": "No sources about the claim were found.",
-          "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
-          "failure_class": "insufficient_evidence",
+          "docs_url": "https://lenz.io/docs/errors#internal",
+          "failure_class": "internal",
           "hint": null,
           "retryable": false
         },
@@ -95,7 +95,8 @@
       "verdicts": [
         "False",
         "Mostly False",
-        "Mixed"
+        "Mixed",
+        "No Public Record"
       ]
     },
     "poll_after_seconds": null,

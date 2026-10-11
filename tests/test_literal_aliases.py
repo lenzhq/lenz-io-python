@@ -24,9 +24,11 @@ from lenz_io import (
 
 def test_the_values() -> None:
     assert get_args(VerdictLabel) == ("True", "Mostly True", "Mixed", "Mostly False", "False")
-    assert get_args(Verdict) == ("True", "Mostly True", "Mixed", "Mostly False", "False", "Error")
-    # /verify's alias adds the sixth outcome; the five labels and /assess's
-    # alias are untouched.
+    # An assess or review-assessment verdict: the five labels, "No Public
+    # Record" (a quick check that found nothing public to weigh the claim
+    # against), and the deprecated "Error".
+    assert get_args(Verdict) == (*get_args(VerdictLabel), "No Public Record", "Error")
+    # /verify's alias adds the sixth outcome; the five labels are untouched.
     assert get_args(VerificationVerdict) == (*get_args(VerdictLabel), "No Public Record")
     assert get_args(FailureClass) == ("upstream_unavailable", "invalid_input", "cancelled", "internal")
     assert get_args(Confidence) == ("low", "medium", "high")

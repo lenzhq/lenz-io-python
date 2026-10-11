@@ -1,0 +1,5 @@
+{
+  "detail": "The page at the link could not be read.",
+  "code": "page_unreadable",
+  "hint": "Paste the page's text instead."
+}

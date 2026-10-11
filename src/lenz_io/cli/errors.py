@@ -89,6 +89,10 @@ def to_payload(exc: Exception) -> dict[str, Any]:
         upgrade_url = exc.upgrade_url
     elif isinstance(exc, LenzError):
         code = _CODE_BY_TYPE.get(type(exc), "api_error")
+        if getattr(exc, "code", "") == "page_unreadable":
+            # /extract on a link whose page could not be read (a 422): its own
+            # code, so a script can tell it from a malformed request.
+            code = "page_unreadable"
         message = exc.message or str(exc)
         status = exc.status_code
         fix = exc.fix

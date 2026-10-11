@@ -1,0 +1,38 @@
+{
+  "body": {
+    "claims": [
+      {
+        "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+        "confidence": "medium",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": "Nothing found records this.",
+        "searched_pages": [],
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "No Public Record",
+        "verification_url": null
+      },
+      {
+        "claim": "Water boils at 100 C at sea level.",
+        "confidence": "high",
+        "dissent": null,
+        "failure": null,
+        "language": "en",
+        "more_claims": [],
+        "rationale": null,
+        "searched_pages": [],
+        "status": "completed",
+        "suggested_rewrite": null,
+        "verdict": "True",
+        "verification_url": null
+      }
+    ],
+    "failure": null,
+    "more_claims": [],
+    "status": "ok"
+  },
+  "status": 200
+}

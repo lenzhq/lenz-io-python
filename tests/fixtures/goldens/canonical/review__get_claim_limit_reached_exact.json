@@ -88,7 +88,8 @@
       "verdicts": [
         "False",
         "Mostly False",
-        "Mixed"
+        "Mixed",
+        "No Public Record"
       ]
     },
     "poll_after_seconds": null,
