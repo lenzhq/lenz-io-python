@@ -8,7 +8,15 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- **`"No Public Record"`**, a sixth verdict on a `verify` check that found no public record to weigh the claim against. It is a completed check, not a failure: `lenz_score` is `None`, `confidence` is a band, and `verify_and_wait` returns it instead of raising. Needs an API that serves the outcome; the SDK keeps sending `X-Lenz-API-Version: 2026-10-11`.
+- `VerificationVerdict` (exported): the five labels and `"No Public Record"`, for `Verification.verdict` and the verification items of a list. `VerdictLabel` (the five labels) and `Verdict` (what `assess` rows read) are unchanged; the `verdict` fields stay `str`.
+- `Verification.has_score` and `Verification.is_no_public_record` (and the same on `VerificationListItem`): whether a 1-10 score is present, and whether the verdict is `"No Public Record"`.
+- The CLI prints `No Public Record` in a neutral colour with no `/10`, confidence kept.
 - `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
+
+### Changed
+
+- `FailureClass` no longer lists `insufficient_evidence`: a check that finds no sources completes as `"No Public Record"` instead of failing. It is a documentation alias, so a server that still sends the class reads as before. The documented `failure.code` set on a failed verification is `no_checkable_claim` | `upstream_unavailable` | `internal` | `cancelled`; the field stays an open `str`.
 
 ## [3.2.0] - 2026-10-10
 

@@ -1,0 +1,12 @@
+{
+  "status": "failed",
+  "task_id": "tsk_npr002",
+  "failure": {
+    "code": "internal",
+    "detail": "The check stopped before it finished.",
+    "docs_url": "https://lenz.io/docs/errors#internal",
+    "failure_class": "internal",
+    "hint": null,
+    "retryable": false
+  }
+}

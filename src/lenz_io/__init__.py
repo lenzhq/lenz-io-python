@@ -166,6 +166,7 @@ from .models import (
     VerificationList,
     VerificationListItem,
     VerificationResult,
+    VerificationVerdict,
 )
 from .webhooks import (
     CertificateTimestamped,
@@ -293,6 +294,7 @@ __all__ = [
     "VerificationListItem",
     "VerificationNeedsInput",
     "VerificationResult",
+    "VerificationVerdict",
     "VerifyBatchItem",
     "WebhookEvent",
     "__version__",

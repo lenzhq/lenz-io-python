@@ -11,8 +11,9 @@ The exit code is the review's ``outcome``, so a CI step can gate on it and
 never read an outage as a clean draft::
 
     0  clean          every selected claim checked, no issue
-    1  issues_found   at least one claim is False, Mostly False or Mixed, or
-                      a source does not say what the draft says it does
+    1  issues_found   at least one claim is False, Mostly False or Mixed (or
+                      has No Public Record), or a source does not say what
+                      the draft says it does
     2  anything else  incomplete, unchecked, failed, timed out, or an error
                       (a bad key, no credits, a bad flag)
 
@@ -322,8 +323,9 @@ def _count(n: int, one: str, many: str | None = None) -> str:
 
 def _summary_line(review: ReviewFull) -> str:
     """One line: the outcome, then where every claim landed. The issue set is
-    fixed (False, Mostly False, Mixed), so a claim is an issue, true or mostly
-    true, failed, or not checked: four buckets say it all."""
+    the server's (False, Mostly False, Mixed, No Public Record), so a claim is
+    an issue, true or mostly true, failed, or not checked: four buckets say it
+    all."""
     s = review.summary
     selected = s.claims_selected or 0
     if not selected:

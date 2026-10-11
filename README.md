@@ -93,7 +93,9 @@ client.review_and_wait(
 ```
 
 **Reading the result.** `outcome` is the one field to branch on. Each entry in
-`issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`:
+`issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`,
+or whose deep check found `No Public Record` (an issue with no score and no
+suggested edit; the review reads `issues_found`, not `incomplete`):
 `source` says whether that verdict comes from a deep check (`verification`,
 with `key_finding`, `url` and `verification_id`) or from the quick check alone
 (`assessment`, with the reviewers' `rationale`; `escalation.disposition` says
@@ -509,14 +511,16 @@ Every claim-shaped response shares these fields at top level:
 | Field | Type | Notes |
 |-------|------|-------|
 | `claim` | `str` | The framed claim text. |
-| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"` \| `"Error"`. |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. (A failed `assess` row reads `"Error"` in the legacy shape; see below.) |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
-| `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it). |
+| `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it); `None` on `"No Public Record"`. |
 
 The accepted values are exported as `Literal` aliases for comparisons and
-exhaustive matching: `Verdict` (the five labels and `"Error"`), `VerdictLabel`
-(the five labels), `Confidence` and `Depth` (`"standard"` or `"low"`). The
-fields themselves stay `str`, so a value a later API adds still reads.
+exhaustive matching: `Verdict` (the five labels and `"Error"`, what `assess`
+rows read), `VerificationVerdict` (the five labels and `"No Public Record"`,
+what a `verify` verification reads), `VerdictLabel` (the five labels),
+`Confidence` and `Depth` (`"standard"` or `"low"`). The fields themselves stay
+`str`, so a value a later API adds still reads.
 
 ```python
 from lenz_io import Verdict
@@ -524,6 +528,26 @@ from lenz_io import Verdict
 NEEDS_A_LOOK: set[Verdict] = {"False", "Mostly False", "Mixed"}
 flagged = [row for row in quick if row.verdict in NEEDS_A_LOOK]
 ```
+
+### "No Public Record"
+
+A `verify` check that finds no public record to weigh the claim against
+**completes** with `verdict == "No Public Record"`, no `lenz_score` and a
+`confidence`; it is not a failure, so `verify_and_wait` returns it instead of
+raising. Branch on it with `Verification.is_no_public_record`, and use
+`Verification.has_score` before reading the score (both are on the items of
+`verifications.list()` too):
+
+```python
+v = client.verify_and_wait(claim="The company opened a second office in Lisbon last spring.")
+if v.is_no_public_record:
+    print("Nothing public to check this against:", v.executive_summary)
+elif v.has_score:
+    print(v.verdict, v.lenz_score)
+```
+
+The `lenz` CLI prints it in a neutral colour with no `/10`. `assess` is
+unchanged: it never returns this verdict.
 
 ### Field names: the current names, and the deprecated 2.x ones
 
@@ -1201,10 +1225,14 @@ except LenzApiVersionError as exc:
 
 A failed *verification* (as opposed to a failed HTTP call) raises
 `LenzPipelineError` from `verify_and_wait` / `wait`. Since 2.8.0 it carries
-`failure_class` (closed set: `upstream_unavailable` | `insufficient_evidence`
-| `invalid_input` | `cancelled` | `internal`) and `retryable` — `True` means
+`failure_class` (closed set: `upstream_unavailable` | `invalid_input` |
+`cancelled` | `internal`) and `retryable` — `True` means
 a transient provider-side exhaustion where resubmitting the same claim is the
-right move; older servers leave it `None`. A verification cancelled elsewhere
+right move; older servers leave it `None`. `failure.code` on a failed
+verification is one of `no_checkable_claim` | `upstream_unavailable` |
+`internal` | `cancelled` (a server older than the "No Public Record" outcome
+sends finer codes and a check that found no sources as a failure; read `code`
+as an open string). A verification cancelled elsewhere
 (the website's Stop button, another process) raises the same error with
 `failure_class == "cancelled"` and `retryable` `False`; `review_and_wait` and
 `citecheck_and_wait` do the same with `ReviewFailed` and `CitecheckFailed`.

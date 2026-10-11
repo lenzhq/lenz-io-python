@@ -39,7 +39,7 @@
   "ExtractedClaims": "class",
   "ExtractedEntity": "class",
   "FailureBlock": "class",
-  "FailureClass": "typing:Literal['upstream_unavailable', 'insufficient_evidence', 'invalid_input', 'cancelled', 'internal']",
+  "FailureClass": "typing:Literal['upstream_unavailable', 'invalid_input', 'cancelled', 'internal']",
   "Lenz": "class",
   "LenzAPIError": "class",
   "LenzApiVersionError": "class",

@@ -159,6 +159,11 @@ def _load(name: str) -> dict:
         ("assess_more_claims.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
+        # A completed "No Public Record" check (`lenz_score` null, a
+        # confidence band) in the three places a verification is read.
+        ("verify_status_completed_no_public_record.json", TaskStatus),
+        ("verifications_detail_no_public_record.json", Verification),
+        ("verifications_list_no_public_record.json", VerificationList),
         # The `processing` body. Under the server's `exclude_unset` a
         # completed body has no `progress` key at all and this one has no
         # `result` — the fixtures are the two halves of that contract.
@@ -193,6 +198,8 @@ def _load(name: str) -> dict:
         ("review_failed_no_claim.json", ReviewFull),
         ("review_failed_insufficient_credits.json", ReviewFull),
         ("review_completed_issues.json", ReviewIssues),
+        # A deep check that found No Public Record is an issue: the review reads `issues_found`.
+        ("review_completed_issues_no_public_record.json", ReviewIssues),
         # The citation check, recorded: every row pending, some running, the
         # finished review in both views, and a quote finding.
         ("review_citations_pending.json", ReviewFull),

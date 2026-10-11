@@ -577,8 +577,9 @@ class LenzPipelineError(LenzError):
     ``code`` ``verification_failed``).
 
     ``failure_class`` says WHY (closed set: ``upstream_unavailable`` |
-    ``insufficient_evidence`` | ``invalid_input`` | ``cancelled`` |
-    ``internal``); ``retryable`` is the derived signal — ``True`` means a
+    ``invalid_input`` | ``cancelled`` | ``internal``; a check that found no
+    public record completes as ``"No Public Record"``, it does not fail);
+    ``retryable`` is the derived signal — ``True`` means a
     transient provider-side exhaustion where resubmitting the same claim is
     the right move. ``None`` when an older server didn't say. ``hint`` is the
     server's one sentence on what to send instead (e.g. for ``not_a_claim``);
