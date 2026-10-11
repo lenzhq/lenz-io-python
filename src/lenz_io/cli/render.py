@@ -36,6 +36,9 @@ _VERDICT_COLOR = {
     "Mostly False": "dark_orange3",
     "False": "red",
     "Error": "red",
+    # No score and no lean either way: neutral, not a colour that reads as a
+    # verdict.
+    "No Public Record": "grey62",
     # Legacy label (pre-5-point), still emitted by older cached responses.
     "Misleading": "yellow",
 }

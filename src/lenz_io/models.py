@@ -626,10 +626,14 @@ def _sent_as(model: BaseModel, key: str, kind: TypeAdapter[_T]) -> _T | None:
 #:     from lenz_io import FailureClass
 #:
 #: The model fields themselves stay ``str`` — the SDK must not reject a class
-#: the server adds after this release was cut.
+#: the server adds after this release was cut. A check that found no public
+#: record to weigh is not a failure: it completes with the verdict
+#: ``"No Public Record"`` (see :data:`VerificationVerdict`), so
+#: ``insufficient_evidence`` is no longer a class a failed check carries. A
+#: server older than that change may still send it; the fields read it as a
+#: plain string.
 FailureClass = Literal[
     "upstream_unavailable",
-    "insufficient_evidence",
     "invalid_input",
     "cancelled",
     "internal",
@@ -649,6 +653,17 @@ VerdictLabel = Literal["True", "Mostly True", "Mixed", "Mostly False", "False"]
 #:     FALSE_ISH: set[Verdict] = {"False", "Mostly False"}
 #:     if row.verdict in FALSE_ISH: ...
 Verdict = Literal["True", "Mostly True", "Mixed", "Mostly False", "False", "Error"]
+
+#: A verdict as read on a ``/verify`` verification (``Verification``,
+#: ``VerificationListItem``, a verification webhook's ``result``): the five
+#: labels, or ``"No Public Record"`` when the check found nothing public to
+#: weigh the claim against. A completed check, not a failure; it carries
+#: ``lenz_score`` ``None`` and a ``confidence``. ``VerdictLabel`` stays the five
+#: labels (what ``assess`` and a score band speak). The fields stay ``str``::
+#:
+#:     from lenz_io import VerificationVerdict
+#:     if v.verdict == "No Public Record": ...
+VerificationVerdict = Literal["True", "Mostly True", "Mixed", "Mostly False", "False", "No Public Record"]
 
 #: A confidence band, as read on a verification or an assess row.
 Confidence = Literal["low", "medium", "high"]
@@ -891,9 +906,12 @@ class Verification(_Lax):
     entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
     # Verdict block (flat)
-    verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
+    #: One of :data:`VerificationVerdict` (the five labels, or
+    #: ``"No Public Record"``); a ``str``, so a label added later still reads.
+    verdict: str = ""
     confidence: str = "low"  # "high" | "medium" | "low"
-    lenz_score: int | None = None  # 1-10 integer
+    #: 1-10 integer; ``None`` on a ``"No Public Record"`` verification.
+    lenz_score: int | None = None
     # The analysis's key finding: one declarative sentence stating the
     # most important fact it established (2.6.0). "" on legacy claims
     # that were never backfilled.
@@ -947,6 +965,19 @@ class Verification(_Lax):
         day than ``created_at``)."""
         return _sent_as(self, "completed_at", _STR)
 
+    @property
+    def has_score(self) -> bool:
+        """Whether this verification carries a 1-10 ``lenz_score``. ``False``
+        on a ``"No Public Record"`` verification, which has none."""
+        return self.lenz_score is not None
+
+    @property
+    def is_no_public_record(self) -> bool:
+        """Whether the check found no public record to weigh the claim
+        against (``verdict == "No Public Record"``): a completed check with no
+        score, not a failure."""
+        return self.verdict == "No Public Record"
+
 
 def _equal_to_base(model: BaseModel, other: object, base: type[BaseModel]) -> bool | None:
     """Whether ``model`` (a top-level subclass of ``base``) equals ``other``,
@@ -985,8 +1016,10 @@ class VerificationListItem(_Lax):
     claim: str = ""
     domain: str = ""
     entities: list[EntityRef] = Field(default_factory=list)
+    #: See ``Verification.verdict`` (:data:`VerificationVerdict`).
     verdict: str = ""
     confidence: str = "low"
+    #: ``None`` on a ``"No Public Record"`` verification.
     lenz_score: int | None = None
     # The analysis's key finding (2.6.0). See ``Verification.key_finding``.
     key_finding: str = ""
@@ -1012,6 +1045,18 @@ class VerificationListItem(_Lax):
         deprecated and kept (set only when the completion fell on a later UTC
         day than ``created_at``)."""
         return _sent_as(self, "completed_at", _STR)
+
+    @property
+    def has_score(self) -> bool:
+        """Whether this item carries a 1-10 ``lenz_score``. ``False`` on a
+        ``"No Public Record"`` verification, which has none."""
+        return self.lenz_score is not None
+
+    @property
+    def is_no_public_record(self) -> bool:
+        """Whether ``verdict == "No Public Record"``: a completed check that
+        found no public record to weigh the claim against, with no score."""
+        return self.verdict == "No Public Record"
 
 
 class VerificationList(Result):
@@ -1662,8 +1707,10 @@ class TaskStatus(Result):
 
     @property
     def failure(self) -> FailureBlock | None:
-        """On ``failed``: why. ``code`` is the cause (an open set, e.g.
-        ``research_empty``, ``no_checkable_claim``), ``detail`` one sentence on
+        """On ``failed``: why. ``code`` is the cause (an open set; today
+        ``no_checkable_claim`` | ``upstream_unavailable`` | ``internal`` |
+        ``cancelled``, and a server older than that change may send finer
+        ones), ``detail`` one sentence on
         what happened, ``failure_class`` / ``retryable`` / ``hint`` /
         ``docs_url``. ``None`` on other statuses. Replaces ``error``,
         ``failure_reason``, ``failure_detail``, ``failure_class``,
@@ -2379,6 +2426,8 @@ class ReviewVerification(_Lax):
     depth: str | None = None
     domain: str | None = None
     entities: list[ReviewEntity] = Field(default_factory=list)
+    #: A :data:`VerificationVerdict` once completed (``"No Public Record"``
+    #: included, with ``lenz_score`` ``None``).
     verdict: str | None = None
     confidence: str | None = None
     lenz_score: int | float | None = None

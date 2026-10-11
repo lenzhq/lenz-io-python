@@ -158,6 +158,11 @@ def _load(name: str) -> dict:
         ("assess_more_claims.json", AssessResponse),
         ("verify_status_completed.json", TaskStatus),
         ("verify_status_failed.json", TaskStatus),
+        # A completed "No Public Record" check (`lenz_score` null, a
+        # confidence band) in the three places a verification is read.
+        ("verify_status_completed_no_public_record.json", TaskStatus),
+        ("verifications_detail_no_public_record.json", Verification),
+        ("verifications_list_no_public_record.json", VerificationList),
         # The `processing` body. Under the server's `exclude_unset` a
         # completed body has no `progress` key at all and this one has no
         # `result` — the fixtures are the two halves of that contract.
