@@ -895,8 +895,6 @@ class Verification(_Lax):
     'public' can only be read, for listed claims). ``url`` stays dropped.
     """
 
-    _null_ok = field_validator("expected_record", mode="wrap")(classmethod(_null_reads_unsent))
-
     verification_id: str = ""
     claim: str = ""
     # 'private' | 'unlisted' | 'public'. Read-back of the claim's visibility.
@@ -934,11 +932,6 @@ class Verification(_Lax):
     #: only find no support. ``assess`` rows carry their own
     #: (``AssessClaim.suggested_rewrite``, with ``suggest_rewrite=True``).
     suggested_rewrite: str | None = None
-    #: On a ``"No Public Record"`` verification, a sentence naming the record
-    #: that would show the claim (a filing, a register entry) when the check
-    #: can name one; ``""`` when it cannot, for every other verdict, and on a
-    #: server that does not send it. Show it only when non-empty.
-    expected_record: str = ""
     sources: list[Source] = Field(default_factory=list)
     audit: Audit = Field(default_factory=Audit)
     created_at: str | None = None
@@ -1020,8 +1013,6 @@ class VerificationListItem(_Lax):
     ``verification_id``), no ``visibility`` (1.1.0).
     """
 
-    _null_ok = field_validator("expected_record", mode="wrap")(classmethod(_null_reads_unsent))
-
     verification_id: str = ""
     claim: str = ""
     domain: str = ""
@@ -1036,8 +1027,6 @@ class VerificationListItem(_Lax):
     executive_summary: str = ""
     # A suggested rewrite of ``claim``. See ``Verification.suggested_rewrite``.
     suggested_rewrite: str | None = None
-    #: See ``Verification.expected_record``.
-    expected_record: str = ""
     created_at: str | None = None
     # Deprecated: use ``completed_at``. See ``Verification.modified_at``.
     modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})

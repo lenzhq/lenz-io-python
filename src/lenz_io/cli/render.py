@@ -222,15 +222,6 @@ def _verification_missing(out: Output) -> NoReturn:
     raise SystemExit(1)
 
 
-def _expected_record_line(out: Output, v: Verification) -> None:
-    """One line naming the record that would show the claim, when the
-    verification carries one (a "No Public Record" result). Printed without
-    markup: the words come from the API."""
-    record = (v.expected_record or "").strip()
-    if record:
-        out.console.print(f"\nRecord that would show it: {escape(record)}")
-
-
 def _suggested_rewrite_line(out: Output, v: Verification, *, gap: bool = False) -> None:
     """One line under the key finding when the verification carries a
     suggested rewrite of its claim. ``gap`` adds the blank line the key
@@ -253,7 +244,6 @@ def render_verification(out: Output, v: Verification | None) -> None:
     _suggested_rewrite_line(out, v, gap=not v.key_finding)
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
-    _expected_record_line(out, v)
     if v.sources:
         out.console.print(f"\n[bold]Sources ({len(v.sources)}):[/bold]")
         for s in v.sources[:8]:
@@ -370,7 +360,6 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
     _suggested_rewrite_line(out, v, gap=not v.key_finding)
     if v.executive_summary:
         out.console.print(f"\n{v.executive_summary}")
-    _expected_record_line(out, v)
     if v.warnings:
         out.console.print(f"\n[bold]Warnings ({len(v.warnings)}):[/bold]")
         for w in v.warnings:

@@ -146,29 +146,3 @@ def test_a_panel_summary_alone_prints_without_an_empty_debate() -> None:
     text = _render_full(v)
     assert "No public record was found to weigh." in text
     assert "Debate" not in text
-
-
-def test_expected_record_reads_and_defaults_empty() -> None:
-    body = _load("verifications_detail_no_public_record.json")
-    assert Verification.model_validate(body).expected_record == ""
-    body["expected_record"] = "A county court record of the sale."
-    v = Verification.model_validate(body)
-    assert v.expected_record == "A county court record of the sale."
-    assert not (v.model_extra or {})
-    body["expected_record"] = None
-    assert Verification.model_validate(body).expected_record == ""
-    assert VerificationListItem().expected_record == ""
-
-
-@pytest.mark.parametrize("concise", [False, True], ids=["full", "concise"])
-def test_the_cli_names_the_record_that_would_show_it(concise: bool) -> None:
-    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
-    assert "Record that would show it" not in _render_full(v, concise=concise)
-    v.expected_record = "A county court record of the sale."
-    text = _render_full(v, concise=concise)
-    assert "Record that would show it: A county court record of the sale." in text
-
-
-def test_expected_record_text_is_printed_without_markup() -> None:
-    v = Verification(verdict="No Public Record", expected_record="A [bold]filing[/bold].")
-    assert "A [bold]filing[/bold]." in _render_full(v)

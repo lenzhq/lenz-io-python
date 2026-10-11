@@ -542,8 +542,6 @@ raising. Branch on it with `Verification.is_no_public_record`, and use
 v = client.verify_and_wait(claim="The company opened a second office in Lisbon last spring.")
 if v.is_no_public_record:
     print("Nothing public to check this against:", v.executive_summary)
-    if v.expected_record:  # the record that would show it, when one can be named
-        print("Record that would show it:", v.expected_record)
 elif v.has_score:
     print(v.verdict, v.lenz_score)
 ```

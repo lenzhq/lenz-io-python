@@ -233,7 +233,7 @@ NEW_EVENT_ATTRS = {"event_id", "failure", "reason", "claims"}
 #: Fields added since the frozen release to models nested inside an event
 #: (additive, defaulting empty): dropped wherever the frozen output has no such
 #: key, at any depth. ``test_review_rows_carry_searched_pages`` pins them.
-NEW_NESTED_FIELDS = {"searched_pages", "expected_record"}
+NEW_NESTED_FIELDS = {"searched_pages"}
 
 
 def _drop_new_nested(observed: Any, expected: Any) -> Any:
@@ -348,7 +348,7 @@ def test_model_schemas_match_the_previous_release() -> None:
     # (a response without them parses as before), so they are left out of the
     # comparison; ``test_snippet_language_on_sources`` and
     # ``test_assess_rows_carry_searched_pages`` pin them.
-    added_since_frozen = {"snippet_language", "searched_pages", "expected_record"}
+    added_since_frozen = {"snippet_language", "searched_pages"}
     # ``language`` is a field of other models too, so it is dropped from
     # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
     added_to_models = {"ExtractedClaims": {"language"}}
