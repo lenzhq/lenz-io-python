@@ -6,6 +6,10 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
+
 ## [3.2.0] - 2026-10-10
 
 ### Added

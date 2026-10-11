@@ -51,6 +51,7 @@
           "failure": null,
           "more_claims": [],
           "rationale": null,
+          "searched_pages": [],
           "status": "completed",
           "suggested_rewrite": null,
           "verdict": "True",

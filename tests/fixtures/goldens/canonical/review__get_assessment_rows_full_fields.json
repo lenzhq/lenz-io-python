@@ -14,6 +14,7 @@
             "It took effect in March."
           ],
           "rationale": "Two reviewers found the date wrong.",
+          "searched_pages": [],
           "status": "completed",
           "suggested_rewrite": "The EU AI Act entered into force in August 2024.",
           "verdict": "False",
@@ -51,6 +52,7 @@
           },
           "more_claims": [],
           "rationale": null,
+          "searched_pages": [],
           "status": "failed",
           "suggested_rewrite": null,
           "verdict": null,

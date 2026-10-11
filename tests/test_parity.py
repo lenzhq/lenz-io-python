@@ -213,6 +213,23 @@ def _diff(a: Any, b: Any, path: str = "") -> list[tuple[str, Any, Any]]:
 #: event must read exactly as before.
 NEW_EVENT_ATTRS = {"event_id", "failure", "reason", "claims"}
 
+#: Fields added since the frozen release to models nested inside an event
+#: (additive, defaulting empty): dropped wherever the frozen output has no such
+#: key, at any depth. ``test_review_rows_carry_searched_pages`` pins them.
+NEW_NESTED_FIELDS = {"searched_pages"}
+
+
+def _drop_new_nested(observed: Any, expected: Any) -> Any:
+    if isinstance(observed, dict) and isinstance(expected, dict):
+        return {
+            k: _drop_new_nested(v, expected.get(k))
+            for k, v in observed.items()
+            if not (k in NEW_NESTED_FIELDS and k not in expected)
+        }
+    if isinstance(observed, list) and isinstance(expected, list) and len(observed) == len(expected):
+        return [_drop_new_nested(o, e) for o, e in zip(observed, expected, strict=True)]
+    return observed
+
 
 def _old_event_attrs(observed: dict[str, Any], expected: dict[str, Any]) -> dict[str, Any]:
     if "event" not in observed:
@@ -220,7 +237,8 @@ def _old_event_attrs(observed: dict[str, Any], expected: dict[str, Any]) -> dict
     event = observed["event"]
     added = set(event) - set(expected["event"])
     assert added <= NEW_EVENT_ATTRS, added
-    return {**observed, "event": {k: v for k, v in event.items() if k in expected["event"]}}
+    kept = {k: v for k, v in event.items() if k in expected["event"]}
+    return {**observed, "event": _drop_new_nested(kept, expected["event"])}
 
 
 @pytest.mark.parametrize("name", [n for n in names() if n.startswith("webhook__")])
@@ -310,20 +328,31 @@ def test_model_schemas_match_the_previous_release() -> None:
 
     # Fields added since the frozen release. They are additive and optional
     # (a response without them parses as before), so they are left out of the
-    # comparison; ``test_snippet_language_on_sources`` pins each one.
-    added_since_frozen = {"snippet_language"}
+    # comparison; ``test_snippet_language_on_sources`` and
+    # ``test_assess_rows_carry_searched_pages`` pin them.
+    added_since_frozen = {"snippet_language", "searched_pages"}
     # ``language`` is a field of other models too, so it is dropped from
     # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
     added_to_models = {"ExtractedClaims": {"language"}}
+
+    # Models added since the frozen release, which the new fields reference:
+    # they appear in a schema's ``$defs`` only through those fields.
+    models_since_frozen = {"SearchedPage"}
 
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the
         # shape may not.
         if isinstance(schema, dict):
             return {
-                k: _shape({n: p for n, p in v.items() if n not in added_since_frozen} if k == "properties" else v)
+                k: _shape(
+                    {n: p for n, p in v.items() if n not in added_since_frozen}
+                    if k == "properties"
+                    else {n: d for n, d in v.items() if n not in models_since_frozen}
+                    if k == "$defs"
+                    else v
+                )
                 for k, v in schema.items()
-                if k not in ("description", "deprecated")
+                if k not in ("description", "deprecated") and not (k == "$defs" and not set(v) - models_since_frozen)
             }
         if isinstance(schema, list):
             return [_shape(v) for v in schema]

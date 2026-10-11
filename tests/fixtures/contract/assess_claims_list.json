@@ -8,6 +8,16 @@
       "verification_url": null,
       "rationale": "Water boils at 100 °C at sea level at standard atmospheric pressure, which is the definition the claim uses.",
       "dissent": null,
+      "searched_pages": [
+        {
+          "title": "Boiling point",
+          "url": "https://en.wikipedia.org/wiki/Boiling_point"
+        },
+        {
+          "title": "Phase transitions",
+          "url": "https://openstax.org/books/chemistry-2e/pages/10-3-phase-transitions"
+        }
+      ],
       "error_code": null,
       "candidate_claims": [],
       "identified_claims": [],
@@ -21,6 +31,12 @@
       "verification_url": "https://lenz.io/api/v1/verifications/3f9a1c2e",
       "rationale": "Studies find an executive-function advantage in some bilingual children, but large replications report small or no effect.",
       "dissent": "Recent large-sample studies find no reliable bilingual advantage in executive function.",
+      "searched_pages": [
+        {
+          "title": "Bilingualism and executive function: a meta-analysis",
+          "url": "https://psycnet.example.org/record/2026-12345"
+        }
+      ],
       "error_code": null,
       "candidate_claims": [],
       "identified_claims": [
@@ -36,6 +52,7 @@
       "verification_url": null,
       "rationale": null,
       "dissent": null,
+      "searched_pages": [],
       "error_code": "no_claim",
       "candidate_claims": [],
       "identified_claims": [],
@@ -49,6 +66,7 @@
       "verification_url": null,
       "rationale": null,
       "dissent": null,
+      "searched_pages": [],
       "error_code": "timeout",
       "candidate_claims": [],
       "identified_claims": [],
