@@ -647,7 +647,8 @@ VerdictLabel = Literal["True", "Mostly True", "Mixed", "Mostly False", "False"]
 
 #: A verdict as read on a verification or an assess row: one of the five
 #: labels, or ``"Error"`` on a failed assess row (deprecated there: read
-#: ``status == "failed"``). Fields stay ``str``::
+#: ``status == "failed"``). The ``"Error"`` value is deprecated and will be
+#: removed in a future major release (4.0). Fields stay ``str``::
 #:
 #:     from lenz_io import Verdict
 #:     FALSE_ISH: set[Verdict] = {"False", "Mostly False"}

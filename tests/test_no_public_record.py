@@ -100,3 +100,49 @@ def test_a_no_public_record_deep_check_is_a_review_issue() -> None:
     assert r.outcome == "issues_found"
     (issue,) = r.issues
     assert (issue.verdict, issue.source, issue.suggested_rewrite) == ("No Public Record", "verification", None)
+
+
+def _render_full(v: Verification, *, concise: bool = False) -> str:
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_verification, render_verification_full
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=120)
+    (render_verification if concise else render_verification_full)(out, v)
+    return buf.getvalue()
+
+
+def test_the_full_view_omits_the_empty_panel_and_debate() -> None:
+    # The wire carries empty debate sides and no assessments on this outcome.
+    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
+    v.audit.adjudication_summary = ""
+    text = _render_full(v)
+    assert "No Public Record" in text
+    assert "Panel" not in text
+    assert "Debate" not in text
+    assert "PRO" not in text and "CON" not in text
+
+
+def test_a_debate_side_with_only_one_argument_still_prints_just_that_side() -> None:
+    from lenz_io import Audit, DebateSide
+
+    v = Verification(
+        verdict="False",
+        lenz_score=2,
+        audit=Audit(debate_pro=DebateSide(argument="It is so."), debate_con=DebateSide()),
+    )
+    text = _render_full(v)
+    assert "Debate" in text and "PRO" in text and "It is so." in text
+    assert "CON" not in text
+
+
+def test_a_panel_summary_alone_prints_without_an_empty_debate() -> None:
+    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
+    text = _render_full(v)
+    assert "No public record was found to weigh." in text
+    assert "Debate" not in text

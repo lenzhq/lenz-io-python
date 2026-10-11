@@ -22,6 +22,7 @@ from lenz_io.models import (
     Assessment,
     AssessResponse,
     Audit,
+    DebateSide,
     ExtractedClaims,
     Source,
     TaskStatus,
@@ -297,12 +298,24 @@ def _render_assessment(out: Output, a: Assessment) -> None:
         out.console.print(f"  [yellow]•[/yellow] {w}")
 
 
+def _has_debate_text(side: DebateSide) -> bool:
+    """Whether a debate side says anything. A "No Public Record" result
+    carries both sides present but empty, which are not worth a heading."""
+    return bool((side.argument or "").strip() or (side.rebuttal or "").strip())
+
+
 def _render_audit(out: Output, a: Audit | None) -> None:
     """The explainability block — panel assessments, adjudication, and the
-    pro/con debate transcript. Silent when the verification carries no audit."""
+    pro/con debate transcript. Silent when the verification carries no audit,
+    and each part is left out when it is empty."""
     if a is None:
         return
-    if not (a.adjudication_summary or a.assessments or a.debate_pro or a.debate_con or a.panel_agreement):
+    debate = [
+        (side, label)
+        for side, label in ((a.debate_pro, "PRO"), (a.debate_con, "CON"))
+        if side is not None and _has_debate_text(side)
+    ]
+    if not (a.adjudication_summary or a.assessments or debate or a.panel_agreement):
         return
     out.console.print("\n[bold]── Panel ──[/bold]")
     if a.panel_agreement:
@@ -311,11 +324,9 @@ def _render_audit(out: Output, a: Audit | None) -> None:
         _render_assessment(out, assessment)
     if a.adjudication_summary:
         out.console.print(f"\n[bold]Panel Review[/bold]\n{a.adjudication_summary}")
-    if a.debate_pro or a.debate_con:
+    if debate:
         out.console.print("\n[bold]Debate[/bold]")
-        for side, label in ((a.debate_pro, "PRO"), (a.debate_con, "CON")):
-            if side is None:
-                continue
+        for side, label in debate:
             out.console.print(f"  [bold]{label}[/bold]  {side.argument}")
             if side.rebuttal:
                 out.console.print(f"  [dim]rebuttal:[/dim] {side.rebuttal}")

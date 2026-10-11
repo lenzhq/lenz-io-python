@@ -511,7 +511,7 @@ Every claim-shaped response shares these fields at top level:
 | Field | Type | Notes |
 |-------|------|-------|
 | `claim` | `str` | The framed claim text. |
-| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. (A failed `assess` row reads `"Error"` in the legacy shape; see below.) |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. (A failed `assess` row reads `"Error"` in the legacy shape; that value is deprecated, read `status == "failed"` and `failure` instead. See below.) |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it); `None` on `"No Public Record"`. |
 
@@ -1674,6 +1674,13 @@ passed explicitly included; left out, the client's own timeout applies. The clie
 An OAuth access token for the Lenz API works wherever the API key goes: pass it as `api_key` or in `LENZ_API_KEY`.
 
 ### Results exactly as sent: `legacy_aliases=False`
+
+> **Deprecated (3.3).** The `"Error"` verdict value and the `legacy_aliases`
+> compatibility layer (the option, and the deprecated 2.x fields it fills in)
+> are deprecated and will be removed in a future major release (4.0). Nothing
+> warns at runtime and nothing changes now. Read a failed `assess` row from
+> `status == "failed"` and its `failure` block (`failure.code`,
+> `failure.retryable`), and build new code with `legacy_aliases=False`.
 
 Since 3.0 the SDK reads the API's `2026-10-11` response shape and, by default,
 also fills in every deprecated 2.x field from it, so 2.x code runs unchanged.

@@ -14,8 +14,13 @@ All notable changes to this SDK are documented here. Format follows
 - The CLI prints `No Public Record` in a neutral colour with no `/10`, confidence kept.
 - `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
 
+### Deprecated
+
+- The `"Error"` verdict value (a failed `assess` row) and the `legacy_aliases` compatibility layer, meaning the option and the deprecated 2.x fields it fills in, are deprecated and will be removed in a future major release (4.0). Read a failed `assess` row from `status == "failed"` and its `failure` block (`code`, `retryable`). Documentation only: no behaviour change and no runtime warning.
+
 ### Changed
 
+- The CLI full view (`lenz show`) leaves out a Debate block whose sides say nothing, as on a "No Public Record" result.
 - `FailureClass` no longer lists `insufficient_evidence`: a check that finds no sources completes as `"No Public Record"` instead of failing. It is a documentation alias, so a server that still sends the class reads as before. The documented `failure.code` set on a failed verification is `no_checkable_claim` | `upstream_unavailable` | `internal` | `cancelled`; the field stays an open `str`.
 
 ## [3.2.0] - 2026-10-10

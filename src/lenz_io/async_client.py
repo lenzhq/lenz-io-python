@@ -640,6 +640,13 @@ class AsyncLenz:
     client's own headers are not changed). Without it, such a client sends
     the SDK's User-Agent unless it set its own.
 
+    .. deprecated:: 3.3
+       ``legacy_aliases`` and the deprecated 2.x fields it fills in (including
+       the ``"Error"`` verdict of a failed ``assess`` row) will be removed in a
+       future major release (4.0). Read a failed row from ``status == "failed"``
+       and its ``failure`` block (``code``, ``retryable``). No warning is
+       raised and nothing changes now.
+
     ``legacy_aliases`` (default ``True``, since 3.2): ``True`` fills in every
     deprecated 2.x field from the current response shape, as 3.0 and 3.1 did.
     ``False`` reads each result exactly as the API sent it in the
