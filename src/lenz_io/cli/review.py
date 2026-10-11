@@ -278,7 +278,7 @@ def _progress_cell(c: ReviewClaim) -> Any:
     if a.status in ("pending", "running", ""):
         return Spinner("dots", text=Text("quick check…", style="dim"))
     if a.status == "failed":
-        return Text(f"failed ({(a.failure.code if a.failure else None) or 'error'})", style="red")
+        return Text("quick check failed", style="red")
     quick = Text.from_markup(_verdict_text(a.verdict, a.confidence))
     if v is None:
         return quick
@@ -386,12 +386,48 @@ def _position_suffix(c: ReviewClaim) -> str:
     return f" [dim]· at {first.start}-{first.end}[/dim]"
 
 
+#: Why a claim got no deep check, in words (the server's ``disposition``).
+#: ``planned`` (it got one) and an empty value say nothing; a disposition added
+#: later reads as the plain line, never as its code.
+_NOT_DEEP_CHECKED = {
+    "cap": "Not deep-checked: the review's limit on deep checks was reached.",
+    "credits": "Not deep-checked: there were not enough credits.",
+    "account_cap": "Not deep-checked: the account's limit on running deep checks was reached.",
+}
+
+
+def _not_deep_checked(disposition: str | None, *, only_when_matched: bool = False) -> str | None:
+    """The line for a claim that got no deep check, or ``None``. A claim no rule
+    selected (``not_selected``) is a line only where it is an issue (the
+    issues view); a full row already shows its quick verdict alone."""
+    if not disposition or disposition == "planned":
+        return None
+    if disposition in _NOT_DEEP_CHECKED:
+        return _NOT_DEEP_CHECKED[disposition]
+    return None if only_when_matched else "Not deep-checked."
+
+
+#: What a failed check says when the server gave no sentence of its own.
+_COULD_NOT_CHECK = "Lenz could not check this just now. Try again."
+
+
+def _failure_words(failure: Any, default: str = _COULD_NOT_CHECK) -> str:
+    """The failure's own sentence: what happened (``detail``), else what to
+    do (``hint``), else a neutral line. Never the raw ``code``."""
+    if failure is None:
+        return default
+    return failure.detail or failure.hint or default
+
+
+#: The stage a failed row names, in the words the rest of the output uses.
+_STAGE_WORDS = {"assessment": "Quick check", "verification": "Deep check"}
+
+
 def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
     out.console.print(f"[bold]\\[{c.index + 1}/{n}][/bold] {escape(c.claim or '')}{_position_suffix(c)}")
     a, v = c.assessment, c.verification
     if a.status == "failed":
-        hint = (a.failure.hint if a.failure else None) or (a.failure.code if a.failure else None) or "failed"
-        out.console.print(f"  [red]Quick check failed:[/red] {escape(hint)}")
+        out.console.print(f"  [red]Quick check failed:[/red] {escape(_failure_words(a.failure))}")
         return
     if v is not None and v.status == "completed":
         out.console.print(f"  {_verdict_text(v.verdict, v.confidence)} [dim]· deep check[/dim]")
@@ -406,10 +442,12 @@ def _render_claim(out: Output, c: ReviewClaim, n: int) -> None:
     out.console.print(f"  {_verdict_text(a.verdict, a.confidence)} [dim]· quick check[/dim]")
     _print_text(out, a.rationale, style="dim")
     if v is not None and v.status == "failed":
-        hint = (v.failure.hint if v.failure else None) or "The deep check failed."
-        out.console.print(f"  [red]Deep check failed:[/red] {escape(hint)}")
-    elif c.escalation is not None and c.escalation.disposition in ("cap", "credits", "account_cap"):
-        out.console.print(f"  [dim]Not deep-checked ({escape(c.escalation.disposition)}).[/dim]")
+        sentence = _failure_words(v.failure, "The deep check failed.")
+        out.console.print(f"  [red]Deep check failed:[/red] {escape(sentence)}")
+    elif c.escalation is not None:
+        words = _not_deep_checked(c.escalation.disposition, only_when_matched=True)
+        if words:
+            out.console.print(f"  [dim]{words}[/dim]")
 
 
 def _render_issue(out: Output, i: Any, n: int) -> None:
@@ -423,9 +461,11 @@ def _render_issue(out: Output, i: Any, n: int) -> None:
     if i.suggested_rewrite:
         out.console.print(f"  [dim]Suggested rewrite:[/dim] {escape(i.suggested_rewrite)}")
     if i.failure is not None:
-        out.console.print(f"  [red]Deep check failed:[/red] {escape(i.failure.hint or i.failure.code or 'failed')}")
-    elif i.source != "verification" and i.escalation is not None and i.escalation.disposition != "planned":
-        out.console.print(f"  [dim]Not deep-checked ({escape(i.escalation.disposition)}).[/dim]")
+        out.console.print(f"  [red]Deep check failed:[/red] {escape(_failure_words(i.failure))}")
+    elif i.source != "verification" and i.escalation is not None:
+        words = _not_deep_checked(i.escalation.disposition)
+        if words:
+            out.console.print(f"  [dim]{words}[/dim]")
     if i.url:
         _print_link(out, i.url)
 
@@ -452,8 +492,8 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
         for f in review.failures:
             out.console.print()
             out.console.print(f"[bold]\\[{f.claim_index + 1}/{n}][/bold] {escape(f.claim or '')}")
-            hint = (f.failure.hint if f.failure else None) or "failed"
-            out.console.print(f"  [red]{escape(f.stage.capitalize() or 'Check')} failed:[/red] {escape(hint)}")
+            stage = _STAGE_WORDS.get(f.stage, "Check")
+            out.console.print(f"  [red]{stage} failed:[/red] {escape(_failure_words(f.failure))}")
         uncertain = _low_confidence_claims(review)
         if uncertain:
             out.console.print("\n[bold]Low confidence[/bold] [dim](not an issue, but worth a second look)[/dim]")

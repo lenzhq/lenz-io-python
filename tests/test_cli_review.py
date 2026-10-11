@@ -302,8 +302,8 @@ def test_issues_render_shows_quick_issues_and_failures():
     text = _render("review_incomplete.json", issues_only=True)
     assert "incomplete" in text
     assert "Mostly False (medium) · quick check" in text
-    assert "Not deep-checked (cap)." in text
-    assert "Assessment failed: The quick check ran out of time" in text
+    assert "Not deep-checked: the review's limit on deep checks was reached." in text
+    assert "Quick check failed: The quick check ran out of time" in text
     assert [text.count(f"[{n}/4]") for n in (1, 2, 3, 4)] == [1, 1, 1, 1]  # each row once
 
 
@@ -347,7 +347,8 @@ def test_progress_view_renders_every_state():
         console.print(render_progress(ReviewFull.model_validate(_load(name))))
     console.print(render_progress(None))
     text = console.file.getvalue()
-    assert "quick check…" in text and "deep check…" in text and "failed (timeout)" in text
+    assert "quick check…" in text and "deep check…" in text and "quick check failed" in text
+    assert "(timeout)" not in text
 
 
 def test_a_poll_error_after_submit_names_the_resume_command(draft):
@@ -816,3 +817,104 @@ def test_a_review_of_an_unreadable_link_exits_two(draft):
         result = _invoke("review", draft, "--json")
     assert result.exit_code == 2, result.output
     assert json.loads(result.stdout)["failure"]["code"] == "page_unreadable"
+
+
+# ── plain words for what the server reports in codes ────────────────────────
+
+DISPOSITION_WORDS = {
+    "cap": "Not deep-checked: the review's limit on deep checks was reached.",
+    "credits": "Not deep-checked: there were not enough credits.",
+    "account_cap": "Not deep-checked: the account's limit on running deep checks was reached.",
+    "not_selected": "Not deep-checked.",
+}
+
+
+def _with_disposition(disposition: str) -> dict:
+    body = _load("review_incomplete.json")
+    for row in body["claims"] + body["issues"]:
+        if (row.get("escalation") or {}).get("disposition") == "cap":
+            row["escalation"]["disposition"] = disposition
+    return body
+
+
+@pytest.mark.parametrize("disposition", sorted(DISPOSITION_WORDS))
+@pytest.mark.parametrize("issues_only", [False, True])
+def test_a_claim_not_deep_checked_says_why_in_words_never_a_code(disposition, issues_only):
+    text = _render_body(_with_disposition(disposition), issues_only=issues_only)
+    if disposition == "not_selected" and not issues_only:
+        # The full view shows a claim no rule selected by its quick verdict alone.
+        assert "Not deep-checked" not in text
+    else:
+        assert DISPOSITION_WORDS[disposition] in text
+    assert f"({disposition})" not in text
+    assert "not_selected" not in text and "account_cap" not in text
+
+
+def test_an_unknown_or_empty_disposition_never_prints_a_code():
+    body = _with_disposition("a_future_reason")
+    text = _render_body(body, issues_only=True)
+    assert "a_future_reason" not in text
+    assert "Not deep-checked." in text
+    assert "a_future_reason" not in _render_body(body)
+    assert "()" not in _render_body(_with_disposition(""), issues_only=True)
+
+
+def test_a_planned_deep_check_prints_no_not_deep_checked_line():
+    assert "Not deep-checked" not in _render("review_completed.json", issues_only=True)
+
+
+def test_a_failed_quick_check_reads_the_same_in_both_views():
+    for issues_only in (False, True):
+        text = _render("review_incomplete.json", issues_only=issues_only)
+        assert "Quick check failed:" in text
+        assert "Assessment failed" not in text
+        assert "Verification failed" not in text
+
+
+def test_a_failed_deep_check_in_the_failures_list_says_deep_check():
+    body = _load("review_incomplete.json")
+    body["failures"][0]["stage"] = "verification"
+    text = _render_body(body, issues_only=True)
+    assert "Deep check failed:" in text
+    assert "Verification failed" not in text
+
+
+def _failed_quick_row(failure: dict | None) -> dict:
+    body = _load("review_incomplete.json")
+    row = next(c for c in body["claims"] if c["assessment"]["status"] == "failed")
+    row["assessment"]["failure"] = failure
+    for f in body["failures"]:
+        if f["claim_index"] == row["index"]:
+            f["failure"] = failure
+    return body
+
+
+UNRESOLVED = {
+    "code": "upstream_unavailable",
+    "detail": "The reviewers did not reach an answer.",
+    "hint": "The quick check ran out of time on this claim. Retry it; nothing was charged.",
+    "failure_class": "upstream_unavailable",
+    "retryable": True,
+}
+
+
+@pytest.mark.parametrize("issues_only", [False, True])
+def test_a_failed_row_says_what_the_failure_says_it_is(issues_only):
+    text = _render_body(_failed_quick_row(UNRESOLVED), issues_only=issues_only)
+    assert "Quick check failed: The reviewers did not reach an answer." in text
+    assert "ran out of time" not in text
+
+
+@pytest.mark.parametrize("issues_only", [False, True])
+def test_a_failed_row_without_a_detail_uses_the_hint(issues_only):
+    failure = {k: v for k, v in UNRESOLVED.items() if k != "detail"}
+    text = _render_body(_failed_quick_row(failure), issues_only=issues_only)
+    assert "Quick check failed: The quick check ran out of time on this claim." in text
+
+
+@pytest.mark.parametrize("issues_only", [False, True])
+@pytest.mark.parametrize("failure", [None, {"code": "upstream_unavailable", "failure_class": "upstream_unavailable"}])
+def test_a_failed_row_with_nothing_to_say_is_neutral_not_a_code(failure, issues_only):
+    text = _render_body(_failed_quick_row(failure), issues_only=issues_only)
+    assert "Quick check failed: Lenz could not check this just now. Try again." in text
+    assert "upstream_unavailable" not in text
