@@ -125,6 +125,38 @@ def _empty_debate_render_gap(path: str, old: Any, new: Any) -> bool:
     return False
 
 
+_STAGE_RENAMES = {"Assessment failed:": "Quick check failed:", "Verification failed:": "Deep check failed:"}
+
+
+def _in_plain_words(text: str) -> str:
+    """The CLI's lines about a check that failed or was not run, with the
+    sentence set aside: it now prints the failure's own `detail` (else its
+    hint) where it printed a hint or a code, names the stage "Quick check" /
+    "Deep check" in every view, and says why a claim got no deep check in words
+    instead of ``(cap)``. (``test_cli_review.py`` pins the new wording.)"""
+    lines = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        for old, new in _STAGE_RENAMES.items():
+            if stripped.startswith(old):
+                line = "  " + new + stripped[len(old) :]
+        if line.startswith("  Quick check failed:") or line.startswith("  Deep check failed:"):
+            line = line.partition(":")[0] + ": ..."
+        elif line.startswith("  Not deep-checked"):
+            line = "  Not deep-checked ..."
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _failure_words_render_gap(path: str, old: Any, new: Any, cancelled: bool) -> bool:
+    """Whether a `render` text differs only by those lines (and, on a cancelled
+    review, by the cancelled lines the CLI words anew)."""
+    if path not in ("render", "render_issues") or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    old, new = _in_plain_words(old), _in_plain_words(new)
+    return old.splitlines() == new.splitlines() or (cancelled and _cancelled_render_gap(path, old, new))
+
+
 def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, Any]) -> str | None:
     """Why ``path`` may differ for ``name``, or ``None`` when it may not."""
     lb, cb = legacy["body"], canonical["body"]
@@ -308,6 +340,7 @@ def test_newer_shape_reads_the_same(name: str) -> None:
         and _intended(path, old, new, legacy) is None
         and not (canonical["body"].get("status") == "cancelled" and _cancelled_render_gap(path, old, new))
         and not _empty_debate_render_gap(path, old, new)
+        and not _failure_words_render_gap(path, old, new, canonical["body"].get("status") == "cancelled")
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
