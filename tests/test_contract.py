@@ -197,6 +197,8 @@ def _load(name: str) -> dict:
         ("review_failed_no_claim.json", ReviewFull),
         ("review_failed_insufficient_credits.json", ReviewFull),
         ("review_completed_issues.json", ReviewIssues),
+        # A deep check that found No Public Record is an issue: the review reads `issues_found`.
+        ("review_completed_issues_no_public_record.json", ReviewIssues),
         # The citation check, recorded: every row pending, some running, the
         # finished review in both views, and a quote finding.
         ("review_citations_pending.json", ReviewFull),

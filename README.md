@@ -93,7 +93,9 @@ client.review_and_wait(
 ```
 
 **Reading the result.** `outcome` is the one field to branch on. Each entry in
-`issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`:
+`issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`,
+or whose deep check found `No Public Record` (an issue with no score and no
+suggested edit; the review reads `issues_found`, not `incomplete`):
 `source` says whether that verdict comes from a deep check (`verification`,
 with `key_finding`, `url` and `verification_id`) or from the quick check alone
 (`assessment`, with the reviewers' `rationale`; `escalation.disposition` says

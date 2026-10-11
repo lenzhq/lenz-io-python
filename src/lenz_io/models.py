@@ -2525,7 +2525,10 @@ class ReviewClaim(_Lax):
 
 
 class ReviewIssue(_Lax):
-    """A claim whose final verdict is ``False``, ``Mostly False`` or ``Mixed``.
+    """A claim whose final verdict is ``False``, ``Mostly False`` or ``Mixed``,
+    or whose deep check found ``No Public Record`` (``verdict`` reads that
+    label, ``lenz_score`` is absent and there is no suggested edit; the review
+    reads ``issues_found``, not ``incomplete``).
 
     ``source`` says which check the verdict comes from: ``verification`` (a
     deep check, with ``verification_id``, ``url`` and ``key_finding``) or

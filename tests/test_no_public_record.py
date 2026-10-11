@@ -91,3 +91,12 @@ def test_the_cli_prints_the_verdict_without_a_score(monkeypatch) -> None:
     assert "No Public Record" in line and "(low)" in line
     assert "/10" not in line and "score" not in line
     assert "grey62" in line
+
+
+def test_a_no_public_record_deep_check_is_a_review_issue() -> None:
+    from lenz_io import ReviewIssues
+
+    r = ReviewIssues.model_validate(_load("review_completed_issues_no_public_record.json"))
+    assert r.outcome == "issues_found"
+    (issue,) = r.issues
+    assert (issue.verdict, issue.source, issue.suggested_rewrite) == ("No Public Record", "verification", None)
