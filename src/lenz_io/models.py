@@ -11,7 +11,7 @@ breaking changes that require a SDK major bump.
 Vocabulary (applies across every claim-shaped response):
 
 - ``claim``       : str           — the framed claim text
-- ``verdict``     : str           — "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
+- ``verdict``     : str           — "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "No Public Record"
 - ``confidence``  : str           — "high" | "medium" | "low" (categorical)
 - ``lenz_score``  : int | None    - 1-10 integer (deep / list; /assess omits)
 """

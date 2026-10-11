@@ -505,7 +505,7 @@ Every claim-shaped response shares these fields at top level:
 | Field | Type | Notes |
 |-------|------|-------|
 | `claim` | `str` | The framed claim text. |
-| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"Error"` on a failed `assess` row; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. (A failed `assess` row reads `"Error"` in the legacy shape; see below.) |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it); `None` on `"No Public Record"`. |
 
