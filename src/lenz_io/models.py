@@ -1238,6 +1238,13 @@ _COMPOUND_HINT = "Assessed the main claim only. Send identified_claims as their 
 _NO_CLAIM_ERROR = "No verifiable claim detected"
 
 
+class SearchedPage(_Lax):
+    """A page looked at while assessing a claim: its title and link."""
+
+    title: str = ""
+    url: str = ""
+
+
 class AssessClaim(_Lax):
     """Per-claim entry in an ``AssessResponse.claims`` list.
 
@@ -1283,6 +1290,11 @@ class AssessClaim(_Lax):
     rationale: str | None = None
     #: **Deprecated:** always null. Kept so code that reads it keeps working.
     dissent: str | None = None
+    # The pages the reviewers looked at while assessing the claim, as title
+    # and link. ``[]`` when there is nothing to show, on a failed row, and on
+    # a response replayed from before the API added the key. What they say
+    # has not been checked: for sourced evidence, call ``verify``.
+    searched_pages: list[SearchedPage] = Field(default_factory=list)
     # The claim with its wrong part corrected, when the request set
     # ``suggest_rewrite=True`` and the check found the claim "False" or
     # "Mostly False" with high confidence. ``None`` when not requested,
@@ -2354,6 +2366,10 @@ class ReviewAssessment(_Lax):
     rationale: str | None = None
     #: **Deprecated:** always null. Kept so code that reads it keeps working.
     dissent: str | None = None
+    #: The pages the quick check's reviewers looked at, as title and link,
+    #: as on an ``/assess`` row (:attr:`AssessClaim.searched_pages`). ``[]``
+    #: when there is nothing to show, and from servers that predate the field.
+    searched_pages: list[SearchedPage] = Field(default_factory=list)
     verification_url: str | None = None
     #: **Deprecated**, use ``failure.code`` (``no_checkable_claim`` where this
     #: reads ``no_claim``).

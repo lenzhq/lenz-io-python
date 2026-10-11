@@ -12,6 +12,7 @@ All notable changes to this SDK are documented here. Format follows
 - `VerificationVerdict` (exported): the five labels and `"No Public Record"`, for `Verification.verdict` and the verification items of a list. `VerdictLabel` (the five labels) and `Verdict` (what `assess` rows read) are unchanged; the `verdict` fields stay `str`.
 - `Verification.has_score` and `Verification.is_no_public_record` (and the same on `VerificationListItem`): whether a 1-10 score is present, and whether the verdict is `"No Public Record"`.
 - The CLI prints `No Public Record` in a neutral colour with no `/10`, confidence kept.
+- `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
 
 ### Changed
 

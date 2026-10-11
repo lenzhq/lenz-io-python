@@ -3246,6 +3246,15 @@
             "description": "Deprecated: always null.",
             "title": "Dissent"
           },
+          "searched_pages": {
+            "default": [],
+            "description": "Pages looked at while assessing this claim, as title and link.",
+            "items": {
+              "$ref": "#/components/schemas/SearchedPageOut"
+            },
+            "title": "Searched Pages",
+            "type": "array"
+          },
           "suggested_rewrite": {
             "anyOf": [
               {
@@ -3397,6 +3406,25 @@
           "docs_url"
         ],
         "title": "FailureOut",
+        "type": "object"
+      },
+      "SearchedPageOut": {
+        "description": "A page looked at while assessing a claim.",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "SearchedPageOut",
         "type": "object"
       },
       "AssessIn": {
@@ -5206,6 +5234,15 @@
             "deprecated": true,
             "description": "Deprecated: always null.",
             "title": "Dissent"
+          },
+          "searched_pages": {
+            "default": [],
+            "description": "Pages looked at while assessing this claim, as title and link.",
+            "items": {
+              "$ref": "#/components/schemas/SearchedPageOut"
+            },
+            "title": "Searched Pages",
+            "type": "array"
           },
           "verification_url": {
             "anyOf": [
@@ -9800,6 +9837,15 @@
             "description": "Deprecated: always null.",
             "title": "Dissent"
           },
+          "searched_pages": {
+            "default": [],
+            "description": "Pages looked at while assessing this claim, as title and link.",
+            "items": {
+              "$ref": "#/components/schemas/SearchedPageOut"
+            },
+            "title": "Searched Pages",
+            "type": "array"
+          },
           "suggested_rewrite": {
             "anyOf": [
               {
@@ -10270,6 +10316,15 @@
             "deprecated": true,
             "description": "Deprecated: always null.",
             "title": "Dissent"
+          },
+          "searched_pages": {
+            "default": [],
+            "description": "Pages looked at while assessing this claim, as title and link.",
+            "items": {
+              "$ref": "#/components/schemas/SearchedPageOut"
+            },
+            "title": "Searched Pages",
+            "type": "array"
           },
           "verification_url": {
             "anyOf": [
