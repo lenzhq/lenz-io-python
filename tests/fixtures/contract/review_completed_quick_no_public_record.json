@@ -29,7 +29,6 @@
     "claim_limit_exceeded": false,
     "input_truncated": false,
     "assessments": {
-      "planned": 2,
       "completed": 2,
       "failed": 0
     },
