@@ -108,6 +108,23 @@ def _cancelled_render_gap(path: str, old: Any, new: Any) -> bool:
     return lines == new.splitlines()
 
 
+#: What the CLI printed for a debate whose sides say nothing; it now prints none.
+_EMPTY_DEBATE_RENDER = ["", "Debate", "  PRO  ", "  CON  "]
+
+
+def _empty_debate_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a `render` text differs only by the empty Debate block the CLI
+    no longer prints (``test_the_full_view_omits_the_empty_panel_and_debate``
+    pins the new behaviour)."""
+    if path not in ("render", "render_issues") or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    lines = old.splitlines()
+    for i in range(len(lines) - len(_EMPTY_DEBATE_RENDER) + 1):
+        if lines[i : i + len(_EMPTY_DEBATE_RENDER)] == _EMPTY_DEBATE_RENDER:
+            return lines[:i] + lines[i + len(_EMPTY_DEBATE_RENDER) :] == new.splitlines()
+    return False
+
+
 def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, Any]) -> str | None:
     """Why ``path`` may differ for ``name``, or ``None`` when it may not."""
     lb, cb = legacy["body"], canonical["body"]
@@ -216,7 +233,7 @@ NEW_EVENT_ATTRS = {"event_id", "failure", "reason", "claims"}
 #: Fields added since the frozen release to models nested inside an event
 #: (additive, defaulting empty): dropped wherever the frozen output has no such
 #: key, at any depth. ``test_review_rows_carry_searched_pages`` pins them.
-NEW_NESTED_FIELDS = {"searched_pages"}
+NEW_NESTED_FIELDS = {"searched_pages", "expected_record"}
 
 
 def _drop_new_nested(observed: Any, expected: Any) -> Any:
@@ -290,6 +307,7 @@ def test_newer_shape_reads_the_same(name: str) -> None:
         if _allowed(name, path, legacy, canonical) is None
         and _intended(path, old, new, legacy) is None
         and not (canonical["body"].get("status") == "cancelled" and _cancelled_render_gap(path, old, new))
+        and not _empty_debate_render_gap(path, old, new)
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
@@ -330,7 +348,7 @@ def test_model_schemas_match_the_previous_release() -> None:
     # (a response without them parses as before), so they are left out of the
     # comparison; ``test_snippet_language_on_sources`` and
     # ``test_assess_rows_carry_searched_pages`` pin them.
-    added_since_frozen = {"snippet_language", "searched_pages"}
+    added_since_frozen = {"snippet_language", "searched_pages", "expected_record"}
     # ``language`` is a field of other models too, so it is dropped from
     # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
     added_to_models = {"ExtractedClaims": {"language"}}

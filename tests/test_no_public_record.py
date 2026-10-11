@@ -100,3 +100,75 @@ def test_a_no_public_record_deep_check_is_a_review_issue() -> None:
     assert r.outcome == "issues_found"
     (issue,) = r.issues
     assert (issue.verdict, issue.source, issue.suggested_rewrite) == ("No Public Record", "verification", None)
+
+
+def _render_full(v: Verification, *, concise: bool = False) -> str:
+    import io
+
+    from rich.console import Console
+
+    from lenz_io.cli.render import Output, render_verification, render_verification_full
+
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=120)
+    (render_verification if concise else render_verification_full)(out, v)
+    return buf.getvalue()
+
+
+def test_the_full_view_omits_the_empty_panel_and_debate() -> None:
+    # The wire carries empty debate sides and no assessments on this outcome.
+    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
+    v.audit.adjudication_summary = ""
+    text = _render_full(v)
+    assert "No Public Record" in text
+    assert "Panel" not in text
+    assert "Debate" not in text
+    assert "PRO" not in text and "CON" not in text
+
+
+def test_a_debate_side_with_only_one_argument_still_prints_just_that_side() -> None:
+    from lenz_io import Audit, DebateSide
+
+    v = Verification(
+        verdict="False",
+        lenz_score=2,
+        audit=Audit(debate_pro=DebateSide(argument="It is so."), debate_con=DebateSide()),
+    )
+    text = _render_full(v)
+    assert "Debate" in text and "PRO" in text and "It is so." in text
+    assert "CON" not in text
+
+
+def test_a_panel_summary_alone_prints_without_an_empty_debate() -> None:
+    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
+    text = _render_full(v)
+    assert "No public record was found to weigh." in text
+    assert "Debate" not in text
+
+
+def test_expected_record_reads_and_defaults_empty() -> None:
+    body = _load("verifications_detail_no_public_record.json")
+    assert Verification.model_validate(body).expected_record == ""
+    body["expected_record"] = "A county court record of the sale."
+    v = Verification.model_validate(body)
+    assert v.expected_record == "A county court record of the sale."
+    assert not (v.model_extra or {})
+    body["expected_record"] = None
+    assert Verification.model_validate(body).expected_record == ""
+    assert VerificationListItem().expected_record == ""
+
+
+@pytest.mark.parametrize("concise", [False, True], ids=["full", "concise"])
+def test_the_cli_names_the_record_that_would_show_it(concise: bool) -> None:
+    v = Verification.model_validate(_load("verifications_detail_no_public_record.json"))
+    assert "Record that would show it" not in _render_full(v, concise=concise)
+    v.expected_record = "A county court record of the sale."
+    text = _render_full(v, concise=concise)
+    assert "Record that would show it: A county court record of the sale." in text
+
+
+def test_expected_record_text_is_printed_without_markup() -> None:
+    v = Verification(verdict="No Public Record", expected_record="A [bold]filing[/bold].")
+    assert "A [bold]filing[/bold]." in _render_full(v)

@@ -12,10 +12,16 @@ All notable changes to this SDK are documented here. Format follows
 - `VerificationVerdict` (exported): the five labels and `"No Public Record"`, for `Verification.verdict` and the verification items of a list. `VerdictLabel` (the five labels) and `Verdict` (what `assess` rows read) are unchanged; the `verdict` fields stay `str`.
 - `Verification.has_score` and `Verification.is_no_public_record` (and the same on `VerificationListItem`): whether a 1-10 score is present, and whether the verdict is `"No Public Record"`.
 - The CLI prints `No Public Record` in a neutral colour with no `/10`, confidence kept.
+- `Verification.expected_record` (and the same on `VerificationListItem`): on a `"No Public Record"` result, a sentence naming the record that would show the claim, when one can be named; `""` otherwise and when the server does not send it. The CLI prints it as "Record that would show it" when it is not empty.
 - `searched_pages` on every `assess` row (`AssessClaim`) and every review quick check (`ReviewAssessment`): the pages the reviewers looked at, as `SearchedPage` items (`title`, `url`; exported from `lenz_io`). `[]` when there is nothing to show, on a failed row, and on a response from before the API sent it. What the pages say has not been checked; for sourced evidence, call `verify`. Needs the API release that sends it; before that every row reads `[]`.
+
+### Deprecated
+
+- The `"Error"` verdict value (a failed `assess` row) and the `legacy_aliases` compatibility layer, meaning the option and the deprecated 2.x fields it fills in, are deprecated and will be removed in a future major release (4.0). Read a failed `assess` row from `status == "failed"` and its `failure` block (`code`, `retryable`). Documentation only: no behaviour change and no runtime warning.
 
 ### Changed
 
+- The CLI full view (`lenz show`) leaves out a Debate block whose sides say nothing, as on a "No Public Record" result.
 - `FailureClass` no longer lists `insufficient_evidence`: a check that finds no sources completes as `"No Public Record"` instead of failing. It is a documentation alias, so a server that still sends the class reads as before. The documented `failure.code` set on a failed verification is `no_checkable_claim` | `upstream_unavailable` | `internal` | `cancelled`; the field stays an open `str`.
 
 ## [3.2.0] - 2026-10-10

@@ -3080,7 +3080,7 @@
   }
  },
  "get_status": {
-  "repr": "TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
+  "repr": "TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
   "result": {
    "candidates": [],
    "claims": [],
@@ -3114,6 +3114,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -3151,7 +3152,7 @@
   "suppress_context": false
  },
  "library_iter": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
+  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en')]",
   "result": [
    {
     "claim": "A.",
@@ -3160,6 +3161,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -3175,6 +3177,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -3191,7 +3194,7 @@
   "idempotency_key": null
  },
  "library_iter_short_page": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
+  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en')]",
   "result": [
    {
     "claim": "A.",
@@ -3200,6 +3203,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -3211,7 +3215,7 @@
   ]
  },
  "library_list": {
-  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')], total=2, page=1, page_size=1)",
+  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en')], total=2, page=1, page_size=1)",
   "result": {
    "items": [
     {
@@ -3221,6 +3225,7 @@
      "domain": "",
      "entities": [],
      "executive_summary": "",
+     "expected_record": "",
      "key_finding": "",
      "language": "en",
      "lenz_score": null,
@@ -3236,7 +3241,7 @@
   }
  },
  "library_list_filters": {
-  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')], total=2, page=2, page_size=1)",
+  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en')], total=2, page=2, page_size=1)",
   "result": {
    "items": [
     {
@@ -3246,6 +3251,7 @@
      "domain": "",
      "entities": [],
      "executive_summary": "",
+     "expected_record": "",
      "key_finding": "",
      "language": "en",
      "lenz_score": null,
@@ -3395,7 +3401,7 @@
   }
  },
  "options_everywhere": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -3412,6 +3418,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -3426,7 +3433,7 @@
   }
  },
  "options_on_iter": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
+  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, expected_record='', created_at=None, modified_at=None, language='en')]",
   "result": [
    {
     "claim": "A.",
@@ -3435,6 +3442,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -3450,6 +3458,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -4048,7 +4057,7 @@
   }
  },
  "retry_transport": {
-  "repr": "TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
+  "repr": "TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')",
   "result": {
    "candidates": [],
    "claims": [],
@@ -4082,6 +4091,7 @@
     "domain": "",
     "entities": [],
     "executive_summary": "",
+    "expected_record": "",
     "key_finding": "",
     "language": "en",
     "lenz_score": null,
@@ -7446,7 +7456,7 @@
   "suppress_context": false
  },
  "verifications_get": {
-  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
+  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, expected_record='', sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "Unanimous: claim holds under standard conditions.",
@@ -7476,6 +7486,7 @@
     }
    ],
    "executive_summary": "At standard atmospheric pressure, water boils at exactly 100°C.",
+   "expected_record": "",
    "key_finding": "Water boils at 100°C at standard atmospheric pressure.",
    "language": "en",
    "lenz_score": 10,
@@ -7552,7 +7563,7 @@
   }
  },
  "verifications_get_keyless": {
-  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
+  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, expected_record='', sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "Unanimous: claim holds under standard conditions.",
@@ -7582,6 +7593,7 @@
     }
    ],
    "executive_summary": "At standard atmospheric pressure, water boils at exactly 100°C.",
+   "expected_record": "",
    "key_finding": "Water boils at 100°C at standard atmospheric pressure.",
    "language": "en",
    "lenz_score": 10,
@@ -7605,7 +7617,7 @@
   }
  },
  "verifications_iter": {
-  "repr": "[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en'), VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')]",
+  "repr": "[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", expected_record='', created_at='2026-05-22T12:00:00Z', modified_at=None, language='en'), VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", expected_record='', created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')]",
   "result": [
    {
     "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
@@ -7619,6 +7631,7 @@
      }
     ],
     "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+    "expected_record": "",
     "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
     "language": "en",
     "lenz_score": 1,
@@ -7639,6 +7652,7 @@
      }
     ],
     "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+    "expected_record": "",
     "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
     "language": "en",
     "lenz_score": 1,
@@ -7659,7 +7673,7 @@
   "idempotency_key": null
  },
  "verifications_list": {
-  "repr": "VerificationList(items=[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')], total=2, page=1, page_size=1)",
+  "repr": "VerificationList(items=[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", expected_record='', created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')], total=2, page=1, page_size=1)",
   "result": {
    "items": [
     {
@@ -7674,6 +7688,7 @@
       }
      ],
      "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+     "expected_record": "",
      "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
      "language": "en",
      "lenz_score": 1,
@@ -7689,7 +7704,7 @@
   }
  },
  "verifications_list_p2": {
-  "repr": "VerificationList(items=[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')], total=2, page=2, page_size=1)",
+  "repr": "VerificationList(items=[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", expected_record='', created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')], total=2, page=2, page_size=1)",
   "result": {
    "items": [
     {
@@ -7704,6 +7719,7 @@
       }
      ],
      "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+     "expected_record": "",
      "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
      "language": "en",
      "lenz_score": 1,
@@ -7725,7 +7741,7 @@
   }
  },
  "verify_and_wait": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -7742,6 +7758,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -7843,7 +7860,7 @@
   }
  },
  "verify_batch_and_wait": {
-  "repr": "[BatchItemResult(task_id='t1', claim_text='A.', status='completed', verification=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), status_detail=TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')), BatchItemResult(task_id='t2', claim_text='B.', status='failed', verification=None, status_detail=None)]",
+  "repr": "[BatchItemResult(task_id='t1', claim_text='A.', status='completed', verification=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), status_detail=TaskStatus(status='completed', task_id='t1', reason='', hint='', progress=Progress(step='', index=None, total=None, elapsed_seconds=None, poll_after_seconds=None), result=Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None), claims=[], candidates=[], similar_claims=[], error='', failure_reason='', failure_detail='', failure_class='', retryable=None, docs_url='')), BatchItemResult(task_id='t2', claim_text='B.', status='failed', verification=None, status_detail=None)]",
   "result": [
    {
     "claim_text": "A.",
@@ -7881,6 +7898,7 @@
       "domain": "",
       "entities": [],
       "executive_summary": "",
+      "expected_record": "",
       "key_finding": "",
       "language": "en",
       "lenz_score": null,
@@ -7915,6 +7933,7 @@
      "domain": "",
      "entities": [],
      "executive_summary": "",
+     "expected_record": "",
      "key_finding": "",
      "language": "en",
      "lenz_score": null,
@@ -8066,7 +8085,7 @@
   "suppress_context": false
  },
  "wait_garbage_hints": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -8083,6 +8102,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -8152,7 +8172,7 @@
   "suppress_context": false
  },
  "wait_negative": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -8169,6 +8189,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -8183,7 +8204,7 @@
   }
  },
  "wait_out_of_range_hints": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -8200,6 +8221,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -8214,7 +8236,7 @@
   }
  },
  "wait_poll_errors": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -8231,6 +8253,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
@@ -8289,7 +8312,7 @@
   ]
  },
  "wait_stated_wait_beats_hint": {
-  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
+  "repr": "Verification(verification_id='v1', claim='A.', visibility='', depth='', domain='', entities=[], presumed_intent='', verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', warnings=[], suggested_rewrite=None, expected_record='', sources=[], audit=Audit(adjudication_summary='', assessments=[], debate_pro=None, debate_con=None, panel_agreement=''), created_at=None, modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "",
@@ -8306,6 +8329,7 @@
    "domain": "",
    "entities": [],
    "executive_summary": "",
+   "expected_record": "",
    "key_finding": "",
    "language": "en",
    "lenz_score": null,
