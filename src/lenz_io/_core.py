@@ -54,6 +54,7 @@ from .errors import (
     ResponseHeaders,
     ReviewFailed,
     ReviewTimeout,
+    failure_will_not_succeed_again,
     map_response_to_error,
     unreadable_fields_error,
 )
@@ -1812,10 +1813,16 @@ def _after_response(
     #    not an abort of a request our ladder might still satisfy.
     #  * a 429 whose code is in NO_RETRY_429_CODES — raise at once,
     #    whatever the wait (see its definition).
+    #  * a 5xx of the current API version whose body says sending it again
+    #    cannot succeed (``retryable: false``, or the code ``internal``, work
+    #    that failed on our side) — raise at once. A legacy-version or
+    #    gateway 5xx (no version header) says nothing of the kind and keeps
+    #    its ladder.
     if (
         attempt < retries
         and (response.status_code >= 500 or response.status_code == 429)
         and not (response.status_code == 429 and _body_error_code(response) in NO_RETRY_429_CODES)
+        and not _final_canonical_5xx(response)
     ):
         stated = _stated_retry_after(response)
         if stated is not None and stated <= MAX_RETRY_AFTER_SLEEP:
@@ -1833,6 +1840,16 @@ def _after_response(
         # The code exactly as sent: no 2.x rewrite, none left out.
         err.code = _body_error_code(response)
     raise err
+
+
+def _final_canonical_5xx(response: httpx.Response) -> bool:
+    """Whether this is a 5xx the current API version sent saying that the same
+    request cannot succeed on a retry (see ``failure_will_not_succeed_again``)."""
+    if response.status_code < 500:
+        return False
+    if (response.headers.get(_VERSION_HEADER) or "").strip() != API_VERSION:
+        return False
+    return failure_will_not_succeed_again(response.status_code, _json_or_none(response))
 
 
 def _exhausted(last_exc: Exception | None, method: str, path: str) -> LenzAPIError:

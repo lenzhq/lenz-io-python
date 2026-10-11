@@ -62,10 +62,10 @@
         "confidence": null,
         "dissent": null,
         "failure": {
-          "code": "framing_failed",
+          "code": "internal",
           "detail": "The input could not be read as a claim.",
-          "docs_url": "https://lenz.io/docs/errors#invalid-input",
-          "failure_class": "invalid_input",
+          "docs_url": "https://lenz.io/docs/errors#internal",
+          "failure_class": "internal",
           "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
           "retryable": false
         },

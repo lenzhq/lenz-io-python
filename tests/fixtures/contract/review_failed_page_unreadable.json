@@ -1,0 +1,63 @@
+{
+  "review_id": "7e0a93bd",
+  "view": "full",
+  "status": "failed",
+  "outcome": "unchecked",
+  "created_at": "2026-10-11T09:20:11.402118Z",
+  "completed_at": "2026-10-11T09:20:16.870305Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed",
+      "No Public Record"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 5,
+    "depth": "standard",
+    "max_citations": 0,
+    "suggest_edits": false
+  },
+  "summary": {
+    "claims_found": null,
+    "claims_selected": null,
+    "claim_limit": 20,
+    "claim_limit_exceeded": false,
+    "input_truncated": false,
+    "assessments": null,
+    "verifications": null,
+    "issues": 0,
+    "citations_found": null,
+    "citations_selected": null,
+    "citation_limit": null,
+    "citation_limit_exceeded": null,
+    "citations_skipped": null,
+    "citation_checks": null,
+    "citation_issues": 0
+  },
+  "credits": {
+    "charged": 0
+  },
+  "poll_after_seconds": null,
+  "issues": [],
+  "failures": [],
+  "claims": [],
+  "failure": {
+    "code": "page_unreadable",
+    "detail": "The page at the link could not be read.",
+    "hint": "The page asks for a login.",
+    "failure_class": "invalid_input",
+    "retryable": false,
+    "docs_url": "https://lenz.io/docs/errors#invalid-input"
+  },
+  "more_claims": [],
+  "more_claim_locations": [],
+  "more_citations": [],
+  "citations": [],
+  "citation_issues": [],
+  "citation_failures": []
+}

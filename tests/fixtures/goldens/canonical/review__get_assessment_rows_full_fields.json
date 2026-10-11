@@ -43,9 +43,9 @@
           "confidence": null,
           "dissent": null,
           "failure": {
-            "code": "timeout",
+            "code": "upstream_unavailable",
             "detail": "The check did not finish inside its time budget.",
-            "docs_url": null,
+            "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
             "failure_class": "upstream_unavailable",
             "hint": "The check ran out of time. Retry it; nothing was charged.",
             "retryable": true
@@ -78,9 +78,9 @@
         "claim": "The Eiffel Tower is in Berlin.",
         "claim_index": 1,
         "failure": {
-          "code": "timeout",
+          "code": "upstream_unavailable",
           "detail": "The check did not finish inside its time budget.",
-          "docs_url": null,
+          "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
           "failure_class": "upstream_unavailable",
           "hint": "The check ran out of time. Retry it; nothing was charged.",
           "retryable": true
@@ -130,7 +130,8 @@
       "verdicts": [
         "False",
         "Mostly False",
-        "Mixed"
+        "Mixed",
+        "No Public Record"
       ]
     },
     "poll_after_seconds": null,

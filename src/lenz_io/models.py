@@ -645,15 +645,17 @@ FailureClass = Literal[
 #: the API adds later still reads.
 VerdictLabel = Literal["True", "Mostly True", "Mixed", "Mostly False", "False"]
 
-#: A verdict as read on a verification or an assess row: one of the five
-#: labels, or ``"Error"`` on a failed assess row (deprecated there: read
-#: ``status == "failed"``). The ``"Error"`` value is deprecated and will be
+#: A verdict as read on an assess row or a review's quick check: one of the
+#: five labels, ``"No Public Record"`` when the reviewers found no public record
+#: that would show the claim (a completed check with a confidence band, never
+#: ``"high"``, and no score), or ``"Error"`` on a failed row (deprecated there:
+#: read ``status == "failed"``). The ``"Error"`` value is deprecated and will be
 #: removed in a future major release (4.0). Fields stay ``str``::
 #:
 #:     from lenz_io import Verdict
 #:     FALSE_ISH: set[Verdict] = {"False", "Mostly False"}
 #:     if row.verdict in FALSE_ISH: ...
-Verdict = Literal["True", "Mostly True", "Mixed", "Mostly False", "False", "Error"]
+Verdict = Literal["True", "Mostly True", "Mixed", "Mostly False", "False", "No Public Record", "Error"]
 
 #: A verdict as read on a ``/verify`` verification (``Verification``,
 #: ``VerificationListItem``, a verification webhook's ``result``): the five
@@ -1280,8 +1282,10 @@ class AssessClaim(_Lax):
     # ``None`` on a failed row only with ``legacy_aliases=False`` (the
     # default reads ``"Error"`` and ``"low"`` there; the annotation stays
     # ``str`` for 3.x code).
-    verdict: str = ""  # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "Error"
-    confidence: str = "low"  # "high" | "medium" | "low"
+    # "True" | "Mostly True" | "Mixed" | "Mostly False" | "False" | "No Public Record" | "Error"
+    verdict: str = ""
+    # "high" | "medium" | "low"; never "high" on "No Public Record"
+    confidence: str = "low"
     verification_url: str | None = None
     # ``rationale`` is the reasoning of a reviewer who agrees with the panel's
     # verdict. It is a reviewers' note, not a checked source; for sourced
@@ -1305,19 +1309,21 @@ class AssessClaim(_Lax):
     # ``verify``, before using it.
     suggested_rewrite: str | None = None
     # Deprecated: use ``failure.code`` (``"no_checkable_claim"`` where this
-    # reads ``"no_claim"``). Only on ``verdict == "Error"`` rows:
-    # 'no_claim' | 'framing_failed' | 'upstream_unavailable' | 'timeout'.
+    # reads ``"no_claim"``). Only on ``verdict == "Error"`` rows, and the same
+    # code as ``failure.code``: 'no_claim' | 'upstream_unavailable' |
+    # 'internal' (the 2026-10-11 shape; the earlier 'timeout' and
+    # 'framing_failed' read as these two).
     #
     # An OPEN set, deliberately typed ``str`` rather than a Literal: the API
     # may add a cause in a minor version, so branch on the ones you know and
     # fall through on the rest.
     #
-    # Which are worth resending as-is: 'upstream_unavailable' (a provider was
-    # down) and 'timeout' (the call ran out of its time budget before this
-    # item was done — send fewer items per call to make it less likely).
-    # 'framing_failed' is deterministic, so retrying the same text will not
-    # help (a provider outage comes back as 'upstream_unavailable' instead).
-    # 'no_claim' wants a different input; read ``hint``.
+    # Resend a row when ``failure.retryable`` is true: 'upstream_unavailable'
+    # (a provider was down, the call ran out of its time budget before this
+    # item was done — send fewer items per call to make it less likely — or
+    # the reviewers did not reach an answer). 'internal' is deterministic, so
+    # retrying the same text will not help. 'no_claim' wants a different
+    # input; read ``hint``.
     error_code: str | None = Field(default=None, json_schema_extra={"deprecated": True})
     # Deprecated: always empty since 2026-09-12, when the ``ambiguous`` cause
     # that filled it was retired. Kept because the server still sends the key.
@@ -1373,9 +1379,9 @@ class AssessClaim(_Lax):
     @property
     def failure(self) -> FailureBlock | None:
         """Why a failed row has no verdict (``None`` on a completed row):
-        ``code`` (``no_checkable_claim`` | ``framing_failed`` |
-        ``upstream_unavailable`` | ``timeout`` today, an open set) and ``hint``,
-        one sentence on what to send next. Replaces ``error_code`` and
+        ``code`` (``no_checkable_claim`` | ``upstream_unavailable`` |
+        ``internal`` today, an open set), ``retryable`` and ``hint``, one
+        sentence on what to send next. Replaces ``error_code`` and
         ``hint``, which are deprecated and kept."""
         sent = _sent(self, "failure")
         if sent is None:
@@ -2152,8 +2158,9 @@ class FailureBlock(_Lax):
     """Why a review, or one claim's work inside it, failed.
 
     The same fields a failed ``GET /verify/status`` carries: ``code``
-    is the specific cause (an open set, e.g. ``no_checkable_claim``,
-    ``insufficient_credits``, ``timeout``; ``failure_reason`` is its 2.x name,
+    is the specific cause (an open set: ``no_checkable_claim``,
+    ``page_unreadable``, ``upstream_unavailable``, ``internal``, ``cancelled``,
+    ``no_citations``, ``insufficient_credits``; ``failure_reason`` is its 2.x name,
     deprecated and kept, spelling "nothing checkable" ``no_claim`` or
     ``not_a_claim``), ``failure_class`` the closed
     :data:`FailureClass`, ``retryable`` whether resending the same request can
@@ -2212,8 +2219,9 @@ def _deep_check_failure(data: Any) -> Any:
 class EscalationPolicy(_Lax):
     """Which quick-checked claims get a deep check, as the review RESOLVED it.
 
-    A claim is deep-checked when its quick verdict is in ``verdicts`` OR its
-    confidence band is in ``confidence``, up to ``max_verifications`` of them,
+    A claim is deep-checked when its quick verdict is in ``verdicts`` (by
+    default ``False``, ``Mostly False``, ``Mixed`` and ``No Public Record``) OR
+    its confidence band is in ``confidence``, up to ``max_verifications`` of them,
     at ``depth``. ``max_assessments`` is how many of the draft's claims, most
     check-worthy first, got a quick verdict.
     """
@@ -2357,9 +2365,11 @@ class ReviewResult(_Lax):
 class ReviewAssessment(_Lax):
     """A claim's quick check. ``status``: ``pending`` | ``running`` |
     ``completed`` | ``failed``. On ``completed`` the fields mean what they
-    mean on an ``/assess`` row; on ``failed`` see ``failure`` (``code`` is an
-    open set, as on ``/assess``; ``error_code`` and ``hint`` are its 2.x
-    names, deprecated and kept)."""
+    mean on an ``/assess`` row, ``verdict`` ``"No Public Record"`` included
+    (no score, a ``confidence`` of ``"medium"`` or ``"low"``, and a
+    ``result.is_issue`` that is true when it is the claim's final answer); on
+    ``failed`` see ``failure`` (``code`` is an open set, as on ``/assess``;
+    ``error_code`` and ``hint`` are its 2.x names, deprecated and kept)."""
 
     status: str = ""
     verdict: str | None = None

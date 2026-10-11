@@ -78,8 +78,8 @@ results = client.verify_batch_and_wait(claims=capped) if capped else []
 ```
 
 **Which claims get the deep check.** A claim is deep-checked when its quick
-verdict is `False`, `Mostly False` or `Mixed`, or its confidence is `low`, up
-to five of them. Change the rule with flat keyword arguments:
+verdict is `False`, `Mostly False`, `Mixed` or `No Public Record`, or its
+confidence is `low`, up to five of them. Change the rule with flat keyword arguments:
 
 ```python
 client.review_and_wait(
@@ -94,8 +94,9 @@ client.review_and_wait(
 
 **Reading the result.** `outcome` is the one field to branch on. Each entry in
 `issues` is a claim whose final verdict is `False`, `Mostly False` or `Mixed`,
-or whose deep check found `No Public Record` (an issue with no score and no
-suggested edit; the review reads `issues_found`, not `incomplete`):
+or `No Public Record`, from the deep check or from a final quick check (an issue
+with no score and no suggested rewrite; the review reads `issues_found`, not
+`incomplete`):
 `source` says whether that verdict comes from a deep check (`verification`,
 with `key_finding`, `url` and `verification_id`) or from the quick check alone
 (`assessment`, with the reviewers' `rationale`; `escalation.disposition` says
@@ -361,10 +362,10 @@ if deep is not None:
 `assess(claims=[...])` takes up to 20 claims per call and always answers
 with exactly one row per claim, in the order sent. A row that could not be
 given a verdict comes back in position with `status == "failed"` and a
-`failure` block: `failure.code` (`no_checkable_claim` / `framing_failed` /
-`upstream_unavailable` / `timeout` — an open set; the last two are the ones
-worth resending as-is) and `failure.hint`, one sentence on what to send next;
-it is not charged. A compound item is assessed on its main claim and lists the
+`failure` block: `failure.code` (see [One failure vocabulary](#one-failure-vocabulary):
+`no_checkable_claim` / `upstream_unavailable` / `internal`, an open set),
+`failure.retryable` (resend the row when it is true, whatever the code) and
+`failure.hint`, one sentence on what to send next; it is not charged. A compound item is assessed on its main claim and lists the
 other claims it found in `more_claims` — send those as their own items to
 check the rest. `assess(claim="...")` takes one text and answers
 with a row per claim found in it, up to 20, at 1 credit each; a text that
@@ -511,13 +512,13 @@ Every claim-shaped response shares these fields at top level:
 | Field | Type | Notes |
 |-------|------|-------|
 | `claim` | `str` | The framed claim text. |
-| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a `verify` check that found nothing public to weigh the claim against. (A failed `assess` row reads `"Error"` in the legacy shape; that value is deprecated, read `status == "failed"` and `failure` instead. See below.) |
+| `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a check that found no public record that would show the claim (`verify`, or a quick check: `assess`, a review's quick check). (A failed `assess` row reads `"Error"` in the legacy shape; that value is deprecated, read `status == "failed"` and `failure` instead. See below.) |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it); `None` on `"No Public Record"`. |
 
 The accepted values are exported as `Literal` aliases for comparisons and
-exhaustive matching: `Verdict` (the five labels and `"Error"`, what `assess`
-rows read), `VerificationVerdict` (the five labels and `"No Public Record"`,
+exhaustive matching: `Verdict` (the five labels, `"No Public Record"` and the deprecated
+`"Error"`, what `assess` rows and a review's quick checks read), `VerificationVerdict` (the five labels and `"No Public Record"`,
 what a `verify` verification reads), `VerdictLabel` (the five labels),
 `Confidence` and `Depth` (`"standard"` or `"low"`). The fields themselves stay
 `str`, so a value a later API adds still reads.
@@ -531,8 +532,8 @@ flagged = [row for row in quick if row.verdict in NEEDS_A_LOOK]
 
 ### "No Public Record"
 
-A `verify` check that finds no public record to weigh the claim against
-**completes** with `verdict == "No Public Record"`, no `lenz_score` and a
+A check that finds no public record that would show the claim
+**completes** with `verdict == "No Public Record"`, no score and a
 `confidence`; it is not a failure, so `verify_and_wait` returns it instead of
 raising. Branch on it with `Verification.is_no_public_record`, and use
 `Verification.has_score` before reading the score (both are on the items of
@@ -546,8 +547,27 @@ elif v.has_score:
     print(v.verdict, v.lenz_score)
 ```
 
-The `lenz` CLI prints it in a neutral colour with no `/10`. `assess` is
-unchanged: it never returns this verdict.
+The `lenz` CLI prints it in a neutral colour with no `/10`.
+
+A quick check can return it too: an `assess` row, and a review's quick check,
+with `verdict == "No Public Record"`, `status == "completed"` and a
+`confidence` of `"medium"` or `"low"` (a quick check never says `"high"` here;
+`"low"` is the cue to run a deep check). It has no score and
+`suggested_rewrite` is `None`. Branch on `row.verdict`:
+
+```python
+for row in client.assess(claims=claims).claims:
+    if row.verdict == "No Public Record":
+        print("No public record found that would show:", row.claim)
+```
+
+In a review, a final quick-check `No Public Record` is an issue
+(`is_issue` is true, the review reads `issues_found`), and the default
+`verdicts` that get a deep check include it (`policy.verdicts` lists them). A
+quick check whose reviewers did not reach an answer is not a
+`No Public Record` row: it is a failed row, free, with `failure.code`
+`"upstream_unavailable"`, `retryable` true and the detail "The reviewers did
+not reach an answer.".
 
 ### Field names: the current names, and the deprecated 2.x ones
 
@@ -969,6 +989,47 @@ request with that key is still running; `verification_not_ready`); `False`
 for any other 4xx and a version error; `None` when there was no HTTP status
 (a missing key, a `*_and_wait` timeout). A failed verification, review or
 citation check carries the server's own value (`None` when it sent none).
+
+### One failure vocabulary
+
+On the `2026-10-11` shape (the one this SDK sends), a failed `assess` row, a
+failed review or citation check, a review's or citation check's failed rows and
+the HTTP bodies of `/assess` and `/extract` name their failure with the same
+`code` set: `no_checkable_claim`, `page_unreadable`, `upstream_unavailable`,
+`internal`, `cancelled`, `no_citations` and `insufficient_credits`. `detail` says
+the cause in a sentence (out of time, no row could be assessed, the reviewers did
+not reach an answer); `failure_class` and `retryable` say whether sending it
+again can help. Branch on `retryable` for that, and on the input codes
+(`no_checkable_claim`, `page_unreadable`, `no_citations`) for what to tell the
+person; fall through on a code you do not know.
+
+| Where it used to read | It reads now |
+|---|---|
+| `timeout` (an `assess` row, a review's quick check, a citation row) | `upstream_unavailable`, retryable |
+| `framing_failed` (an `assess` row, or its single-claim 502) | `internal`, not retryable |
+| `assessment_failed` (a review) | `upstream_unavailable` when every row ran out of time or a provider failed, else `internal` |
+| `citation_check_failed` | `internal` |
+| `invalid_input` on a review of a link | `page_unreadable` |
+| `extraction_failed` (the 502 of `/extract`, and of its unreadable link) | `internal` (502); an unreadable link is a 422 `page_unreadable` |
+
+The deprecated `AssessClaim.error_code` and `ReviewAssessment.error_code` carry
+the same code. A server still on the `2026-05-13` shape keeps the old codes,
+and this SDK refuses to read its successful answers (`LenzApiVersionError`).
+
+**`/extract` and an unreadable link.** When `text` is one URL and the page
+behind it cannot be read (a login wall, a missing page, too little text), the
+call raises `LenzValidationError` (HTTP 422) with `code == "page_unreadable"`,
+`retryable` false and `fix == "Paste the page's text instead."`. The same link
+gives the same answer, so the SDK does not resend it. A page that could not be
+reached right now stays a 503 `upstream_unavailable`. Work that failed on our
+side is a 502 with `code == "internal"`.
+
+**The transport stops on a 5xx that will not change.** The SDK retries a 5xx
+with its backoff, except an answer in the `2026-10-11` shape that says sending
+it again cannot succeed: a body with `retryable: false` or the code `internal`.
+That raises on the first answer, with `retryable` false and a `fix` that says
+so. A 5xx from a gateway or in another API version, and the generic 500, keep
+their retries.
 
 **`idempotency_key`** (since 3.0, on every error): the `Idempotency-Key` the
 failed call sent, or `None` when it sent none. A resend is safe only with the

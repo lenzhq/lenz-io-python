@@ -103,7 +103,8 @@ class LenzError(Exception):
         ``True`` for a network failure, a transport timeout, a 429, a 5xx and
         a 409 ``idempotency_conflict`` (the first request with that key is
         still running) or ``verification_not_ready``; ``False`` for any other
-        4xx and a version error; ``None`` when there was no HTTP status (a
+        4xx, a version error, and a 5xx that says sending it again cannot
+        succeed (a body with ``retryable: false``, or the code ``internal``); ``None`` when there was no HTTP status (a
         missing key, a ``*_and_wait`` timeout, a needs-input pause, a bad
         webhook signature). A failed
         verification, review or citation check carries the server's value
@@ -1314,15 +1315,57 @@ def map_response_to_error(
     # level, is the server's own word and wins over the status. (A failed
     # verification's 409 read it above.)
     if not isinstance(err, LenzPipelineError):
-        candidates = [
-            block.get("retryable") for block in (raw.get("failure"), parsed.get("failure")) if isinstance(block, dict)
-        ]
-        candidates += [raw.get("retryable"), parsed.get("retryable")]
-        stated = next((c for c in candidates if isinstance(c, bool)), None)
+        stated = _stated_retryable(raw, parsed)
         if stated is not None:
             err.retryable = stated
+        elif _is_internal_failure(status_code, parsed):
+            err.retryable = False
+
+    if status_code == 422 and code == "page_unreadable":
+        # /extract on a link whose page could not be read: the same link gives
+        # the same answer, and the body says what to send instead.
+        err.retryable = False
+        err.fix = _opt_str(parsed.get("hint")) or "Paste the page's text instead."
+    elif 500 <= status_code < 600 and err.retryable is False:
+        # The server said sending this again will not help (a 502 `internal`,
+        # or a body with `retryable: false`): not the generic "retry" advice.
+        err.fix = (
+            _opt_str(parsed.get("hint"))
+            or "This failed on our side and sending the same request again will not help. "
+            "If it keeps happening, contact support (https://lenz.io/contact) with the request id."
+        )
 
     return err
+
+
+def _stated_retryable(*bodies: dict[str, Any]) -> bool | None:
+    """The boolean ``retryable`` a body states: its ``failure`` block's first,
+    else its own top level; ``None`` when it states none."""
+    candidates: list[Any] = [b["failure"].get("retryable") for b in bodies if isinstance(b.get("failure"), dict)]
+    candidates += [b.get("retryable") for b in bodies]
+    return next((c for c in candidates if isinstance(c, bool)), None)
+
+
+def _is_internal_failure(status: int, body: dict[str, Any]) -> bool:
+    """Whether a 5xx body is work that failed on our side (``code``
+    ``internal``): the API's own description of that code is that sending the
+    same request again will not help. The generic 500 (``internal_error``) is
+    a different code and stays retryable."""
+    return 500 <= status < 600 and body.get("code") == "internal"
+
+
+def failure_will_not_succeed_again(status: int, body: Any) -> bool:
+    """Whether a 5xx answer says that sending the same request again cannot
+    succeed: a body stating ``retryable: false`` (top level or in its
+    ``failure`` block), or the code ``internal``. The transport asks this of
+    answers that name the current API version only; a legacy or gateway 5xx
+    keeps being retried."""
+    if not isinstance(body, dict) or not 500 <= status < 600:
+        return False
+    stated = _stated_retryable(body)
+    if stated is not None:
+        return stated is False
+    return _is_internal_failure(status, body)
 
 
 #: The longest wait ``retry_after`` reports, in seconds (the client's

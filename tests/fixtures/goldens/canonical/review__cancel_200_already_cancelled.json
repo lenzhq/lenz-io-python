@@ -54,7 +54,7 @@
           "key_finding": null,
           "language": null,
           "lenz_score": null,
-          "status": "failed",
+          "status": "cancelled",
           "suggested_rewrite": null,
           "task_id": "<task_id#4:hex32>",
           "url": null,
@@ -129,7 +129,7 @@
         "url": null,
         "verdict": "False",
         "verification_id": null,
-        "verification_status": "failed",
+        "verification_status": "cancelled",
         "verification_url": null,
         "verified_claim": null
       }
@@ -151,7 +151,8 @@
       "verdicts": [
         "False",
         "Mostly False",
-        "Mixed"
+        "Mixed",
+        "No Public Record"
       ]
     },
     "poll_after_seconds": null,

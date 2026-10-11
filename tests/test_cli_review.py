@@ -763,3 +763,56 @@ def test_json_mode_prints_no_opening_line(draft):
 def test_help_states_the_citation_default_and_its_cost():
     result = runner.invoke(app, ["review", "--help"], env={"COLUMNS": "200"})
     assert "default 20" in result.stdout and "1 credit per checked citation" in result.stdout
+
+
+# ── "No Public Record" and the collapsed failure codes ──────────────────────
+
+
+def test_a_quick_no_public_record_is_listed_as_an_issue():
+    text = _render("review_completed_quick_no_public_record.json")
+    assert text.splitlines()[0].startswith("Review c41d7e02: issues found — 2 claims: 1 issue, 1 true or mostly true")
+    assert "No Public Record (medium) · quick check" in text
+    assert "/10" not in text
+
+
+def test_a_low_confidence_no_public_record_is_an_issue_not_a_second_look():
+    body = _load("review_completed_quick_no_public_record.json")
+    body["claims"][0]["assessment"]["confidence"] = "low"
+    body["claims"][0]["result"]["confidence"] = "low"
+    body["issues"][0]["confidence"] = "low"
+    text = _render_body(body, issues_only=True)
+    assert text.count("No Public Record (low) · quick check") == 1
+    assert "Low confidence" not in text
+
+
+def test_a_quick_no_public_record_exits_one(draft):
+    with respx.mock(base_url=BASE) as r:
+        _serve(r, "review_completed_quick_no_public_record.json")
+        result = _invoke("review", draft, "--json")
+    assert result.exit_code == 1, result.output
+
+
+def test_a_link_the_review_could_not_read_says_so_and_what_to_send():
+    text = _render("review_failed_page_unreadable.json")
+    assert "Failed: The page asks for a login." in text
+    assert "Paste the page's text instead." in text
+
+
+def test_a_page_unreadable_failure_without_a_hint_still_says_it():
+    body = _load("review_failed_page_unreadable.json")
+    body["failure"]["hint"] = None
+    text = _render_body(body)
+    assert "Failed: The page at the link could not be read." in text
+    assert "Paste the page's text instead." in text
+
+
+def test_another_failure_prints_no_paste_advice():
+    assert "Paste the page" not in _render("review_failed_no_claim.json")
+
+
+def test_a_review_of_an_unreadable_link_exits_two(draft):
+    with respx.mock(base_url=BASE) as r:
+        _serve(r, "review_failed_page_unreadable.json")
+        result = _invoke("review", draft, "--json")
+    assert result.exit_code == 2, result.output
+    assert json.loads(result.stdout)["failure"]["code"] == "page_unreadable"

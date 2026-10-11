@@ -49,6 +49,9 @@ from .render import _VERDICT_COLOR, Output, _truncate
 
 DEPTH_CHOICES = ("standard", "low")
 
+#: What to do when the page behind a link could not be read (`page_unreadable`).
+_PASTE_THE_TEXT = "Paste the page's text instead."
+
 EXIT_CLEAN = 0
 EXIT_ISSUES = 1
 EXIT_OTHER = 2
@@ -433,8 +436,12 @@ def render_review(out: Output, review: ReviewFull, *, issues_only: bool = False)
     or the reviewers' note (quick), and the suggested rewrite."""
     out.console.print(_summary_line(review))
     if review.failure is not None:
-        hint = review.failure.hint or review.failure.code or "no reason given"
-        out.console.print(f"[red]Failed:[/red] {escape(hint)}")
+        unreadable = review.failure.code == "page_unreadable"
+        hint = review.failure.hint or ("The page at the link could not be read." if unreadable else None)
+        out.console.print(f"[red]Failed:[/red] {escape(hint or review.failure.code or 'no reason given')}")
+        if unreadable:
+            # A link the review could not read: the draft's text is what to send.
+            out.console.print(f"  [dim]{_PASTE_THE_TEXT}[/dim]")
     elif review.status == "cancelled":
         out.console.print("[red]Cancelled.[/red]")
     n = review.summary.claims_selected or len(review.claims)

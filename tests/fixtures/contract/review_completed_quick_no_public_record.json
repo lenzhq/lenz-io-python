@@ -1,0 +1,145 @@
+{
+  "review_id": "c41d7e02",
+  "view": "full",
+  "status": "completed",
+  "outcome": "issues_found",
+  "created_at": "2026-10-11T09:14:02.118331Z",
+  "completed_at": "2026-10-11T09:14:21.904417Z",
+  "language": "en",
+  "policy": {
+    "verdicts": [
+      "False",
+      "Mostly False",
+      "Mixed",
+      "No Public Record"
+    ],
+    "confidence": [
+      "low"
+    ],
+    "max_assessments": 20,
+    "max_verifications": 5,
+    "depth": "standard",
+    "max_citations": 0,
+    "suggest_edits": false
+  },
+  "summary": {
+    "claims_found": 2,
+    "claims_selected": 2,
+    "claim_limit": 20,
+    "claim_limit_exceeded": false,
+    "input_truncated": false,
+    "assessments": {
+      "planned": 2,
+      "completed": 2,
+      "failed": 0
+    },
+    "verifications": {
+      "planned": 0,
+      "completed": 0,
+      "failed": 0
+    },
+    "issues": 1,
+    "citations_found": null,
+    "citations_selected": null,
+    "citation_limit": null,
+    "citation_limit_exceeded": null,
+    "citations_skipped": null,
+    "citation_checks": null,
+    "citation_issues": 0
+  },
+  "credits": {
+    "charged": 2
+  },
+  "poll_after_seconds": null,
+  "issues": [
+    {
+      "claim_index": 0,
+      "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+      "source": "assessment",
+      "verdict": "No Public Record",
+      "confidence": "medium",
+      "rationale": null,
+      "suggested_rewrite": null,
+      "key_finding": null,
+      "verification_id": null,
+      "verification_status": null,
+      "verification_url": null,
+      "url": null,
+      "verified_claim": null,
+      "failure": null,
+      "escalation": {
+        "disposition": "not_selected",
+        "matched_rules": []
+      },
+      "suggested_edits": null
+    }
+  ],
+  "failures": [],
+  "claims": [
+    {
+      "index": 0,
+      "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+      "positions": null,
+      "assessment": {
+        "status": "completed",
+        "verdict": "No Public Record",
+        "confidence": "medium",
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "verification_url": null,
+        "failure": null
+      },
+      "verification": null,
+      "result": {
+        "verdict": "No Public Record",
+        "confidence": "medium",
+        "source": "assessment",
+        "is_issue": true
+      },
+      "escalation": {
+        "disposition": "not_selected",
+        "matched_rules": []
+      },
+      "suggested_edits": null
+    },
+    {
+      "index": 1,
+      "claim": "Water boils at 100 C at sea level.",
+      "positions": null,
+      "assessment": {
+        "status": "completed",
+        "verdict": "True",
+        "confidence": "high",
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "verification_url": null,
+        "failure": null
+      },
+      "verification": null,
+      "result": {
+        "verdict": "True",
+        "confidence": "high",
+        "source": "assessment",
+        "is_issue": false
+      },
+      "escalation": {
+        "disposition": "not_selected",
+        "matched_rules": []
+      },
+      "suggested_edits": null
+    }
+  ],
+  "failure": null,
+  "more_claims": [],
+  "more_claim_locations": [],
+  "more_citations": [],
+  "citations": [],
+  "citation_issues": [],
+  "citation_failures": []
+}

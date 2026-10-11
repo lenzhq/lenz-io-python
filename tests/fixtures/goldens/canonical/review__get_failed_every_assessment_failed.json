@@ -67,7 +67,7 @@
       "charged": 0
     },
     "failure": {
-      "code": "assessment_failed",
+      "code": "upstream_unavailable",
       "detail": "No claim could be assessed.",
       "docs_url": "https://lenz.io/docs/errors#upstream-unavailable",
       "failure_class": "upstream_unavailable",
@@ -120,7 +120,8 @@
       "verdicts": [
         "False",
         "Mostly False",
-        "Mixed"
+        "Mixed",
+        "No Public Record"
       ]
     },
     "poll_after_seconds": null,

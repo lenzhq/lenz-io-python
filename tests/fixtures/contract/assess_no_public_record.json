@@ -1,0 +1,98 @@
+{
+  "status": "ok",
+  "claims": [
+    {
+      "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+      "language": "en",
+      "status": "completed",
+      "verdict": "No Public Record",
+      "confidence": "medium",
+      "verification_url": null,
+      "rationale": "No page the reviewers found records this.",
+      "dissent": null,
+      "searched_pages": [],
+      "suggested_rewrite": null,
+      "more_claims": [],
+      "failure": null
+    },
+    {
+      "claim": "Water boils at 100 C at sea level.",
+      "language": "en",
+      "status": "completed",
+      "verdict": "True",
+      "confidence": "high",
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "searched_pages": [],
+      "suggested_rewrite": null,
+      "more_claims": [],
+      "failure": null
+    },
+    {
+      "claim": "The Eiffel Tower is 330 metres tall.",
+      "language": "en",
+      "status": "failed",
+      "verdict": null,
+      "confidence": null,
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "searched_pages": [],
+      "suggested_rewrite": null,
+      "more_claims": [],
+      "failure": {
+        "code": "upstream_unavailable",
+        "detail": "The check did not finish inside its time budget.",
+        "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call.",
+        "failure_class": "upstream_unavailable",
+        "retryable": true,
+        "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    },
+    {
+      "claim": "cannot frame",
+      "language": "en",
+      "status": "failed",
+      "verdict": null,
+      "confidence": null,
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "searched_pages": [],
+      "suggested_rewrite": null,
+      "more_claims": [],
+      "failure": {
+        "code": "internal",
+        "detail": "The input could not be read as a claim.",
+        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
+        "failure_class": "internal",
+        "retryable": false,
+        "docs_url": "https://lenz.io/docs/errors#internal"
+      }
+    },
+    {
+      "claim": "The Halberd Ferry Company ran 61 sailings in its first winter.",
+      "language": "en",
+      "status": "failed",
+      "verdict": null,
+      "confidence": null,
+      "verification_url": null,
+      "rationale": null,
+      "dissent": null,
+      "searched_pages": [],
+      "suggested_rewrite": null,
+      "more_claims": [],
+      "failure": {
+        "code": "upstream_unavailable",
+        "detail": "The reviewers did not reach an answer.",
+        "hint": "The quick check did not settle this item; nothing was charged. Retry it, or run a deep check.",
+        "failure_class": "upstream_unavailable",
+        "retryable": true,
+        "docs_url": "https://lenz.io/docs/errors#upstream-unavailable"
+      }
+    }
+  ],
+  "failure": null,
+  "more_claims": []
+}
