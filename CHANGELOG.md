@@ -6,6 +6,8 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-11
+
 ### Added
 
 - **`"No Public Record"`**, a sixth verdict on a `verify` check that found no public record to weigh the claim against. It is a completed check, not a failure: `lenz_score` is `None`, `confidence` is a band, and `verify_and_wait` returns it instead of raising. Needs an API that serves the outcome; the SDK keeps sending `X-Lenz-API-Version: 2026-10-11`.
