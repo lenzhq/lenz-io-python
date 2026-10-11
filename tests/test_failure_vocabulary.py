@@ -147,3 +147,19 @@ def test_the_cli_reports_an_unreadable_link_by_its_own_code_and_advice() -> None
     # Any other 422 keeps its code.
     other = map_response_to_error(422, json.dumps({"detail": "bad", "code": "validation_error"}), {})
     assert to_payload(other)["error"]["code"] == "invalid_request"
+
+
+def test_a_gateway_page_is_retried_as_before(client) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/me/usage")
+        route.side_effect = [httpx.Response(502, text="<html>Bad Gateway</html>"), _usage_ok()]
+        client.usage()
+    assert route.call_count == 2
+
+
+def test_a_canonical_html_5xx_is_retried_as_before(client) -> None:
+    with respx.mock(base_url=BASE) as r:
+        route = r.get("/me/usage")
+        route.side_effect = [httpx.Response(502, text="<html>Bad Gateway</html>", headers=CANONICAL), _usage_ok()]
+        client.usage()
+    assert route.call_count == 2
