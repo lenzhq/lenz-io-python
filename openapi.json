@@ -7769,7 +7769,7 @@
       },
       "CitationPairIn": {
         "additionalProperties": false,
-        "description": "One statement and the source it cites: a URL or a DOI, never both.",
+        "description": "One statement and the source it cites: a URL, a DOI or a legal cite, exactly one.",
         "properties": {
           "statement": {
             "description": "The sentence that cites the source, at most 1,000 characters.",
@@ -7799,6 +7799,18 @@
             ],
             "description": "The cited DOI alone, like 10.1038/nature12373.",
             "title": "Doi"
+          },
+          "cite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A legal authority named by its citation, alone: a US case like `372 U.S. 335` (a caption may precede it), a statute like `42 U.S.C. \u00a7 1983`, a regulation like `17 C.F.R. \u00a7 240.10b-5` or an EU act like `Regulation (EU) 2016/679`. At most 300 characters. Checked like a legal citation found in a text.",
+            "title": "Cite"
           },
           "quotes": {
             "default": [],

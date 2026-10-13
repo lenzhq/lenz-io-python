@@ -164,7 +164,8 @@ def _read_pairs(arg: str) -> list[Any]:
         raise CLIError(
             f"{arg} must hold a list of pairs.",
             code="no_input",
-            fix='Each pair is {"statement": "...", "url": "https://..."} or {"statement": "...", "doi": "10..."}.',
+            fix='Each pair is {"statement": "...", "url": "https://..."}, {"statement": "...", "doi": "10..."} '
+            'or {"statement": "...", "cite": "372 U.S. 335"}.',
             exit_code=2,
         )
     return data

@@ -236,6 +236,11 @@ check = client.citecheck_and_wait(
 )
 ```
 
+A pair's source can also be a legal authority by its citation:
+`{"statement": "...", "cite": "42 U.S.C. § 1983"}` (a US case, a statute, a
+regulation or an EU act; one authority per pair, exactly one of `url`, `doi`
+and `cite`).
+
 The body carries the same rows as a review's: `citations`, `citation_issues`,
 `citation_failures`, `summary` and `more_citations` (the draft's citations past
 `max_citations`, found but not checked). `client.citecheck(...)` returns a
