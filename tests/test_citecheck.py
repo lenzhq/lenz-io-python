@@ -108,6 +108,16 @@ class TestSubmit:
         ]
         assert self._body(client, pairs=pairs) == {"pairs": pairs}
 
+    def test_a_legal_cite_pair_is_sent_as_it_is(self, client):
+        pairs = [
+            {
+                "statement": "A state must give a poor defendant a lawyer.",
+                "cite": "Gideon v. Wainwright, 372 U.S. 335 (1963)",
+            },
+            {"statement": "The statute gives a cause of action.", "cite": "42 U.S.C. § 1983"},
+        ]
+        assert self._body(client, pairs=pairs) == {"pairs": pairs}
+
     def test_a_pair_has_no_language_of_its_own(self):
         from lenz_io import CitationPair
 
