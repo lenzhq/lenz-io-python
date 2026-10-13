@@ -165,7 +165,7 @@ def _read_pairs(arg: str) -> list[Any]:
             f"{arg} must hold a list of pairs.",
             code="no_input",
             fix='Each pair is {"statement": "...", "url": "https://..."}, {"statement": "...", "doi": "10..."} '
-            'or {"statement": "...", "cite": "372 U.S. 335"}.',
+            'or {"statement": "...", "cite": "372 U.S. 335"} (a citation: a legal authority or a DOI).',
             exit_code=2,
         )
     return data

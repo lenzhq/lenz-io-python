@@ -1845,8 +1845,8 @@ class AsyncLenz:
           listed in ``more_citations``.
         - ``pairs``: 1 to 20 statement-source pairs (:class:`CitationPair`),
           each checked as it is. ``max_citations`` does not apply. A pair's
-          source is a ``url``, a ``doi`` or a ``cite`` (a legal authority by
-          its citation, like ``372 U.S. 335``).
+          source is a ``url``, a ``doi`` or a ``cite`` (a source by its
+          citation: a legal authority like ``372 U.S. 335``, or a DOI).
 
         Each check answers: does the cited source say what the statement
         says it does? ``language`` is the language Lenz writes the reasoning
