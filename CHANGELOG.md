@@ -10,7 +10,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
-- `CitationPair` takes `cite`: a source named by its citation, as the third way to name a pair's source beside `url` and `doi` (exactly one). A legal authority (`372 U.S. 335`, `42 U.S.C. § 1983`, `17 C.F.R. § 240.10b-5`, `Regulation (EU) 2016/679`) or a DOI (the same as `doi`); other kinds of citation will be read through `cite` as the API adds them. A cite the API does not read as exactly one citation is a 422 `invalid_cite`; a legal cite is refused with a 422 `legal_citations_unavailable` until the API makes legal citations available. Needs the API release that accepts it. The `lenz citecheck --pairs` file takes it too.
+- `CitationPair` takes `cite`: a source named by its citation, as the third way to name a pair's source beside `url` and `doi` (exactly one). A legal authority (`372 U.S. 335`, `42 U.S.C. § 1983`, `17 C.F.R. § 240.10b-5`, `Regulation (EU) 2016/679`) or a DOI (the same as `doi`); other kinds of citation will be read through `cite` as the API adds them. A cite the API does not read as exactly one citation is a 422 `invalid_cite`. Needs the API release that accepts it. The `lenz citecheck --pairs` file takes it too.
 
 ## [3.3.0] - 2026-10-11
 
