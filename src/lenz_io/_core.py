@@ -481,8 +481,7 @@ class CitationPair(TypedDict, total=False):
     (a source named by its citation, alone: a legal authority such as
     ``372 U.S. 335``, ``42 U.S.C. § 1983``, ``17 C.F.R. § 240.10b-5`` or
     ``Regulation (EU) 2016/679``, or a DOI, which is the same as ``doi``; one
-    citation per pair, else a 422 ``invalid_cite``; a legal cite is refused with
-    a 422 ``legal_citations_unavailable`` while legal citations are not available).
+    citation per pair, else a 422 ``invalid_cite``).
     ``quotes``: up to 3 excerpts the statement quotes from the source, each
     15 to 500 characters and words of the statement. With a ``doi``, what the
     reference gives: ``cited_title``, ``cited_authors`` (family names),
