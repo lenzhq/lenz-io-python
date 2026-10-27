@@ -30,7 +30,7 @@ from lenz_io import Lenz
 from lenz_io.errors import LenzApiVersionError, LenzError, LenzGoneError, LenzInvalidResponseError
 from lenz_io.models import TaskStatus
 
-from ._run import execute, read_text_arg
+from ._run import execute, parse_source_file_args, read_text_arg
 from .context import CLIState
 from .errors import CLIError
 from .render import Output, render_batch_details, render_batch_table, render_verification
@@ -95,6 +95,12 @@ def verify(
         metavar="standard|low",
         help="'low' runs a shallower check — fewer sources, faster, same models, half the credits.",
     ),
+    source_file: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--source-file",
+        metavar="[META:]PATH",
+        help="Supplied source document to verify against. Repeatable.",
+    ),
 ) -> None:
     """Full fact-check pipeline (~90s). Needs a key; a fresh claim costs 10 credits (5 at --depth low)."""
     state: CLIState = ctx.obj
@@ -106,10 +112,18 @@ def verify(
         # ``execute``'s error handler (correct exit code + --json shape).
         chosen_depth = _parse_depth(depth)
         if resume:
+            if source_file:
+                raise CLIError("Cannot pass --source-file with --resume.", code="invalid_usage", exit_code=2)
             _resume(client, out, resume, timeout, selection=selection, detach=detach)
             return
         text = read_text_arg(claim)
-        accepted = client.verify(text, depth=chosen_depth, idempotency_key=uuid.uuid4().hex)
+        sources = parse_source_file_args(source_file)
+        accepted = client.verify(
+            text,
+            depth=chosen_depth,
+            supplied_sources=sources,
+            idempotency_key=uuid.uuid4().hex,
+        )
         # --detach alone fires off the submitted task immediately. With --claim
         # it instead flows through the multi-claim picker and detaches the
         # selected pipelines (so `--claim 1,3 --detach` submits exactly those).

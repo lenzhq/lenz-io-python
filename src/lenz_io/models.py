@@ -22,7 +22,7 @@ import copy
 import typing
 from collections.abc import Callable, ItemsView, KeysView, ValuesView
 from datetime import datetime, timezone
-from typing import Any, Literal, TypeVar
+from typing import Any, Literal, TypedDict, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -36,7 +36,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from typing_extensions import Self, deprecated
+from typing_extensions import Required, Self, deprecated
 
 from .errors import LenzInvalidResponseError, ResponseHeaders, unreadable_fields_error
 
@@ -676,6 +676,21 @@ Confidence = Literal["low", "medium", "high"]
 Depth = Literal["standard", "low"]
 
 
+class SuppliedSource(TypedDict, total=False):
+    """A caller-supplied source document.
+
+    When provided to ``verify``, ``verify_batch``, ``review``, or ``citecheck``,
+    matching citations will draw support from the supplied full text.
+    """
+
+    text: Required[str]
+    url: str
+    doi: str
+    cite: str
+    title: str
+    published_date: str
+
+
 class Source(_Lax):
     """A single citation backing a verification."""
 
@@ -691,6 +706,18 @@ class Source(_Lax):
     # unknown.
     snippet_language: str | None = None
     date: str = ""
+    origin: str = "web"
+
+    @field_validator("origin", mode="before")
+    @classmethod
+    def _coerce_origin(cls, value: Any) -> Any:
+        if not value:
+            return "web"
+        return value
+
+
+#: Alias for Source representing cited or supporting evidence.
+Evidence = Source
 
 
 class DebateSide(_Lax):
@@ -2953,6 +2980,7 @@ __all__ = [
     "EntityRef",
     "Escalation",
     "EscalationPolicy",
+    "Evidence",
     "ExtractStatus",
     "ExtractedClaim",
     "ExtractedClaims",
@@ -2990,6 +3018,7 @@ __all__ = [
     "ReviewVerificationCounts",
     "SimilarVerification",
     "Source",
+    "SuppliedSource",
     "TaskAccepted",
     "TaskAcceptedResult",
     "TaskStatus",
