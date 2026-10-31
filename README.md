@@ -181,8 +181,28 @@ It raises `ReviewFailed` when the review fails (`review.failure.code` and
 `review.failure.hint` say why; the exception's `error_code` keeps its 2.x spelling) and `ReviewTimeout` after `timeout` seconds (600 by default); the review
 keeps running, and the error carries its `review_id` and the last body read.
 To submit without waiting, `client.review(draft)` returns a `review_id`;
-read it with `client.get_review(review_id)`, or only the issues with
-`client.get_review(review_id, view="issues")`.
+read it with `client.get_review(review_id)`, only the issues with
+`client.get_review(review_id, view="issues")`, or poll it with
+`client.wait_for_review(review_id)`.
+
+**Reviewing document files (.docx, .pdf).** Instead of raw text, you can upload Word documents or PDFs directly using `review_file` and `review_file_and_wait`. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
+
+```python
+# Submit and wait for a Word document or PDF:
+review = client.review_file_and_wait("report.docx")
+
+# Or submit without waiting and poll later:
+started = client.review_file("report.pdf")
+review = client.wait_for_review(started.review_id)
+```
+
+**Exporting annotated documents (.docx).** For reviews completed from a Word document (or text reviews where Word output is generated), export the annotated `.docx` with Word comments and track changes for every flagged issue:
+
+```python
+export = client.export_review(review.review_id, format="docx")
+with open(export.filename or "annotated.docx", "wb") as f:
+    f.write(export.data)
+```
 
 A runnable version, with the errors handled:
 [`examples/core/review_draft.py`](examples/core/review_draft.py).
@@ -281,6 +301,8 @@ lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
+lenz review report.docx          # review Word document or PDF directly
+lenz review report.docx --export annotated.docx  # save annotated Word document with comments
 lenz review draft.md --issues    # only the issues
 lenz review draft.md --max-citations 0    # claims only, no source checked
 lenz review draft.md --max-assessments 0  # only the sources, no claim

@@ -88,6 +88,7 @@ from ._core import (
     _check_legacy_aliases,
     _check_library_iter_sort,
     _check_page_size,
+    _check_served_version,
     _check_user_agent,
     _citecheck_failed,
     _citecheck_job,
@@ -138,7 +139,13 @@ from ._core import (
     _with_options_layer,
 )
 from ._polling import JobPoll, TaskPoll, _progress_copy
-from .errors import LenzError
+from ._shared import (
+    FileInput,
+    ReviewEscalateInput,
+    _parse_content_disposition_filename,
+    _prepare_review_file_multipart,
+)
+from .errors import LenzError, LenzUsageError
 from .models import (
     AskHistory,
     AskReply,
@@ -154,6 +161,8 @@ from .models import (
     LibraryList,
     Progress,
     RelatedVerifications,
+    ReviewExport,
+    ReviewExportFormat,
     ReviewFull,
     ReviewIssues,
     ReviewStarted,
@@ -1832,6 +1841,193 @@ class AsyncLenz:
                 cancel_on_abort=cancel_on_abort,
             )
 
+    async def wait_for_review(
+        self,
+        review_id: str,
+        *,
+        timeout: float = 600.0,
+        on_update: Callable[[ReviewFull], Awaitable[object] | None] | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+        cancel_on_abort: bool = False,
+    ) -> ReviewFull:
+        """Poll an existing review until it reaches a terminal state.
+
+        Returns the completed ``ReviewFull``.
+        """
+        timeout = _wait_budget(timeout, 600.0, "wait_for_review()")
+        options = _call_options(None, None, extra_headers, "wait_for_review()")
+        return await self._wait_review(
+            review_id,
+            timeout=timeout,
+            on_update=on_update,
+            extra_headers=dict(options.headers),
+            cancel_on_abort=cancel_on_abort,
+        )
+
+    async def review_file(
+        self,
+        file: FileInput,
+        *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        max_assessments: int | None = None,
+        max_citations: int | None = None,
+        suggest_edits: bool | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        visibility: str = "private",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
+        escalate: ReviewEscalateInput | dict[str, Any] | None = None,
+        verdicts: list[str] | None = None,
+        confidence: list[str] | None = None,
+        max_verifications: int | None = None,
+        depth: str | None = None,
+        idempotency_key: str | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+        idempotency: bool = True,
+    ) -> ReviewStarted:
+        """Submit a Word (.docx) or PDF (.pdf) file
+        for review via multipart/form-data.
+
+        Returns a ``ReviewStarted`` receipt with a ``review_id``.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "review_file()")
+        files, data = _prepare_review_file_multipart(
+            file,
+            filename=filename,
+            content_type=content_type,
+            max_assessments=max_assessments,
+            max_citations=max_citations,
+            suggest_edits=suggest_edits,
+            language=language,
+            webhook_url=webhook_url,
+            visibility=visibility,
+            supplied_sources=supplied_sources,
+            escalate=escalate,
+            verdicts=verdicts,
+            confidence=confidence,
+            max_verifications=max_verifications,
+            depth=depth,
+        )
+        job_key = _job_key(idempotency_key, idempotency)
+        headers = _key_header(job_key)
+        body = await self._recovering(
+            _review_started_by_conflict,
+            "POST",
+            "/review/file",
+            files=files,
+            data=data,
+            headers=headers,
+            conflict_settles=_names_the_job("review_id"),
+            options=options,
+        )
+        if isinstance(body, ReviewStarted):
+            return body
+        with _carrying_key(job_key, unreadable=True):
+            return ReviewStarted.model_validate(body, context=self._results)
+
+    async def review_file_and_wait(
+        self,
+        file: FileInput,
+        *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        timeout: float = 600.0,
+        on_update: Callable[[ReviewFull], Awaitable[object] | None] | None = None,
+        max_assessments: int | None = None,
+        max_citations: int | None = None,
+        suggest_edits: bool | None = None,
+        language: str = "",
+        webhook_url: str | None = None,
+        visibility: str = "private",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
+        escalate: ReviewEscalateInput | dict[str, Any] | None = None,
+        verdicts: list[str] | None = None,
+        confidence: list[str] | None = None,
+        max_verifications: int | None = None,
+        depth: str | None = None,
+        idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+        idempotency: bool = True,
+        cancel_on_abort: bool = False,
+    ) -> ReviewFull:
+        """Submit a Word (.docx) or PDF (.pdf) file
+        for review and poll until it ends.
+
+        Returns the completed ``ReviewFull``.
+        """
+        timeout = _wait_budget(timeout, 600.0, "review_file_and_wait()")
+        options = _call_options(None, max_retries, extra_headers, "review_file_and_wait()")
+        key = _job_key(idempotency_key, idempotency)
+        with _carrying_key(key):
+            started = await self.review_file(
+                file,
+                filename=filename,
+                content_type=content_type,
+                max_assessments=max_assessments,
+                max_citations=max_citations,
+                suggest_edits=suggest_edits,
+                language=language,
+                webhook_url=webhook_url,
+                visibility=visibility,
+                supplied_sources=supplied_sources,
+                escalate=escalate,
+                verdicts=verdicts,
+                confidence=confidence,
+                max_verifications=max_verifications,
+                depth=depth,
+                idempotency_key=key,
+                **_given(options),
+                **_no_key(key is not None),
+            )
+            logger.info("Submitted file review: %s", started.review_id)
+            return await self._wait_review(
+                started.review_id,
+                timeout=timeout,
+                on_update=on_update,
+                extra_headers=dict(options.headers),
+                cancel_on_abort=cancel_on_abort,
+            )
+
+    async def export_review(
+        self,
+        review_id: str,
+        *,
+        format: ReviewExportFormat | str = "docx",
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewExport:
+        """Export the annotated document for a review.
+
+        Returns a ``ReviewExport`` containing ``data`` (bytes), ``filename``, ``content_type``,
+        ``format``, and optional ``source``.
+        """
+        fmt = format.strip().lower() if isinstance(format, str) else ""
+        if not fmt:
+            raise LenzUsageError("format must be a non-empty string.", code="invalid_argument", param="format")
+        options = _call_options(timeout, max_retries, extra_headers, "export_review()")
+        rid = _segment(review_id, "export_review() needs a review_id.", "review_id")
+        path = f"/reviews/{rid}/export"
+        response = await self._request_bytes("GET", path, params={"format": fmt}, options=options)
+        raw_bytes = response.content
+        if fmt == "docx" and (len(raw_bytes) < 4 or raw_bytes[:4] != b"PK\x03\x04"):
+            raise _unexpected_answer("GET", path, response.text[:200])
+        content_type = response.headers.get("content-type", "application/octet-stream").split(";")[0].strip()
+        source = response.headers.get("x-lenz-export-source", "").strip().lower() or None
+        fn = _parse_content_disposition_filename(response.headers.get("content-disposition"), f"lenz-check-{rid}.{fmt}")
+        return ReviewExport(
+            data=raw_bytes,
+            filename=fn,
+            content_type=content_type,
+            format=fmt,
+            source=source,
+            http_status=response.status_code,
+        )
+
     # ── /citecheck: the citation check on its own ──
 
     async def citecheck(
@@ -2542,6 +2738,7 @@ class AsyncLenz:
         conflict_settles: Callable[[Any], bool] | None = None,
         options: _CallOptions = _NO_OPTIONS,
         floor: float | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         """One API call, with the retry ladder. Every ``LenzError`` it raises
         carries the ``Idempotency-Key`` it sent (``exc.idempotency_key``).
@@ -2551,6 +2748,21 @@ class AsyncLenz:
         ``max_retries`` are the SDK's own settings for one request (a wait's
         polls): when set they win over every option."""
         key = (headers or {}).get("Idempotency-Key") or None
+        if kwargs.get("files") is not None or kwargs.get("data") is not None:
+            with _carrying_key(key, unreadable=True):
+                return await self._request_multipart(
+                    method,
+                    path,
+                    files=kwargs.get("files"),
+                    data=kwargs.get("data"),
+                    headers=headers,
+                    auth_required=auth_required,
+                    auth_optional=auth_optional,
+                    timeout=timeout,
+                    max_retries=max_retries,
+                    conflict_settles=conflict_settles,
+                    options=options,
+                )
         resolved, retries, option_headers = _request_settings(
             options,
             self._options,
@@ -2645,6 +2857,133 @@ class AsyncLenz:
             if settled is None:
                 raise
             return settled
+
+    async def _request_multipart(
+        self,
+        method: str,
+        path: str,
+        *,
+        files: Any = None,
+        data: Any = None,
+        headers: dict[str, str] | None = None,
+        auth_required: bool = True,
+        auth_optional: bool = False,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        conflict_settles: Callable[[Any], bool] | None = None,
+        options: _CallOptions = _NO_OPTIONS,
+    ) -> dict[str, Any]:
+        """Request sending multipart/form-data with retry ladder."""
+        resolved, retries, option_headers = _request_settings(
+            options,
+            self._options,
+            self._client_timeout(),
+            self._max_retries,
+            None,
+            timeout,
+            max_retries,
+            self._send_timeout,
+        )
+        url, req_headers, req_timeout = _prepare(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            path=path,
+            headers=headers,
+            option_headers=option_headers,
+            auth_required=auth_required,
+            auth_optional=auth_optional,
+            timeout=resolved,
+            has_body=False,  # Let httpx set multipart Content-Type with boundary
+            user_agent=(
+                _borrowed_user_agent(self._client.headers, self._user_agent, self._sdk_user_agent)
+                if self._borrowed
+                else None
+            ),
+        )
+        last_exc: Exception | None = None
+        for attempt in range(retries + 1):
+            try:
+                response = await self._client.request(
+                    method, url, files=files, data=data, headers=req_headers, timeout=req_timeout
+                )
+            except NOT_SENDABLE as exc:
+                raise _not_sendable(exc, method, path) from exc
+            except httpx.TransportError as exc:
+                last_exc = exc
+                await _sleep(_after_transport_error(exc, attempt, retries, method, path))
+                continue
+            done, value = _after_response(
+                response, attempt, retries, method, path, req_headers, conflict_settles, self._legacy_aliases
+            )
+            if done:
+                return value  # type: ignore[return-value]
+            await _sleep(value)
+        raise _exhausted(last_exc, method, path)
+
+    async def _request_bytes(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        auth_required: bool = True,
+        auth_optional: bool = False,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        options: _CallOptions = _NO_OPTIONS,
+    ) -> httpx.Response:
+        """Request returning raw httpx.Response for binary endpoints (like docx download)."""
+        resolved, retries, option_headers = _request_settings(
+            options,
+            self._options,
+            self._client_timeout(),
+            self._max_retries,
+            None,
+            timeout,
+            max_retries,
+            self._send_timeout,
+        )
+        url, req_headers, req_timeout = _prepare(
+            api_key=self._api_key,
+            base_url=self._base_url,
+            path=path,
+            headers=headers,
+            option_headers=option_headers,
+            auth_required=auth_required,
+            auth_optional=auth_optional,
+            timeout=resolved,
+            has_body=False,
+            user_agent=(
+                _borrowed_user_agent(self._client.headers, self._user_agent, self._sdk_user_agent)
+                if self._borrowed
+                else None
+            ),
+        )
+        last_exc: Exception | None = None
+        for attempt in range(retries + 1):
+            try:
+                response = await self._client.request(
+                    method, url, params=params, headers=req_headers, timeout=req_timeout
+                )
+            except NOT_SENDABLE as exc:
+                raise _not_sendable(exc, method, path) from exc
+            except httpx.TransportError as exc:
+                last_exc = exc
+                await _sleep(_after_transport_error(exc, attempt, retries, method, path))
+                continue
+
+            _check_served_version(response)
+            if response.status_code == 200:
+                return response
+
+            done, value = _after_response(
+                response, attempt, retries, method, path, req_headers, None, self._legacy_aliases
+            )
+            if done:
+                raise _unexpected_answer(method, path, response.text[:200])
+            await _sleep(value)
+        raise _exhausted(last_exc, method, path)
 
 
 __all__ = ["AsyncLenz"]

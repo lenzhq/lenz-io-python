@@ -143,6 +143,8 @@ ASYNC_ONLY_PARAMS = {
     "wait": {"cancel_on_abort"},
     "verify_batch_and_wait": {"cancel_on_abort"},
     "review_and_wait": {"cancel_on_abort"},
+    "review_file_and_wait": {"cancel_on_abort"},
+    "wait_for_review": {"cancel_on_abort"},
     "citecheck_and_wait": {"cancel_on_abort"},
 }
 
