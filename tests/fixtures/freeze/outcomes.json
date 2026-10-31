@@ -7446,7 +7446,7 @@
   "suppress_context": false
  },
  "verifications_get": {
-  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
+  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15', origin='web')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "Unanimous: claim holds under standard conditions.",
@@ -7484,6 +7484,7 @@
    "sources": [
     {
      "date": "2024-01-15",
+     "origin": "web",
      "snippet": "At 1 atm pressure water boils at 100.00°C (373.15 K).",
      "snippet_language": null,
      "source_name": "NIST",
@@ -7552,7 +7553,7 @@
   }
  },
  "verifications_get_keyless": {
-  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
+  "repr": "VerificationResult(verification_id='a1b2c3d4', claim='Water boils at 100°C at sea level.', visibility='', depth='standard', domain='Science', entities=[EntityRef(name='Water', qid='Q283')], presumed_intent='Verify a factual claim', verdict='True', confidence='high', lenz_score=10, key_finding='Water boils at 100°C at standard atmospheric pressure.', executive_summary='At standard atmospheric pressure, water boils at exactly 100°C.', warnings=[], suggested_rewrite=None, sources=[Source(source_name='NIST', title='Phase Transitions of Water', url='https://www.nist.gov/water-boiling', snippet='At 1 atm pressure water boils at 100.00°C (373.15 K).', snippet_language=None, date='2024-01-15', origin='web')], audit=Audit(adjudication_summary='Unanimous: claim holds under standard conditions.', assessments=[], debate_pro=DebateSide(role='', argument='', rebuttal=''), debate_con=DebateSide(role='', argument='', rebuttal=''), panel_agreement='unanimous'), created_at='2026-05-22T12:00:00Z', modified_at=None, language='en', coverage=None)",
   "result": {
    "audit": {
     "adjudication_summary": "Unanimous: claim holds under standard conditions.",
@@ -7590,6 +7591,7 @@
    "sources": [
     {
      "date": "2024-01-15",
+     "origin": "web",
      "snippet": "At 1 atm pressure water boils at 100.00°C (373.15 K).",
      "snippet_language": null,
      "source_name": "NIST",

@@ -33,7 +33,7 @@ from lenz_io import Lenz
 from lenz_io.errors import CitecheckFailed, CitecheckTimeout, LenzError
 from lenz_io.models import Citecheck
 
-from ._run import execute, read_text_arg
+from ._run import execute, parse_source_file_args, read_text_arg
 from .context import CLIState
 from .errors import CLIError
 from .render import Output
@@ -67,6 +67,12 @@ def citecheck(
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the citecheck_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="CITECHECK_ID", help="Pick up a check started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
+    source_file: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--source-file",
+        metavar="[META:]PATH",
+        help="Supplied source document to verify against. Repeatable.",
+    ),
 ) -> None:
     """Check a draft's sources: does each link say what the draft says? Exit code: 0 clean, 1 issues, 2 other."""
     state: CLIState = ctx.obj
@@ -82,12 +88,13 @@ def citecheck(
 
     def _work(client: Lenz) -> None:
         if resume:
-            if draft or pairs:
+            if draft or pairs or source_file:
                 raise CLIError("Pass either a draft, --pairs or --resume.", code="invalid_usage", exit_code=2)
             citecheck_id = resume
         else:
             if draft and pairs:
                 raise CLIError("Pass either a draft or --pairs, not both.", code="invalid_usage", exit_code=2)
+            sources = parse_source_file_args(source_file)
             if pairs:
                 if max_citations is not None:
                     raise CLIError(
@@ -95,9 +102,11 @@ def citecheck(
                         code="invalid_usage",
                         exit_code=2,
                     )
-                started = client.citecheck(pairs=_read_pairs(pairs), language=lang)
+                started = client.citecheck(pairs=_read_pairs(pairs), language=lang, supplied_sources=sources)
             else:
-                started = client.citecheck(_read_draft(draft), max_citations=max_citations, language=lang)
+                started = client.citecheck(
+                    _read_draft(draft), max_citations=max_citations, language=lang, supplied_sources=sources
+                )
             citecheck_id = started.citecheck_id
             if detach:
                 _emit_detached(out, citecheck_id)

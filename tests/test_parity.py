@@ -381,7 +381,7 @@ def test_model_schemas_match_the_previous_release() -> None:
     # (a response without them parses as before), so they are left out of the
     # comparison; ``test_snippet_language_on_sources`` and
     # ``test_assess_rows_carry_searched_pages`` pin them.
-    added_since_frozen = {"snippet_language", "searched_pages"}
+    added_since_frozen = {"snippet_language", "searched_pages", "origin"}
     # ``language`` is a field of other models too, so it is dropped from
     # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
     added_to_models = {"ExtractedClaims": {"language"}}

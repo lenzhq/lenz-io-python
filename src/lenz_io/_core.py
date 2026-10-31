@@ -69,6 +69,7 @@ from .models import (
     LibraryList,
     ReviewFull,
     ReviewStarted,
+    SuppliedSource,
     TaskStatus,
     Verification,
     VerificationList,
@@ -443,7 +444,31 @@ def _blank_webhook_url(value: Any) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
 
 
-def _batch_item_body(item: Any) -> Any:
+def _supplied_sources_body(
+    supplied_sources: Any,
+    *,
+    param: str = "supplied_sources",
+) -> list[dict[str, Any]]:
+    if isinstance(supplied_sources, (str, bytes)) or not isinstance(supplied_sources, Sequence):
+        raise LenzUsageError(
+            f"{param} must be a list of source dicts.",
+            code="invalid_argument",
+            param=param,
+        )
+    out: list[dict[str, Any]] = []
+    for idx, item in enumerate(supplied_sources):
+        if isinstance(item, Mapping):
+            out.append(dict(item))
+        else:
+            raise LenzUsageError(
+                f"{param}[{idx}] must be a dict (got {type(item).__name__}).",
+                code="invalid_argument",
+                param=f"{param}[{idx}]",
+            )
+    return out
+
+
+def _batch_item_body(item: Any, index: int = 0) -> Any:
     """The wire shape of one batch item.
 
     An item without ``claim`` is forwarded verbatim, so every existing caller
@@ -455,10 +480,16 @@ def _batch_item_body(item: Any) -> Any:
     """
     if isinstance(item, dict) and _blank_webhook_url(item.get("webhook_url")):
         item = {k: v for k, v in item.items() if k != "webhook_url"}
-    if "claim" not in item:
+    if not isinstance(item, dict):
         return item
     body = {k: v for k, v in item.items() if k != "claim"}
-    body["text"] = item["claim"] or item.get("text", "")
+    if "claim" in item:
+        body["text"] = item["claim"] or item.get("text", "")
+    if "supplied_sources" in body and body["supplied_sources"] is not None:
+        body["supplied_sources"] = _supplied_sources_body(
+            body["supplied_sources"],
+            param=f"claims[{index}].supplied_sources",
+        )
     return body
 
 
@@ -498,6 +529,11 @@ class CitationPair(TypedDict, total=False):
     cited_authors: list[str]
     cited_year: str
     cited_journal: str
+    source_text: str
+    published_date: str
+
+
+CitationPairInput = CitationPair
 
 
 class VerifyBatchItem(TypedDict, total=False):
@@ -530,6 +566,10 @@ class VerifyBatchItem(TypedDict, total=False):
     # sources, faster, 5 credits). Per-item value overrides the batch-wide
     # ``depth`` default.
     depth: str
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]]
+
+
+BatchClaimInput = VerifyBatchItem
 
 
 def _page_step(current: VerificationList | LibraryList, page: int) -> tuple[list[Any], int | None]:
@@ -1156,6 +1196,7 @@ def _verify_payload(
     language: str,
     visibility: str,
     depth: str,
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     chosen = _one_input(claim, text)
     if not chosen or _blank(chosen):
@@ -1180,6 +1221,8 @@ def _verify_payload(
     # Omit-when-empty: the server defaults to 'standard'.
     if depth:
         payload["depth"] = depth
+    if supplied_sources is not None:
+        payload["supplied_sources"] = _supplied_sources_body(supplied_sources)
     return payload
 
 
@@ -1190,13 +1233,14 @@ def _batch_payload(
     language: str,
     visibility: str,
     depth: str,
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     # ``webhook_url`` and ``language`` are batch-wide defaults; any
     # per-item value on a claim dict overrides them server-side.
     # Per-item items are validated as plain dicts at runtime — the
     # ``VerifyBatchItem`` TypedDict is purely for IDE autocompletion
     # (no Pydantic coercion, keep the runtime contract a plain dict).
-    payload: dict[str, Any] = {"claims": [_batch_item_body(c) for c in claims]}
+    payload: dict[str, Any] = {"claims": [_batch_item_body(c, i) for i, c in enumerate(claims)]}
     # Omit-when-empty, as on ``verify``: no ``webhook_url`` means the key's default.
     if not _blank_webhook_url(webhook_url):
         payload["webhook_url"] = webhook_url
@@ -1206,6 +1250,8 @@ def _batch_payload(
         payload["visibility"] = visibility
     if depth:
         payload["depth"] = depth
+    if supplied_sources is not None:
+        payload["supplied_sources"] = _supplied_sources_body(supplied_sources)
     return payload
 
 
@@ -1373,6 +1419,7 @@ def _review_payload(
     language: str,
     webhook_url: str | None,
     visibility: str,
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     if not text or not text.strip():
         raise LenzUsageError(_API_REVIEW_BLANK, code="blank_input", param="text")
@@ -1383,6 +1430,8 @@ def _review_payload(
         payload["webhook_url"] = webhook_url
     if visibility:
         payload["visibility"] = visibility
+    if supplied_sources is not None:
+        payload["supplied_sources"] = _supplied_sources_body(supplied_sources)
     escalate: dict[str, Any] = {}
     for name, selector in (("verdicts", verdicts), ("confidence", confidence)):
         if selector is None:
@@ -1418,6 +1467,7 @@ def _citecheck_payload(
     max_citations: int | None,
     language: str,
     webhook_url: str | None,
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     has_text = bool(text and text.strip())
     if not has_text and pairs is None:
@@ -1435,6 +1485,8 @@ def _citecheck_payload(
         payload["language"] = language
     if webhook_url is not None:
         payload["webhook_url"] = webhook_url
+    if supplied_sources is not None:
+        payload["supplied_sources"] = _supplied_sources_body(supplied_sources)
     return payload
 
 

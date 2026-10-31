@@ -42,7 +42,7 @@ from lenz_io import Lenz
 from lenz_io.errors import LenzError, ReviewFailed, ReviewTimeout
 from lenz_io.models import Citecheck, ReviewCitationIssue, ReviewClaim, ReviewFull, ReviewIssues
 
-from ._run import execute, read_text_arg
+from ._run import execute, parse_source_file_args, read_text_arg
 from .context import CLIState
 from .errors import CLIError
 from .render import _VERDICT_COLOR, Output, _truncate
@@ -102,6 +102,12 @@ def review(
     detach: bool = typer.Option(False, "--detach", help="Submit and exit; print the review_id to resume."),
     resume: str = typer.Option(None, "--resume", metavar="REVIEW_ID", help="Pick up a review started earlier."),
     timeout: float = typer.Option(600.0, "--timeout", help="Max seconds to wait."),
+    source_file: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--source-file",
+        metavar="[META:]PATH",
+        help="Supplied source document to verify against. Repeatable.",
+    ),
 ) -> None:
     """Review a draft and its sources. Exit codes: 0 clean, 1 issues, 2 anything else.
 
@@ -120,13 +126,14 @@ def review(
 
     def _work(client: Lenz) -> None:
         if resume:
-            if draft:
+            if draft or source_file:
                 raise CLIError("Pass either a draft or --resume, not both.", code="invalid_usage", exit_code=2)
             review_id = resume
         else:
             chosen_depth = _parse_depth(depth)
             text = _read_draft(draft)
             citations = DEFAULT_MAX_CITATIONS if max_citations is None else max_citations
+            sources = parse_source_file_args(source_file)
             if not out.json_mode:
                 out.err.print(f"[dim]{escape(opening_line(max_assessments, citations))}[/dim]")
             started = client.review(
@@ -136,6 +143,7 @@ def review(
                 depth=chosen_depth,
                 max_citations=citations,
                 language=(language or "").strip().lower(),
+                supplied_sources=sources,
             )
             review_id = started.review_id
             if detach:

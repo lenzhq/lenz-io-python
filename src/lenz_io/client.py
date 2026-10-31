@@ -251,6 +251,11 @@ from .models import (
     ReviewFull as ReviewFull,
     ReviewIssues as ReviewIssues,
     ReviewStarted as ReviewStarted,
+    SimilarVerification as SimilarVerification,
+    Source as Source,
+    SuggestedEdit as SuggestedEdit,
+    SuggestedEdits as SuggestedEdits,
+    SuppliedSource as SuppliedSource,
     TaskAccepted as TaskAccepted,
     TaskAcceptedResult as TaskAcceptedResult,
     TaskStatus as TaskStatus,
@@ -877,6 +882,7 @@ class Lenz:
         idempotency_key: str | None = None,
         source_url: str = "",
         webhook_url: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
@@ -929,6 +935,7 @@ class Lenz:
             language=language,
             visibility=visibility,
             depth=depth,
+            supplied_sources=supplied_sources,
             idempotency_key=_call_key(idempotency_key, idempotency),
             timeout=timeout,
             max_retries=max_retries,
@@ -943,6 +950,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         idempotency: bool = True,
         timeout: float | httpx.Timeout | None = None,
@@ -983,6 +991,7 @@ class Lenz:
             language=language,
             visibility=visibility,
             depth=depth,
+            supplied_sources=supplied_sources,
             idempotency_key=_call_key(idempotency_key, idempotency),
             timeout=timeout,
             max_retries=max_retries,
@@ -1336,6 +1345,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         timeout: float = WAIT_TIMEOUT,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -1393,6 +1403,7 @@ class Lenz:
                 language=language,
                 visibility=visibility,
                 depth=depth,
+                supplied_sources=supplied_sources,
                 idempotency_key=key,
                 max_retries=options.max_retries,
                 extra_headers=dict(options.headers),
@@ -1454,6 +1465,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         timeout: float = WAIT_TIMEOUT,
         on_progress: Callable[[str, Progress], None] | None = None,
@@ -1499,6 +1511,7 @@ class Lenz:
                 language=language,
                 visibility=visibility,
                 depth=depth,
+                supplied_sources=supplied_sources,
                 idempotency_key=key,
                 max_retries=options.max_retries,
                 extra_headers=dict(options.headers),
@@ -1526,6 +1539,7 @@ class Lenz:
         language: str = "",
         webhook_url: str | None = None,
         visibility: str = "private",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
@@ -1607,6 +1621,7 @@ class Lenz:
             language=language,
             webhook_url=webhook_url,
             visibility=visibility,
+            supplied_sources=supplied_sources,
         )
         job_key = _job_key(idempotency_key, idempotency)
         headers = _key_header(job_key)
@@ -1738,6 +1753,7 @@ class Lenz:
         language: str = "",
         webhook_url: str | None = None,
         visibility: str = "private",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
@@ -1771,6 +1787,9 @@ class Lenz:
         # The key is minted here (as ``review`` would) so the wait's errors carry it too.
         key = _job_key(idempotency_key, idempotency)
         with _carrying_key(key):
+            call_kw: dict[str, Any] = {}
+            if supplied_sources is not None:
+                call_kw["supplied_sources"] = supplied_sources
             started = self.review(
                 text,
                 verdicts=verdicts,
@@ -1787,6 +1806,7 @@ class Lenz:
                 # Only the options given, so a 2.21 ``review`` override is still called.
                 **_given(options),
                 **_no_key(key is not None),
+                **call_kw,
             )
             logger.info("Submitted review: %s", started.review_id)
             return self._wait_review(
@@ -1803,6 +1823,7 @@ class Lenz:
         max_citations: int | None = None,
         language: str = "",
         webhook_url: str | None = None,
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
@@ -1848,7 +1869,12 @@ class Lenz:
         """
         options = _call_options(timeout, max_retries, extra_headers, "citecheck()")
         payload = _citecheck_payload(
-            text=text, pairs=pairs, max_citations=max_citations, language=language, webhook_url=webhook_url
+            text=text,
+            pairs=pairs,
+            max_citations=max_citations,
+            language=language,
+            webhook_url=webhook_url,
+            supplied_sources=supplied_sources,
         )
         job_key = _job_key(idempotency_key, idempotency)
         headers = _key_header(job_key)
@@ -1932,6 +1958,7 @@ class Lenz:
         max_citations: int | None = None,
         language: str = "",
         webhook_url: str | None = None,
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
@@ -1962,6 +1989,9 @@ class Lenz:
         # The key is minted here (as ``citecheck`` would) so the wait's errors carry it too.
         key = _job_key(idempotency_key, idempotency)
         with _carrying_key(key):
+            call_kw: dict[str, Any] = {}
+            if supplied_sources is not None:
+                call_kw["supplied_sources"] = supplied_sources
             started = self.citecheck(
                 text,
                 pairs=pairs,
@@ -1972,6 +2002,7 @@ class Lenz:
                 # Only the options given, so a 2.21 ``citecheck`` override is still called.
                 **_given(options),
                 **_no_key(key is not None),
+                **call_kw,
             )
             logger.info("Submitted citation check: %s", started.citecheck_id)
             return self._wait_citecheck(
@@ -2179,6 +2210,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
@@ -2193,6 +2225,7 @@ class Lenz:
             language=language,
             visibility=visibility,
             depth=depth,
+            supplied_sources=supplied_sources,
         )
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):
@@ -2207,6 +2240,7 @@ class Lenz:
         language: str = "",
         visibility: str = "",
         depth: str = "",
+        supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
         idempotency_key: str | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
@@ -2214,7 +2248,12 @@ class Lenz:
     ) -> BatchAccepted:
         options = _call_options(timeout, max_retries, extra_headers, "verify_batch()")
         payload = _batch_payload(
-            claims=claims, webhook_url=webhook_url, language=language, visibility=visibility, depth=depth
+            claims=claims,
+            webhook_url=webhook_url,
+            language=language,
+            visibility=visibility,
+            depth=depth,
+            supplied_sources=supplied_sources,
         )
         headers = _key_header(idempotency_key)
         with _carrying_key(idempotency_key, unreadable=True):

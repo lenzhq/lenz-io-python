@@ -66,6 +66,7 @@ if TYPE_CHECKING:
     from .async_client import AsyncLenz
 
 # Public surface
+from ._core import BatchClaimInput, CitationPairInput
 from .client import API_VERSION, DEFAULT_BASE_URL, NOT_GIVEN, CitationPair, Lenz, NotGiven, VerifyBatchItem
 from .errors import (
     MAX_RETRY_AFTER_SLEEP,
@@ -127,6 +128,7 @@ from .models import (
     EntityRef,
     Escalation,
     EscalationPolicy,
+    Evidence,
     ExtractedClaim,
     ExtractedClaims,
     ExtractedEntity,
@@ -153,6 +155,7 @@ from .models import (
     Source,
     SuggestedEdit,
     SuggestedEdits,
+    SuppliedSource,
     TaskAccepted,
     TaskAcceptedResult,
     TaskStatus,
@@ -198,12 +201,14 @@ __all__ = [
     "AsyncLenz",
     "Audit",
     "BatchAccepted",
+    "BatchClaimInput",
     "BatchItemResult",
     "CancelResult",
     "CandidateClaim",
     "Certificate",
     "CertificateTimestamped",
     "CitationPair",
+    "CitationPairInput",
     "Citecheck",
     "CitecheckEvent",
     "CitecheckFailed",
@@ -221,6 +226,7 @@ __all__ = [
     "EntityRef",
     "Escalation",
     "EscalationPolicy",
+    "Evidence",
     "ExtractStatus",
     "ExtractedClaim",
     "ExtractedClaims",
@@ -276,6 +282,7 @@ __all__ = [
     "Source",
     "SuggestedEdit",
     "SuggestedEdits",
+    "SuppliedSource",
     "TaskAccepted",
     "TaskAcceptedResult",
     "TaskStatus",
