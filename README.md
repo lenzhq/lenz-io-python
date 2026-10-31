@@ -185,11 +185,12 @@ read it with `client.get_review(review_id)`, only the issues with
 `client.get_review(review_id, view="issues")`, or poll it with
 `client.wait_for_review(review_id)`.
 
-**Reviewing document files (.docx, .pdf).** Instead of raw text, you can upload Word documents or PDFs directly using `review_file` and `review_file_and_wait`. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
+**Reviewing document and image files (.docx, .pdf, .png, .jpg, .webp).** Instead of raw text, you can upload Word documents, PDFs, or images directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs and direct image links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
 
 ```python
-# Submit and wait for a Word document or PDF:
+# Submit and wait for a Word document, PDF, or image:
 review = client.review_file_and_wait("report.docx")
+review_img = client.review_file_and_wait("infographic.png")
 
 # Or submit without waiting and poll later:
 started = client.review_file("report.pdf")
@@ -301,7 +302,7 @@ lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
 lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
-lenz review report.docx          # review Word document or PDF directly
+lenz review report.docx          # review Word document, PDF, or image (.png, .jpg, .webp) directly
 lenz review report.docx --export annotated.docx  # save annotated Word document with comments
 lenz review draft.md --issues    # only the issues
 lenz review draft.md --max-citations 0    # claims only, no source checked

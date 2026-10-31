@@ -684,3 +684,19 @@ def test_the_new_classes_are_exported():
     for name in ("LenzNotFoundError", "LenzConnectionError", "LenzRequestTimeoutError"):
         assert name in lenz_io.__all__
         assert issubclass(getattr(lenz_io, name), LenzError)
+
+
+def test_review_family_regex_matches_review_file():
+    from lenz_io.errors import _REVIEW_FAMILY, _original_error
+
+    assert _REVIEW_FAMILY.match("/review/file")
+    assert _REVIEW_FAMILY.match("/review")
+    assert _REVIEW_FAMILY.match("/reviews/442b6aa9")
+    assert _REVIEW_FAMILY.match("/citecheck")
+    assert _REVIEW_FAMILY.match("/citechecks/442b6aa9")
+    assert not _REVIEW_FAMILY.match("/verify")
+
+    # When /review/file encounters not_authenticated, code is stripped per _REVIEW_FAMILY handling
+    original = _original_error(401, {"code": "not_authenticated", "detail": "bad"}, "POST", "/review/file")
+    assert "code" not in original
+    assert original["detail"] == "bad"

@@ -90,7 +90,10 @@ def _prepare_review_file_multipart(
     max_verifications: int | None = None,
     depth: str | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate file input and construct httpx files and data dictionaries."""
+    """Validate file input and construct httpx files and data dictionaries.
+
+    Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
+    """
     # 1. Resolve file content, filename, content_type
     file_bytes: bytes
     resolved_filename: str
@@ -141,7 +144,7 @@ def _prepare_review_file_multipart(
             param="file",
         )
 
-    # Validate filename extension: only .docx and .pdf are supported by POST /review/file
+    # Validate filename extension: .docx, .pdf, .png, .jpg, .jpeg, and .webp are supported by POST /review/file
     lower_fn = resolved_filename.lower()
     if lower_fn.endswith(".docx"):
         resolved_content_type = (
@@ -149,10 +152,16 @@ def _prepare_review_file_multipart(
         )
     elif lower_fn.endswith(".pdf"):
         resolved_content_type = content_type or "application/pdf"
+    elif lower_fn.endswith(".png"):
+        resolved_content_type = content_type or "image/png"
+    elif lower_fn.endswith(".jpg") or lower_fn.endswith(".jpeg"):
+        resolved_content_type = content_type or "image/jpeg"
+    elif lower_fn.endswith(".webp"):
+        resolved_content_type = content_type or "image/webp"
     else:
         raise LenzUsageError(
-            f"Unsupported file format for review: {resolved_filename}. Only Word (.docx) and PDF (.pdf) "
-            "files are supported.",
+            f"Unsupported file format for review: {resolved_filename}. Only Word (.docx), PDF (.pdf), "
+            "and image (.png, .jpg, .webp) files are supported.",
             code="invalid_argument",
             param="file",
         )

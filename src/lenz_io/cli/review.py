@@ -71,7 +71,13 @@ _OUTCOME_LABEL = {
 
 def review(
     ctx: typer.Context,
-    draft: str = typer.Argument(None, help="The draft: a file path, '-' (or a pipe) for stdin, or one http(s) URL."),
+    draft: str = typer.Argument(
+        None,
+        help=(
+            "The draft: a file path (.docx, .pdf, .png, .jpg, .webp, or text), '-' (or a pipe) for stdin, "
+            "or one http(s) URL (web articles, Google Docs, or direct image URLs)."
+        ),
+    ),
     issues: bool = typer.Option(False, "--issues", help="Print only the issues (and any failed rows)."),
     max_assessments: int = typer.Option(
         None,
@@ -285,17 +291,16 @@ def _parse_depth(raw: str | None) -> str | None:
 
 
 def _is_binary_document(arg: str | None) -> bool:
-    """Check if arg points to a binary document (.docx or .pdf)."""
+    """Check if arg points to a binary document or image (.docx, .pdf, .png, .jpg, .jpeg, .webp)."""
     if not arg or arg == "-" or _URL.match(arg.strip()):
         return False
-    lower = arg.lower()
-    return lower.endswith(".docx") or lower.endswith(".pdf")
+    return arg.lower().endswith((".docx", ".pdf", ".png", ".jpg", ".jpeg", ".webp"))
 
 
 def _resolve_draft_input(arg: str | None) -> tuple[str | None, Path | None]:
     """Resolve draft argument into (text, file_path).
 
-    For binary documents (.docx, .pdf), returns (None, path).
+    For binary documents and images (.docx, .pdf, .png, .jpg, .jpeg, .webp), returns (None, path).
     For text files, URLs, or stdin, returns (text, None).
     """
     if arg is not None and _is_binary_document(arg):
@@ -311,7 +316,7 @@ def _resolve_draft_input(arg: str | None) -> tuple[str | None, Path | None]:
             raise CLIError(
                 f"File is empty: {arg}",
                 code="no_input",
-                fix="Pass a non-empty .docx or .pdf document.",
+                fix="Pass a non-empty document or image file (.docx, .pdf, .png, .jpg, .webp).",
                 exit_code=2,
             )
         return None, path

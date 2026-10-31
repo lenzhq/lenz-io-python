@@ -954,8 +954,8 @@ def _parse_body(raw: bytes | str | None) -> dict[str, Any]:
 # (the same rules as the Node SDK), so every attribute of the exception keeps
 # its 2.x value; ``exc.body`` is the body as sent.
 
-#: /review and /citecheck (submit and read) kept their own error envelope.
-_REVIEW_FAMILY = re.compile(r"^/(?:review|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
+#: /review, /review/file, and /citecheck (submit and read) kept their own error envelope.
+_REVIEW_FAMILY = re.compile(r"^/(?:review|review/file|reviews/[^/]+|citecheck|citechecks/[^/]+)$")
 
 #: The cancel calls are new in 3.0: no earlier shape to read, so the server's
 #: ``code`` stays on the error (``not_found``, ``use_review_cancel``, ...).
