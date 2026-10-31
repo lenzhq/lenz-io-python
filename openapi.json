@@ -3,7 +3,7 @@
   "info": {
     "title": "Lenz \u2014 AI Fact-Checking API",
     "version": "1.0.0",
-    "description": "# Four API calls and one to run them\n\nA research-depth ladder: find claims, judge fast, prove deep, citecheck; `/review` runs them all.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 100, most check-worthy first, inputs to 50k chars), or in a public web page given its URL; an optional `focus` narrows the list to the claims you care about, and `locate: true` keeps only the claims traced back to the text, with where each is made. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 a fast panel verdict, with the pages the reviewers looked at, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel. A text that makes more claims than one call checks gets the most check-worthy checked and the rest back as `more_claims`, free, to send on.\n- `POST /verify` \u2014 a full investigation, with verified citations, in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /citecheck` \u2014 does each cited source say what the text attributes to it: send pairs of a statement and its URL or DOI, or a whole text. Async; 1 credit per checked citation, refunded when a citation could not be checked ([guide](https://lenz.io/docs/citations)).\n- `POST /review` \u2014 the extract \u2192 assess \u2192 verify ladder on a whole draft, returning the issues with suggested rewrites in 2-4 min. Async, 1 credit per claim assessed + 10 (5 at `depth: \"low\"`) per claim verified. With `escalate.max_citations` (0-20, default 0) it also checks whether each source the draft cites says what the draft attributes to it, at 1 credit per checked citation (one that could not be checked is refunded) ([guide](https://lenz.io/docs/citations)). `more_claims` and `more_citations` list what the review found and did not check, at no cost; send them to `/assess` and `/citecheck` to check the rest.\n- Also `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## API versions\n\nLenz versions the shape of its responses by date: send `X-Lenz-API-Version: 2026-10-11` to choose this shape. This reference describes `2026-10-11`. A field `2026-05-13` still sends under an older name is listed `deprecated` beside the current one, and where its shape differs, the operation names the `...Legacy` component it receives (`x-lenz-versions` on the response). Every response carries `X-Lenz-API-Version`, naming the version it is in. Which version a request gets without the header, and what changed: [https://lenz.io/docs/api-versions](https://lenz.io/docs/api-versions).\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: one /review call\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# Extract, assess, and verify the doubtful claims in one call (async, 2-4 min)\ndraft = \"The EU AI Act took effect in March 2024. It sorts AI systems into four risk tiers.\"\nreview = client.review_and_wait(text=draft)\nfor i in review.issues:\n    print(i.verdict, i.claim, i.suggested_rewrite)\n```\n\nThe default policy: a quick verdict on every claim (up to 20), and the deep check on the rows whose quick verdict is `False`, `Mostly False`, `Mixed` or `No Public Record`, or whose confidence is `low`, up to five. Change it in `escalate`. To deep-check the rows the cap left out (`escalation.disposition == \"cap\"`), send them to `/verify/batch`. A resend with the same `Idempotency-Key` within 24 hours returns the same review; a new key is a new review.\n\n## The primitives, call by call: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# extracted.claims lists every claim found, most check-worthy first:\n# always a list (one entry for one claim, [] for none).\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = [c.claim for c in extracted.claims]\n\n# 2. Fast verdict in ONE call (typically 10-25s, 3-model panel): a list of up\n# to 20, one row per claim, in the order you sent them. extract finds up to\n# 100, most check-worthy first, so this checks the first 20.\nquick = client.assess(claims=claims[:20]).claims if claims else []\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Failed rows are free. A retryable one (a provider, or the time budget)\n# is worth resending; the rest (no_checkable_claim, internal) are not.\nretry = [c.claim for c in quick if c.failure and c.failure.retryable]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.status == \"completed\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of five shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`, and, after you cancel the run (see Stopping a run), `cancelled`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant. Several claims in one sentence count the same as several sentences.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries a `failure` block. `code` says what a caller can do about it, a closed set: `no_checkable_claim` (send a checkable statement), `upstream_unavailable` (a provider or our own executor failed; retry), `internal` (retrying the same input will not help) and `cancelled`. `detail` is one sentence on the cause (which step stopped, or that the search was unavailable). `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, the search for sources did not finish, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `invalid_input` | Not a checkable claim | `false` |\n| `cancelled` | You stopped it with `POST /verify/{task_id}/cancel`; not charged | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n| `insufficient_evidence` | Version `2026-05-13` only: too few sources to judge the claim (`research_empty` / `research_insufficient`); the current version answers such a run with \"No Public Record\" (below) | `false` |\n\nBranch on `retryable`. `failure_class` and `code` are **closed sets**. A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nVersion `2026-05-13` sends the same facts flat: `failure_reason` (the webhook's `error`) is the same code (`not_a_claim` for `no_checkable_claim`), except `research_empty` / `research_insufficient` with `failure_class: \"insufficient_evidence\"`, which is how that version reads a \"No Public Record\" answer. It used to name the pipeline step (`framing_failed`, `conclusion_failed`, `task_stuck`, \u2026); those now read as the code above.\n\n### When an /assess row, a review or a citation check fails\n\nThe same `failure` block, and one vocabulary for `code`: `no_checkable_claim`, `page_unreadable` (a link /review or /extract was sent could not be read), `upstream_unavailable` (a provider or the time budget; retry), `internal`, `cancelled`, `no_citations` and `insufficient_credits`. `detail` names the cause (out of time, no row could be assessed, ...). Branch on `retryable`, never on a list of codes. Version `2026-05-13` keeps the earlier causes as codes (`timeout`, `framing_failed`, `assessment_failed`, `citation_check_failed`, `invalid_input`), and `/extract` answers an unreadable link with its 502 `extraction_failed` where the current version answers 422 `page_unreadable`.\n\n### No Public Record\n\nA claim whose central assertion no public record in the evidence settles (a private fact, an entity nothing records, a record that would carry it and was not found) completes with `verdict: \"No Public Record\"`, `lenz_score: null` and a `confidence`. It is an answer, charged like a verdict, never warranted and always private (`visibility` is ignored for it). It does not make the claim false. On a review it is an issue (in `issues[]`, with no suggested edit; the review reads `outcome: \"issues_found\"`). Version `2026-05-13` never receives it: it reads such a run as the failure it was before (`research_empty` when no source was found, else `research_insufficient`; `GET /verifications/{id}` answers 409 `verification_failed`; `GET /verifications` leaves it out); a run submitted in that version is not charged for it.\n\nIn the next API version a cancelled run is not a failure: `GET /verify/status/{task_id}` answers `{\"status\": \"cancelled\", \"task_id\": \"\u2026\"}`, and a `webhook_url` receives `verification.cancelled`. A request made in 2026-05-13 keeps `status: \"failed\"` with `failure_class: \"cancelled\"` and receives `verification.failed`.\n\n### Stopping a run\n\n`POST /verify/{task_id}/cancel` stops a verification that has not finished. A cancelled run is not charged and saves no verification; model work already under way is not billed to you, and the run stops at its next step. The call is safe to repeat and answers 200 in every state: `cancelled: true` with `status: \"cancelled\"`, or `cancelled: false` with `status: \"completed\"` (it finished first and was charged as usual) or `\"failed\"`. It needs no `Idempotency-Key`. An unknown task, another account's task and a task not submitted through the API answer 404 `not_found`; a task that is a `/review`'s deep check answers 409 `use_review_cancel`. Each item of a `/verify/batch` has its own `task_id`, so cancel per task; there is no call for a whole batch. `POST /reviews/{review_id}/cancel` and `POST /citechecks/{citecheck_id}/cancel` stop everything in a review or a citation check. They refund the quick checks not yet served and the citations not yet checked, and keep what was delivered charged.\n\nOne of those codes comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `no_checkable_claim` (`not_a_claim` in 2026-05-13; the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **Whole drafts**: `POST /review` with `webhook_url`; handle `review.completed` (a `ReviewWebhookPayload`, deduped on `event_id`) and read `review.issues[]` and `review.citation_issues[]`.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\"`; a verification or an /assess row can also be `\"No Public Record\"` (see above; an /assess row in version `2026-05-13` never is, and can be `\"Error\"`).\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads); `null` for `\"No Public Record\"`.\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`). On `/assess` rows too when the request sets `suggest_rewrite`: written from the quick check's reasoning for a claim it found False or Mostly False with high confidence, at no extra credit; `null` otherwise, and on every row when not requested.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 a fast verdict, with the pages the reviewers looked at.\n- **Verify** \u2014 the full investigation: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows and rows answered from the cache are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED. A `/verify/batch` may mix depths per item and is billed per item.\n\nAn answer served from the last hour's cache is free: a `/verify`, `/assess` or `/review` claim that gets back a verdict checked in the last hour costs nothing, so a tool that resends a request is not charged twice. The exception is a `/verify` that issues you a new warranty certificate, charged at the depth you requested.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. In version `2026-05-13` the per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch`, `POST /verify/{task_id}/select`, `POST /review`, `POST /citecheck` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs generate a key for `extract`, `assess`, `select`, `verify`, `verify_and_wait`, `verify_batch`, `verify_batch_and_wait`, `ask.send`, `review` and `citecheck` and reuse it across their own retries (lenz-io 3.0; 2.x sent a key on `verify_batch` and `ask.send` only when you passed `idempotency_key` yourself). An error from a keyed call carries the key (`idempotency_key` in Python, `idempotencyKey` in Node): resend with that same key, never as a plain new call, which sends a new key and can run the work twice.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. lenz-io 3.0 sends a fresh key on every `ask.send` call and reuses it across the retries inside that call, so a retried question is not asked twice. Asking the same question again is a new call with a new key, and is asked again, because a repeated question is usually deliberate; pin the key to make a retry from another process mean \"the same question, once\": `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket. lenz-io 3.0 reads the last column for you: `retryable` is set on every SDK error (true for a 429, a 5xx, a dropped connection, a request timeout and a 409 that means \"not yet\"; false for any other 4xx), so branch on it instead of the status.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | A request with the same `Idempotency-Key` is still running, or the work the call names is not in the state it needs (`no_selection_pending`, `verification_not_ready`, `verification_failed`, `use_review_cancel`) | Same-key conflict: yes, with the same key. `verification_not_ready`: poll, or choose the claims when it needs input. `no_selection_pending`: poll the status first. `use_review_cancel`: cancel the review instead |\n| 422 | Malformed input | No |\n| 429 | Rate limit: the per-account `/extract` daily cap, or too many reviews or citation checks running (`review_in_flight`, `citecheck_in_flight`) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`, `/ask`) failed deterministically \u2014 a schema or parse failure (`/ask`: `ask_failed`) | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`) or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header. The in-flight 429 of `/review` and `/citecheck` (`review_in_flight`, `citecheck_in_flight`) carries `retry_after_seconds` and `Retry-After` instead. The daily cap is the same on every plan; only a key Lenz has marked unlimited for `/extract` bypasses it.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` and `POST /review` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events. Events: `verification.completed`, `verification.failed`, `verification.cancelled`, `certificate.timestamped`, and for a review `review.completed` / `review.failed` / `review.cancelled` and for a citation check `citecheck.completed` / `citecheck.failed` / `citecheck.cancelled` (switch on `event`; a review's own deep checks fire no `verification.*` events). The `*.cancelled` events fire once, when you cancel, in the next API version; a submission made in 2026-05-13 receives the matching `*.failed` event with `failure_class: \"cancelled\"` instead.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
+    "description": "# Four API calls and one to run them\n\nA research-depth ladder: find claims, judge fast, prove deep, citecheck; `/review` runs them all.\n\n- `POST /extract` \u2014 enumerate every major verifiable claim in a document (up to 100, most check-worthy first, inputs to 50k chars), or in a public web page, Google Doc, YouTube video, or image given its URL; an optional `focus` narrows the list to the claims you care about, and `locate: true` keeps only the claims traced back to the text, with where each is made. Costs no credits; fair-use cap 1,000/account/day.\n- `POST /assess` \u2014 a fast panel verdict, with the pages the reviewers looked at, typically 10-25s. Sync, 1 credit per claim. Send one text in `claim`, or a list of up to 20 in `claims` \u2014 one row per claim, same order, all checked in parallel. A text that makes more claims than one call checks gets the most check-worthy checked and the rest back as `more_claims`, free, to send on.\n- `POST /verify` \u2014 a full investigation, with verified citations, in ~90s. Async, 10 credits \u2014 or 5 with `depth: \"low\"`, a shallower check that comes back sooner.\n- `POST /citecheck` \u2014 does each cited source say what the text attributes to it: send pairs of a statement and its URL or DOI, or a whole text. Async; 1 credit per checked citation, refunded when a citation could not be checked ([guide](https://lenz.io/docs/citations)).\n- `POST /review` \u2014 the extract \u2192 assess \u2192 verify ladder on a whole draft, returning the issues with suggested rewrites in 2-4 min. Async, 1 credit per claim assessed + 10 (5 at `depth: \"low\"`) per claim verified. With `escalate.max_citations` (0-20, default 0) it also checks whether each source the draft cites says what the draft attributes to it, at 1 credit per checked citation (one that could not be checked is refunded) ([guide](https://lenz.io/docs/citations)). `more_claims` and `more_citations` list what the review found and did not check, at no cost; send them to `/assess` and `/citecheck` to check the rest.\n- Also `POST /ask/{id}` \u2014 ask follow-up questions grounded on a verification.\n\n## Built for teams whose AI output is async or document-shaped\n\nLegal-memo generators, AI deep-research, due-diligence platforms, vertical agents producing structured deliverables, \"report-as-a-service\" companies. `/assess` opens the door to sync UX too \u2014 fast enough to gate a chat completion or a UI submit.\n\n## API versions\n\nLenz versions the shape of its responses by date: send `X-Lenz-API-Version: 2026-10-11` to choose this shape. This reference describes `2026-10-11`. A field `2026-05-13` still sends under an older name is listed `deprecated` beside the current one, and where its shape differs, the operation names the `...Legacy` component it receives (`x-lenz-versions` on the response). Every response carries `X-Lenz-API-Version`, naming the version it is in. Which version a request gets without the header, and what changed: [https://lenz.io/docs/api-versions](https://lenz.io/docs/api-versions).\n\n## Install the SDK\n\n```bash\npip install lenz-io      # Python\nnpm install lenz-io      # Node / TypeScript\n```\n\nSource on GitHub: [lenz-io-python](https://github.com/lenzhq/lenz-io-python) \u00b7 [lenz-io-node](https://github.com/lenzhq/lenz-io-node).\n\n## The canonical integration: one /review call\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# Extract, assess, and verify the doubtful claims in one call (async, 2-4 min)\ndraft = \"The EU AI Act took effect in March 2024. It sorts AI systems into four risk tiers.\"\nreview = client.review_and_wait(text=draft)\nfor i in review.issues:\n    print(i.verdict, i.claim, i.suggested_rewrite)\n```\n\nThe default policy: a quick verdict on every claim (up to 20), and the deep check on the rows whose quick verdict is `False`, `Mostly False`, `Mixed` or `No Public Record`, or whose confidence is `low`, up to five. Change it in `escalate`. To deep-check the rows the cap left out (`escalation.disposition == \"cap\"`), send them to `/verify/batch`. A resend with the same `Idempotency-Key` within 24 hours returns the same review; a new key is a new review.\n\n## The primitives, call by call: extract \u2192 assess \u2192 conditional verify\n\n```python\nfrom lenz_io import Lenz\nclient = Lenz(api_key=\"lenz_...\")\n\n# 1. Enumerate the factual claims in your model output (free)\n# extracted.claims lists every claim found, most check-worthy first:\n# always a list (one entry for one claim, [] for none).\n# Pass focus=\"market size and competitors\" to narrow the list;\n# status is \"no_match\" when the document has claims but none match.\nextracted = client.extract(text=llm_output)\nclaims = [c.claim for c in extracted.claims]\n\n# 2. Fast verdict in ONE call (typically 10-25s, 3-model panel): a list of up\n# to 20, one row per claim, in the order you sent them. extract finds up to\n# 100, most check-worthy first, so this checks the first 20.\nquick = client.assess(claims=claims[:20]).claims if claims else []\n\n# 3. Escalate the low-confidence ones to /verify in one batch (~90s, multi-model pipeline)\n# Failed rows are free. A retryable one (a provider, or the time budget)\n# is worth resending; the rest (no_checkable_claim, internal) are not.\nretry = [c.claim for c in quick if c.failure and c.failure.retryable]\nquick += client.assess(claims=retry).claims if retry else []\ndoubtful = [{\"claim\": c.claim} for c in quick if c.status == \"completed\" and c.confidence == \"low\"]\nfor r in client.verify_batch_and_wait(claims=doubtful) if doubtful else []:\n    if r.verification:\n        print(r.verification.verdict, r.verification.lenz_score, r.verification.key_finding)\n```\n\n## How /verify works under the hood\n\nFrame \u2192 Collect Evidence \u2192 Debate (2 models, 2 rounds) \u2192 Adjudicate (three reviewers on models from different vendors, two more when they disagree) \u2192 Conclude. ~90 seconds wall-clock per claim.\n\n### While /verify is running\n\n`GET /verify/status/{task_id}` answers one of five shapes, keyed on `status`: `processing`, `needs_input`, `completed`, `failed`, and, after you cancel the run (see Stopping a run), `cancelled`. Every one echoes `task_id`, and only the fields belonging to that shape are present \u2014 read the ones for the branch you are in, and treat an absent key as absent rather than empty.\n\nA `processing` body carries `progress`:\n\n```json\n{\"status\": \"processing\", \"task_id\": \"\u2026\",\n \"progress\": {\"step\": \"research\", \"index\": 2, \"total\": 5,\n              \"elapsed_seconds\": 42, \"poll_after_seconds\": 5}}\n```\n\n`step` is a closed set \u2014 `starting`, `framing`, `research`, `debate`, `adjudication`, `conclusion` \u2014 so it is safe to switch on. `index` is the 1-based stage position (0 while `starting`) out of `total`; read `total` off the response rather than hard-coding it. `poll_after_seconds` is how long to wait before looking again, and `elapsed_seconds` is how long the run has been going \u2014 a measurement, not an estimate of what is left.\n\nNote that `index` is stage **position**, not elapsed work: the stages are uneven, so a progress bar driven by it will sit on `research` for roughly half the run.\n\n`progress` is **advisory**. It says the work is pending and which stage it is on; it is not a place to read results from. The verdict arrives once, under `result`, when `status` is `completed`.\n\n### When /verify asks for input\n\n`/verify` is not only submit-and-poll. `GET /verify/status/{task_id}` can terminate at `needs_input` \u2014 the submitted text held several claims, or was too vague to check as written \u2014 and the task waits rather than guessing which claim you meant. Several claims in one sentence count the same as several sentences.\n\nResolve it with `POST /verify/{task_id}/select`, passing the exact wording of the claim(s) you want from the ones the status offered. Selection is **by text, not index**; anything that was not offered is rejected with a 422. Each selected claim fans out into its own pipeline, so the response carries one `task_id` per claim \u2014 poll each the way you would a fresh `/verify`.\n\nClaims returned by `/extract` skip this entirely: submitted verbatim, they are never bounced back for rephrasing.\n\n### Covered verification\n\nEvery verification a paid Pro or Scale account runs is put in front of a gate. The ones that qualify carry a contractual warranty, and every result tells you whether it qualified \u2014 a `coverage` block on the completed `/verify/status/{task_id}` body, on `GET /verifications/{id}` and on the `verification.completed` webhook.\n\nIt is on by default, with no request field to set; an account on Pro or Scale can turn certificates off on the API credentials page, for checks submitted from then on (reason `account`; a verification that already carries a certificate keeps it).\n\n`status` is `covered`, `pending_timestamp` or `uncovered`; `reasons` says why not, in a closed seven-value vocabulary. **If you publish automatically, key on the `certificate.timestamped` webhook, not `verification.completed`** \u2014 cover requires the qualified timestamp to precede what you publish, and `completed` fires while the qualified timestamp is still pending.\n\nFull wire format, the reason vocabulary and the offline verifier: [lenz.io/docs/coverage](https://lenz.io/docs/coverage). What is covered and what is not: [lenz.io/warranty](https://lenz.io/warranty).\n\n### When /verify fails\n\nA `failed` status (and the `verification.failed` webhook) carries a `failure` block. `code` says what a caller can do about it, a closed set: `no_checkable_claim` (send a checkable statement), `upstream_unavailable` (a provider or our own executor failed; retry), `internal` (retrying the same input will not help) and `cancelled`. `detail` is one sentence on the cause (which step stopped, or that the search was unavailable). `failure_class` says **why**, and `retryable` is derived from it:\n\n| `failure_class` | Meaning | `retryable` |\n|---|---|---|\n| `upstream_unavailable` | Model or search providers were rate-limited or down, the search for sources did not finish, or the task was never run \u2014 resubmit after a short wait | `true` |\n| `invalid_input` | Not a checkable claim | `false` |\n| `cancelled` | You stopped it with `POST /verify/{task_id}/cancel`; not charged | `false` |\n| `internal` | Anything else \u2014 retrying the same input will not help | `false` |\n| `insufficient_evidence` | Version `2026-05-13` only: too few sources to judge the claim (`research_empty` / `research_insufficient`); the current version answers such a run with \"No Public Record\" (below) | `false` |\n\nBranch on `retryable`. `failure_class` and `code` are **closed sets**. A failed body also carries `docs_url`, pointing at the explanation of its class. A failed `/verify` is not charged.\n\nVersion `2026-05-13` sends the same facts flat: `failure_reason` (the webhook's `error`) is the same code (`not_a_claim` for `no_checkable_claim`), except `research_empty` / `research_insufficient` with `failure_class: \"insufficient_evidence\"`, which is how that version reads a \"No Public Record\" answer. It used to name the pipeline step (`framing_failed`, `conclusion_failed`, `task_stuck`, \u2026); those now read as the code above.\n\n### When an /assess row, a review or a citation check fails\n\nThe same `failure` block, and one vocabulary for `code`: `no_checkable_claim`, `page_unreadable` (a link /review or /extract was sent could not be read), `upstream_unavailable` (a provider or the time budget; retry), `internal`, `cancelled`, `no_citations` and `insufficient_credits`. `detail` names the cause (out of time, no row could be assessed, ...). Branch on `retryable`, never on a list of codes. Version `2026-05-13` keeps the earlier causes as codes (`timeout`, `framing_failed`, `assessment_failed`, `citation_check_failed`, `invalid_input`), and `/extract` answers an unreadable link with its 502 `extraction_failed` where the current version answers 422 `page_unreadable`.\n\n### No Public Record\n\nA claim whose central assertion no public record in the evidence settles (a private fact, an entity nothing records, a record that would carry it and was not found) completes with `verdict: \"No Public Record\"`, `lenz_score: null` and a `confidence`. It is an answer, charged like a verdict, never warranted and always private (`visibility` is ignored for it). It does not make the claim false. On a review it is an issue (in `issues[]`, with no suggested edit; the review reads `outcome: \"issues_found\"`). Version `2026-05-13` never receives it: it reads such a run as the failure it was before (`research_empty` when no source was found, else `research_insufficient`; `GET /verifications/{id}` answers 409 `verification_failed`; `GET /verifications` leaves it out); a run submitted in that version is not charged for it.\n\nIn the next API version a cancelled run is not a failure: `GET /verify/status/{task_id}` answers `{\"status\": \"cancelled\", \"task_id\": \"\u2026\"}`, and a `webhook_url` receives `verification.cancelled`. A request made in 2026-05-13 keeps `status: \"failed\"` with `failure_class: \"cancelled\"` and receives `verification.failed`.\n\n### Stopping a run\n\n`POST /verify/{task_id}/cancel` stops a verification that has not finished. A cancelled run is not charged and saves no verification; model work already under way is not billed to you, and the run stops at its next step. The call is safe to repeat and answers 200 in every state: `cancelled: true` with `status: \"cancelled\"`, or `cancelled: false` with `status: \"completed\"` (it finished first and was charged as usual) or `\"failed\"`. It needs no `Idempotency-Key`. An unknown task, another account's task and a task not submitted through the API answer 404 `not_found`; a task that is a `/review`'s deep check answers 409 `use_review_cancel`. Each item of a `/verify/batch` has its own `task_id`, so cancel per task; there is no call for a whole batch. `POST /reviews/{review_id}/cancel` and `POST /citechecks/{citecheck_id}/cancel` stop everything in a review or a citation check. They refund the quick checks not yet served and the citations not yet checked, and keep what was delivered charged.\n\nOne of those codes comes from framing rather than from a pipeline step and carries `failure_class: invalid_input`: `no_checkable_claim` (`not_a_claim` in 2026-05-13; the input is not a checkable statement, or is too vague to have a checkable reading). A vague input that has a likely reading is verified on it, and the result's `claim` is that reading. On the webhook the same value rides in `error`, as an ordinary `verification.failed` delivery; before 2026-09-03 it fired nothing at all, so a task submitted with a `webhook_url` could terminate in silence.\n\n### What may change without notice\n\nNew keys may be added to status and webhook bodies at any time \u2014 ignore keys you do not recognise. Fields documented as **advisory** \u2014 `progress` and everything inside it \u2014 may also change or disappear without a version bump. The verdict fields under `result` may not: those change only with a versioned, announced release.\n\n## Common patterns\n\n- **Runtime sync UX**: `POST /assess` on the user-facing path; escalate `confidence == \"low\"` claims to `/verify` in the background.\n- **Runtime webhook**: `POST /verify` with `webhook_url`. Lenz POSTs the typed payload when done. Best for document pipelines.\n- **Whole drafts**: `POST /review` with `webhook_url`; handle `review.completed` (a `ReviewWebhookPayload`, deduped on `event_id`) and read `review.issues[]` and `review.citation_issues[]`.\n- **CI / pre-release**: `/extract` + batch `/verify` your golden set on every deploy. The free `/extract` tier covers most of this. Claims returned by `/extract` verify cleanly \u2014 submitted verbatim to `/verify`, they are never bounced back for rephrasing.\n- **Incident triage**: paste the offending output into `/extract`, then `/verify` the wrong-looking claims. Get a citation trail to send back to the customer.\n\n## What's in the response\n\nUnified vocabulary across every claim-shaped response:\n\n- **`claim`** \u2014 the framed claim text.\n- **`verdict`** \u2014 `\"True\" | \"Mostly True\" | \"Mixed\" | \"Mostly False\" | \"False\"`; a verification or an /assess row can also be `\"No Public Record\"` (see above; an /assess row in version `2026-05-13` never is, and can be `\"Error\"`).\n- **`confidence`** \u2014 `\"high\" | \"medium\" | \"low\"`.\n- **`lenz_score`** \u2014 1\u201310 integer score (deep payloads); `null` for `\"No Public Record\"`.\n- **`key_finding`** \u2014 one declarative sentence stating the most important fact the analysis established. For a false claim it states the CORRECTED fact rather than restating the claim, so render it next to the verdict label, never as a standalone headline. `\"\"` on older verifications predating the field.\n- **`suggested_rewrite`** \u2014 a suggested rewrite of `claim` that the verification's findings support. It has not been verified itself: before using it, review it or run it through `/verify`. `null` for a true claim, when no correction is established, and on older verifications. On every verification, single or listed (`GET /verifications/{id}`, `/verify/status`, the `verification.completed` webhook, `GET /verifications`, `GET /library`). On `/assess` rows too when the request sets `suggest_rewrite`: written from the quick check's reasoning for a claim it found False or Mostly False with high confidence, at no extra credit; `null` otherwise, and on every row when not requested.\n- **`sources`** \u2014 evidence with title, URL and snippet: the sentence(s) quoted from the page, verbatim and in the page's own language (`/verify` only).\n- **`audit`** \u2014 adjudication reasoning, debate transcript, panel agreement (`/verify` only).\n\n## How the API is organized\n\n- **Extract** \u2014 pull verifiable claims out of text.\n- **Assess** \u2014 a fast verdict, with the pages the reviewers looked at.\n- **Verify** \u2014 the full investigation: submit one claim or a batch, poll status, and resolve a `needs_input` interrupt by selecting claims.\n- **Verifications** \u2014 list, fetch, delete, and toggle visibility on stored verifications.\n- **Library** \u2014 browse the public catalog. No API key needed.\n- **Ask** \u2014 follow-up questions, 1 credit each.\n- **Account** \u2014 your credit balance and the price list.\n\n## Credits\n\nOne pool per account funds every billable call, at a fixed weight:\n\n| Endpoint | Credits |\n|---|---|\n| `POST /verify` (and `/verify/batch`, `/select`) | 10 per claim |\n| `POST /verify` with `depth: \"low\"` | 5 per claim |\n| `POST /assess` | 1 per claim \u2014 per row that carries a verdict; error rows and rows answered from the cache are free |\n| `POST /ask` | 1 |\n| `POST /extract` | 0 \u2014 free, fair-use capped |\n\n`depth: \"low\"` caps research breadth \u2014 fewer discovery queries, a hard extraction ceiling, no recovery tiers on the happy path \u2014 while every reasoning step runs unchanged. It is not a model downgrade. You are charged for the depth you REQUESTED. A `/verify/batch` may mix depths per item and is billed per item.\n\nAn answer served from the last hour's cache is free: a `/verify`, `/assess` or `/review` claim that gets back a verdict checked in the last hour costs nothing, so a tool that resends a request is not charged twice. The exception is a `/verify` that issues you a new warranty certificate, charged at the depth you requested.\n\n`GET /me/usage` reports the balance under `credits` and the weights under `costs`, with parameter-dependent prices such as `depth` nested under `cost_options`. In version `2026-05-13` the per-capability blocks beside them (`verify`, `assess`, `ask`) are **projections** of that one balance into each capability's own unit \u2014 how many of those calls the remaining credits would buy \u2014 not separate allowances. Spending on any one of them moves all of them.\n\n## Authentication\n\n1. [Create a Lenz account](https://lenz.io/auth).\n2. Generate an API key on the [API credentials](https://lenz.io/api-credentials) page.\n3. Send it on every request:\n   ```\n   Authorization: Bearer lenz_...\n   ```\n\nOr skip steps 1\u20132: **[lenz.io/setup](https://lenz.io/setup)** issues a test key and generates setup instructions for your environment \u2014 MCP client, SDK or plain HTTP \u2014 that you paste into your coding agent to do the wiring.\n\n### One balance, whichever door you come through\n\nLenz also runs a remote MCP server at `https://lenz.io/mcp`, so an agent can fact-check inside a conversation. It is **not** part of this surface \u2014 there are no MCP endpoints below, and its tools are documented at [lenz.io/integrations/mcp-server](https://lenz.io/integrations/mcp-server).\n\nIt matters here for one reason: that server is a client of this API. It takes the same `lenz_...` key and forwards it to the endpoints below, so MCP traffic spends the same credits, counts against the same rate limits, and shows up in `GET /me/usage` \u2014 there is no separate MCP quota to check, and a 402 can just as easily be an agent as your own code.\n\n## Idempotency\n\nSend an `Idempotency-Key` header on `POST /extract`, `POST /assess`, `POST /verify`, `POST /verify/batch`, `POST /verify/{task_id}/select`, `POST /review`, `POST /citecheck` and `POST /ask/{verification_id}` so retries after a network drop do not spawn duplicate tasks or double-debit quota. The server caches the response body and returns it on replay; a re-used key with a different body returns 422. The SDKs generate a key for `extract`, `assess`, `select`, `verify`, `verify_and_wait`, `verify_batch`, `verify_batch_and_wait`, `ask.send`, `review` and `citecheck` and reuse it across their own retries (lenz-io 3.0; 2.x sent a key on `verify_batch` and `ask.send` only when you passed `idempotency_key` yourself). An error from a keyed call carries the key (`idempotency_key` in Python, `idempotencyKey` in Node): resend with that same key, never as a plain new call, which sends a new key and can run the work twice.\n\nOn `/ask` a key also keeps the retry out of the conversation: without one, a repeated question is a second turn, a second credit and a second answer that the next turn reads as context. A retry that lands while the first call is still running gets 409 rather than the reply \u2014 nothing is finalized yet to replay \u2014 so treat it as work already in progress and retry the same key once the first call has had time to finish. `GET /ask/{verification_id}` returns the message history, but carries no request id, so it can only tell you which answer was yours when one question is in flight at a time. lenz-io 3.0 sends a fresh key on every `ask.send` call and reuses it across the retries inside that call, so a retried question is not asked twice. Asking the same question again is a new call with a new key, and is asked again, because a repeated question is usually deliberate; pin the key to make a retry from another process mean \"the same question, once\": `ask.send(..., idempotency_key=...)` in Python, `ask.send(id, { message, idempotencyKey })` in Node. The n8n node's Ask operation sends a key scoped to the workflow execution, so a retry replays rather than re-asks. The Zapier app sends none on ask.\n\n## Errors\n\nThe status code says what to do next; the body says what happened. Every response carries an `X-Request-ID` header \u2014 quote it on a support ticket. lenz-io 3.0 reads the last column for you: `retryable` is set on every SDK error (true for a 429, a 5xx, a dropped connection, a request timeout and a 409 that means \"not yet\"; false for any other 4xx), so branch on it instead of the status.\n\n| Status | Condition | Retry? |\n|---|---|---|\n| 401 | Missing, malformed or unknown key | After fixing credentials |\n| 402 | Out of credits, or the plan is the limit | No \u2014 billing action |\n| 403 | Authenticated but not allowed (private verification, IP block) | No |\n| 409 | A request with the same `Idempotency-Key` is still running, or the work the call names is not in the state it needs (`no_selection_pending`, `verification_not_ready`, `verification_failed`, `use_review_cancel`) | Same-key conflict: yes, with the same key. `verification_not_ready`: poll, or choose the claims when it needs input. `no_selection_pending`: poll the status first. `use_review_cancel`: cancel the review instead |\n| 422 | Malformed input | No |\n| 429 | Rate limit: the per-account `/extract` daily cap, or too many reviews or citation checks running (`review_in_flight`, `citecheck_in_flight`) | Yes, after `Retry-After` |\n| 502 | A sync step (`/assess`, `/extract`, `/ask`) failed deterministically \u2014 a schema or parse failure (`/ask`: `ask_failed`) | No \u2014 same input, same outcome |\n| 503 | Our model providers were rate-limited or down for the step and every fallback was exhausted (`code: upstream_unavailable`) or the pipeline has no capacity (`code: capacity`) | Yes, after `Retry-After` (body `retry_after` too) |\n\n**402** carries `detail`, `code` (always `no_credits`), `upgrade_url`, `doc_url`, `wall_id`, `cost` (what the rejected call would have taken), and \u2014 when resolvable \u2014 `remaining`, `credits_remaining` and `resets_at`. `remaining` and `requested` are in the *capability's* unit (verifications, assesses); `credits_remaining` and `cost` are in credits, so a client can tell \"not enough for a 10-credit verify\" from \"empty\". The resolvable fields are omitted rather than sent as `null`, so an absent key means \"unknown\", not \"zero\".\n\n`wall_id` identifies this specific rejection and is already appended to `upgrade_url`, so sending a user to that URL is all that is needed \u2014 it exists as its own field only for clients that build their own upgrade link. Treat `upgrade_url` as opaque and follow it whole rather than matching it against a fixed string.\n\nThe `code` values are deliberately plan-agnostic: they name the condition, never the plan that would fix it. Send users to `upgrade_url` rather than mapping codes to plan names \u2014 the set of plans changes, the conditions do not.\n\nAn empty balance is deliberately **not** a 429: a 429 tells every client to retry, and an empty balance never succeeds on retry. **429** carries `code`, `limit`, `reset_in_seconds`, `upgrade_url` and the `Retry-After` header. The in-flight 429 of `/review` and `/citecheck` (`review_in_flight`, `citecheck_in_flight`) carries `retry_after_seconds` and `Retry-After` instead. The daily cap is the same on every plan; only a key Lenz has marked unlimited for `/extract` bypasses it.\n\n**Migrating (August 2026).** These rejections were 403, which the SDKs map to their auth error; they are now 402, which maps to the quota error \u2014 not a subclass. If you catch the auth error to handle an empty balance, that branch stops firing. This reaches you on every SDK version, including ones released before the change. `detail` strings are unchanged. Full reference: [lenz.io/docs/errors](https://lenz.io/docs/errors#quota).\n\n## Webhooks\n\nOn `POST /verify` and `POST /review` you may supply a `webhook_url`. We POST an HMAC-SHA256-signed JSON payload to it when the pipeline terminates. Signature header is `X-Lenz-Signature: sha256=<hex>`. Verify with your webhook secret (generate + rotate on [API credentials](https://lenz.io/api-credentials)). Retries: 10s, 60s, 600s (3 retries after the initial delivery, 4 attempts total). The SDKs ship a `LenzWebhooks` helper that verifies signatures and parses the payload into typed events. Events: `verification.completed`, `verification.failed`, `verification.cancelled`, `certificate.timestamped`, and for a review `review.completed` / `review.failed` / `review.cancelled` and for a citation check `citecheck.completed` / `citecheck.failed` / `citecheck.cancelled` (switch on `event`; a review's own deep checks fire no `verification.*` events). The `*.cancelled` events fire once, when you cancel, in the next API version; a submission made in 2026-05-13 receives the matching `*.failed` event with `failure_class: \"cancelled\"` instead.\n\nFor commercial use, volume pricing, or onboarding support, [get in touch](https://lenz.io/contact).",
     "termsOfService": "https://lenz.io/terms"
   },
   "paths": {
@@ -661,7 +661,7 @@
             }
           }
         },
-        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the extraction step on its own \u2014 no research, no debate, no credit\ncharge. Enumerates every distinct major factual\nclaim in the input (up to 100), ordered most-check-worthy-first, in\n`claims` (one item for a single claim, `[]` for none). Claims returned\nhere verify cleanly when submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `no_checkable_claim` \u2014 no claim in the input could be checked against\n  public evidence.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\n`text` can also be a single public web page URL (http or https, nothing\nelse in the field). Lenz reads the page, or a YouTube video's transcript,\nand extracts the claims from its first 50,000 characters. Pages behind a\nlogin (Facebook, Instagram, Threads, LinkedIn) can't be read. A URL call\ntypically takes 5-40 seconds, so give it a 90-second client timeout (SDK\n2.13 and later do). A page that cannot be read answers 502\n`extraction_failed`; when the services that read pages are down, 503\n`upstream_unavailable` with `Retry-After`. Neither uses a unit of the\ndaily cap.\n\nPass `locate: true` to keep only the claims that can be traced directly\nback to your text, and get each claim's `positions`: the passages that\nmake it, with `start` / `end` offsets into `text` as you\nsent it, in Unicode code points. A claim the text does not make, or makes\nwith a different figure, is left out, so the list says what the author\nwrote and nothing else. Offsets count code points, not UTF-16 units: in\nJavaScript slice with `Array.from(text).slice(start, end).join('')`.\nFor a URL the offsets are `null` and each position carries its passage.\nLocating adds a few seconds, never more than 20. If it cannot run,\nevery `positions` is `null` and the claims are returned unfiltered. `locate`\ndefaults to `false`.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys.\n\n**Versions.** 200: `2026-10-11` receives `ExtractOut`, `2026-05-13` receives `ExtractOutLegacy`; 422: `2026-10-11` receives `ValidationErrorOut`, `2026-05-13` receives `ValidationErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
+        "description": "Extract verifiable claims from arbitrary text.\n\nRuns the extraction step on its own \u2014 no research, no debate, no credit\ncharge. Enumerates every distinct major factual\nclaim in the input (up to 100), ordered most-check-worthy-first, in\n`claims` (one item for a single claim, `[]` for none). Claims returned\nhere verify cleanly when submitted verbatim to `POST /verify`.\n\nPass `focus` to narrow the result to the claims you care about \u2014 a short\ndescription such as `\"market size, growth and competitors\"`, at most 300\ncharacters. A focus selects from the claims the extractor found and\nnothing else: it cannot add a claim, reword one, reorder them, change the\nlanguage, or change what counts as a claim. Ordering stays\nmost-check-worthy-first.\n\n`status` is one of:\n\n- `ready` \u2014 claims were found (and, with a `focus`, at least one matched).\n- `no_checkable_claim` \u2014 no claim in the input could be checked against\n  public evidence.\n- `no_match` \u2014 claims were found but none fall within your `focus`. The\n  unfocused list is never substituted; widen the focus and call again.\n\n`text` can also be a single public web page URL (http or https, nothing\nelse in the field). Lenz reads the page, a Google Doc, a YouTube video's\ntranscript, or an image (.png, .jpg, .jpeg, .webp), and extracts the claims\nfrom its first 50,000 characters. Pages behind a\nlogin (Facebook, Instagram, Threads, LinkedIn) can't be read. A URL call\ntypically takes 5-40 seconds, so give it a 90-second client timeout (SDK\n2.13 and later do). A page that cannot be read answers 502\n`extraction_failed`; when the services that read pages are down, 503\n`upstream_unavailable` with `Retry-After`. Neither uses a unit of the\ndaily cap.\n\nPass `locate: true` to keep only the claims that can be traced directly\nback to your text, and get each claim's `positions`: the passages that\nmake it, with `start` / `end` offsets into `text` as you\nsent it, in Unicode code points. A claim the text does not make, or makes\nwith a different figure, is left out, so the list says what the author\nwrote and nothing else. Offsets count code points, not UTF-16 units: in\nJavaScript slice with `Array.from(text).slice(start, end).join('')`.\nFor a URL the offsets are `null` and each position carries its passage.\nLocating adds a few seconds, never more than 20. If it cannot run,\nevery `positions` is `null` and the claims are returned unfiltered. `locate`\ndefaults to `false`.\n\nAccepts up to 50,000 characters (longer input is truncated). Free for\nAPI-key holders, capped at 1000 calls per ACCOUNT per day (resets at\n00:00 UTC) regardless of input length \u2014 a focused call costs the same one\nunit as an unfocused one. The cap is shared across all of the account's\nkeys.\n\n**Versions.** 200: `2026-10-11` receives `ExtractOut`, `2026-05-13` receives `ExtractOutLegacy`; 422: `2026-10-11` receives `ValidationErrorOut`, `2026-05-13` receives `ValidationErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
         "tags": [
           "Extract"
         ],
@@ -1950,7 +1950,7 @@
             }
           }
         },
-        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nOnly claims traced directly back to the draft are checked: a claim found\nnowhere in it is left out (as `/extract` does with `locate: true`). Each\nclaim row's `positions` says where the draft makes it, and\n`more_claim_locations` gives `{claim, positions}` for each of\n`more_claims`. Claim and citation positions share one shape, `{start, end,\ntext}`: `start` / `end` in Unicode code points of `text` as you sent it,\nhalf-open, and `text` the passage (`null` on a citation, whose row carries\nthe statement). For a URL draft `start` / `end` are `null` and `text`\ncarries the passage.\n\nA `text` that is one URL is read like `/extract` reads it and counts as\none `/extract` call: past the daily `/extract` limit it answers 429\n`extract_daily_limit`. The other 429 is `review_in_flight` (three reviews\nrunning on the account).\n\n**Versions.** 402: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 409: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 429: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 503: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
+        "description": "Read a draft, quick-check every claim, deep-check the ones that look\nwrong or uncertain, and hand back the issues with the fixes.\n\nReturns 202 with a `review_id`; read the review at the `Location`\n(`GET /reviews/{review_id}`), or receive `review.completed` /\n`review.failed` at your webhook. A review takes two to four minutes.\n\nIt spends the credits the primitives spend: 1 per claim assessed, and 10\n(5 at `depth: low`) per deep check it runs. At most\n`min(claims, max_assessments) \u00d7 1 + max_verifications \u00d7 depth cost`;\nthe review reports what it charged.\n\nSend `escalate.max_citations: N` to also check the draft's first N\ncitations (markdown links, bare URLs, DOIs, `[n]` markers with a reference\nlist): for each, whether the source says what the draft attributes to it.\nOff by default; 1 credit per checked citation, and a source that could not\nbe checked is not charged. `POST /citecheck` is the same check alone.\nThe rows are in `citations[]`, the ones that do not hold up in\n`citation_issues[]`, and `outcome` reads `issues_found` for them.\n`escalate.max_assessments: 0` runs no quick check (a review of the\ncitations alone).\n\nOnly claims traced directly back to the draft are checked: a claim found\nnowhere in it is left out (as `/extract` does with `locate: true`). Each\nclaim row's `positions` says where the draft makes it, and\n`more_claim_locations` gives `{claim, positions}` for each of\n`more_claims`. Claim and citation positions share one shape, `{start, end,\ntext}`: `start` / `end` in Unicode code points of `text` as you sent it,\nhalf-open, and `text` the passage (`null` on a citation, whose row carries\nthe statement). For a URL draft `start` / `end` are `null` and `text`\ncarries the passage.\n\nA `text` that is one URL (a web page, YouTube video, public Google Doc,\nor direct `.png` / `.jpg` / `.webp` image link) is read like `/extract`\nreads it and counts as one `/extract` call: past the daily `/extract`\nlimit it answers 429 `extract_daily_limit`. The other 429 is\n`review_in_flight` (three reviews running on the account).\n\n**Versions.** 402: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 409: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 429: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 503: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
         "tags": [
           "Review"
         ],
@@ -1974,6 +1974,247 @@
             "lang": "Shell",
             "label": "cURL",
             "source": "curl -X POST https://lenz.io/api/v1/review \\\n  -H \"Authorization: Bearer lenz_...\" \\\n  -H \"X-Lenz-API-Version: 2026-10-11\" \\\n  -H \"Content-Type: application/json\" \\\n  -H \"Idempotency-Key: draft-42\" \\\n  -d '{\"text\": \"The EU AI Act took effect in March 2024. ...\",\n       \"escalate\": {\"max_verifications\": 5}}'\n# 202 {\"review_id\": \"a1b2c3d4\", \"status\": \"queued\"}\n# Location: /api/v1/reviews/a1b2c3d4\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/review/file": {
+      "post": {
+        "operationId": "reviewFile",
+        "summary": "Review a Word (.docx), PDF (.pdf), or image (.png, .jpg, .webp) file",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/XLenzApiVersion"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewFileAcceptedOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "402": {
+            "description": "Payment Required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "default": {
+            "description": "An error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          }
+        },
+        "description": "Upload a Word (`.docx`), PDF (`.pdf`), or image (`.png`, `.jpg`,\n`.jpeg`, `.webp`) file up to 10 MB (up to 50,000 characters of extracted\ntext and 100 PDF pages) and run a full document review on it.\n\nReturns 202 with `{review_id, status: \"queued\", kept}`. Poll\n`GET /reviews/{review_id}` until `completed`, then export the annotated\ndocument with comments and tracked changes at\n`GET /reviews/{review_id}/export?format=docx`.\n\n**Versions.** 402: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 409: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 429: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 503: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
+        "tags": [
+          "Review"
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "properties": {
+                  "file": {
+                    "format": "binary",
+                    "title": "File",
+                    "type": "string"
+                  },
+                  "language": {
+                    "default": "auto",
+                    "title": "Language",
+                    "type": "string"
+                  },
+                  "escalate": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Escalate"
+                  },
+                  "supplied_sources": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Supplied Sources"
+                  },
+                  "webhook_url": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Webhook Url"
+                  },
+                  "visibility": {
+                    "default": "private",
+                    "title": "Visibility",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "file"
+                ],
+                "title": "MultiPartBodyParams",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nreview = client.review_file_and_wait(\"draft.docx\", max_citations=10, suggest_edits=True)\nfor issue in review.issues:\n    print(issue.verdict, issue.claim)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst review = await client.reviewFileAndWait({\n  file: \"draft.docx\",\n  maxCitations: 10,\n  suggestEdits: true,\n});\nreview.issues.forEach(i => console.log(i.verdict, i.claim));\n"
           }
         ]
       }
@@ -2176,6 +2417,264 @@
             "lang": "Shell",
             "label": "cURL",
             "source": "curl \"https://lenz.io/api/v1/reviews/a1b2c3d4?view=issues\" \\\n  -H \"X-Lenz-API-Version: 2026-10-11\" \\\n  -H \"Authorization: Bearer lenz_...\"\n# Poll every poll_after_seconds until status is completed or failed,\n# then read outcome and issues[] (verdict, key_finding, suggested_rewrite).\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/reviews/{review_id}/export": {
+      "get": {
+        "operationId": "exportReview",
+        "summary": "Export an annotated document for a completed review",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "schema": {
+              "title": "Review Id",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "schema": {
+              "title": "Format",
+              "type": "string"
+            },
+            "required": true
+          },
+          {
+            "$ref": "#/components/parameters/XLenzApiVersion"
+          }
+        ],
+        "responses": {
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "410": {
+            "description": "Gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewValidationErrorOut"
+                }
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ReviewErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ReviewErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          },
+          "200": {
+            "description": "The exported annotated document (currently `.docx` with Word comments and tracked changes).",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Attachment filename (`<stem> (checked by Lenz).<format>` or `lenz-check-<review_id>.<format>`).",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "X-Lenz-Export-Source": {
+                "description": "`original` when the uploaded document was marked in place; `rebuilt` when built from the review text.",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "original",
+                    "rebuilt"
+                  ]
+                }
+              },
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            },
+            "content": {
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "An error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "x-lenz-versions": {
+              "2026-10-11": {
+                "$ref": "#/components/schemas/ErrorOut"
+              },
+              "2026-05-13": {
+                "$ref": "#/components/schemas/ErrorOutLegacy"
+              }
+            },
+            "headers": {
+              "X-Lenz-API-Version": {
+                "$ref": "#/components/headers/XLenzApiVersion"
+              }
+            }
+          }
+        },
+        "description": "Export an annotated document (currently `format=docx`) with comments and\ntracked changes for a completed review (`POST /review` or `POST /review/file`).\n\nWhen the review was created from a `.docx` upload and `kept` was `true`,\nfindings and suggested edits are placed directly into the original `.docx`\n(`X-Lenz-Export-Source: original`). For text reviews, PDF uploads, or\nzero-retention reviews, a clean `.docx` is built from the draft text and\nannotated (`X-Lenz-Export-Source: rebuilt`).\n\n**Versions.** 403: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 404: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 409: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 410: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 429: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; 500: `2026-10-11` receives `ReviewErrorOut`, `2026-05-13` receives `ReviewErrorOutLegacy`; default: `2026-10-11` receives `ErrorOut`, `2026-05-13` receives `ErrorOutLegacy`.",
+        "tags": [
+          "Review"
+        ],
+        "security": [
+          {
+            "APIKeyBearerAuth": []
+          }
+        ],
+        "x-codeSamples": [
+          {
+            "lang": "Python",
+            "source": "from pathlib import Path\nfrom lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nexported = client.export_review(\"a1b2c3d4\", format=\"docx\")\nPath(exported.filename).write_bytes(exported.data)\n"
+          },
+          {
+            "lang": "TypeScript",
+            "source": "import { writeFileSync } from \"node:fs\";\nimport { Lenz } from \"lenz-io\";\n\nconst client = new Lenz({ apiKey: \"lenz_...\" });\nconst exported = await client.exportReview(\"a1b2c3d4\", { format: \"docx\" });\nwriteFileSync(exported.filename, exported.data);\n"
           }
         ]
       }
@@ -2966,6 +3465,82 @@
         "title": "VerificationListOut",
         "type": "object"
       },
+      "SuppliedSourceIn": {
+        "additionalProperties": false,
+        "description": "A caller-supplied source document.",
+        "properties": {
+          "text": {
+            "description": "Full text content of the source document.",
+            "title": "Text",
+            "type": "string"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical source URL.",
+            "title": "Url"
+          },
+          "doi": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "DOI identifier (e.g. 10.1038/s41586-020-2649-2).",
+            "title": "Doi"
+          },
+          "cite": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Legal citation string (case, statute, regulation).",
+            "title": "Cite"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Document title if known.",
+            "title": "Title"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication date (YYYY-MM-DD) if known.",
+            "title": "Published Date"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "SuppliedSourceIn",
+        "type": "object"
+      },
       "VerifyIn": {
         "properties": {
           "claim": {
@@ -3026,6 +3601,21 @@
             ],
             "title": "Depth",
             "type": "string"
+          },
+          "supplied_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuppliedSourceIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional full-text source documents supplied by the caller.",
+            "title": "Supplied Sources"
           }
         },
         "title": "VerifyIn",
@@ -3074,6 +3664,21 @@
             ],
             "title": "Depth",
             "type": "string"
+          },
+          "supplied_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuppliedSourceIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Batch-wide full-text source documents, merged into each item.",
+            "title": "Supplied Sources"
           }
         },
         "required": [
@@ -3153,6 +3758,21 @@
               }
             ],
             "title": "Depth"
+          },
+          "supplied_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuppliedSourceIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional full-text source documents supplied by the caller for this claim.",
+            "title": "Supplied Sources"
           }
         },
         "title": "VerifyBatchItemIn",
@@ -3633,7 +4253,7 @@
       "ExtractIn": {
         "properties": {
           "text": {
-            "description": "The document to extract claims from. Up to 50,000 characters; longer input is truncated. Or a single public web page URL (http or https, nothing else in the field): Lenz reads the page, or a YouTube video's transcript, and extracts the claims from its first 50,000 characters.",
+            "description": "The document to extract claims from. Up to 50,000 characters; longer input is truncated. Or a single public web page URL (http or https, nothing else in the field): Lenz reads the page, a Google Doc, a YouTube video's transcript, or an image (.png, .jpg, .jpeg, .webp), and extracts the claims from its first 50,000 characters.",
             "title": "Text",
             "type": "string"
           },
@@ -4120,7 +4740,7 @@
         "type": "object"
       },
       "SourceOut": {
-        "description": "A research source used to evaluate a claim.\n\n``date`` is the source article's publication date (a source-level\nattribute, not a Lenz API event time \u2014 so it's not renamed to\n``published_at``).",
+        "description": "Canonical source citation, adding ``origin``.",
         "properties": {
           "source_name": {
             "default": "",
@@ -4158,6 +4778,16 @@
           "date": {
             "default": "",
             "title": "Date",
+            "type": "string"
+          },
+          "origin": {
+            "default": "web",
+            "description": "Whether this source came from live web retrieval (`web`) or caller-supplied text (`supplied`).",
+            "enum": [
+              "web",
+              "supplied"
+            ],
+            "title": "Origin",
             "type": "string"
           }
         },
@@ -5007,7 +5637,7 @@
           "max_assessments": {
             "anyOf": [
               {
-                "maximum": 20,
+                "maximum": 30,
                 "minimum": 0,
                 "type": "integer"
               },
@@ -5015,7 +5645,7 @@
                 "type": "null"
               }
             ],
-            "description": "How many of the draft's claims, most check-worthy first, get a quick verdict. Default 20. 0: no quick checks (a review that checks only the citations).",
+            "description": "How many of the draft's claims, most check-worthy first, get a quick verdict. Default 30. 0: no quick checks (a review that checks only the citations).",
             "title": "Max Assessments"
           },
           "depth": {
@@ -5069,7 +5699,7 @@
         "description": "A draft to review: up to 50,000 characters, or one public http(s) URL.",
         "properties": {
           "text": {
-            "description": "The draft, up to 50,000 characters (longer text is cut and reported as input_truncated), or one public http(s) URL, read like /extract reads one.",
+            "description": "The draft, up to 50,000 characters (longer text is cut and reported as input_truncated), or one public http(s) URL (web page, YouTube video, public Google Doc, or direct .png / .jpg / .webp image link), read like /extract reads one.",
             "title": "Text",
             "type": "string"
           },
@@ -5111,12 +5741,53 @@
                 "type": "null"
               }
             ]
+          },
+          "supplied_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuppliedSourceIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full-text source documents supplied by the caller, up to 50 items and 500,000 total characters.",
+            "title": "Supplied Sources"
           }
         },
         "required": [
           "text"
         ],
         "title": "ReviewIn",
+        "type": "object"
+      },
+      "ReviewFileAcceptedOut": {
+        "properties": {
+          "review_id": {
+            "title": "Review Id",
+            "type": "string"
+          },
+          "status": {
+            "const": "queued",
+            "description": "The acceptance receipt, not the current state.",
+            "title": "Status",
+            "type": "string"
+          },
+          "kept": {
+            "description": "Whether the uploaded original was stored (retained for up to 30 days) so GET /reviews/{review_id}/export can mark it in place (false for .pdf and image uploads, zero-retention accounts, and when storage fails).",
+            "title": "Kept",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "review_id",
+          "status",
+          "kept"
+        ],
+        "title": "ReviewFileAcceptedOut",
         "type": "object"
       },
       "ClaimLocationOut": {
@@ -7865,6 +8536,30 @@
             ],
             "description": "With `doi`: the journal the reference gives.",
             "title": "Cited Journal"
+          },
+          "source_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full text content of the cited source. 1 to 100,000 characters. May be passed alongside url, doi, or cite, or alone.",
+            "title": "Source Text"
+          },
+          "published_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Publication date (YYYY-MM-DD) of the source, if known.",
+            "title": "Published Date"
           }
         },
         "required": [
@@ -7903,6 +8598,21 @@
             ],
             "description": "1 to 20 statement-source pairs to check as they are. Send exactly one of text and pairs.",
             "title": "Pairs"
+          },
+          "supplied_sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SuppliedSourceIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Full-text source documents supplied by the caller, up to 50 items and 500,000 total characters.",
+            "title": "Supplied Sources"
           },
           "max_citations": {
             "anyOf": [
@@ -9014,7 +9724,7 @@
           "sources": {
             "default": [],
             "items": {
-              "$ref": "#/components/schemas/SourceOut"
+              "$ref": "#/components/schemas/SourceOutLegacy"
             },
             "title": "Sources",
             "type": "array"
@@ -9093,6 +9803,52 @@
           "reason"
         ],
         "title": "NeedsInputOut",
+        "type": "object"
+      },
+      "SourceOutLegacy": {
+        "description": "A research source used to evaluate a claim (``2026-05-13`` shape).\n\n``date`` is the source article's publication date (a source-level\nattribute, not a Lenz API event time \u2014 so it's not renamed to\n``published_at``).",
+        "properties": {
+          "source_name": {
+            "default": "",
+            "title": "Source Name",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "default": "",
+            "title": "Url",
+            "type": "string"
+          },
+          "snippet": {
+            "default": "",
+            "description": "The sentence(s) quoted from the source page, verbatim and in the page's own language, with ` \u2026 ` between separate passages. A few sources carry no verified quote \u2014 for those it is the surrounding passage instead, which may run longer and contain line breaks.",
+            "title": "Snippet",
+            "type": "string"
+          },
+          "snippet_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "The language of `snippet` (the source page's own language) as an ISO 639-1 code (e.g. `uk`, `pt`), when it is not English; null for English or when unknown. The verdict's own language is `language`.",
+            "title": "Snippet Language"
+          },
+          "date": {
+            "default": "",
+            "title": "Date",
+            "type": "string"
+          }
+        },
+        "title": "SourceOutLegacy",
         "type": "object"
       },
       "WebhookPayloadLegacy": {
