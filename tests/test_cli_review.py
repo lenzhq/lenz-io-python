@@ -918,3 +918,159 @@ def test_a_failed_row_with_nothing_to_say_is_neutral_not_a_code(failure, issues_
     text = _render_body(_failed_quick_row(failure), issues_only=issues_only)
     assert "Quick check failed: Lenz could not check this just now. Try again." in text
     assert "upstream_unavailable" not in text
+
+
+# ── File and Docx CLI support ───────────────────────────────────────────────
+
+
+def test_review_binary_docx_file(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx content")
+
+    with respx.mock(base_url=BASE) as r:
+        post = r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+
+        res = _invoke("review", str(docx_file))
+        assert res.exit_code == 1  # review_completed.json outcome is issues_found
+        assert post.called
+        content = post.calls.last.request.content
+        assert b'filename="report.docx"' in content
+
+
+def test_review_binary_pdf_file(tmp_path):
+    pdf_file = tmp_path / "memo.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    with respx.mock(base_url=BASE) as r:
+        post = r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+
+        res = _invoke("review", str(pdf_file))
+        assert res.exit_code == 1
+        assert post.called
+        content = post.calls.last.request.content
+        assert b'filename="memo.pdf"' in content
+
+
+def test_review_export_download_option(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx content")
+    out_docx = tmp_path / "annotated.docx"
+
+    with respx.mock(base_url=BASE) as r:
+        post = r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+        r.get(f"{BASE}/reviews/442b6aa9/export").respond(
+            200,
+            content=b"PK\x03\x04annotated docx downloaded",
+            headers={"Content-Disposition": 'attachment; filename="annotated.docx"'},
+        )
+
+        res = _invoke("review", str(docx_file), "--export", str(out_docx))
+        assert res.exit_code == 1
+        assert out_docx.exists()
+        assert out_docx.read_bytes() == b"PK\x03\x04annotated docx downloaded"
+        # Verify suggest_edits=True was included in escalate JSON in multipart payload
+        assert post.called
+        content = post.calls.last.request.content
+        assert b'"suggest_edits": true' in content or b'"suggest_edits":true' in content
+
+
+def test_review_export_with_detach_fails(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx")
+    out_docx = tmp_path / "out.docx"
+
+    res = _invoke("review", str(docx_file), "--export", str(out_docx), "--detach")
+    assert res.exit_code == 2
+    assert "Cannot combine --export with --detach" in res.output
+
+
+def test_review_export_unsupported_extension(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx")
+
+    res = _invoke("review", str(docx_file), "--export", str(tmp_path / "out.pdf"))
+    assert res.exit_code == 2
+    assert "Unsupported --export extension" in res.output
+
+
+def test_review_export_url_draft_fails():
+    res = _invoke("review", "https://example.com/article", "--export", "out.docx")
+    assert res.exit_code == 2
+    assert "--export is not supported for URL drafts" in res.output
+
+
+def test_review_export_overwriting_input_file(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx")
+
+    res = _invoke("review", str(docx_file), "--export", str(docx_file))
+    assert res.exit_code == 2
+    assert "--export path must not overwrite the input draft file" in res.output
+
+
+def test_review_empty_binary_file(tmp_path):
+    empty_file = tmp_path / "empty.docx"
+    empty_file.write_bytes(b"")
+
+    res = _invoke("review", str(empty_file))
+    assert res.exit_code == 2
+    assert "File is empty:" in res.output
+
+
+def test_review_export_nothing_to_mark(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx content")
+    out_docx = tmp_path / "annotated.docx"
+
+    clean = _load("review_completed.json")
+    clean["outcome"] = "clean"
+    clean["issues"] = []
+
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=clean)
+        r.get(f"{BASE}/reviews/442b6aa9/export").respond(
+            409,
+            json={"code": "nothing_to_mark", "detail": "No issues were flagged to mark in the export."},
+        )
+
+        res = _invoke("review", str(docx_file), "--export", str(out_docx))
+        assert res.exit_code == 0
+        assert "nothing to mark" in res.output.lower()
+        assert not out_docx.exists()
+
+
+def test_review_export_download_fails(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx content")
+    out_docx = tmp_path / "annotated.docx"
+
+    with respx.mock(base_url=BASE) as r:
+        r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+        r.get(f"{BASE}/reviews/442b6aa9/export").respond(
+            500,
+            json={"code": "internal", "detail": "Export generation failed."},
+        )
+
+        res = _invoke("review", str(docx_file), "--export", str(out_docx))
+        assert res.exit_code == 2
+        assert "Failed to export annotated document" in res.output

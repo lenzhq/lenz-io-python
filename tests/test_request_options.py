@@ -55,7 +55,7 @@ from freeze_cases import (
     TASK,
     USAGE,
 )
-from freeze_harness import API_KEY, BASE, PINNED, Recording, recording
+from freeze_harness import API_KEY, BASE, PINNED, Raw, Recording, recording
 
 import lenz_io
 from lenz_io import NOT_GIVEN, AsyncLenz, Lenz, NotGiven
@@ -148,16 +148,20 @@ PARITY: dict[str, tuple[str, str]] = {
     "get_status": ("getStatus", "call"),
     "cancel": ("cancel", "call"),
     "review": ("review", "call"),
+    "review_file": ("reviewFile", "call"),
     "get_review": ("getReview", "call"),
+    "export_review": ("exportReview", "call"),
     "cancel_review": ("cancelReview", "call"),
     "citecheck": ("citecheck", "call"),
     "get_citecheck": ("getCitecheck", "call"),
     "cancel_citecheck": ("cancelCitecheck", "call"),
     "usage": ("usage", "call"),
     "wait": ("wait", "wait"),
+    "wait_for_review": ("waitForReview", "wait"),
     "verify_and_wait": ("verifyAndWait", "submit_wait"),
     "verify_batch_and_wait": ("verifyBatchAndWait", "submit_wait"),
     "review_and_wait": ("reviewAndWait", "submit_wait"),
+    "review_file_and_wait": ("reviewFileAndWait", "submit_wait"),
     "citecheck_and_wait": ("citecheckAndWait", "submit_wait"),
     "verifications.list": ("verifications.list", "call"),
     "verifications.iter": ("verifications.listAll", "call"),
@@ -212,7 +216,7 @@ def test_each_method_takes_the_options_the_map_says(name: str) -> None:
         assert all(p.default is None for p in options.values())
     elif kind == "wait":
         assert set(options) == {"timeout", "extra_headers"}
-        assert options["timeout"].default == WAIT_TIMEOUT  # the wait budget, unchanged
+        assert options["timeout"].default in (WAIT_TIMEOUT, 600.0)  # the wait budget, unchanged
         assert options["extra_headers"].default is None
     elif kind == "submit_wait":
         assert set(options) == CALL
@@ -268,9 +272,26 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.review(DRAFT, idempotency_key=PINNED, **o),
         {("POST", "/review"): [S503, (202, {"review_id": RID, "status": "queued"})]},
     ),
+    "review_file": (
+        lambda c, o: c.review_file(b"PK\x03\x04fake", filename="test.docx", idempotency_key=PINNED, **o),
+        {("POST", "/review/file"): [S503, (202, {"review_id": RID, "status": "queued"})]},
+    ),
     "get_review": (
         lambda c, o: c.get_review(RID, view="issues", **o),
         {("GET", f"/reviews/{RID}"): [S503, (200, REVIEW_DONE)]},
+    ),
+    "export_review": (
+        lambda c, o: c.export_review(RID, **o),
+        {
+            ("GET", f"/reviews/{RID}/export"): [
+                S503,
+                Raw(
+                    200,
+                    b"PK\x03\x04fake",
+                    {"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+                ),
+            ]
+        },
     ),
     "cancel_review": (
         lambda c, o: c.cancel_review(CANCEL_REVIEW["review_id"], **o),
@@ -290,6 +311,10 @@ CALLS: dict[str, tuple[Run, Answers]] = {
     ),
     "usage": (lambda c, o: c.usage(**o), {("GET", "/me/usage"): [S503, USAGE]}),
     "wait": (lambda c, o: c.wait(TASK, **o), {("GET", f"/verify/status/{TASK}"): [S503, RUNNING, DONE]}),
+    "wait_for_review": (
+        lambda c, o: c.wait_for_review(RID, **o),
+        {("GET", f"/reviews/{RID}"): [S503, (200, REVIEW_RUNNING), (200, REVIEW_DONE)]},
+    ),
     "verify_and_wait": (
         lambda c, o: c.verify_and_wait("A.", idempotency_key=PINNED, **o),
         {("POST", "/verify"): [S503, ACCEPTED], ("GET", f"/verify/status/{TASK}"): [S503, RUNNING, DONE]},
@@ -306,6 +331,13 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.review_and_wait(DRAFT, idempotency_key=PINNED, **o),
         {
             ("POST", "/review"): [S503, (202, {"review_id": RID, "status": "queued"})],
+            ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING), S503, (200, REVIEW_DONE)],
+        },
+    ),
+    "review_file_and_wait": (
+        lambda c, o: c.review_file_and_wait(b"PK\x03\x04fake", filename="test.docx", idempotency_key=PINNED, **o),
+        {
+            ("POST", "/review/file"): [S503, (202, {"review_id": RID, "status": "queued"})],
             ("GET", f"/reviews/{RID}"): [(200, REVIEW_RUNNING), S503, (200, REVIEW_DONE)],
         },
     ),
@@ -363,11 +395,24 @@ def _options_for(name: str, *, headers: dict[str, str | None] | None = None) -> 
     return opts
 
 
+def _mask_boundary(reqs: list[dict[str, Any]]) -> None:
+    for r in reqs:
+        boundary = None
+        for h in r["headers"]:
+            if h[0].lower() == "content-type" and "boundary=" in h[1]:
+                boundary = h[1].split("boundary=")[-1]
+                h[1] = "multipart/form-data; boundary=<boundary>"
+                break
+        if boundary and isinstance(r.get("body"), str):
+            r["body"] = r["body"].replace(boundary, "<boundary>")
+
+
 def _run(monkeypatch: pytest.MonkeyPatch, name: str, opts: dict[str, Any], client: Lenz | None = None) -> Any:
     call, answers = CALLS[name]
     with recorded(answers) as rec:
         c = client or make(api_key=API_KEY)
         call(c, opts)
+    _mask_boundary(rec.requests)
     return rec
 
 

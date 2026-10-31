@@ -4184,22 +4184,25 @@
   }
  },
  "review": {
-  "repr": "ReviewStarted(review_id='442b6aa9', status='queued')",
+  "repr": "ReviewStarted(review_id='442b6aa9', status='queued', kept=None)",
   "result": {
+   "kept": null,
    "review_id": "442b6aa9",
    "status": "queued"
   }
  },
  "review_409_names_the_job": {
-  "repr": "ReviewStarted(review_id='442b6aa9', status='queued')",
+  "repr": "ReviewStarted(review_id='442b6aa9', status='queued', kept=None)",
   "result": {
+   "kept": null,
    "review_id": "442b6aa9",
    "status": "queued"
   }
  },
  "review_409_then_accepted": {
-  "repr": "ReviewStarted(review_id='442b6aa9', status='queued')",
+  "repr": "ReviewStarted(review_id='442b6aa9', status='queued', kept=None)",
   "result": {
+   "kept": null,
    "review_id": "442b6aa9",
    "status": "queued"
   }
@@ -4986,8 +4989,9 @@
   "idempotency_key": null
  },
  "review_options": {
-  "repr": "ReviewStarted(review_id='442b6aa9', status='queued')",
+  "repr": "ReviewStarted(review_id='442b6aa9', status='queued', kept=None)",
   "result": {
+   "kept": null,
    "review_id": "442b6aa9",
    "status": "queued"
   }

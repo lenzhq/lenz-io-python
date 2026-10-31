@@ -19,10 +19,12 @@ Vocabulary (applies across every claim-shaped response):
 from __future__ import annotations
 
 import copy
+import os
 import typing
 from collections.abc import Callable, ItemsView, KeysView, ValuesView
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Literal, TypedDict, TypeVar
+from typing import Any, BinaryIO, Literal, TypeAlias, TypedDict, TypeVar
 
 from pydantic import (
     BaseModel,
@@ -2167,6 +2169,7 @@ class ReviewStarted(Result):
 
     review_id: str = ""
     status: str = "queued"
+    kept: bool | None = None
 
     #: Whether a 409 ``idempotency_conflict`` naming the review settled the call.
     _settled_by_conflict: bool = PrivateAttr(default=False)
@@ -2179,6 +2182,34 @@ class ReviewStarted(Result):
         ``http_status`` is 409); ``False`` on the usual 202 receipt. Not part
         of ``model_dump()``. Since 3.2."""
         return self._settled_by_conflict
+
+
+FileInput: TypeAlias = str | os.PathLike[str] | bytes | BinaryIO
+
+
+class ReviewEscalateInput(TypedDict, total=False):
+    verdicts: list[str]
+    confidence: list[str]
+    max_verifications: int
+    depth: str
+    max_assessments: int
+    max_citations: int
+    suggest_edits: bool
+
+
+ReviewExportFormat = Literal["docx"]
+
+
+@dataclass(slots=True)
+class ReviewExport:
+    """Binary document exported from a completed review."""
+
+    data: bytes = field(repr=False)
+    filename: str
+    content_type: str
+    format: str
+    source: str | None = None
+    http_status: int = 200
 
 
 class FailureBlock(_Lax):
@@ -2987,6 +3018,7 @@ __all__ = [
     "ExtractedEntity",
     "FailureBlock",
     "FailureClass",
+    "FileInput",
     "LibraryItem",
     "LibraryList",
     "Position",
@@ -3006,6 +3038,9 @@ __all__ = [
     "ReviewCredits",
     "ReviewEntity",
     "ReviewEnvelope",
+    "ReviewEscalateInput",
+    "ReviewExport",
+    "ReviewExportFormat",
     "ReviewFailure",
     "ReviewFull",
     "ReviewIssue",

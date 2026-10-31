@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -48,6 +49,7 @@ from .errors import CLIError
 from .render import _VERDICT_COLOR, Output, _truncate
 
 DEPTH_CHOICES = ("standard", "low")
+_EXPORT_FORMATS = {".docx": "docx"}
 
 #: What to do when the page behind a link could not be read (`page_unreadable`).
 _PASTE_THE_TEXT = "Paste the page's text instead."
@@ -108,6 +110,12 @@ def review(
         metavar="[META:]PATH",
         help="Supplied source document to verify against. Repeatable.",
     ),
+    export_path: str | None = typer.Option(
+        None,
+        "--export",
+        metavar="PATH",
+        help="Export the annotated document to PATH once the review completes (format inferred from extension: .docx).",
+    ),
 ) -> None:
     """Review a draft and its sources. Exit codes: 0 clean, 1 issues, 2 anything else.
 
@@ -125,26 +133,74 @@ def review(
             raise SystemExit(130) from None
 
     def _work(client: Lenz) -> None:
+        export_fmt: str | None = None
+        if export_path:
+            if detach:
+                raise CLIError("Cannot combine --export with --detach.", code="invalid_usage", exit_code=2)
+            suffix = Path(export_path).suffix.lower()
+            if suffix not in _EXPORT_FORMATS:
+                raise CLIError(
+                    f"Unsupported --export extension {Path(export_path).suffix!r} (supported: .docx).",
+                    code="invalid_usage",
+                    exit_code=2,
+                )
+            export_fmt = _EXPORT_FORMATS[suffix]
+            if draft and _URL.match(draft.strip()):
+                raise CLIError("--export is not supported for URL drafts.", code="invalid_usage", exit_code=2)
+
         if resume:
             if draft or source_file:
                 raise CLIError("Pass either a draft or --resume, not both.", code="invalid_usage", exit_code=2)
             review_id = resume
         else:
             chosen_depth = _parse_depth(depth)
-            text = _read_draft(draft)
+            text, file_path = _resolve_draft_input(draft)
+            if export_path:
+                if file_path is not None and Path(export_path).resolve() == file_path.resolve():
+                    raise CLIError(
+                        "--export path must not overwrite the input draft file.",
+                        code="invalid_usage",
+                        exit_code=2,
+                    )
+                if (
+                    draft
+                    and draft != "-"
+                    and Path(draft).is_file()
+                    and Path(export_path).resolve() == Path(draft).resolve()
+                ):
+                    raise CLIError(
+                        "--export path must not overwrite the input draft file.",
+                        code="invalid_usage",
+                        exit_code=2,
+                    )
             citations = DEFAULT_MAX_CITATIONS if max_citations is None else max_citations
             sources = parse_source_file_args(source_file)
             if not out.json_mode:
                 out.err.print(f"[dim]{escape(opening_line(max_assessments, citations))}[/dim]")
-            started = client.review(
-                text,
-                max_assessments=max_assessments,
-                max_verifications=max_verifications,
-                depth=chosen_depth,
-                max_citations=citations,
-                language=(language or "").strip().lower(),
-                supplied_sources=sources,
-            )
+            suggest_edits = bool(export_path)
+            if file_path is not None:
+                started = client.review_file(
+                    file_path,
+                    max_assessments=max_assessments,
+                    max_verifications=max_verifications,
+                    depth=chosen_depth,
+                    max_citations=citations,
+                    suggest_edits=suggest_edits,
+                    language=(language or "").strip().lower(),
+                    supplied_sources=sources,
+                )
+            else:
+                assert text is not None
+                started = client.review(
+                    text,
+                    max_assessments=max_assessments,
+                    max_verifications=max_verifications,
+                    depth=chosen_depth,
+                    max_citations=citations,
+                    suggest_edits=suggest_edits,
+                    language=(language or "").strip().lower(),
+                    supplied_sources=sources,
+                )
             review_id = started.review_id
             if detach:
                 _emit_detached(out, review_id)
@@ -155,6 +211,36 @@ def review(
             # The review was accepted and may still finish: say how to get it.
             exc.fix = f"{exc.fix} Resume with: lenz review --resume {review_id}".strip()
             raise
+
+        if export_path and export_fmt:
+            if final.status != "completed":
+                raise CLIError(
+                    f"Review ended with status '{final.status}'; cannot export annotated document.",
+                    code="export_failed",
+                    exit_code=2,
+                )
+            target_path = Path(export_path)
+            try:
+                export_res = client.export_review(review_id, format=export_fmt)
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                with tempfile.NamedTemporaryFile(dir=target_path.parent, delete=False) as tmp:
+                    tmp.write(export_res.data)
+                    tmp_path = Path(tmp.name)
+                tmp_path.replace(target_path)
+                out.err.print(f"[green]Saved annotated Word document to {escape(str(target_path))}[/green]")
+            except LenzError as exc:
+                if getattr(exc, "code", "") == "nothing_to_mark":
+                    out.err.print(
+                        "[yellow]Note: draft is clean (nothing to mark); skipped writing "
+                        f"{escape(str(target_path))}.[/yellow]"
+                    )
+                else:
+                    raise CLIError(
+                        f"Failed to export annotated document: {exc}", code="export_failed", exit_code=2
+                    ) from exc
+            except OSError as exc:
+                raise CLIError(f"Failed to write export file: {exc}", code="export_failed", exit_code=2) from exc
+
         if out.json_mode:
             if issues:
                 out.emit_json(client.get_review(review_id, view="issues").model_dump(mode="json"))
@@ -196,6 +282,40 @@ def _parse_depth(raw: str | None) -> str | None:
             f"--depth expects one of {'|'.join(DEPTH_CHOICES)} (got {raw!r}).", code="invalid_depth", exit_code=2
         )
     return cleaned
+
+
+def _is_binary_document(arg: str | None) -> bool:
+    """Check if arg points to a binary document (.docx or .pdf)."""
+    if not arg or arg == "-" or _URL.match(arg.strip()):
+        return False
+    lower = arg.lower()
+    return lower.endswith(".docx") or lower.endswith(".pdf")
+
+
+def _resolve_draft_input(arg: str | None) -> tuple[str | None, Path | None]:
+    """Resolve draft argument into (text, file_path).
+
+    For binary documents (.docx, .pdf), returns (None, path).
+    For text files, URLs, or stdin, returns (text, None).
+    """
+    if arg is not None and _is_binary_document(arg):
+        path = Path(arg)
+        if not path.is_file():
+            raise CLIError(
+                f"No such file: {arg}",
+                code="no_input",
+                fix="Pass a file, '-' to read stdin, or one http(s) URL.",
+                exit_code=2,
+            )
+        if path.stat().st_size == 0:
+            raise CLIError(
+                f"File is empty: {arg}",
+                code="no_input",
+                fix="Pass a non-empty .docx or .pdf document.",
+                exit_code=2,
+            )
+        return None, path
+    return _read_draft(arg), None
 
 
 def _read_draft(arg: str | None) -> str:

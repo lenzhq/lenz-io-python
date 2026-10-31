@@ -34,6 +34,7 @@ from lenz_io import (
     LenzValidationError,
     LenzWebhooks,
     ReviewEvent,
+    ReviewExport,
     ReviewFailed,
     ReviewFull,
     ReviewIssues,
@@ -1110,3 +1111,223 @@ class TestSuggestedEdits:
         assert review.claims[0].assessment.suggested_rewrite == "Mercury is the closest planet to the Sun."
         # From a server that predates the field, or a review that did not ask.
         assert ReviewAssessment.model_validate({"status": "completed"}).suggested_rewrite is None
+
+
+class TestReviewFileAndExport:
+    """Tests for review_file, review_file_and_wait, wait_for_review, and export_review."""
+
+    def test_review_file_path(self, client, tmp_path: Path):
+        file_path = tmp_path / "document.docx"
+        file_path.write_bytes(b"PK\x03\x04fake docx content")
+
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            route = respx_mock.post("/review/file").respond(
+                202,
+                json={"status": "queued", "review_id": "rev_docx_123", "kept": True},
+            )
+            started = client.review_file(
+                file_path,
+                max_assessments=10,
+                max_citations=5,
+                suggest_edits=True,
+                escalate={"verdicts": ["False"], "depth": "standard"},
+            )
+            assert isinstance(started, ReviewStarted)
+            assert started.review_id == "rev_docx_123"
+            assert started.status == "queued"
+            assert started.kept is True
+            assert route.called
+            req = route.calls.last.request
+            assert "multipart/form-data" in req.headers.get("content-type", "")
+            # Check form fields
+            content = req.content
+            assert b"document.docx" in content
+            assert b"fake docx content" in content
+            assert b'name="escalate"' in content
+            assert b'"max_assessments": 10' in content
+            assert b'"max_citations": 5' in content
+            assert b'"suggest_edits": true' in content
+            assert b'"verdicts": ["False"]' in content
+            assert b'name="max_assessments"' not in content
+
+    def test_review_file_bytes_and_stream(self, client):
+        import io
+
+        data = b"%PDF-1.4 fake pdf"
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            respx_mock.post("/review/file").respond(
+                202,
+                json={"status": "queued", "review_id": "rev_pdf_456"},
+            )
+            started = client.review_file(data, filename="test.pdf")
+            assert started.review_id == "rev_pdf_456"
+
+            stream = io.BytesIO(data)
+            stream.name = "test_stream.pdf"
+            started2 = client.review_file(stream)
+            assert started2.review_id == "rev_pdf_456"
+
+    def test_review_file_validation_errors(self, client, tmp_path: Path):
+        from lenz_io.errors import LenzUsageError
+
+        # Missing filename for raw bytes
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(b"some bytes")
+        assert "filename is required" in str(exc_info.value)
+
+        # Unsupported format (e.g. .xyz or .txt)
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(b"some bytes", filename="unsupported.xyz")
+        assert "Unsupported file format" in str(exc_info.value)
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(b"some bytes", filename="notes.txt")
+        assert "Unsupported file format" in str(exc_info.value)
+
+        # Missing file path
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(tmp_path / "nonexistent.docx")
+        assert "No such file" in str(exc_info.value)
+
+    def test_review_file_and_wait(self, client, no_sleep, tmp_path: Path):
+        file_path = tmp_path / "report.docx"
+        file_path.write_bytes(b"PK\x03\x04fake docx")
+
+        completed = dict(_load("review_completed.json"), review_id="rev_wait_789")
+        with respx.mock(base_url=BASE) as respx_mock:
+            respx_mock.post("/review/file").respond(
+                202,
+                json={"status": "queued", "review_id": "rev_wait_789"},
+            )
+            respx_mock.get("/reviews/rev_wait_789").respond(
+                200,
+                json=completed,
+            )
+            res = client.review_file_and_wait(file_path)
+            assert isinstance(res, ReviewFull)
+            assert res.outcome == "issues_found"
+
+    def test_wait_for_review(self, client, no_sleep):
+        completed = dict(_load("review_completed.json"), review_id="rev_existing_111")
+        with respx.mock(base_url=BASE) as respx_mock:
+            respx_mock.get("/reviews/rev_existing_111").respond(
+                200,
+                json=completed,
+            )
+            res = client.wait_for_review("rev_existing_111")
+            assert isinstance(res, ReviewFull)
+            assert res.outcome == "issues_found"
+
+    def test_export_review(self, client):
+        docx_bytes = b"PK\x03\x04annotated docx bytes"
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            route = respx_mock.get("/reviews/rev_123/export").respond(
+                200,
+                content=docx_bytes,
+                headers={
+                    "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "Content-Disposition": 'attachment; filename="annotated_report.docx"',
+                    "X-Lenz-Export-Source": "original",
+                },
+            )
+            res = client.export_review("rev_123")
+            assert isinstance(res, ReviewExport)
+            assert res.data == docx_bytes
+            assert res.filename == "annotated_report.docx"
+            assert res.content_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            assert res.format == "docx"
+            assert res.source == "original"
+            assert route.calls.last.request.url.params["format"] == "docx"
+
+    def test_export_review_rfc5987(self, client):
+        docx_bytes = b"PK\x03\x04annotated docx bytes"
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            respx_mock.get("/reviews/rev_456/export").respond(
+                200,
+                content=docx_bytes,
+                headers={
+                    "Content-Disposition": "attachment; filename*=UTF-8''my%20annotated%20document.docx",
+                    "X-Lenz-Export-Source": "rebuilt",
+                },
+            )
+            res = client.export_review("rev_456")
+            assert res.filename == "my annotated document.docx"
+            assert res.source == "rebuilt"
+
+    def test_review_file_supplied_sources(self, client, tmp_path: Path):
+        file_path = tmp_path / "doc.docx"
+        file_path.write_bytes(b"PK\x03\x04fake docx")
+
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            route = respx_mock.post("/review/file").respond(
+                202,
+                json={"status": "queued", "review_id": "rev_sup_123"},
+            )
+            client.review_file(
+                file_path,
+                supplied_sources=[{"text": "Source text", "title": "Doc Title"}],
+            )
+            assert route.called
+            content = route.calls.last.request.content
+            assert b'name="supplied_sources"' in content
+            assert b'"text": "Source text"' in content
+            assert b'"title": "Doc Title"' in content
+
+    def test_review_file_preserves_idempotency_key_on_error(self, client, tmp_path: Path):
+        file_path = tmp_path / "doc.docx"
+        file_path.write_bytes(b"PK\x03\x04fake docx")
+
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            respx_mock.post("/review/file").respond(500, json={"detail": "server error"})
+            with pytest.raises(LenzError) as exc_info:
+                client.review_file(file_path, idempotency_key="pinned-idem-key")
+            assert exc_info.value.idempotency_key == "pinned-idem-key"
+
+    def test_export_review_invalid_format(self, client):
+        from lenz_io.errors import LenzUsageError
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.export_review("rev_123", format="")
+        assert exc_info.value.code == "invalid_argument"
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.export_review("rev_123", format="   ")
+        assert exc_info.value.code == "invalid_argument"
+
+    def test_export_review_docx_invalid_magic_bytes(self, client):
+        from lenz_io.errors import LenzInvalidResponseError
+
+        with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+            respx_mock.get("/reviews/rev_123/export").respond(
+                200,
+                content=b"NOT_A_ZIP_FILE",
+                headers={"Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"},
+            )
+            with pytest.raises(LenzInvalidResponseError):
+                client.export_review("rev_123")
+
+    def test_parse_content_disposition_filename_sanitization(self):
+        from lenz_io._shared import _parse_content_disposition_filename
+
+        default_fn = "lenz-check-r1.docx"
+
+        # Normal filename
+        assert _parse_content_disposition_filename('attachment; filename="report.docx"', default_fn) == "report.docx"
+
+        # Path traversal
+        assert (
+            _parse_content_disposition_filename('attachment; filename="../../../etc/passwd.docx"', default_fn)
+            == "passwd.docx"
+        )
+        assert (
+            _parse_content_disposition_filename(
+                'attachment; filename="..\\..\\Windows\\system32\\calc.docx"', default_fn
+            )
+            == "calc.docx"
+        )
+
+        # Traversal only -> fallback
+        assert _parse_content_disposition_filename('attachment; filename="../../.."', default_fn) == default_fn
+
+        # NUL byte -> fallback
+        assert _parse_content_disposition_filename('attachment; filename="bad\x00file.docx"', default_fn) == default_fn
