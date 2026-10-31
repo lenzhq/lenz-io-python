@@ -959,6 +959,29 @@ def test_review_binary_pdf_file(tmp_path):
         assert b'filename="memo.pdf"' in content
 
 
+@pytest.mark.parametrize(
+    "ext,mime",
+    [(".png", "image/png"), (".jpg", "image/jpeg"), (".jpeg", "image/jpeg"), (".webp", "image/webp")],
+)
+def test_review_binary_image_files(tmp_path, ext, mime):
+    img_file = tmp_path / f"chart{ext}"
+    img_file.write_bytes(b"fake image data")
+
+    with respx.mock(base_url=BASE) as r:
+        post = r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+
+        res = _invoke("review", str(img_file))
+        assert res.exit_code == 1
+        assert post.called
+        content = post.calls.last.request.content
+        assert f'filename="chart{ext}"'.encode() in content
+        assert f"Content-Type: {mime}".encode() in content
+
+
 def test_review_export_download_option(tmp_path):
     docx_file = tmp_path / "report.docx"
     docx_file.write_bytes(b"PK\x03\x04fake docx content")
@@ -1027,6 +1050,7 @@ def test_review_empty_binary_file(tmp_path):
     res = _invoke("review", str(empty_file))
     assert res.exit_code == 2
     assert "File is empty:" in res.output
+    assert "Pass a non-empty document or image file (.docx, .pdf, .png, .jpg, .webp)." in res.output
 
 
 def test_review_export_nothing_to_mark(tmp_path):

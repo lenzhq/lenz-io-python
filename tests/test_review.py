@@ -1167,6 +1167,27 @@ class TestReviewFileAndExport:
             started2 = client.review_file(stream)
             assert started2.review_id == "rev_pdf_456"
 
+    def test_review_file_image_formats_and_mime_types(self, client):
+        test_cases = [
+            ("photo.png", b"\x89PNG\r\n\x1a\nfake", "image/png"),
+            ("photo.jpg", b"\xff\xd8\xfffake", "image/jpeg"),
+            ("photo.jpeg", b"\xff\xd8\xfffake", "image/jpeg"),
+            ("photo.webp", b"RIFF\x00\x00\x00\x00WEBPfake", "image/webp"),
+        ]
+        for fname, data, expected_mime in test_cases:
+            with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+                route = respx_mock.post("/review/file").respond(
+                    202,
+                    json={"status": "queued", "review_id": f"rev_{fname}"},
+                )
+                started = client.review_file(data, filename=fname)
+                assert started.review_id == f"rev_{fname}"
+                assert route.called
+                req = route.calls.last.request
+                content = req.content
+                assert fname.encode() in content
+                assert f"Content-Type: {expected_mime}".encode() in content
+
     def test_review_file_validation_errors(self, client, tmp_path: Path):
         from lenz_io.errors import LenzUsageError
 
@@ -1178,11 +1199,17 @@ class TestReviewFileAndExport:
         # Unsupported format (e.g. .xyz or .txt)
         with pytest.raises(LenzUsageError) as exc_info:
             client.review_file(b"some bytes", filename="unsupported.xyz")
-        assert "Unsupported file format" in str(exc_info.value)
+        assert (
+            "Unsupported file format for review: unsupported.xyz. Only Word (.docx), PDF (.pdf), "
+            "and image (.png, .jpg, .webp) files are supported." == str(exc_info.value)
+        )
 
         with pytest.raises(LenzUsageError) as exc_info:
             client.review_file(b"some bytes", filename="notes.txt")
-        assert "Unsupported file format" in str(exc_info.value)
+        assert (
+            "Unsupported file format for review: notes.txt. Only Word (.docx), PDF (.pdf), "
+            "and image (.png, .jpg, .webp) files are supported." == str(exc_info.value)
+        )
 
         # Missing file path
         with pytest.raises(LenzUsageError) as exc_info:

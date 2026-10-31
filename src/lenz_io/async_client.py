@@ -1888,7 +1888,7 @@ class AsyncLenz:
         extra_headers: Mapping[str, str | None] | None = None,
         idempotency: bool = True,
     ) -> ReviewStarted:
-        """Submit a Word (.docx) or PDF (.pdf) file
+        """Submit a Word (.docx), PDF (.pdf), or image (.png, .jpg, .webp) file
         for review via multipart/form-data.
 
         Returns a ``ReviewStarted`` receipt with a ``review_id``.
@@ -1954,7 +1954,7 @@ class AsyncLenz:
         idempotency: bool = True,
         cancel_on_abort: bool = False,
     ) -> ReviewFull:
-        """Submit a Word (.docx) or PDF (.pdf) file
+        """Submit a Word (.docx), PDF (.pdf), or image (.png, .jpg, .webp) file
         for review and poll until it ends.
 
         Returns the completed ``ReviewFull``.
