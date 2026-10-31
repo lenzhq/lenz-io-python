@@ -1559,7 +1559,9 @@ class AsyncLenz:
         block until it ends, or ``get_review`` to read it.
 
         ``text`` is the draft (up to 50,000 characters; longer text is cut and
-        reported as ``summary.input_truncated``), or one public http(s) URL.
+        reported as ``summary.input_truncated``), or one public http(s) URL
+        (web page, Google Doc, YouTube video, direct ``.pdf`` or ``arxiv.org/pdf/<id>``
+        URL, or direct ``.png``/``.jpg``/``.webp`` image URL).
 
         Every claim in the draft gets a quick verdict (up to
         ``max_assessments``, default 20, most check-worthy first). The ones
