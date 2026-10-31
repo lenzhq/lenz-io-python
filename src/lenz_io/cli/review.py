@@ -75,7 +75,7 @@ def review(
         None,
         help=(
             "The draft: a file path (.docx, .pdf, .png, .jpg, .webp, or text), '-' (or a pipe) for stdin, "
-            "or one http(s) URL (web articles, Google Docs, or direct image URLs)."
+            "or one http(s) URL (web articles, Google Docs, YouTube videos, direct PDF URLs, or direct image URLs)."
         ),
     ),
     issues: bool = typer.Option(False, "--issues", help="Print only the issues (and any failed rows)."),

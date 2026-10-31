@@ -185,7 +185,7 @@ read it with `client.get_review(review_id)`, only the issues with
 `client.get_review(review_id, view="issues")`, or poll it with
 `client.wait_for_review(review_id)`.
 
-**Reviewing document and image files (.docx, .pdf, .png, .jpg, .webp).** Instead of raw text, you can upload Word documents, PDFs, or images directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs and direct image links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
+**Reviewing document and image files (.docx, .pdf, .png, .jpg, .webp).** Instead of raw text, you can upload Word documents, PDFs, or images directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs, YouTube videos, direct PDF URLs (`.pdf`, `arxiv.org/pdf/<id>`), and direct image links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
 
 ```python
 # Submit and wait for a Word document, PDF, or image:
