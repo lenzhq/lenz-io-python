@@ -293,6 +293,7 @@ lenz extract "Einstein won the 1921 Nobel for relativity"   # free, 1000/day
 lenz extract "$(cat deck.txt)" --focus "market size"        # only the claims you want
 lenz extract "$(cat draft.txt)" --locate                    # where the text makes each claim
 lenz extract "Die Erde ist flach." --language auto           # claims in the text's own language
+lenz extract report.pdf                                        # extract from docx, pdf, or image
 lenz assess  "The Great Wall is visible from space"          # fast verdict
 lenz assess  "<claim 1>" "<claim 2>" "<claim 3>"              # one call, one verdict per claim (up to 20)
 lenz verify  "Water boils at 90C at sea level"               # full pipeline (~90s)
@@ -459,6 +460,7 @@ your own claims. Use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (each `out.claims[i].positions`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
+- **`client.extract_file(file=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Extract claims directly from Word documents (`.docx`), PDFs (`.pdf`), or standalone images (`.png`, `.jpg`, `.jpeg`, `.webp`) from a file path, `pathlib.Path`, open binary reader, or raw `bytes`. Accepts the same `language=`, `focus=`, and `locate=` options as `extract`.
 - **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict have `status == "failed"` and a `failure` block (`failure.code`, `failure.hint`), in position and free. A single text past 20 claims lists the rest in `more_claims` (`[]` otherwise). The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
@@ -1526,6 +1528,22 @@ On the CLI:
 
 ```bash
 lenz extract "$(cat draft.txt)" --locate
+```
+
+### Extracting from document and image files (.docx, .pdf, .png, .jpg, .webp)
+
+Instead of raw text, extract verifiable claims directly from Word documents, PDFs, or images using `client.extract_file()`:
+
+```python
+# Pass a file path, pathlib.Path, open binary reader, or raw bytes:
+out = client.extract_file("pitch_deck.pdf", focus="market size")
+out_img = client.extract_file("infographic.png")
+```
+
+On the CLI:
+
+```bash
+lenz extract pitch_deck.pdf --focus "market size"
 ```
 
 ## Multi-language output

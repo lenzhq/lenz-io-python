@@ -213,6 +213,7 @@ from ._shared import (
     FileInput,
     ReviewEscalateInput,
     _parse_content_disposition_filename,
+    _prepare_extract_file_multipart,
     _prepare_review_file_multipart,
 )
 from .errors import (
@@ -1081,6 +1082,76 @@ class Lenz:
         _call_options(timeout, max_retries, extra_headers, "extract()")
         return self._extract(
             text=text,
+            language=language,
+            focus=focus,
+            locate=locate,
+            timeout=timeout,
+            idempotency_key=_call_key(idempotency_key, idempotency),
+            max_retries=max_retries,
+            extra_headers=extra_headers,
+        )
+
+    def extract_file(
+        self,
+        file: FileInput,
+        *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        language: str = "",
+        focus: str = "",
+        locate: bool | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        idempotency: bool = True,
+        idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ExtractedClaims:
+        """Pull verifiable claims directly out of a Word (.docx), PDF (.pdf),
+        or image (.png, .jpg, .webp) document. Sync, free, capped at 1000
+        calls/account/day (shared across your API keys).
+
+        ``file``: a path (:class:`pathlib.Path` or ``str``), raw ``bytes``,
+        or a binary file-like stream (such as an open file or :class:`io.BytesIO`).
+        When passing bytes or a stream without a ``.name`` attribute, supply
+        ``filename=``.
+
+        ``filename`` (optional): explicit filename used for MIME type detection
+        and multipart upload metadata. Required when passing raw ``bytes`` or
+        anonymous streams.
+
+        ``content_type`` (optional): override the MIME type sent in the multipart
+        payload. Inferred from ``filename`` or the file path when omitted.
+
+        ``language`` (optional): return extracted claims in the target
+        language. Defaults to the document's own language (unlike :meth:`extract`
+        which defaults to English). Leave it empty or pass ``"auto"`` for the
+        document's language. A concrete language code always wins.
+
+        ``focus`` (optional): narrow the result to the claims it describes,
+        e.g. ``"market size, growth and competitors"``. At most 300
+        characters — a longer focus is rejected with a 422, never truncated.
+
+        ``locate`` (optional): with ``True``, only the claims that could be
+        traced directly back to the document are returned, and each claim's
+        ``positions`` carries the matched passage in ``text`` (``start`` and
+        ``end`` are ``None``, as with URL extraction). Leave ``None`` for
+        server default.
+
+        ``timeout`` (optional): per-call HTTP timeout in seconds (or an
+        ``httpx.Timeout``), overriding the client default for this one
+        request. Uses ``EXTRACT_TIMEOUT`` (150s) floor by default.
+
+        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
+        SDK's retry after a timeout or network drop replays the first
+        answer instead of running the extraction again.
+
+        ``max_retries`` and ``extra_headers``: see :meth:`Lenz.with_options`.
+        """
+        _call_options(timeout, max_retries, extra_headers, "extract_file()")
+        return self._extract_file(
+            file=file,
+            filename=filename,
+            content_type=content_type,
             language=language,
             focus=focus,
             locate=locate,
@@ -2492,6 +2563,36 @@ class Lenz:
             )
             return _extracted(body, locate=locate, context=self._results)
 
+    def _extract_file(
+        self,
+        *,
+        file: FileInput,
+        filename: str | None = None,
+        content_type: str | None = None,
+        language: str = "",
+        focus: str = "",
+        locate: bool | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        idempotency_key: str | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ExtractedClaims:
+        options = _call_options(timeout, max_retries, extra_headers, "extract_file()")
+        files, data = _prepare_extract_file_multipart(
+            file,
+            filename=filename,
+            content_type=content_type,
+            language=language,
+            focus=focus,
+            locate=locate,
+        )
+        headers = _key_header(idempotency_key)
+        with _carrying_key(idempotency_key, unreadable=True):
+            body = self._request(
+                "POST", "/extract/file", files=files, data=data, headers=headers, options=options, floor=EXTRACT_TIMEOUT
+            )
+            return _extracted(body, locate=locate, context=self._results)
+
     def _assess(
         self,
         *,
@@ -2586,6 +2687,7 @@ class Lenz:
                     max_retries=max_retries,
                     conflict_settles=conflict_settles,
                     options=options,
+                    floor=floor,
                 )
         resolved, retries, option_headers = _request_settings(
             options,
@@ -2696,6 +2798,7 @@ class Lenz:
         max_retries: int | None = None,
         conflict_settles: Callable[[Any], bool] | None = None,
         options: _CallOptions = _NO_OPTIONS,
+        floor: float | None = None,
     ) -> dict[str, Any]:
         """Request sending multipart/form-data with retry ladder."""
         resolved, retries, option_headers = _request_settings(
@@ -2703,7 +2806,7 @@ class Lenz:
             self._options,
             self._client_timeout(),
             self._max_retries,
-            None,
+            floor,
             timeout,
             max_retries,
             self._send_timeout,

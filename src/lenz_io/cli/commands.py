@@ -6,6 +6,7 @@ renders. All error/exit handling lives in :func:`._run.execute`; ``verify``
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Optional
 from urllib.parse import urlsplit, urlunsplit
 
@@ -27,11 +28,15 @@ from .render import (
     render_usage,
     render_verification_full,
 )
+from .review import _is_binary_document
 
 
 def extract(
     ctx: typer.Context,
-    text: str = typer.Argument(None, help="Text to extract claims from ('-' or pipe = stdin)."),
+    text: str = typer.Argument(
+        None,
+        help="Text or document file (.docx, .pdf, .png, .jpg, .webp) to extract claims from ('-' or pipe = stdin).",
+    ),
     focus: str = typer.Option(
         "",
         "--focus",
@@ -51,11 +56,30 @@ def extract(
         help="Keep only the claims traced back to the text, with where it makes each. Default: server decides (off).",
     ),
 ) -> None:
-    """Pull verifiable claims out of text. No credit charge (1000/day) — but needs a key."""
+    """Pull verifiable claims out of text or document files. No credit charge (1000/day) — but needs a key."""
     state: CLIState = ctx.obj
     out = state.output
 
     def work(client: Lenz) -> None:
+        if text is not None and _is_binary_document(text) and Path(text).is_file():
+            path = Path(text)
+            if path.stat().st_size == 0:
+                raise CLIError(
+                    f"File is empty: {text}",
+                    code="no_input",
+                    fix="Pass a non-empty document or image file (.docx, .pdf, .png, .jpg, .webp).",
+                    exit_code=2,
+                )
+            with out.working("Extracting claims…"):
+                result = client.extract_file(
+                    path,
+                    language=(language or "").strip().lower(),
+                    focus=focus or "",
+                    locate=locate,
+                )
+            render_extract(out, result)
+            return
+
         payload = read_text_arg(text)
         with out.working("Extracting claims…"):
             result = client.extract(text=payload, language=(language or "").strip().lower(), focus=focus, locate=locate)
