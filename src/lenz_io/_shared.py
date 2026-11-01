@@ -72,29 +72,17 @@ def _serialize_supplied_sources(
     return json.dumps(raw_list)
 
 
-def _prepare_review_file_multipart(
+def _read_upload_file(
     file: FileInput,
     *,
     filename: str | None = None,
     content_type: str | None = None,
-    max_assessments: int | None = None,
-    max_citations: int | None = None,
-    suggest_edits: bool | None = None,
-    language: str = "",
-    webhook_url: str | None = None,
-    visibility: str = "private",
-    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
-    escalate: ReviewEscalateInput | dict[str, Any] | None = None,
-    verdicts: list[str] | None = None,
-    confidence: list[str] | None = None,
-    max_verifications: int | None = None,
-    depth: str | None = None,
-) -> tuple[dict[str, Any], dict[str, str]]:
-    """Validate file input and construct httpx files and data dictionaries.
+    action: str = "review",
+) -> tuple[str, bytes, str]:
+    """Validate file input and resolve filename, bytes, and content type.
 
     Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
     """
-    # 1. Resolve file content, filename, content_type
     file_bytes: bytes
     resolved_filename: str
 
@@ -144,7 +132,6 @@ def _prepare_review_file_multipart(
             param="file",
         )
 
-    # Validate filename extension: .docx, .pdf, .png, .jpg, .jpeg, and .webp are supported by POST /review/file
     lower_fn = resolved_filename.lower()
     if lower_fn.endswith(".docx"):
         resolved_content_type = (
@@ -160,12 +147,69 @@ def _prepare_review_file_multipart(
         resolved_content_type = content_type or "image/webp"
     else:
         raise LenzUsageError(
-            f"Unsupported file format for review: {resolved_filename}. Only Word (.docx), PDF (.pdf), "
+            f"Unsupported file format for {action}: {resolved_filename}. Only Word (.docx), PDF (.pdf), "
             "and image (.png, .jpg, .webp) files are supported.",
             code="invalid_argument",
             param="file",
         )
 
+    return resolved_filename, file_bytes, resolved_content_type
+
+
+def _prepare_extract_file_multipart(
+    file: FileInput,
+    *,
+    filename: str | None = None,
+    content_type: str | None = None,
+    language: str = "",
+    focus: str = "",
+    locate: bool | None = None,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate file input and construct httpx files and data dictionaries for POST /extract/file."""
+    resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
+        file, filename=filename, content_type=content_type, action="extraction"
+    )
+    if len(file_bytes) == 0:
+        raise LenzUsageError("file payload is empty (0 bytes).", code="invalid_argument", param="file")
+    files = {
+        "file": (resolved_filename, file_bytes, resolved_content_type),
+    }
+    data: dict[str, str] = {}
+    if language:
+        data["language"] = language
+    if focus:
+        data["focus"] = focus
+    if locate is not None:
+        data["locate"] = "true" if locate else "false"
+
+    return files, data
+
+
+def _prepare_review_file_multipart(
+    file: FileInput,
+    *,
+    filename: str | None = None,
+    content_type: str | None = None,
+    max_assessments: int | None = None,
+    max_citations: int | None = None,
+    suggest_edits: bool | None = None,
+    language: str = "",
+    webhook_url: str | None = None,
+    visibility: str = "private",
+    supplied_sources: Sequence[SuppliedSource | dict[str, Any]] | None = None,
+    escalate: ReviewEscalateInput | dict[str, Any] | None = None,
+    verdicts: list[str] | None = None,
+    confidence: list[str] | None = None,
+    max_verifications: int | None = None,
+    depth: str | None = None,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Validate file input and construct httpx files and data dictionaries.
+
+    Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
+    """
+    resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
+        file, filename=filename, content_type=content_type, action="review"
+    )
     files = {
         "file": (resolved_filename, file_bytes, resolved_content_type),
     }

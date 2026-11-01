@@ -810,6 +810,7 @@ class TestExtractTimeout:
 
 _AUTO_KEY_CALLS = [
     ("/extract", lambda c, **kw: c.extract(text="A document.", **kw), _EXTRACT_BODY),
+    ("/extract/file", lambda c, **kw: c.extract_file(b"PK\x03\x04fake", filename="test.docx", **kw), _EXTRACT_BODY),
     (
         "/verify/tsk_001/select",
         lambda c, **kw: c.select("tsk_001", claims=["A."], **kw),
@@ -985,6 +986,7 @@ class TestWaitDefaults:
 
 _FLOORED_CALLS = [
     ("/extract", lambda c: c.extract(text="A document."), _EXTRACT_BODY),
+    ("/extract/file", lambda c: c.extract_file(b"PK\x03\x04fake", filename="test.docx"), _EXTRACT_BODY),
     ("/assess", lambda c: c.assess(claim="A."), {"claims": [], "error": None}),
 ]
 

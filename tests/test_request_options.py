@@ -143,6 +143,7 @@ PARITY: dict[str, tuple[str, str]] = {
     "verify": ("verify", "call"),
     "verify_batch": ("verifyBatch", "call"),
     "extract": ("extract", "call"),
+    "extract_file": ("extractFile", "call"),
     "assess": ("assess", "call"),
     "select": ("select", "call"),
     "get_status": ("getStatus", "call"),
@@ -257,6 +258,10 @@ CALLS: dict[str, tuple[Run, Answers]] = {
     "extract": (
         lambda c, o: c.extract(text="Doc.", idempotency_key=PINNED, **o),
         {("POST", "/extract"): [S503, EXTRACTED]},
+    ),
+    "extract_file": (
+        lambda c, o: c.extract_file(b"PK\x03\x04fake", filename="test.docx", idempotency_key=PINNED, **o),
+        {("POST", "/extract/file"): [S503, EXTRACTED]},
     ),
     "assess": (lambda c, o: c.assess("A.", idempotency_key=PINNED, **o), {("POST", "/assess"): [S503, ASSESSED]}),
     "select": (

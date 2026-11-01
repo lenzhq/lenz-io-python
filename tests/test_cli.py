@@ -98,6 +98,7 @@ class FakeClient:
         self._usage = usage_result
         self._raises = raises or {}
         self.extract_calls: list = []
+        self.extract_file_calls: list = []
         self.assess_calls: list = []
         self.verify_calls: list = []
         self.select_calls: list = []
@@ -110,6 +111,20 @@ class FakeClient:
     def extract(self, *, text, language="", focus="", locate=None):
         self._maybe_raise("extract")
         self.extract_calls.append({"text": text, "language": language, "focus": focus, "locate": locate})
+        return self._extract
+
+    def extract_file(self, file, *, filename=None, content_type=None, language="", focus="", locate=None):
+        self._maybe_raise("extract_file")
+        self.extract_file_calls.append(
+            {
+                "file": file,
+                "filename": filename,
+                "content_type": content_type,
+                "language": language,
+                "focus": focus,
+                "locate": locate,
+            }
+        )
         return self._extract
 
     def assess(self, claim="", *, text="", claims=None, language="", timeout=None):
@@ -479,6 +494,76 @@ def test_extract_locate_flag_passes_through(monkeypatch, flags, expected):
     result = runner.invoke(app, ["--json", "extract", "some text", *flags])
     assert result.exit_code == 0
     assert fake.extract_calls[-1]["locate"] is expected
+
+
+def test_extract_binary_file_routes_to_extract_file(monkeypatch, tmp_path):
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c1", "c2"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", str(doc)])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["identified_claims"] == ["c1", "c2"]
+    assert len(fake.extract_file_calls) == 1
+    assert fake.extract_file_calls[0]["file"] == doc
+    assert fake.extract_calls == []
+
+
+def test_extract_binary_file_passes_flags(monkeypatch, tmp_path):
+    doc = tmp_path / "slide.png"
+    doc.write_bytes(b"\x89PNG fake")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(
+        app,
+        ["--json", "extract", str(doc), "--focus", "growth", "--language", "DE", "--locate"],
+    )
+    assert result.exit_code == 0
+    assert len(fake.extract_file_calls) == 1
+    call = fake.extract_file_calls[0]
+    assert call["file"] == doc
+    assert call["focus"] == "growth"
+    assert call["language"] == "de"
+    assert call["locate"] is True
+
+
+def test_extract_empty_binary_file_error(monkeypatch, tmp_path):
+    empty_file = tmp_path / "empty.docx"
+    empty_file.write_bytes(b"")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=[]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["extract", str(empty_file)])
+    assert result.exit_code == 2
+    assert "File is empty:" in result.output
+    assert "Pass a non-empty document or image file" in result.output
+    assert fake.extract_file_calls == []
+
+
+def test_extract_nonexistent_binary_file_stays_text(monkeypatch):
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", "nonexistent.pdf"])
+    assert result.exit_code == 0
+    assert len(fake.extract_calls) == 1
+    assert fake.extract_calls[0]["text"] == "nonexistent.pdf"
+    assert fake.extract_file_calls == []
+
+
+def test_extract_long_literal_text_ending_in_pdf_stays_text(monkeypatch):
+    long_text = ("The company grew revenue by 40% in 2025. " * 10) + "See report.pdf"
+    assert len(long_text) > 300
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", long_text])
+    assert result.exit_code == 0
+    assert len(fake.extract_calls) == 1
+    assert fake.extract_calls[0]["text"] == long_text
+    assert fake.extract_file_calls == []
 
 
 def _render_pretty(extracted):
