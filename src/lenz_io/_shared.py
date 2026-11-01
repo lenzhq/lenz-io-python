@@ -83,16 +83,11 @@ def _read_upload_file(
 
     Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
     """
-    if file is None or (isinstance(file, str) and not file):
-        raise LenzUsageError("file is required.", code="invalid_argument", param="file")
-
     file_bytes: bytes
     resolved_filename: str
 
     if isinstance(file, (str, os.PathLike)):
         p = Path(file)
-        if p.is_dir():
-            raise LenzUsageError(f"Expected a file, but got a directory: {file}", code="invalid_argument", param="file")
         if not p.is_file():
             raise LenzUsageError(f"No such file: {file}", code="invalid_argument", param="file")
         try:
@@ -137,9 +132,6 @@ def _read_upload_file(
             param="file",
         )
 
-    if len(file_bytes) == 0:
-        raise LenzUsageError("file payload is empty (0 bytes).", code="invalid_argument", param="file")
-
     lower_fn = resolved_filename.lower()
     if lower_fn.endswith(".docx"):
         resolved_content_type = (
@@ -177,6 +169,8 @@ def _prepare_extract_file_multipart(
     resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
         file, filename=filename, content_type=content_type, action="extraction"
     )
+    if len(file_bytes) == 0:
+        raise LenzUsageError("file payload is empty (0 bytes).", code="invalid_argument", param="file")
     files = {
         "file": (resolved_filename, file_bytes, resolved_content_type),
     }

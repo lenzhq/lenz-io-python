@@ -64,7 +64,7 @@ class TestExtractFileSuccess:
             assert res.claims[0].claim == "Revenue reached $10M in Q3."
             assert route.called
             req = route.calls.last.request
-            assert b"filename=\"report.docx\"" in req.content
+            assert b'filename="report.docx"' in req.content
             docx_mime = b"Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             assert docx_mime in req.content
             assert req.extensions["timeout"]["read"] == EXTRACT_TIMEOUT
@@ -80,7 +80,7 @@ class TestExtractFileSuccess:
             assert isinstance(res, ExtractedClaims)
             assert route.called
             req = route.calls.last.request
-            assert b"filename=\"paper.pdf\"" in req.content
+            assert b'filename="paper.pdf"' in req.content
             assert b"Content-Type: application/pdf" in req.content
 
     def test_extract_file_image_formats_and_mime_types(self, client):
@@ -97,7 +97,7 @@ class TestExtractFileSuccess:
                 assert isinstance(res, ExtractedClaims)
                 assert route.called
                 req = route.calls.last.request
-                assert f"filename=\"{fname}\"".encode() in req.content
+                assert f'filename="{fname}"'.encode() in req.content
                 assert f"Content-Type: {expected_mime}".encode() in req.content
 
     def test_extract_file_bytes_and_stream(self, client):
@@ -110,7 +110,7 @@ class TestExtractFileSuccess:
             res = client.extract_file(stream)
             assert isinstance(res, ExtractedClaims)
             assert route.called
-            assert b"filename=\"streamed.docx\"" in route.calls.last.request.content
+            assert b'filename="streamed.docx"' in route.calls.last.request.content
 
     def test_extract_file_override_filename_and_content_type(self, client):
         data = b"PK\x03\x04fake"
@@ -118,7 +118,7 @@ class TestExtractFileSuccess:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
             client.extract_file(data, filename="custom.pdf", content_type="application/x-custom-pdf")
             req = route.calls.last.request
-            assert b"filename=\"custom.pdf\"" in req.content
+            assert b'filename="custom.pdf"' in req.content
             assert b"Content-Type: application/x-custom-pdf" in req.content
 
     def test_extract_file_form_data_fields(self, client, tmp_path: Path):
@@ -129,9 +129,9 @@ class TestExtractFileSuccess:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
             client.extract_file(file_path, language="de", focus="market share", locate=True)
             content = route.calls.last.request.content
-            assert b"name=\"language\"\r\n\r\nde" in content
-            assert b"name=\"focus\"\r\n\r\nmarket share" in content
-            assert b"name=\"locate\"\r\n\r\ntrue" in content
+            assert b'name="language"\r\n\r\nde' in content
+            assert b'name="focus"\r\n\r\nmarket share' in content
+            assert b'name="locate"\r\n\r\ntrue' in content
 
     def test_extract_file_locate_false_and_none(self, client, tmp_path: Path):
         file_path = tmp_path / "doc.pdf"
@@ -141,13 +141,13 @@ class TestExtractFileSuccess:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
             client.extract_file(file_path, locate=False)
             content = route.calls.last.request.content
-            assert b"name=\"locate\"\r\n\r\nfalse" in content
+            assert b'name="locate"\r\n\r\nfalse' in content
 
         with respx.mock(base_url=BASE) as respx_mock:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
             client.extract_file(file_path, locate=None)
             content = route.calls.last.request.content
-            assert b"name=\"locate\"" not in content
+            assert b'name="locate"' not in content
 
     def test_extract_file_idempotency_and_retry(self, client, tmp_path: Path):
         file_path = tmp_path / "doc.pdf"
@@ -201,13 +201,13 @@ class TestExtractFileValidationErrors:
     def test_directory_as_file(self, client, tmp_path: Path):
         with pytest.raises(LenzUsageError) as exc_info:
             client.extract_file(tmp_path)
-        assert "Expected a file, but got a directory" in str(exc_info.value)
+        assert "No such file" in str(exc_info.value)
         assert exc_info.value.param == "file"
 
     def test_empty_string_file(self, client):
         with pytest.raises(LenzUsageError) as exc_info:
             client.extract_file("")
-        assert "file is required." in str(exc_info.value)
+        assert "No such file" in str(exc_info.value)
         assert exc_info.value.param == "file"
 
     def test_empty_payload_0_bytes(self, client, tmp_path: Path):
@@ -318,10 +318,10 @@ class TestAsyncExtractFile:
             assert res.status == "ready"
             assert route.called
             req = route.calls.last.request
-            assert b"filename=\"async_report.docx\"" in req.content
-            assert b"name=\"language\"\r\n\r\nfr" in req.content
-            assert b"name=\"focus\"\r\n\r\nearnings" in req.content
-            assert b"name=\"locate\"\r\n\r\ntrue" in req.content
+            assert b'filename="async_report.docx"' in req.content
+            assert b'name="language"\r\n\r\nfr' in req.content
+            assert b'name="focus"\r\n\r\nearnings' in req.content
+            assert b'name="locate"\r\n\r\ntrue' in req.content
 
     @pytest.mark.asyncio
     async def test_async_extract_file_bytes(self, async_client):
@@ -330,7 +330,7 @@ class TestAsyncExtractFile:
             res = await async_client.extract_file(b"\x89PNG fake image", filename="img.png")
             assert isinstance(res, ExtractedClaims)
             assert route.called
-            assert b"filename=\"img.png\"" in route.calls.last.request.content
+            assert b'filename="img.png"' in route.calls.last.request.content
 
     @pytest.mark.asyncio
     async def test_async_extract_file_validation_error(self, async_client, tmp_path: Path):

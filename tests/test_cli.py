@@ -553,6 +553,19 @@ def test_extract_nonexistent_binary_file_stays_text(monkeypatch):
     assert fake.extract_file_calls == []
 
 
+def test_extract_long_literal_text_ending_in_pdf_stays_text(monkeypatch):
+    long_text = ("The company grew revenue by 40% in 2025. " * 10) + "See report.pdf"
+    assert len(long_text) > 300
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", long_text])
+    assert result.exit_code == 0
+    assert len(fake.extract_calls) == 1
+    assert fake.extract_calls[0]["text"] == long_text
+    assert fake.extract_file_calls == []
+
+
 def _render_pretty(extracted):
     import io
 

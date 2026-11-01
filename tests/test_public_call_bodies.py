@@ -230,6 +230,31 @@ class TestSyncCalls:
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
 
     @pytest.mark.parametrize(
+        ("kwargs", "present", "absent"),
+        [
+            ({}, [], ['name="language"', 'name="focus"', 'name="locate"']),
+            ({"language": "", "focus": "", "locate": None}, [], ['name="language"', 'name="focus"', 'name="locate"']),
+            ({"locate": False}, ['name="locate"\r\n\r\nfalse'], ['name="language"', 'name="focus"']),
+            (
+                {"language": "it", "focus": "figures", "locate": True},
+                ['name="language"\r\n\r\nit', 'name="focus"\r\n\r\nfigures', 'name="locate"\r\n\r\ntrue'],
+                [],
+            ),
+        ],
+    )
+    def test_extract_file(self, client: Lenz, kwargs: dict[str, Any], present: list[str], absent: list[str]) -> None:
+        with respx.mock(base_url=BASE) as r:
+            route = r.post("/extract/file").respond(200, json={"claims": [], "status": "ready"})
+            client.extract_file(b"%PDF-1.4 doc", filename="doc.pdf", idempotency_key=KEY, **kwargs)
+        raw = route.calls.last.request.content.decode("latin1")
+        assert 'filename="doc.pdf"' in raw
+        for part in present:
+            assert part in raw
+        for part in absent:
+            assert part not in raw
+        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
+
+    @pytest.mark.parametrize(
         ("kwargs", "sent"),
         [
             ({"claims": ["A.", "B."]}, ["A.", "B."]),
