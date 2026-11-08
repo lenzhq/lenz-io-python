@@ -1228,7 +1228,7 @@ class Lenz:
         multi-model pipeline with citations.
 
         ``language`` (optional, default ``""``): set to ``'es' / 'de' / 'fr' /
-        'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg'`` to receive
+        'it' / 'pt' / 'nl' / 'sv' / 'da' / 'no' / 'fi' / 'bg' / 'sr'`` to receive
         the claim text in that language, or to ``'auto'`` to answer in the
         language of the submitted text (with a ``claims`` list, one language is
         chosen for the whole request: the one most items are written in, else

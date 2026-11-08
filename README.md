@@ -1549,9 +1549,9 @@ lenz extract pitch_deck.pdf --focus "market size"
 ## Multi-language output
 
 The Lenz API returns prose fields (atomic claim, executive summary, debate, panel
-reasoning) in any of 12 languages. Pass `language=` on `verify`, `verify_and_wait`,
+reasoning) in any of 13 languages. Pass `language=` on `verify`, `verify_and_wait`,
 `verify_batch`, `assess`, `extract`, or `ask.send`. Verdict labels stay English
-regardless of language. On `extract`, `language` and `focus` are independent —
+regardless of language. Serbian (`sr`) is answered in the Latin script. On `extract`, `language` and `focus` are independent —
 a focus written in any language selects claims emitted in `language`.
 
 ```python
