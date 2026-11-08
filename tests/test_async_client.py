@@ -863,7 +863,10 @@ async def test_iter_checks_its_arguments_at_the_call_and_fetches_lazily() -> Non
 def test_the_async_client_never_blocks_the_loop(caplog: pytest.LogCaptureFixture) -> None:
     async def run() -> None:
         loop = asyncio.get_running_loop()
-        loop.slow_callback_duration = 0.05
+        # A blocking sleep in the SDK would hold the loop for at least the
+        # shortest backoff (RETRY_BACKOFF[0], 1 s). 0.5 s catches that with a
+        # 2x margin; 0.05 s caught a slow shared CI runner (81 ms on macOS).
+        loop.slow_callback_duration = 0.5
         server = Server(
             {
                 ("POST", "/verify"): [httpx.Response(503, json={"detail": "x"}), {"task_id": "t1"}],

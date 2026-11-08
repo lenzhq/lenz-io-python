@@ -6,6 +6,10 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Docs: `sr` (Serbian, answered in the Latin script) is listed among the supported `language` codes; the API now accepts it. No code change: the SDK sends `language` as given.
+
 ## [3.6.0] - 2026-10-31
 
 ### Added
