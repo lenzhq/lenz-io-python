@@ -1,11 +1,11 @@
-"""Official Python SDK for the Lenz Fact Checking API for AI Product Teams.
+"""Official Python SDK for the Lenz Fact-Checking API.
 
     pip install lenz-io
 
-The fact-check API for AI products, in six calls: four form a research-depth
-ladder (find claims, judge them fast, prove them deep, follow up), ``review``
-runs the ladder on a whole draft, and ``citecheck`` checks a draft's sources
-on its own:
+Check the facts, figures, and citations in your work, in six calls: four form
+a research-depth ladder (find claims, judge them fast, prove them deep, follow
+up), ``review`` runs the ladder on a whole draft, and ``citecheck`` checks a
+draft's sources on its own:
 
     from lenz_io import Lenz
     client = Lenz()  # reads LENZ_API_KEY

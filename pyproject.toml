@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "lenz-io"
 dynamic = ["version"]
-description = "Official Python SDK for the Lenz Fact Checking API for AI Product Teams"
+description = "Official Python SDK for the Lenz Fact-Checking API — check the facts, figures, and citations in your work"
 readme = "README.md"
 license = "MIT"
 authors = [{ name = "Lenz", email = "support@lenz.io" }]
