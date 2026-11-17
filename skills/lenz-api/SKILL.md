@@ -1,10 +1,10 @@
 ---
 name: lenz-api
 description: >-
-  Verify factual claims, quotes, and citations in text, documents, or URLs using the Lenz Fact-Checking API (/extract, /assess, /verify, /citecheck, /review, /ask) and the official lenz-io Python and TypeScript/Node.js SDKs. Use when an agent needs to fact-check statements, evaluate draft accuracy, check source citations (URLs, DOIs, legal citations), or integrate automated verification into research, due-diligence, or document-generation workflows.
+  Verify factual claims, quotes, and citations in text, documents, or URLs using the Lenz Accuracy Verification API (/extract, /assess, /verify, /citecheck, /review, /ask) and the official lenz-io Python and TypeScript/Node.js SDKs. Use when an agent needs to verify statements, evaluate draft accuracy, check source citations (URLs, DOIs, legal citations), or integrate automated verification into research, due-diligence, or document-generation workflows.
 ---
 
-# Lenz Fact-Checking API (`lenz-api`)
+# Lenz Accuracy Verification API (`lenz-api`)
 
 Lenz checks the facts, figures, and citations in your work so you can sign off or publish with confidence: a quick verdict, or a deep check with sources and reasoning.
 

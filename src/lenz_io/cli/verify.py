@@ -102,7 +102,7 @@ def verify(
         help="Supplied source document to verify against. Repeatable.",
     ),
 ) -> None:
-    """Full fact-check pipeline (~90s). Needs a key; a fresh claim costs 10 credits (5 at --depth low)."""
+    """Full verification pipeline (~90s). Needs a key; a fresh claim costs 10 credits (5 at --depth low)."""
     state: CLIState = ctx.obj
     out = state.output
     selection = _parse_claim_selection(pick)
