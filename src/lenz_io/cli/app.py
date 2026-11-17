@@ -22,7 +22,7 @@ from .render import Output
 app = typer.Typer(
     name="lenz",
     help=(
-        "Lenz — fact-check AI output from your terminal.\n\n"
+        "Lenz — check facts and citations from your terminal.\n\n"
         "Quick start:\n"
         "  lenz login\n"
         '  lenz assess "Einstein won the 1921 Nobel for relativity"'

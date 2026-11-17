@@ -1,4 +1,4 @@
-"""Official Python SDK for the Lenz Fact-Checking API.
+"""Official Python SDK for the Lenz Verification API.
 
     pip install lenz-io
 

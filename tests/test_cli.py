@@ -2121,7 +2121,7 @@ def test_cli_renders_non_ascii_under_an_ascii_locale():
         env={**os.environ, "PYTHONIOENCODING": "ascii"},
     )
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
-    assert "Lenz — fact-check" in proc.stdout.decode("utf-8")
+    assert "Lenz — check facts and citations" in proc.stdout.decode("utf-8")
     assert b"Traceback" not in proc.stderr
 
 
