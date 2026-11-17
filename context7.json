@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "Lenz Python SDK (lenz-io)",
-  "description": "Official Python SDK and CLI for the Lenz Accuracy Verification API (/extract, /assess, /verify, /citecheck, /review, /ask) — verify factual claims and citations in AI- and human-written documents against independent sources.",
+  "description": "Official Python SDK and CLI for the Lenz Accuracy Verification API (/extract, /assess, /verify, /citecheck, /review, /ask) — check the facts, figures, and citations in your work against primary and authoritative sources.",
   "excludeFolders": [
     "tests",
     ".github",
