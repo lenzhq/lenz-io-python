@@ -1,7 +1,7 @@
 # Contributing
 
 Thanks for thinking about contributing to `lenz-io`. This SDK is the public
-Python client for the Lenz Claim Verification API for AI Product Teams.
+Python client for the Lenz Accuracy Verification API.
 
 ## Reporting issues
 

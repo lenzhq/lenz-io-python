@@ -1,4 +1,4 @@
-"""Official Python SDK for the Lenz Verification API.
+"""Official Python SDK for the Lenz Accuracy Verification API.
 
     pip install lenz-io
 
