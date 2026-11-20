@@ -350,7 +350,7 @@
         "x-codeSamples": [
           {
             "lang": "Python",
-            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\n# Add language=\"es\" for Spanish output (12 languages supported).\n# Add depth=\"low\" for a shallower check that returns sooner.\nprint(v.verdict, v.lenz_score)\n# False 2\n"
+            "source": "from lenz_io import Lenz\n\nclient = Lenz(api_key=\"lenz_...\")\nv = client.verify_and_wait(claim=\"Sharks don't get cancer\")\n# Add language=\"es\" for Spanish output (39 languages supported).\n# Add depth=\"low\" for a shallower check that returns sooner.\nprint(v.verdict, v.lenz_score)\n# False 2\n"
           },
           {
             "lang": "TypeScript",

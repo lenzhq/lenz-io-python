@@ -4,7 +4,7 @@ Multi-language SDK convention:
 * Request methods (verify, assess, extract, ask, …) take ``language=''``
   as their default. Sending an empty string means "do NOT include the
   field in the request body" — preserves byte-identical behavior for
-  existing English callers. Set ``language='es'`` (or any of the 12
+  existing English callers. Set ``language='es'`` (or any of the 39
   supported codes) to receive prose fields in that language. ``assess``,
   ``verify`` (and ``verify_and_wait``), ``review`` (and ``review_and_wait``),
   ``extract`` and ``ask.send`` also take ``language='auto'``: the answer comes

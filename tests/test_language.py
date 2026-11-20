@@ -8,7 +8,7 @@ Six endpoint methods gain an optional ``language`` kwarg:
 * ``language=''`` (default) MUST omit the field from the request body.
   This is the CRITICAL regression invariant: every existing English
   caller's wire format must stay byte-identical after this change.
-* ``language='es' | 'de' | …`` (any of 12 supported codes) MUST send
+* ``language='es' | 'de' | …`` (any of 39 supported codes) MUST send
   ``"language": "<code>"`` in the JSON body.
 * ``language='auto'`` (``assess``, ``verify``, ``ask.send``) is sent as
   ``"language": "auto"``, unchanged. The SDK does no validation of its own.
