@@ -10,7 +10,7 @@ Lenz checks the facts, figures, and citations in your work so you can sign off o
 
 ## Six API Calls
 
-1. **`extract`** (`POST /api/v1/extract`, `POST /api/v1/extract/file`): Pull verifiable factual claims from text, public URLs (web pages, Google Docs, YouTube, direct PDFs/images), or uploaded files (`.docx`, `.pdf`, `.png`, `.jpg`, `.webp`). Free (1,000 calls/account/day).
+1. **`extract`** (`POST /api/v1/extract`, `POST /api/v1/extract/file`): Pull verifiable factual claims from text, public URLs (web pages, Google Docs, YouTube, direct PDFs/images/audio), or uploaded files (`.docx`, `.pdf`, `.png`, `.jpg`, `.webp`, `.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`). Free (1,000 calls/account/day).
 2. **`assess`** (`POST /api/v1/assess`): Fast 3-model panel verdict on 1 to 20 claims in about 15 seconds (1 credit/claim). Returns `verdict`, `confidence`, `rationale`, `searched_pages`, and `suggested_rewrite` (when `suggest_rewrite=True`).
 3. **`verify`** (`POST /api/v1/verify`, `POST /api/v1/verify/batch`): Full multi-model verification pipeline with independent web research and citations in about a minute or two (10 credits standard / 5 credits at `depth="low"`). Returns `verdict`, `lenz_score` (1–10 or `null`), `confidence`, `key_finding`, `executive_summary`, and `sources`.
 4. **`citecheck`** (`POST /api/v1/citecheck`): Standalone citation verification. Checks whether cited sources (`url`, `doi`, or legal `cite`) exist and support what the draft says (1 credit/checked citation).
@@ -144,7 +144,7 @@ for issue in review.issues:
 for c in review.citation_issues:
     print(c.finding, c.cited_url or c.doi, c.statement)
 
-# File upload (.docx, .pdf, .png, .jpg, .webp) and annotated .docx export:
+# File upload (.docx, .pdf, .png, .jpg, .webp, .mp3, .m4a, .wav, .ogg, .webm) and annotated .docx export:
 # review_doc = client.review_file_and_wait("report.docx")
 # export = client.export_review(review_doc.review_id, format="docx")
 ```

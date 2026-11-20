@@ -32,7 +32,7 @@ from .review import _is_binary_document
 
 
 def _is_existing_binary_file(text: str | None) -> bool:
-    """Return True if *text* names an existing binary document or image file on disk.
+    """Return True if *text* names an existing binary document, image, or audio file on disk.
 
     Catches ``OSError`` (such as ``ENAMETOOLONG`` when *text* is a long literal
     paragraph that happens to end in ``.pdf``) so literal text falls through to
@@ -50,7 +50,10 @@ def extract(
     ctx: typer.Context,
     text: str = typer.Argument(
         None,
-        help="Text or document file (.docx, .pdf, .png, .jpg, .webp) to extract claims from ('-' or pipe = stdin).",
+        help=(
+            "Text, document, image, or audio file (.docx, .pdf, .png, .jpg, .webp, "
+            ".mp3, .m4a, .wav, .ogg, .webm) to extract claims from ('-' or pipe = stdin)."
+        ),
     ),
     focus: str = typer.Option(
         "",

@@ -1187,6 +1187,30 @@ class TestReviewFileAndExport:
                 content = req.content
                 assert fname.encode() in content
                 assert f"Content-Type: {expected_mime}".encode() in content
+                assert req.extensions["timeout"]["read"] == 90.0
+
+    def test_review_file_audio_formats_and_mime_types(self, client):
+        test_cases = [
+            ("podcast.mp3", b"ID3fake", "audio/mpeg"),
+            ("voice.m4a", b"ftypM4A fake", "audio/mp4"),
+            ("audio.wav", b"RIFFfakeWAVE", "audio/wav"),
+            ("recording.ogg", b"OggSfake", "audio/ogg"),
+            ("session.webm", b"\x1a\x45\xdf\xa3fake", "audio/webm"),
+        ]
+        for fname, data, expected_mime in test_cases:
+            with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
+                route = respx_mock.post("/review/file").respond(
+                    202,
+                    json={"status": "queued", "review_id": f"rev_{fname}"},
+                )
+                started = client.review_file(data, filename=fname)
+                assert started.review_id == f"rev_{fname}"
+                assert route.called
+                req = route.calls.last.request
+                content = req.content
+                assert fname.encode() in content
+                assert f"Content-Type: {expected_mime}".encode() in content
+                assert req.extensions["timeout"]["read"] == 150.0
 
     def test_review_file_validation_errors(self, client, tmp_path: Path):
         from lenz_io.errors import LenzUsageError
@@ -1201,14 +1225,16 @@ class TestReviewFileAndExport:
             client.review_file(b"some bytes", filename="unsupported.xyz")
         assert (
             "Unsupported file format for review: unsupported.xyz. Only Word (.docx), PDF (.pdf), "
-            "and image (.png, .jpg, .webp) files are supported." == str(exc_info.value)
+            "image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files are supported."
+            == str(exc_info.value)
         )
 
         with pytest.raises(LenzUsageError) as exc_info:
             client.review_file(b"some bytes", filename="notes.txt")
         assert (
             "Unsupported file format for review: notes.txt. Only Word (.docx), PDF (.pdf), "
-            "and image (.png, .jpg, .webp) files are supported." == str(exc_info.value)
+            "image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files are supported."
+            == str(exc_info.value)
         )
 
         # Missing file path

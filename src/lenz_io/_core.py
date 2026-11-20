@@ -118,6 +118,8 @@ ASSESS_LIST_TIMEOUT = ASSESS_TIMEOUT
 # the first answer rather than run the extraction again. 150s leaves room
 # above the slowest.
 EXTRACT_TIMEOUT = 150.0
+# Timeout floor for media uploads (image and audio files) and document URL inputs.
+URL_TIMEOUT_FLOOR = 90.0
 # Default ``timeout`` for the helpers that poll a verification to its end
 # (``wait``, ``verify_and_wait``, ``verify_batch_and_wait``). A check usually
 # finishes in ~90s; a slow one under load can take several minutes. A

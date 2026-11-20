@@ -6,6 +6,10 @@ All notable changes to this SDK are documented here. Format follows
 
 ## [Unreleased]
 
+### Added
+
+- Support for audio file uploads (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`) and direct audio URLs across `extract_file`, `review_file`, `review_file_and_wait`, and CLI commands (`lenz extract`, `lenz review`).
+
 ### Changed
 
 - Docs: `sr` (Serbian, answered in the Latin script) is listed among the supported `language` codes; the API now accepts it. No code change: the SDK sends `language` as given.
