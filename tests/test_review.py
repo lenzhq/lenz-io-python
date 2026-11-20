@@ -1210,7 +1210,7 @@ class TestReviewFileAndExport:
                 content = req.content
                 assert fname.encode() in content
                 assert f"Content-Type: {expected_mime}".encode() in content
-                assert req.extensions["timeout"]["read"] == 90.0
+                assert req.extensions["timeout"]["read"] == 150.0
 
     def test_review_file_validation_errors(self, client, tmp_path: Path):
         from lenz_io.errors import LenzUsageError

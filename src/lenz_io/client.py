@@ -1969,10 +1969,9 @@ class Lenz:
         headers = _key_header(job_key)
         resolved_mime = str(files["file"][2])
         lower_fn = str(files["file"][0]).lower()
-        is_media = resolved_mime.startswith(("image/", "audio/")) or lower_fn.endswith(
-            (".png", ".jpg", ".jpeg", ".webp", ".mp3", ".m4a", ".wav", ".ogg", ".webm")
-        )
-        floor = URL_TIMEOUT_FLOOR if is_media else None
+        is_audio = resolved_mime.startswith("audio/") or lower_fn.endswith((".mp3", ".m4a", ".wav", ".ogg", ".webm"))
+        is_image = resolved_mime.startswith("image/") or lower_fn.endswith((".png", ".jpg", ".jpeg", ".webp"))
+        floor = EXTRACT_TIMEOUT if is_audio else (URL_TIMEOUT_FLOOR if is_image else None)
         body = self._recovering(
             _review_started_by_conflict,
             "POST",
@@ -2596,9 +2595,13 @@ class Lenz:
             locate=locate,
         )
         headers = _key_header(idempotency_key)
+        resolved_mime = str(files["file"][2])
+        lower_fn = str(files["file"][0]).lower()
+        is_audio = resolved_mime.startswith("audio/") or lower_fn.endswith((".mp3", ".m4a", ".wav", ".ogg", ".webm"))
+        floor = 240.0 if is_audio else EXTRACT_TIMEOUT
         with _carrying_key(idempotency_key, unreadable=True):
             body = self._request(
-                "POST", "/extract/file", files=files, data=data, headers=headers, options=options, floor=EXTRACT_TIMEOUT
+                "POST", "/extract/file", files=files, data=data, headers=headers, options=options, floor=floor
             )
             return _extracted(body, locate=locate, context=self._results)
 

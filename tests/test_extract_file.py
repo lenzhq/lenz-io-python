@@ -117,6 +117,7 @@ class TestExtractFileSuccess:
                 req = route.calls.last.request
                 assert f'filename="{fname}"'.encode() in req.content
                 assert f"Content-Type: {expected_mime}".encode() in req.content
+                assert req.extensions["timeout"]["read"] == 240.0
 
     def test_extract_file_bytes_and_stream(self, client):
         data = b"PK\x03\x04fake docx"
