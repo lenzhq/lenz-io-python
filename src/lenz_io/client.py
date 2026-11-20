@@ -121,6 +121,7 @@ from ._core import (
     RETRY_BACKOFF as RETRY_BACKOFF,
     REVIEW_POLL_DEFAULT as REVIEW_POLL_DEFAULT,
     REVIEW_POLL_FLOOR as REVIEW_POLL_FLOOR,
+    URL_TIMEOUT_FLOOR as URL_TIMEOUT_FLOOR,
     WAIT_TIMEOUT as WAIT_TIMEOUT,
     CitationPair as CitationPair,
     NotGiven as NotGiven,
@@ -1073,11 +1074,10 @@ class Lenz:
         retries; pin your own with ``idempotency_key=``, or pass
         ``idempotency=False`` to send none. Never derived from the text.
 
-        When ``text`` is one URL and the page behind it cannot be read, the
-        call raises :class:`LenzValidationError` (HTTP 422) with ``code``
-        ``"page_unreadable"`` and ``fix`` ``"Paste the page's text
-        instead."``; it is not retried. Work that failed on our side is a 502
-        with ``code`` ``"internal"``.
+        When ``text`` is one URL (web page, Google Doc, direct PDF, image, or audio URL)
+        and the resource behind it cannot be read, the call raises :class:`LenzValidationError` (HTTP 422)
+        with ``code`` ``"page_unreadable"`` and ``fix`` ``"Paste the page's text instead."``;
+        it is not retried. Work that failed on our side is a 502 with ``code`` ``"internal"``.
         """
         _call_options(timeout, max_retries, extra_headers, "extract()")
         return self._extract(
@@ -1107,7 +1107,8 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
     ) -> ExtractedClaims:
         """Pull verifiable claims directly out of a Word (.docx), PDF (.pdf),
-        or image (.png, .jpg, .webp) document. Sync, free, capped at 1000
+        image (.png, .jpg, .webp), or audio (.mp3, .m4a, .wav, .ogg, .webm)
+        document or audio recording. Sync, free, capped at 1000
         calls/account/day (shared across your API keys).
 
         ``file``: a path (:class:`pathlib.Path` or ``str``), raw ``bytes``,
@@ -1632,8 +1633,9 @@ class Lenz:
 
         ``text`` is the draft (up to 50,000 characters; longer text is cut and
         reported as ``summary.input_truncated``), or one public http(s) URL
-        (web page, Google Doc, YouTube video, direct ``.pdf`` or ``arxiv.org/pdf/<id>``
-        URL, or direct ``.png``/``.jpg``/``.webp`` image URL).
+        (web page, Google Doc, YouTube video, direct ``.pdf`` or ``arxiv.org/pdf/<id>`` URL,
+        direct ``.png``/``.jpg``/``.webp`` image URL, or direct ``.mp3``/``.m4a``/``.wav``/``.ogg``/``.webm``
+        audio URL).
 
         Every claim in the draft gets a quick verdict (up to
         ``max_assessments``, default 20, most check-worthy first). The ones
@@ -1940,7 +1942,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
         idempotency: bool = True,
     ) -> ReviewStarted:
-        """Submit a Word (.docx), PDF (.pdf), or image (.png, .jpg, .webp) file
+        """Submit a Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), or audio (.mp3, .m4a, .wav, .ogg, .webm) file
         for review via multipart/form-data.
 
         Returns a ``ReviewStarted`` receipt with a ``review_id``.
@@ -1965,6 +1967,12 @@ class Lenz:
         )
         job_key = _job_key(idempotency_key, idempotency)
         headers = _key_header(job_key)
+        resolved_mime = str(files["file"][2])
+        lower_fn = str(files["file"][0]).lower()
+        is_media = resolved_mime.startswith(("image/", "audio/")) or lower_fn.endswith(
+            (".png", ".jpg", ".jpeg", ".webp", ".mp3", ".m4a", ".wav", ".ogg", ".webm")
+        )
+        floor = URL_TIMEOUT_FLOOR if is_media else None
         body = self._recovering(
             _review_started_by_conflict,
             "POST",
@@ -1974,6 +1982,7 @@ class Lenz:
             headers=headers,
             conflict_settles=_names_the_job("review_id"),
             options=options,
+            floor=floor,
         )
         if isinstance(body, ReviewStarted):
             return body
@@ -2005,7 +2014,7 @@ class Lenz:
         extra_headers: Mapping[str, str | None] | None = None,
         idempotency: bool = True,
     ) -> ReviewFull:
-        """Submit a Word (.docx), PDF (.pdf), or image (.png, .jpg, .webp) file
+        """Submit a Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), or audio (.mp3, .m4a, .wav, .ogg, .webm) file
         for review and poll until it ends.
 
         Returns the completed ``ReviewFull``.

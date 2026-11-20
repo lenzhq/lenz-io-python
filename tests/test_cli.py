@@ -529,6 +529,19 @@ def test_extract_binary_file_passes_flags(monkeypatch, tmp_path):
     assert call["locate"] is True
 
 
+def test_extract_audio_file_dispatches_to_extract_file(monkeypatch, tmp_path):
+    audio = tmp_path / "recording.mp3"
+    audio.write_bytes(b"ID3fake audio")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", str(audio)])
+    assert result.exit_code == 0
+    assert len(fake.extract_file_calls) == 1
+    assert fake.extract_file_calls[0]["file"] == audio
+    assert fake.extract_calls == []
+
+
 def test_extract_empty_binary_file_error(monkeypatch, tmp_path):
     empty_file = tmp_path / "empty.docx"
     empty_file.write_bytes(b"")

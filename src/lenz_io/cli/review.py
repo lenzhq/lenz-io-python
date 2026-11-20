@@ -74,8 +74,9 @@ def review(
     draft: str = typer.Argument(
         None,
         help=(
-            "The draft: a file path (.docx, .pdf, .png, .jpg, .webp, or text), '-' (or a pipe) for stdin, "
-            "or one http(s) URL (web articles, Google Docs, YouTube videos, direct PDF URLs, or direct image URLs)."
+            "The draft: a file path (.docx, .pdf, .png, .jpg, .webp, .mp3, .m4a, "
+            ".wav, .ogg, .webm, or text), '-' (or a pipe) for stdin, or one http(s) URL "
+            "(web articles, Google Docs, YouTube videos, direct PDF URLs, direct image URLs, or direct audio URLs)."
         ),
     ),
     issues: bool = typer.Option(False, "--issues", help="Print only the issues (and any failed rows)."),
@@ -290,17 +291,35 @@ def _parse_depth(raw: str | None) -> str | None:
     return cleaned
 
 
+_BINARY_DOCUMENT_EXTENSIONS: tuple[str, ...] = (
+    ".docx",
+    ".pdf",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".webp",
+    ".mp3",
+    ".m4a",
+    ".wav",
+    ".ogg",
+    ".webm",
+)
+
+
 def _is_binary_document(arg: str | None) -> bool:
-    """Check if arg points to a binary document or image (.docx, .pdf, .png, .jpg, .jpeg, .webp)."""
+    """Check if arg points to a binary document, image, or audio file
+    (.docx, .pdf, .png, .jpg, .jpeg, .webp, .mp3, .m4a, .wav, .ogg, .webm).
+    """
     if not arg or arg == "-" or _URL.match(arg.strip()):
         return False
-    return arg.lower().endswith((".docx", ".pdf", ".png", ".jpg", ".jpeg", ".webp"))
+    return arg.lower().endswith(_BINARY_DOCUMENT_EXTENSIONS)
 
 
 def _resolve_draft_input(arg: str | None) -> tuple[str | None, Path | None]:
     """Resolve draft argument into (text, file_path).
 
-    For binary documents and images (.docx, .pdf, .png, .jpg, .jpeg, .webp), returns (None, path).
+    For binary documents, images, and audio (.docx, .pdf, .png, .jpg, .jpeg,
+    .webp, .mp3, .m4a, .wav, .ogg, .webm), returns (None, path).
     For text files, URLs, or stdin, returns (text, None).
     """
     if arg is not None and _is_binary_document(arg):

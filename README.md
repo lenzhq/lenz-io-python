@@ -185,11 +185,12 @@ read it with `client.get_review(review_id)`, only the issues with
 `client.get_review(review_id, view="issues")`, or poll it with
 `client.wait_for_review(review_id)`.
 
-**Reviewing document and image files (.docx, .pdf, .png, .jpg, .webp).** Instead of raw text, you can upload Word documents, PDFs, or images directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs, YouTube videos, direct PDF URLs (`.pdf`, `arxiv.org/pdf/<id>`), and direct image links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
+**Reviewing document, image, and audio files (.docx, .pdf, .png, .jpg, .webp, .mp3, .m4a, .wav, .ogg, .webm).** Instead of raw text, you can upload Word documents, PDFs, images, or audio files directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs, YouTube videos, direct PDF URLs (`.pdf`, `arxiv.org/pdf/<id>`), direct image links, and direct audio links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
 
 ```python
-# Submit and wait for a Word document, PDF, or image:
+# Submit and wait for a Word document, PDF, image, or audio recording:
 review = client.review_file_and_wait("report.docx")
+review_audio = client.review_file_and_wait("podcast.mp3")
 review_img = client.review_file_and_wait("infographic.png")
 
 # Or submit without waiting and poll later:
@@ -460,7 +461,7 @@ your own claims. Use webhooks for production async flows.
 ## What you get on the client
 
 - **`client.extract(text=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Add `focus=` to narrow the list — see [Steering extract](#steering-extract) — and `locate=True` to keep only the claims traced back to your text, with their positions (each `out.claims[i].positions`). Each attempt waits up to 150s by default (a timeout is retried like any transport error, and the call's idempotency key makes the retry replay the first answer); `timeout=` overrides it for that call.
-- **`client.extract_file(file=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Extract claims directly from Word documents (`.docx`), PDFs (`.pdf`), or standalone images (`.png`, `.jpg`, `.jpeg`, `.webp`) from a file path, `pathlib.Path`, open binary reader, or raw `bytes`. Accepts the same `language=`, `focus=`, and `locate=` options as `extract`.
+- **`client.extract_file(file=...)`** → `ExtractedClaims`. Free, capped at 1000/account/day. Extract claims directly from Word documents (`.docx`), PDFs (`.pdf`), standalone images (`.png`, `.jpg`, `.jpeg`, `.webp`), or audio recordings (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`) from a file path, `pathlib.Path`, open binary reader, or raw `bytes`. Accepts the same `language=`, `focus=`, and `locate=` options as `extract`.
 - **`client.assess(claim=...)`** / **`client.assess(claims=[...])`** → `AssessResponse`. Sync. One statement (~15s; `text=` is accepted as an alias: a document is `text`, a claim is `claim`) or a list of up to 20 claims in one call (~15s) — exactly one row per claim, in order; rows that got no verdict have `status == "failed"` and a `failure` block (`failure.code`, `failure.hint`), in position and free. A single text past 20 claims lists the rest in `more_claims` (`[]` otherwise). The two forms are mutually exclusive. `timeout=` overrides the client timeout for that call (both forms default to 100s: a long text can take up to 90s).
 - **`client.verify(...)`** → `TaskAccepted`. Async submit; returns a `task_id`. Get the result by polling (`client.wait(...)` / `client.get_status(...)`) or via a webhook.
 - **`client.verify_and_wait(...)`** → `Verification`. Submit + poll until the pipeline lands (sync ergonomic). Equivalent to `wait(verify(...))`.
@@ -1530,20 +1531,21 @@ On the CLI:
 lenz extract "$(cat draft.txt)" --locate
 ```
 
-### Extracting from document and image files (.docx, .pdf, .png, .jpg, .webp)
+### Extracting from document, image, and audio files (.docx, .pdf, .png, .jpg, .webp, .mp3, .m4a, .wav, .ogg, .webm)
 
-Instead of raw text, extract verifiable claims directly from Word documents, PDFs, or images using `client.extract_file()`:
+Instead of raw text, extract verifiable claims directly from Word documents, PDFs, images, or audio recordings using `client.extract_file()`:
 
 ```python
 # Pass a file path, pathlib.Path, open binary reader, or raw bytes:
 out = client.extract_file("pitch_deck.pdf", focus="market size")
+out_audio = client.extract_file("interview.mp3", focus="key announcements")
 out_img = client.extract_file("infographic.png")
 ```
 
 On the CLI:
 
 ```bash
-lenz extract pitch_deck.pdf --focus "market size"
+lenz extract interview.mp3 --focus "key announcements"
 ```
 
 ## Multi-language output

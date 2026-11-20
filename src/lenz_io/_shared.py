@@ -81,7 +81,7 @@ def _read_upload_file(
 ) -> tuple[str, bytes, str]:
     """Validate file input and resolve filename, bytes, and content type.
 
-    Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
+    Accepts Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files.
     """
     file_bytes: bytes
     resolved_filename: str
@@ -145,10 +145,20 @@ def _read_upload_file(
         resolved_content_type = content_type or "image/jpeg"
     elif lower_fn.endswith(".webp"):
         resolved_content_type = content_type or "image/webp"
+    elif lower_fn.endswith(".mp3"):
+        resolved_content_type = content_type or "audio/mpeg"
+    elif lower_fn.endswith(".m4a"):
+        resolved_content_type = content_type or "audio/mp4"
+    elif lower_fn.endswith(".wav"):
+        resolved_content_type = content_type or "audio/wav"
+    elif lower_fn.endswith(".ogg"):
+        resolved_content_type = content_type or "audio/ogg"
+    elif lower_fn.endswith(".webm"):
+        resolved_content_type = content_type or "audio/webm"
     else:
         raise LenzUsageError(
             f"Unsupported file format for {action}: {resolved_filename}. Only Word (.docx), PDF (.pdf), "
-            "and image (.png, .jpg, .webp) files are supported.",
+            "image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files are supported.",
             code="invalid_argument",
             param="file",
         )
@@ -205,7 +215,7 @@ def _prepare_review_file_multipart(
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Validate file input and construct httpx files and data dictionaries.
 
-    Accepts Word (.docx), PDF (.pdf), and image (.png, .jpg, .webp) files.
+    Accepts Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files.
     """
     resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
         file, filename=filename, content_type=content_type, action="review"

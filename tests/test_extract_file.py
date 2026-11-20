@@ -100,6 +100,24 @@ class TestExtractFileSuccess:
                 assert f'filename="{fname}"'.encode() in req.content
                 assert f"Content-Type: {expected_mime}".encode() in req.content
 
+    def test_extract_file_audio_formats_and_mime_types(self, client):
+        cases = [
+            ("podcast.mp3", b"ID3fake", "audio/mpeg"),
+            ("voice.m4a", b"ftypM4A fake", "audio/mp4"),
+            ("audio.wav", b"RIFFfakeWAVE", "audio/wav"),
+            ("recording.ogg", b"OggSfake", "audio/ogg"),
+            ("session.webm", b"\x1a\x45\xdf\xa3fake", "audio/webm"),
+        ]
+        for fname, data, expected_mime in cases:
+            with respx.mock(base_url=BASE) as respx_mock:
+                route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
+                res = client.extract_file(data, filename=fname)
+                assert isinstance(res, ExtractedClaims)
+                assert route.called
+                req = route.calls.last.request
+                assert f'filename="{fname}"'.encode() in req.content
+                assert f"Content-Type: {expected_mime}".encode() in req.content
+
     def test_extract_file_bytes_and_stream(self, client):
         data = b"PK\x03\x04fake docx"
         stream = io.BytesIO(data)
@@ -236,7 +254,8 @@ class TestExtractFileValidationErrors:
             client.extract_file(b"some bytes", filename="notes.txt")
         assert (
             "Unsupported file format for extraction: notes.txt. Only Word (.docx), PDF (.pdf), "
-            "and image (.png, .jpg, .webp) files are supported." == str(exc_info.value)
+            "image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files are supported."
+            == str(exc_info.value)
         )
         assert exc_info.value.param == "file"
 

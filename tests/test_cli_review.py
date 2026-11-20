@@ -982,6 +982,35 @@ def test_review_binary_image_files(tmp_path, ext, mime):
         assert f"Content-Type: {mime}".encode() in content
 
 
+@pytest.mark.parametrize(
+    "ext,mime",
+    [
+        (".mp3", "audio/mpeg"),
+        (".m4a", "audio/mp4"),
+        (".wav", "audio/wav"),
+        (".ogg", "audio/ogg"),
+        (".webm", "audio/webm"),
+    ],
+)
+def test_review_binary_audio_files(tmp_path, ext, mime):
+    audio_file = tmp_path / f"audio{ext}"
+    audio_file.write_bytes(b"fake audio data")
+
+    with respx.mock(base_url=BASE) as r:
+        post = r.post("/review/file").respond(
+            202,
+            json={"status": "queued", "review_id": "442b6aa9"},
+        )
+        r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
+
+        res = _invoke("review", str(audio_file))
+        assert res.exit_code == 1
+        assert post.called
+        content = post.calls.last.request.content
+        assert f'filename="audio{ext}"'.encode() in content
+        assert f"Content-Type: {mime}".encode() in content
+
+
 def test_review_export_download_option(tmp_path):
     docx_file = tmp_path / "report.docx"
     docx_file.write_bytes(b"PK\x03\x04fake docx content")
