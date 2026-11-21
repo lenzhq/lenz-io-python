@@ -164,6 +164,8 @@ PARITY: dict[str, tuple[str, str]] = {
     "review_and_wait": ("reviewAndWait", "submit_wait"),
     "review_file_and_wait": ("reviewFileAndWait", "submit_wait"),
     "citecheck_and_wait": ("citecheckAndWait", "submit_wait"),
+    "list_reviews": ("listReviews", "call"),
+    "iter_reviews": ("listAllReviews", "call"),
     "verifications.list": ("verifications.list", "call"),
     "verifications.iter": ("verifications.listAll", "call"),
     "verifications.get": ("verifications.get", "call"),
@@ -246,6 +248,20 @@ def test_get_review_overloads_all_take_the_options() -> None:
 
 Answers = dict[tuple[str, str], list[Any]]
 Run = Callable[[Lenz, dict[str, Any]], Any]
+
+_REV_ITEM = {
+    "review_id": RID,
+    "status": "completed",
+    "outcome": "clean",
+    "created_at": "2026-10-01T09:07:00Z",
+    "completed_at": "2026-10-01T09:08:00Z",
+    "language": "en",
+    "policy": {},
+    "summary": {},
+    "credits": {"charged": 2},
+}
+REV_PAGE_1 = (200, {"items": [_REV_ITEM], "total": 2, "page": 1, "page_size": 1})
+REV_PAGE_2 = (200, {"items": [_REV_ITEM], "total": 2, "page": 2, "page_size": 1})
 
 # Each method: how to call it, its scripted answers (a 503 first wherever the
 # call retries, so a retry is a recorded request too), and its kind.
@@ -352,6 +368,14 @@ CALLS: dict[str, tuple[Run, Answers]] = {
             ("POST", "/citecheck"): [S503, (202, {"citecheck_id": CID, "status": "queued"})],
             ("GET", f"/citechecks/{CID}"): [S503, (200, CHECK_DONE)],
         },
+    ),
+    "list_reviews": (
+        lambda c, o: c.list_reviews(page=1, **o),
+        {("GET", "/reviews"): [S503, REV_PAGE_1]},
+    ),
+    "iter_reviews": (
+        lambda c, o: list(c.iter_reviews(**o)),
+        {("GET", "/reviews"): [S503, REV_PAGE_1, S503, REV_PAGE_2]},
     ),
     "verifications.list": (
         lambda c, o: c.verifications.list(page=1, **o),

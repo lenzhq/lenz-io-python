@@ -58,7 +58,7 @@ LITERAL = [
 #: iterator is not awaited), ``with_options(`` (a plain method) and a call
 #: already awaited.
 _CALL = re.compile(r"(?<![\w.])(?<!await )client\.((?:\w+\.)*\w+)\(")
-_NOT_AWAITED = ("iter", "with_options")
+_NOT_AWAITED = ("iter", "iter_reviews", "with_options")
 
 
 def _await_call(match: re.Match[str]) -> str:

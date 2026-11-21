@@ -185,6 +185,13 @@ read it with `client.get_review(review_id)`, only the issues with
 `client.get_review(review_id, view="issues")`, or poll it with
 `client.wait_for_review(review_id)`.
 
+To list previous reviews, `client.list_reviews(page=1, page_size=20)` returns one page (`ReviewList`), while `client.iter_reviews(page_size=100)` walks every review on your account, page after page, newest first:
+
+```python
+for item in client.iter_reviews(page_size=100):
+    print(item.review_id, item.status, item.outcome)
+```
+
 **Reviewing document, image, and audio files (.docx, .pdf, .png, .jpg, .webp, .mp3, .m4a, .wav, .ogg, .webm).** Instead of raw text, you can upload Word documents, PDFs, images, or audio files directly using `review_file` and `review_file_and_wait`. URL inputs also accept Google Docs, YouTube videos, direct PDF URLs (`.pdf`, `arxiv.org/pdf/<id>`), direct image links, and direct audio links alongside web articles. Pass a file path, `pathlib.Path`, open binary reader, or raw `bytes`:
 
 ```python
@@ -1889,10 +1896,10 @@ What each option reaches:
 
 | Methods | `timeout` | `max_retries` | `extra_headers` |
 |---|---|---|---|
-| Plain calls (`verify`, `review`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, `library.list`, ...) | the attempt | the call's retries | every request |
+| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, `library.list`, ...) | the attempt | the call's retries | every request |
 | `extract`, `assess` | the attempt, used as given (so is a copy's; only the client's own is raised to 150 s / 100 s) | the call's retries | every request |
 | Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
-| `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
+| `iter_reviews`, `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
 | `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default for plain calls and submits; never a wait's polls, which are one attempt each | added to every request of the copy |
 
 A bad value raises `ValueError` before anything is sent (for the iterators,

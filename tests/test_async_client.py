@@ -136,7 +136,7 @@ PAIRS = [
 #: Sync name -> async name, where they differ.
 RENAMED = {"close": "aclose", "__enter__": "__aenter__", "__exit__": "__aexit__"}
 #: Plain methods on both clients (not coroutines on the async one).
-PLAIN = {"iter", "with_options", "__init__"}
+PLAIN = {"iter", "iter_reviews", "with_options", "__init__"}
 #: The deliberate additions (README "Differences from Lenz").
 ASYNC_ONLY_PARAMS = {
     "verify_and_wait": {"cancel_on_abort"},

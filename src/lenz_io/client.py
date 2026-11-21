@@ -261,6 +261,8 @@ from .models import (
     ReviewExportFormat as ReviewExportFormat,
     ReviewFull as ReviewFull,
     ReviewIssues as ReviewIssues,
+    ReviewList as ReviewList,
+    ReviewListItem as ReviewListItem,
     ReviewStarted as ReviewStarted,
     SimilarVerification as SimilarVerification,
     Source as Source,
@@ -1787,6 +1789,65 @@ class Lenz:
             self._request("GET", f"/reviews/{rid}", options=options), context=self._results
         )
 
+    def list_reviews(
+        self,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewList:
+        """One page of your document reviews, newest first.
+
+        ``page_size`` (optional): items per page, a whole number from 1 to 100
+        (``ValueError`` otherwise, before any request). Omitted, the server's
+        default (20) applies. The page size served is echoed as
+        ``page_size`` on the result.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`Lenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "list_reviews()")
+        params = _verifications_params(page, _check_page_size(page_size))
+        body = self._request("GET", "/reviews", params=params, options=options)
+        return ReviewList.model_validate(body, context=self._results)
+
+    def iter_reviews(
+        self,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> Iterator[ReviewListItem]:
+        """Every document review on your account, newest first, page after page
+        from ``page`` (default 1).
+
+        Fetches a page only when the items before it have been consumed, reads
+        the page size from each response, and stops after a short or empty
+        page, once the pages read reach the response's ``total``, or when the
+        server answers another page than the one asked for. ``page`` must be
+        1 or more (``ValueError``). ``page_size`` (1 to 100, ``ValueError``
+        otherwise) is sent on every page request; omitted, the
+        server's default (20) applies::
+
+            for item in client.iter_reviews(page_size=100):
+                print(item.review_id, item.status)
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``)
+        apply to every page request, and a bad one raises here, before the
+        first page: see :meth:`Lenz.with_options`.
+        """
+        # Checked and snapshotted now: every page is read with these.
+        options = _call_options(timeout, max_retries, extra_headers, "iter_reviews()")
+        _check_page_size(page_size)
+        return _walk(
+            lambda n: self.list_reviews(page=n, **_page_size_kw(page_size), **_given(options)),
+            _first_page(page),
+        )
+
     def cancel_review(
         self,
         review_id: str,
@@ -2923,4 +2984,11 @@ class Lenz:
         raise _exhausted(last_exc, method, path)
 
 
-__all__ = ["API_VERSION", "DEFAULT_BASE_URL", "NOT_GIVEN", "Lenz", "NotGiven", "VerifyBatchItem"]
+__all__ = [
+    "API_VERSION",
+    "DEFAULT_BASE_URL",
+    "NOT_GIVEN",
+    "Lenz",
+    "NotGiven",
+    "VerifyBatchItem",
+]
