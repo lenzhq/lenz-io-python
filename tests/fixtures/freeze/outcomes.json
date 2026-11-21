@@ -3138,7 +3138,7 @@
    "cause": "This method requires authentication; no API key was provided.",
    "code": "",
    "doc_url": "https://lenz.io/docs/auth",
-   "fix": "Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at https://lenz.io/api-credentials. Library endpoints work without a key.",
+   "fix": "Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at https://lenz.io/api-credentials.",
    "message": "API key required",
    "request_id": "",
    "retryable": null,
@@ -3147,118 +3147,8 @@
   "cause": null,
   "context": null,
   "error": "LenzMissingKeyError",
-  "str": "API key required\n  Cause:  This method requires authentication; no API key was provided.\n  Fix:    Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at https://lenz.io/api-credentials. Library endpoints work without a key.\n  Docs:   https://lenz.io/docs/auth",
+  "str": "API key required\n  Cause:  This method requires authentication; no API key was provided.\n  Fix:    Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at https://lenz.io/api-credentials.\n  Docs:   https://lenz.io/docs/auth",
   "suppress_context": false
- },
- "library_iter": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
-  "result": [
-   {
-    "claim": "A.",
-    "confidence": "low",
-    "created_at": null,
-    "domain": "",
-    "entities": [],
-    "executive_summary": "",
-    "key_finding": "",
-    "language": "en",
-    "lenz_score": null,
-    "modified_at": null,
-    "suggested_rewrite": null,
-    "verdict": "",
-    "verification_id": "lib1"
-   },
-   {
-    "claim": "A.",
-    "confidence": "low",
-    "created_at": null,
-    "domain": "",
-    "entities": [],
-    "executive_summary": "",
-    "key_finding": "",
-    "language": "en",
-    "lenz_score": null,
-    "modified_at": null,
-    "suggested_rewrite": null,
-    "verdict": "",
-    "verification_id": "lib1"
-   }
-  ]
- },
- "library_iter_random": {
-  "cause": null,
-  "error": "LenzUsageError",
-  "idempotency_key": null
- },
- "library_iter_short_page": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
-  "result": [
-   {
-    "claim": "A.",
-    "confidence": "low",
-    "created_at": null,
-    "domain": "",
-    "entities": [],
-    "executive_summary": "",
-    "key_finding": "",
-    "language": "en",
-    "lenz_score": null,
-    "modified_at": null,
-    "suggested_rewrite": null,
-    "verdict": "",
-    "verification_id": "lib1"
-   }
-  ]
- },
- "library_list": {
-  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')], total=2, page=1, page_size=1)",
-  "result": {
-   "items": [
-    {
-     "claim": "A.",
-     "confidence": "low",
-     "created_at": null,
-     "domain": "",
-     "entities": [],
-     "executive_summary": "",
-     "key_finding": "",
-     "language": "en",
-     "lenz_score": null,
-     "modified_at": null,
-     "suggested_rewrite": null,
-     "verdict": "",
-     "verification_id": "lib1"
-    }
-   ],
-   "page": 1,
-   "page_size": 1,
-   "total": 2
-  }
- },
- "library_list_filters": {
-  "repr": "LibraryList(items=[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')], total=2, page=2, page_size=1)",
-  "result": {
-   "items": [
-    {
-     "claim": "A.",
-     "confidence": "low",
-     "created_at": null,
-     "domain": "",
-     "entities": [],
-     "executive_summary": "",
-     "key_finding": "",
-     "language": "en",
-     "lenz_score": null,
-     "modified_at": null,
-     "suggested_rewrite": null,
-     "verdict": "",
-     "verification_id": "lib1"
-    }
-   ],
-   "page": 2,
-   "page_size": 1,
-   "total": 2
-  }
  },
  "max_retries_0_503": {
   "attrs": {
@@ -3426,37 +3316,47 @@
   }
  },
  "options_on_iter": {
-  "repr": "[LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en'), LibraryItem(verification_id='lib1', claim='A.', domain='', entities=[], verdict='', confidence='low', lenz_score=None, key_finding='', executive_summary='', suggested_rewrite=None, created_at=None, modified_at=None, language='en')]",
+  "repr": "[VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en'), VerificationListItem(verification_id='a1b2c3d4', claim='Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.', domain='Science', entities=[EntityRef(name='Albert Einstein', qid='Q937')], verdict='False', confidence='high', lenz_score=1, key_finding=\"Einstein's 1921 Nobel Prize honored the photoelectric effect.\", executive_summary=\"Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.\", suggested_rewrite=\"Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.\", created_at='2026-05-22T12:00:00Z', modified_at=None, language='en')]",
   "result": [
    {
-    "claim": "A.",
-    "confidence": "low",
-    "created_at": null,
-    "domain": "",
-    "entities": [],
-    "executive_summary": "",
-    "key_finding": "",
+    "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+    "confidence": "high",
+    "created_at": "2026-05-22T12:00:00Z",
+    "domain": "Science",
+    "entities": [
+     {
+      "name": "Albert Einstein",
+      "qid": "Q937"
+     }
+    ],
+    "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+    "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
     "language": "en",
-    "lenz_score": null,
+    "lenz_score": 1,
     "modified_at": null,
-    "suggested_rewrite": null,
-    "verdict": "",
-    "verification_id": "lib1"
+    "suggested_rewrite": "Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.",
+    "verdict": "False",
+    "verification_id": "a1b2c3d4"
    },
    {
-    "claim": "A.",
-    "confidence": "low",
-    "created_at": null,
-    "domain": "",
-    "entities": [],
-    "executive_summary": "",
-    "key_finding": "",
+    "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
+    "confidence": "high",
+    "created_at": "2026-05-22T12:00:00Z",
+    "domain": "Science",
+    "entities": [
+     {
+      "name": "Albert Einstein",
+      "qid": "Q937"
+     }
+    ],
+    "executive_summary": "Einstein's 1921 Nobel was awarded for the photoelectric effect, not relativity.",
+    "key_finding": "Einstein's 1921 Nobel Prize honored the photoelectric effect.",
     "language": "en",
-    "lenz_score": null,
+    "lenz_score": 1,
     "modified_at": null,
-    "suggested_rewrite": null,
-    "verdict": "",
-    "verification_id": "lib1"
+    "suggested_rewrite": "Einstein's 1921 Nobel Prize in Physics was awarded for his discovery of the law of the photoelectric effect.",
+    "verdict": "False",
+    "verification_id": "a1b2c3d4"
    }
   ]
  },
@@ -7722,12 +7622,6 @@
    "page": 2,
    "page_size": 1,
    "total": 2
-  }
- },
- "verifications_related": {
-  "repr": "RelatedVerifications(items=[])",
-  "result": {
-   "items": []
   }
  },
  "verify_and_wait": {

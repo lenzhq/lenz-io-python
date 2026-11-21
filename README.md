@@ -476,8 +476,7 @@ your own claims. Use webhooks for production async flows.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
 - **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
-- **`client.verifications.{list,iter,get,delete,related}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). Both take `page_size=` (1-100, default 20 on the server; anything else raises `ValueError` before the request): `client.verifications.iter(page_size=100)` reads 100 a page. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
-- **`client.library.list(...)`** / **`client.library.iter(...)`** → browse the public catalog (no API key needed); `iter` walks every page lazily and refuses `sort="random"`, which is not exhaustive.
+- **`client.verifications.{list,iter,get,delete}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). Both take `page_size=` (1-100, default 20 on the server; anything else raises `ValueError` before the request): `client.verifications.iter(page_size=100)` reads 100 a page. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
 - **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
@@ -713,7 +712,7 @@ The calls are annotated with these subclasses: `AssessResponse`,
 `ExtractedClaims`, `TaskStatus`, `BatchAccepted`, `CancelResult`,
 `ReviewStarted`, `ReviewFull`, `ReviewIssues`, `CitecheckStarted`,
 `Citecheck`, `Usage`, `VerificationList`, `Certificate`,
-`RelatedVerifications`, `AskHistory`, `AskReply` and `LibraryList`. Two
+`AskHistory` and `AskReply`. Two
 models are also nested in other results, so the calls returning them at the
 top level return a subclass of their own: `verify` returns a
 `TaskAcceptedResult` (a `TaskAccepted`) and `verifications.get` a
@@ -750,7 +749,7 @@ if v.suggested_rewrite is not None:
 - **`None` for a true claim**, when no correction is established, and on
   verifications that predate the field.
 - On every verification, single or listed: `verifications.get`,
-  `verifications.list`, `library.list`, `verify_and_wait`, `wait`, a completed
+  `verifications.list`, `verify_and_wait`, `wait`, a completed
   `get_status`, and the `result` of a `verification.completed` webhook.
   `assess` rows carry their own with `suggest_rewrite=True`.
 
@@ -1821,7 +1820,7 @@ With `legacy_aliases=False`:
 | `TaskStatus` | `retryable` | from `failure` | `None` unless sent |
 | `TaskStatus` (`cancelled`, no block sent) | `failure` | the 2.x cancelled block | `None` |
 | `FailureBlock` (every failure block) | `failure_reason` | from `code` | `""` unless sent |
-| `Verification`, `VerificationListItem`, `LibraryItem`, `ReviewVerification` | `modified_at` | from `completed_at` | `None` |
+| `Verification`, `VerificationListItem`, `ReviewVerification` | `modified_at` | from `completed_at` | `None` |
 | `ReviewAssessment` | `identified_claims`, `error_code`, `hint` | from `more_claims`, `failure` | `[]`, `None`, `None` |
 | `ReviewSummary` | `claim_limit_reached`, `citation_limit_reached` | from the `*_exceeded` fields | `None` |
 | `CitecheckSummary` | `citation_limit_reached` | from `citation_limit_exceeded` | `None` |
@@ -1896,10 +1895,10 @@ What each option reaches:
 
 | Methods | `timeout` | `max_retries` | `extra_headers` |
 |---|---|---|---|
-| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, `library.list`, ...) | the attempt | the call's retries | every request |
+| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, ...) | the attempt | the call's retries | every request |
 | `extract`, `assess` | the attempt, used as given (so is a copy's; only the client's own is raised to 150 s / 100 s) | the call's retries | every request |
 | Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
-| `iter_reviews`, `verifications.iter`, `library.iter` | each page's attempt | each page's retries | every page |
+| `iter_reviews`, `verifications.iter` | each page's attempt | each page's retries | every page |
 | `with_options` | the default attempt timeout of the copy (also what each poll of a wait uses, capped by what is left of the wait) | the copy's default for plain calls and submits; never a wait's polls, which are one attempt each | added to every request of the copy |
 
 A bad value raises `ValueError` before anything is sent (for the iterators,

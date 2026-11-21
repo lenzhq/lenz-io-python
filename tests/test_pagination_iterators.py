@@ -1,8 +1,7 @@
-"""``verifications.iter()`` and ``library.iter()``: every item, page after
+"""``verifications.iter()``: every item, page after
 page. The page size is read from each response (the API takes none on the
 request), the start page is honoured, the walk ends on a short or empty page,
-a page is fetched only when the items before it have been consumed, and
-``sort="random"`` (not exhaustive) is refused."""
+and a page is fetched only when the items before it have been consumed."""
 
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ import pytest
 import respx
 from conftest import make_client
 
-from lenz_io import Lenz, LibraryItem, ReviewListItem, VerificationListItem
+from lenz_io import Lenz, ReviewListItem, VerificationListItem
 
 # Every test here runs on both clients (``any_client`` in conftest.py): the
 # same calls and assertions against ``Lenz`` and ``AsyncLenz``.
@@ -61,7 +60,6 @@ def _pager(route: respx.Route, pages: dict[int, dict]) -> None:
     ("path", "walk", "item_type"),
     [
         ("/verifications", lambda c, **kw: c.verifications.iter(**kw), VerificationListItem),
-        ("/library", lambda c, **kw: c.library.iter(**kw), LibraryItem),
         ("/reviews", lambda c, **kw: c.iter_reviews(**kw), ReviewListItem),
     ],
 )
@@ -165,26 +163,4 @@ class TestIter:
             route = r.get(path)
             with pytest.raises(ValueError, match="page"):
                 walk(client, page=page)
-        assert route.call_count == 0
-
-
-class TestFilters:
-    def test_library_filters_reach_every_page(self, unauth_client: Lenz) -> None:
-        with respx.mock(base_url=BASE) as r:
-            route = r.get("/library")
-            _pager(route, {1: _page(0, 2, 1, 2), 2: _page(2, 0, 2, 2)})
-            list(unauth_client.library.iter(sort="most_true", search="moon", curated=["trivia"], verdict="True"))
-        for call in route.calls:
-            params = call.request.url.params
-            assert params["sort"] == "most_true"
-            assert params["search"] == "moon"
-            assert params["curated"] == "trivia"
-            assert params["verdict"] == "True"
-            assert "Authorization" not in call.request.headers
-
-    def test_random_order_is_refused(self, unauth_client: Lenz) -> None:
-        with respx.mock(base_url=BASE, assert_all_called=False) as r:
-            route = r.get("/library")
-            with pytest.raises(ValueError, match="random"):
-                unauth_client.library.iter(sort="random")
         assert route.call_count == 0

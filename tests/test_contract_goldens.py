@@ -29,7 +29,6 @@ GOLDENS = Path(__file__).parent / "fixtures" / "goldens"
 _PARSERS: list[tuple[str, Callable[[Any, Any], Any]]] = [
     ("account__ask_history", lambda b, c: models.AskHistory.model_validate(b, context=c)),
     ("account__ask_send", lambda b, c: models.AskReply.model_validate(b, context=c)),
-    ("account__library", lambda b, c: models.LibraryList.model_validate(b, context=c)),
     ("account__me_usage", lambda b, c: models.Usage.model_validate(b, context=c)),
     ("assess__", lambda b, c: models.AssessResponse.model_validate(b, context=c)),
     ("citecheck__get_", lambda b, c: models.Citecheck.model_validate(b, context=c)),

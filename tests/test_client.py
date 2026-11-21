@@ -38,31 +38,6 @@ DEFAULT_BASE = "https://lenz.io/api/v1"
 
 
 class TestConstruction:
-    def test_no_api_key_permits_library(self, unauth_client):
-        # Library endpoints don't require a key — auth check is deferred until
-        # a method actually tries to call something that needs it.
-        with respx.mock(base_url=DEFAULT_BASE, assert_all_called=False) as r:
-            r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            page = unauth_client.library.list()
-        assert page.total == 0
-
-    def test_library_list_forwards_curated_verdict_random(self, unauth_client):
-        with respx.mock(base_url=DEFAULT_BASE, assert_all_called=False) as r:
-            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            unauth_client.library.list(curated=["trivia", "featured"], sort="random", verdict="True,False")
-        qs = route.calls.last.request.url.params
-        assert qs["curated"] == "trivia,featured"
-        assert qs["sort"] == "random"
-        assert qs["verdict"] == "True,False"
-
-    def test_library_list_omits_curated_and_verdict_when_default(self, unauth_client):
-        with respx.mock(base_url=DEFAULT_BASE, assert_all_called=False) as r:
-            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            unauth_client.library.list()
-        qs = route.calls.last.request.url.params
-        assert "curated" not in qs
-        assert "verdict" not in qs
-
     def test_auth_required_method_without_key_raises_with_clear_message(self, unauth_client):
         with pytest.raises(LenzAuthError) as ei:
             unauth_client.verifications.list()
@@ -120,9 +95,9 @@ class TestConstruction:
 
     def test_base_url_override_routes_through_alternate_base(self, custom_base_client):
         with respx.mock(base_url="http://localhost:8001/api/v1") as r:
-            r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            page = custom_base_client.library.list()
-        assert page.total == 0
+            r.get("/me/usage").respond(200, json={"plan": "free", "credits_used": 0, "credits_total": 10})
+            u = custom_base_client.usage()
+        assert u.plan == "free"
 
     def test_lenz_api_version_header_sent_on_every_request(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:
@@ -1559,53 +1534,6 @@ class TestVerifications:
         method was removed; accessing it raises AttributeError."""
         assert not hasattr(client.verifications, "set_visibility")
 
-    def test_related_returns_typed_items(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.get("/verifications/vid_1/related").respond(
-                200,
-                json={
-                    "items": [
-                        {
-                            "verification_id": "rel00001",
-                            "claim": "A related claim",
-                            "verdict": "False",
-                            "confidence": "high",
-                            "lenz_score": 2,
-                            "url": "https://lenz.io/c/foo-rel00001",
-                            "distance": 0.31,
-                        },
-                        {
-                            "verification_id": "rel00002",
-                            "claim": "Another",
-                            "verdict": "True",
-                            "confidence": "medium",
-                            "lenz_score": 9,
-                            "url": "https://lenz.io/c/bar-rel00002",
-                            "distance": 0.42,
-                        },
-                    ]
-                },
-            )
-            related = client.verifications.related("vid_1", limit=5)
-        # limit propagated as query param
-        assert route.calls.last.request.url.params["limit"] == "5"
-        assert len(related.items) == 2
-        first = related.items[0]
-        assert first.verification_id == "rel00001"
-        assert first.claim == "A related claim"
-        # Unified vocabulary: `verdict` + `lenz_score` (not the old
-        # `verdict_label` + `score`); `confidence` is now also exposed.
-        assert first.verdict == "False"
-        assert first.lenz_score == 2
-        assert first.confidence == "high"
-        assert first.distance == 0.31
-
-    def test_related_empty_when_no_matches(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/verifications/vid_2/related").respond(200, json={"items": []})
-            related = client.verifications.related("vid_2")
-        assert related.items == []
-
 
 class TestAsk:
     """Renamed from TestFollowup after the /verifications/{id}/follow-up ->
@@ -1699,30 +1627,6 @@ class TestAsk:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.delete("/ask/vid_1").respond(200, json={"ok": True})
             assert client.ask.reset("vid_1") is True
-
-
-class TestLibrary:
-    def test_list_without_api_key(self, unauth_client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            unauth_client.library.list(page=1, sort="recent")
-        # No Authorization header sent for library
-        assert "Authorization" not in route.calls.last.request.headers
-
-    def test_list_stays_anonymous_even_when_keyed(self, client):
-        """library.list is public content — the bearer must NOT be attached even
-        with a key configured (optional-auth WITHOUT auth_optional). Only
-        verifications.get opts in, so a key never reaches a public-only endpoint."""
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            client.library.list(page=1, sort="recent")
-        assert "Authorization" not in route.calls.last.request.headers
-
-    def test_get_method_removed(self, unauth_client):
-        # GET /api/v1/library/{id} merged server-side into
-        # GET /api/v1/verifications/{id}. SDK's library.get() was dropped;
-        # callers use verifications.get() (works key-less for public claims).
-        assert not hasattr(unauth_client.library, "get")
 
 
 # ─────────────────────────────────────────────────── Auto-retry ──
@@ -2049,7 +1953,7 @@ class TestSuggestedRewrite:
 
 
 class TestSuggestedRewriteOnListItems:
-    """`GET /verifications` and `GET /library` rows carry the same field."""
+    """`GET /verifications` rows carry the same field."""
 
     def _page(self, *items):
         return {"items": list(items), "total": len(items), "page": 1, "page_size": 20}
@@ -2068,19 +1972,6 @@ class TestSuggestedRewriteOnListItems:
                 ),
             )
             page = client.verifications.list()
-        assert [i.suggested_rewrite for i in page.items] == [_REWRITE, None, None]
-
-    def test_library_list_rows_parse_present_null_and_absent(self, unauth_client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/library").respond(
-                200,
-                json=self._page(
-                    self._row("a", verdict="False", suggested_rewrite=_REWRITE),
-                    self._row("b", verdict="True", suggested_rewrite=None),
-                    self._row("c", verdict="Mixed"),
-                ),
-            )
-            page = unauth_client.library.list()
         assert [i.suggested_rewrite for i in page.items] == [_REWRITE, None, None]
 
 

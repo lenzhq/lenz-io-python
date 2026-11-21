@@ -66,7 +66,6 @@ from .models import (
     CitecheckStarted,
     ExtractedClaims,
     FailureBlock,
-    LibraryList,
     ReviewFull,
     ReviewList,
     ReviewStarted,
@@ -575,7 +574,7 @@ class VerifyBatchItem(TypedDict, total=False):
 BatchClaimInput = VerifyBatchItem
 
 
-def _page_step(current: VerificationList | LibraryList | ReviewList, page: int) -> tuple[list[Any], int | None]:
+def _page_step(current: VerificationList | ReviewList, page: int) -> tuple[list[Any], int | None]:
     """One page of an iterator: the items to hand out, and the next page to
     fetch after them (``None`` to stop).
 
@@ -595,7 +594,7 @@ def _page_step(current: VerificationList | LibraryList | ReviewList, page: int) 
     return items, page + 1
 
 
-def _walk(fetch: Callable[[int], VerificationList | LibraryList | ReviewList], page: int) -> Iterator[Any]:
+def _walk(fetch: Callable[[int], VerificationList | ReviewList], page: int) -> Iterator[Any]:
     """The items of ``fetch(page)``, ``fetch(page + 1)``, ... (``_page_step``
     decides where to stop). A generator: no page is fetched before its first
     item is asked for."""
@@ -1375,40 +1374,6 @@ def _ask_payload(message: str, language: str) -> dict[str, Any]:
     return payload
 
 
-def _library_params(
-    *,
-    page: int,
-    sort: str,
-    search: str,
-    domain: str,
-    entity: str,
-    curated: list[str] | None,
-    verdict: str,
-) -> dict[str, Any]:
-    params: dict[str, Any] = {
-        "page": page,
-        "sort": sort,
-        "search": search,
-        "domain": domain,
-        "entity": entity,
-    }
-    # Omit when default so existing callers keep byte-identical query strings.
-    if curated:
-        params["curated"] = ",".join(curated)
-    if verdict:
-        params["verdict"] = verdict
-    return params
-
-
-def _check_library_iter_sort(sort: str) -> None:
-    if sort == "random":
-        raise LenzUsageError(
-            'iter cannot walk sort="random" (each page is a fresh sample); call library.list instead.',
-            code="invalid_argument",
-            param="sort",
-        )
-
-
 def _review_payload(
     *,
     text: str,
@@ -1619,10 +1584,7 @@ def _prepare(
         raise LenzMissingKeyError(
             message="API key required",
             cause="This method requires authentication; no API key was provided.",
-            fix=(
-                "Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at "
-                "https://lenz.io/api-credentials. Library endpoints work without a key."
-            ),
+            fix=("Pass api_key= to Lenz(), set LENZ_API_KEY env var, or get one at https://lenz.io/api-credentials."),
             doc_url="https://lenz.io/docs/auth",
         )
 
@@ -1642,7 +1604,7 @@ def _prepare(
     # (`auth_optional=True`). The server returns a caller's own private/hidden
     # rows only to the owning bearer, so `verifications.get` must send a key it
     # has (→ `lenz show` on a fresh private API claim). Purely public reads
-    # (`library.list`) stay anonymous — no `auth_optional`, no key on the wire —
+    # stay anonymous — no `auth_optional`, no key on the wire —
     # so a key never reaches an endpoint that doesn't need it.
     if api_key and (auth_required or auth_optional):
         req_headers["Authorization"] = f"Bearer {api_key}"

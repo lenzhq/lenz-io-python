@@ -40,11 +40,8 @@ from freeze_cases import (
     DONE,
     DRAFT,
     EXTRACTED,
-    LIB_1,
-    LIB_2,
     PAGE_1,
     PAGE_2,
-    RELATED,
     REVIEW_DONE,
     REVIEW_RUNNING,
     RID,
@@ -171,12 +168,9 @@ PARITY: dict[str, tuple[str, str]] = {
     "verifications.get": ("verifications.get", "call"),
     "verifications.get_certificate": ("verifications.getCertificate", "call"),
     "verifications.delete": ("verifications.delete", "call"),
-    "verifications.related": ("verifications.related", "call"),
     "ask.history": ("ask.history", "call"),
     "ask.send": ("ask.send", "call"),
     "ask.reset": ("ask.reset", "call"),
-    "library.list": ("library.list", "call"),
-    "library.iter": ("library.listAll", "call"),
     "with_options": ("withOptions", "with_options"),
     "close": ("(none)", "lifecycle"),
 }
@@ -188,7 +182,7 @@ def _public_methods() -> dict[str, Callable[..., Any]]:
     for name, value in inspect.getmembers(client):
         if name.startswith("_"):
             continue
-        if name in ("verifications", "ask", "library"):
+        if name in ("verifications", "ask"):
             for sub, method in inspect.getmembers(value):
                 if not sub.startswith("_") and callable(method):
                     out[f"{name}.{sub}"] = method
@@ -394,21 +388,12 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.verifications.delete("v1", **o),
         {("DELETE", "/verifications/v1"): [S503, (200, {"ok": True})]},
     ),
-    "verifications.related": (
-        lambda c, o: c.verifications.related("v1", limit=3, **o),
-        {("GET", "/verifications/v1/related"): [S503, RELATED]},
-    ),
     "ask.history": (lambda c, o: c.ask.history("v1", **o), {("GET", "/ask/v1"): [S503, ASK_HISTORY]}),
     "ask.send": (
         lambda c, o: c.ask.send("v1", message="Why?", idempotency_key=PINNED, **o),
         {("POST", "/ask/v1"): [S503, ASK_REPLY]},
     ),
     "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (200, {"ok": True})]}),
-    "library.list": (lambda c, o: c.library.list(search="x", **o), {("GET", "/library"): [S503, LIB_1]}),
-    "library.iter": (
-        lambda c, o: list(c.library.iter(search="x", **o)),
-        {("GET", "/library"): [S503, LIB_1, S503, LIB_2]},
-    ),
 }
 
 
@@ -835,7 +820,7 @@ class TestOwnership:
         root = MyLenz(api_key=API_KEY)
         copy = root.with_options(timeout=5)
         assert isinstance(copy, MyLenz) and copy.hello() == "hi"
-        assert copy.verifications._p is copy and copy.ask._p is copy and copy.library._p is copy
+        assert copy.verifications._p is copy and copy.ask._p is copy
         assert root.verifications._p is root
 
 
@@ -864,7 +849,6 @@ def _per_call_entry_points(client: Lenz) -> list[Callable[..., Any]]:
         lambda **o: client.ask.send("v1", message="Why?", **o),
         lambda **o: client.usage(**o),
         lambda **o: client.verifications.iter(**o),
-        lambda **o: client.library.iter(**o),
     ]
 
 
@@ -1016,23 +1000,6 @@ class _OldVerifications(lenz_io.client._VerificationsNamespace):
         return super().list(page=page)
 
 
-class _OldLibrary(lenz_io.client._LibraryNamespace):
-    def list(  # type: ignore[override]
-        self,
-        *,
-        page: int = 1,
-        sort: str = "recent",
-        search: str = "",
-        domain: str = "",
-        entity: str = "",
-        curated: Any = None,
-        verdict: str = "",
-    ) -> Any:
-        return super().list(
-            page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
-        )
-
-
 _REVIEW_WAIT: Answers = {
     ("POST", "/review"): [(202, {"review_id": RID, "status": "queued"})],
     ("GET", f"/reviews/{RID}"): [(200, REVIEW_DONE)],
@@ -1074,10 +1041,8 @@ class TestOverridesWritten221:
     def test_the_iterators(self) -> None:
         client = make(api_key=API_KEY)
         client.verifications = _OldVerifications(client)
-        client.library = _OldLibrary(client)
-        with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2], ("GET", "/library"): [LIB_1, LIB_2]}):
+        with recorded({("GET", "/verifications"): [PAGE_1, PAGE_2]}):
             assert len(list(client.verifications.iter())) == 2
-            assert len(list(client.library.iter(extra_headers={}))) == 2
 
     def test_an_option_still_reaches_an_override_that_takes_it(self) -> None:
         client = make(api_key=API_KEY)
@@ -1110,15 +1075,6 @@ class TestSnapshots:
         assert [_headers(r).get(MARK.lower()) for r in rec.requests] == ["first", "first"]
         assert all("x-late" not in _headers(r) for r in rec.requests)
         assert [r["timeout"]["read"] for r in rec.requests] == [4, 4]
-
-    def test_the_library_iterator_too(self) -> None:
-        headers: dict[str, str | None] = {MARK: "first"}
-        with recorded({("GET", "/library"): [LIB_1, LIB_2]}) as rec:
-            it = make(api_key=API_KEY).library.iter(extra_headers=headers)
-            next(it)
-            headers[MARK] = "changed"
-            list(it)
-        assert [_headers(r).get(MARK.lower()) for r in rec.requests] == ["first", "first"]
 
 
 class TestTimeoutForms:

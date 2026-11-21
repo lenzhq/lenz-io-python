@@ -15,6 +15,10 @@ All notable changes to this SDK are documented here. Format follows
 
 - Docs: `sr` (Serbian, answered in the Latin script) is listed among the supported `language` codes; the API now accepts it. No code change: the SDK sends `language` as given.
 
+### Removed
+
+- `client.library` (`library.list`, `library.iter`) and `client.verifications.related` (plus `LibraryItem`, `LibraryList`, `SimilarVerification`, and `RelatedVerifications`), following the retirement of `GET /api/v1/library` and `GET /api/v1/verifications/{id}/related`.
+
 ## [3.6.0] - 2026-10-31
 
 ### Added

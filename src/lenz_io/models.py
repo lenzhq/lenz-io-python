@@ -805,22 +805,6 @@ class EntityRef(_Lax):
     qid: str | None = None
 
 
-class SimilarVerification(_Lax):
-    """An existing public verification that semantically resembles the submitted text.
-
-    Same vocabulary as ``Verification`` — flat ``verdict`` / ``confidence`` /
-    ``lenz_score`` at top level, no nested ``Verdict`` object.
-    """
-
-    verification_id: str = ""
-    claim: str = ""
-    verdict: str = ""
-    confidence: str = "low"
-    lenz_score: int | None = None
-    url: str = ""
-    distance: float = 0.0
-
-
 #: Closed set of ``coverage.status`` values. Exported for exhaustive matching;
 #: the model field stays ``str`` so the SDK never rejects a status the server
 #: adds after this release was cut.
@@ -1039,9 +1023,8 @@ class VerificationResult(Verification, Result):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint and the public
-    library list. Slim shape — no ``url`` (reference by
-    ``verification_id``), no ``visibility`` (1.1.0).
+    """Compact item for the verifications list endpoint. Slim shape — no ``url``
+    (reference by ``verification_id``), no ``visibility`` (1.1.0).
     """
 
     verification_id: str = ""
@@ -1093,23 +1076,6 @@ class VerificationListItem(_Lax):
 
 class VerificationList(Result):
     items: list[VerificationListItem] = Field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    page_size: int = 20
-
-
-class RelatedVerifications(Result):
-    """Wrapper for ``GET /verifications/{id}/related``."""
-
-    items: list[SimilarVerification] = Field(default_factory=list)
-
-
-class LibraryItem(VerificationListItem):
-    """Same shape as VerificationListItem on the public Library list."""
-
-
-class LibraryList(Result):
-    items: list[LibraryItem] = Field(default_factory=list)
     total: int = 0
     page: int = 1
     page_size: int = 20
@@ -1701,7 +1667,7 @@ class TaskStatus(Result):
     # keeps working; they are deprecated and kept. Marked deprecated in
     # the JSON schema only, so reading them does not warn.
     candidates: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    similar_claims: list[SimilarVerification] = Field(default_factory=list, json_schema_extra={"deprecated": True})
+    similar_claims: list[dict[str, Any]] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # failure branches. Deprecated: ``error``, ``failure_reason``,
     # ``failure_detail``, ``failure_class``, ``retryable`` and ``docs_url``
     # below are the 2.x flat fields of a failed run; read ``failure`` instead
@@ -3046,10 +3012,7 @@ __all__ = [
     "FailureBlock",
     "FailureClass",
     "FileInput",
-    "LibraryItem",
-    "LibraryList",
     "Position",
-    "RelatedVerifications",
     "Result",
     "ReviewAssessment",
     "ReviewAssessmentCounts",
@@ -3080,7 +3043,6 @@ __all__ = [
     "ReviewSummary",
     "ReviewVerification",
     "ReviewVerificationCounts",
-    "SimilarVerification",
     "Source",
     "SuppliedSource",
     "TaskAccepted",
