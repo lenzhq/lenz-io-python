@@ -68,6 +68,7 @@ from .models import (
     FailureBlock,
     LibraryList,
     ReviewFull,
+    ReviewList,
     ReviewStarted,
     SuppliedSource,
     TaskStatus,
@@ -574,7 +575,7 @@ class VerifyBatchItem(TypedDict, total=False):
 BatchClaimInput = VerifyBatchItem
 
 
-def _page_step(current: VerificationList | LibraryList, page: int) -> tuple[list[Any], int | None]:
+def _page_step(current: VerificationList | LibraryList | ReviewList, page: int) -> tuple[list[Any], int | None]:
     """One page of an iterator: the items to hand out, and the next page to
     fetch after them (``None`` to stop).
 
@@ -594,7 +595,7 @@ def _page_step(current: VerificationList | LibraryList, page: int) -> tuple[list
     return items, page + 1
 
 
-def _walk(fetch: Callable[[int], VerificationList | LibraryList], page: int) -> Iterator[Any]:
+def _walk(fetch: Callable[[int], VerificationList | LibraryList | ReviewList], page: int) -> Iterator[Any]:
     """The items of ``fetch(page)``, ``fetch(page + 1)``, ... (``_page_step``
     decides where to stop). A generator: no page is fetched before its first
     item is asked for."""

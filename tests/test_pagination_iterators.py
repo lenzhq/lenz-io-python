@@ -14,7 +14,7 @@ import pytest
 import respx
 from conftest import make_client
 
-from lenz_io import Lenz, LibraryItem, VerificationListItem
+from lenz_io import Lenz, LibraryItem, ReviewListItem, VerificationListItem
 
 # Every test here runs on both clients (``any_client`` in conftest.py): the
 # same calls and assertions against ``Lenz`` and ``AsyncLenz``.
@@ -36,8 +36,15 @@ def unauth_client() -> Iterator[Any]:
 BASE = "https://lenz.io/api/v1"
 
 
+def _item_id(item: Any) -> str:
+    return getattr(item, "verification_id", "") or getattr(item, "review_id", "")
+
+
 def _page(start: int, count: int, page: int, page_size: int, total: int = 100) -> dict:
-    items = [{"verification_id": f"v{start + i}", "claim": f"C{start + i}."} for i in range(count)]
+    items = [
+        {"verification_id": f"v{start + i}", "review_id": f"v{start + i}", "claim": f"C{start + i}."}
+        for i in range(count)
+    ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
@@ -55,6 +62,7 @@ def _pager(route: respx.Route, pages: dict[int, dict]) -> None:
     [
         ("/verifications", lambda c, **kw: c.verifications.iter(**kw), VerificationListItem),
         ("/library", lambda c, **kw: c.library.iter(**kw), LibraryItem),
+        ("/reviews", lambda c, **kw: c.iter_reviews(**kw), ReviewListItem),
     ],
 )
 class TestIter:
@@ -63,7 +71,7 @@ class TestIter:
             route = r.get(path)
             _pager(route, {1: _page(0, 2, 1, 2), 2: _page(2, 2, 2, 2), 3: _page(4, 1, 3, 2)})
             items = list(walk(client))
-        assert [i.verification_id for i in items] == ["v0", "v1", "v2", "v3", "v4"]
+        assert [_item_id(i) for i in items] == ["v0", "v1", "v2", "v3", "v4"]
         assert all(isinstance(i, item_type) for i in items)
         assert [c.request.url.params["page"] for c in route.calls] == ["1", "2", "3"]
         assert all("page_size" not in c.request.url.params for c in route.calls)
@@ -87,7 +95,7 @@ class TestIter:
             route = r.get(path)
             _pager(route, {3: _page(40, 1, 3, 20)})
             items = list(walk(client, page=3))
-        assert [i.verification_id for i in items] == ["v40"]
+        assert [_item_id(i) for i in items] == ["v40"]
         assert route.calls.last.request.url.params["page"] == "3"
 
     def test_an_empty_first_page(self, client: Lenz, path, walk, item_type) -> None:
@@ -103,7 +111,7 @@ class TestIter:
             _pager(route, {1: _page(0, 2, 1, 2), 2: _page(2, 2, 2, 2)})
             it = walk(client)
             assert route.call_count == 0, "nothing is fetched before the first item is asked for"
-            assert [i.verification_id for i in islice(it, 2)] == ["v0", "v1"]
+            assert [_item_id(i) for i in islice(it, 2)] == ["v0", "v1"]
             assert route.call_count == 1
             next(it)
             assert route.call_count == 2
@@ -125,7 +133,7 @@ class TestIter:
             route = r.get(path)
             _pager(route, {1: first, 2: clamped})
             items = list(walk(client))
-        assert [i.verification_id for i in items] == ["v0", "v1"]
+        assert [_item_id(i) for i in items] == ["v0", "v1"]
         assert route.call_count == 2
 
     @pytest.mark.parametrize("page_size", [0, -1, None])

@@ -2925,7 +2925,19 @@ class Citecheck(Result):
     failure: FailureBlock | None = None
 
 
-class ReviewEnvelope(_Lax):
+class _ReviewHeader(_Lax):
+    review_id: str = ""
+    status: str = ""
+    outcome: str | None = None
+    created_at: str = ""
+    completed_at: str | None = None
+    language: str = "en"
+    policy: EscalationPolicy = Field(default_factory=EscalationPolicy)
+    summary: ReviewSummary = Field(default_factory=ReviewSummary)
+    credits: ReviewCredits = Field(default_factory=ReviewCredits)
+
+
+class ReviewEnvelope(_ReviewHeader):
     """What both views of ``GET /reviews/{review_id}`` carry.
 
     ``status`` is the lifecycle: ``queued`` → ``assessing`` → ``verifying``
@@ -2947,16 +2959,7 @@ class ReviewEnvelope(_Lax):
     once the review has ended.
     """
 
-    review_id: str = ""
     view: str = ""
-    status: str = ""
-    outcome: str | None = None
-    created_at: str = ""
-    completed_at: str | None = None
-    language: str = "en"
-    policy: EscalationPolicy = Field(default_factory=EscalationPolicy)
-    summary: ReviewSummary = Field(default_factory=ReviewSummary)
-    credits: ReviewCredits = Field(default_factory=ReviewCredits)
     poll_after_seconds: int | None = None
     issues: list[ReviewIssue] = Field(default_factory=list)
     failures: list[ReviewFailure] = Field(default_factory=list)
@@ -2974,6 +2977,15 @@ class ReviewEnvelope(_Lax):
     more_citations: list[ReviewMoreCitation] | None = None
     failure: FailureBlock | None = None
 
+    def __repr_args__(self) -> list[tuple[str | None, Any]]:
+        args = list(super().__repr_args__())
+        view_item = next((item for item in args if item[0] == "view"), None)
+        if view_item is not None:
+            args.remove(view_item)
+            rid_idx = next((idx for idx, item in enumerate(args) if item[0] == "review_id"), -1)
+            args.insert(rid_idx + 1, view_item)
+        return args
+
 
 class ReviewFull(ReviewEnvelope, Result):
     """``GET /reviews/{review_id}``: the envelope plus every claim."""
@@ -2987,6 +2999,21 @@ class ReviewIssues(ReviewEnvelope, Result):
     """``GET /reviews/{review_id}?view=issues``: the envelope, no ``claims``."""
 
     view: str = "issues"
+
+
+class ReviewListItem(_ReviewHeader):
+    """Compact item for the reviews list endpoint (``GET /reviews``)."""
+
+    failure: FailureBlock | None = None
+
+
+class ReviewList(Result):
+    """One page of reviews from ``GET /reviews``."""
+
+    items: list[ReviewListItem] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
 
 
 __all__ = [
@@ -3045,6 +3072,8 @@ __all__ = [
     "ReviewFull",
     "ReviewIssue",
     "ReviewIssues",
+    "ReviewList",
+    "ReviewListItem",
     "ReviewMoreCitation",
     "ReviewResult",
     "ReviewStarted",
