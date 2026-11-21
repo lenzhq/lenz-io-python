@@ -8,6 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- `list_reviews` and `iter_reviews` (on `Lenz` and `AsyncLenz`): list the account's API reviews (`GET /api/v1/reviews`, newest first, `page_size` 1 to 100) as a paginated `ReviewList` or a lazy `ReviewListItem` iterator (`ReviewList` and `ReviewListItem` exported from `lenz_io`).
 - Support for audio file uploads (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`) and direct audio URLs across `extract_file`, `review_file`, `review_file_and_wait`, and CLI commands (`lenz extract`, `lenz review`).
 
 ### Changed
