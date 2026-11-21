@@ -490,6 +490,23 @@ def test_quote_finding_shows_the_missing_excerpt_only():
     assert "found words here" not in text
 
 
+def test_a_reference_whose_page_is_another_work_shows_the_pages_title():
+    # A reference no sentence cites, compared with the page at its own address:
+    # the API lists no differences and gives the page's title.
+    body = _load("review_citations_constructed.json")
+    row = next(i for i in body["citation_issues"] if i["finding"] == "metadata_mismatch")
+    row.update(metadata_differences=[], doi=None, page_title="Annual rainfall in the Sahel, 1950 to 2020")
+    buf = io.StringIO()
+    out = Output(json_mode=False, no_color=True)
+    out.json_mode = False
+    out.console = Console(file=buf, no_color=True, width=200, highlight=False)
+    render_review(out, ReviewFull.model_validate(body))
+    text = buf.getvalue()
+    assert "The page at this address is titled:" in text
+    assert "“Annual rainfall in the Sahel, 1950 to 2020”" in text
+    assert "the record says" not in text
+
+
 def test_citation_render_issues_only_view_keeps_the_citations():
     text = _render("review_citations_constructed.json", issues_only=True)
     assert "23 sources cited in your draft" in text and "[source 1/10] Contradicted" in text
