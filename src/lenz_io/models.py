@@ -2353,7 +2353,8 @@ class ReviewSummary(_Lax):
     assessments: ReviewAssessmentCounts | None = None
     verifications: ReviewVerificationCounts | None = None
     issues: int = 0
-    #: Citations with a URL or a DOI in the draft (exact; each use counts).
+    #: Citations found in the draft (exact; each use counts). A reference with
+    #: no URL or DOI counts when it gives authors, a year and a title.
     citations_found: int | None = None
     #: How many of them the review checks: the first, in the draft's order.
     citations_selected: int | None = None
@@ -2694,7 +2695,8 @@ class ReviewCitationResult(_Lax):
 
 
 class ReviewCitationRecord(_Lax):
-    """A DOI's record in the registry."""
+    """The registry's record of the cited work: of the DOI the draft writes,
+    or of the work found for a reference that has no URL or DOI."""
 
     title: str | None = None
     authors: list[str] = Field(default_factory=list)
@@ -2729,7 +2731,14 @@ class ReviewCitationCheck(_Lax):
       ``quote`` is ``not_in_source``.
     - ``doi_registered``, ``metadata`` (``consistent``, ``mismatch`` or
       ``unchecked``), ``metadata_differences`` and ``registered``: set for a
-      DOI only.
+      DOI, and for a reference with no URL or DOI that was found in the
+      registry by its authors, year and title (the row's ``doi`` stays
+      ``None``; ``source_url`` links the record). ``metadata`` alone is also
+      set for a reference no sentence cites that was compared with the page
+      at its own address: ``consistent`` when the page has the title the
+      reference gives, ``mismatch`` when the page is another work. That
+      mismatch has no ``metadata_differences`` and no ``registered``;
+      ``page_title`` is the title of the page.
     - ``unchecked_reason`` and ``hint``: why the finding is ``unchecked`` and
       what to do next. The reasons are an open set, e.g. ``no_text``,
       ``partial_text``, ``login_required``, ``unsupported_site``,
@@ -2760,8 +2769,10 @@ class ReviewCitationCheck(_Lax):
 
 
 class ReviewCitation(_Lax):
-    """One citation of the draft (a URL or a DOI where the draft uses it), in
-    the draft's order. Only on a review that asked for the citation check.
+    """One citation of the draft (a URL, a DOI or a reference where the draft
+    uses it), in the draft's order. Only on a review that asked for the
+    citation check. ``cited_url`` and ``doi`` are both ``None`` for a
+    reference that has neither.
 
     ``reference`` is the citation as the draft writes it; ``statement`` the
     draft's sentence it is attached to, with link syntax reduced to its
@@ -2790,8 +2801,10 @@ class ReviewCitationIssue(_Lax):
     ``snippet`` and ``rationale`` are set only when ``source`` is
     ``support``. On ``quote_not_in_source``, ``missing_quote`` is the quoted
     excerpt that was not found. On ``metadata_mismatch``,
-    ``metadata_differences`` says what differs. ``failure`` is set when another part of the check failed after
-    the finding was established.
+    ``metadata_differences`` says what differs from the registry's record;
+    when it is empty, the reference was compared with the page at its own
+    address, and ``page_title`` is the title of that page. ``failure`` is set
+    when another part of the check failed after the finding was established.
     """
 
     citation_index: int = 0
@@ -2814,7 +2827,9 @@ class ReviewCitationIssue(_Lax):
 class ReviewMoreCitation(_Lax):
     """A citation found in the draft past the ones this review checked:
     found but not checked. Send it in a later request to check it.
-    ``sentence`` is the draft's sentence around it."""
+    ``sentence`` is the draft's sentence around it. ``cited_url`` and ``doi``
+    are both ``None`` for a reference that has neither, which cannot be sent
+    as a pair by its address."""
 
     index: int = 0
     reference: str | None = None
