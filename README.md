@@ -8,7 +8,6 @@ Official Python SDK for the [Lenz Accuracy Verification API](https://lenz.io/dev
 - `assess` — fast 3-model panel verdict in ~15s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
-- `ask` — follow-up questions grounded on a verification. Sync, paid.
 - `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
@@ -309,7 +308,6 @@ lenz verify  "<claim>" --depth low                          # shallower, faster,
 lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
-lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
 lenz review report.docx          # review Word document, PDF, or image (.png, .jpg, .webp) directly
 lenz review report.docx --export annotated.docx  # save annotated Word document with comments
@@ -388,12 +386,6 @@ results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 for r in results:
     if r.verification:
         print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
-
-# 4. ask — follow-up grounded on a verification (when a claim was escalated)
-deep = next((r.verification for r in results if r.verification is not None), None)
-if deep is not None:
-    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
-    print(reply.content)
 ```
 
 `assess(claims=[...])` takes up to 20 claims per call and always answers
@@ -475,9 +467,8 @@ your own claims. Use webhooks for production async flows.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
-- **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,iter,get,delete}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). Both take `page_size=` (1-100, default 20 on the server; anything else raises `ValueError` before the request): `client.verifications.iter(page_size=100)` reads 100 a page. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
-- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
+- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
 
@@ -899,7 +890,6 @@ One pool per account funds every billable call, at a fixed weight:
 | `verify` (and `verify_batch`, `select`) | **10** per claim |
 | `verify` with `depth="low"` | **5** per claim |
 | `assess` | 1 per claim; `"Error"` rows are free |
-| `ask` | 1 |
 | `extract` | 0 — free at the pool, bounded by the daily fair-use cap instead |
 
 ```python
@@ -1110,7 +1100,7 @@ string:
 
 | `code` | When | `param`, e.g. |
 |---|---|---|
-| `blank_input` | a blank claim, text or message (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs, `ask.send`) | `"claim"`, `"text"`, `"message"` |
+| `blank_input` | a blank claim or text (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs) | `"claim"`, `"text"`, `"message"` |
 | `blank_item` | a blank item in an `assess(claims=[...])` list | `"claims[2]"` |
 | `empty_list` | an empty list (`assess(claims=[])`), or a `select` list that is empty or all blank | `"claims"`, `"texts"` |
 | `invalid_page_size` | `page_size` outside 1 to 100 | `"page_size"` |
@@ -1895,7 +1885,7 @@ What each option reaches:
 
 | Methods | `timeout` | `max_retries` | `extra_headers` |
 |---|---|---|---|
-| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, ...) | the attempt | the call's retries | every request |
+| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, ...) | the attempt | the call's retries | every request |
 | `extract`, `assess` | the attempt, used as given (so is a copy's; only the client's own is raised to 150 s / 100 s) | the call's retries | every request |
 | Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
 | `iter_reviews`, `verifications.iter` | each page's attempt | each page's retries | every page |

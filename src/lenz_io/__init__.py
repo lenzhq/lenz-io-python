@@ -37,11 +37,6 @@ The primitives, call by call:
     doubtful = [{"claim": c.claim} for c in quick if c.status == "completed" and c.confidence == "low"][:20]
     results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 
-    # 4. /ask — follow-up questions grounded on a verification (when one was escalated)
-    deep = next((r.verification for r in results if r.verification is not None), None)
-    if deep is not None:
-        reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
-
 The same calls from asyncio, as coroutines:
 
     from lenz_io import AsyncLenz
@@ -103,9 +98,6 @@ from .errors import (
     UsageErrorCode,
 )
 from .models import (
-    AskHistory,
-    AskMessage,
-    AskReply,
     AssessClaim,
     Assessment,
     AssessResponse,
@@ -193,9 +185,6 @@ __all__ = [
     "MAX_RETRY_AFTER_SLEEP",
     "NOT_GIVEN",
     "USAGE_ERROR_CODES",
-    "AskHistory",
-    "AskMessage",
-    "AskReply",
     "AssessClaim",
     "AssessResponse",
     "AssessStatus",

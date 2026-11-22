@@ -17,6 +17,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Removed
 
+- `client.ask` (`ask.send`, `ask.history`, `ask.reset`) and the CLI `lenz ask` command (plus `AskHistory`, `AskMessage`, and `AskReply`), following the retirement of `POST`/`GET`/`DELETE` `/api/v1/ask/{verification_id}`.
 - `client.library` (`library.list`, `library.iter`) and `client.verifications.related` (plus `LibraryItem`, `LibraryList`, `SimilarVerification`, and `RelatedVerifications`), following the retirement of `GET /api/v1/library` and `GET /api/v1/verifications/{id}/related`.
 
 ## [3.6.0] - 2026-10-31

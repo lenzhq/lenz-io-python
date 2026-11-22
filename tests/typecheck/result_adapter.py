@@ -36,8 +36,6 @@ def every_call(client: Lenz) -> list[Result]:
         client.verifications.list(),
         client.verifications.get("v1"),
         client.verifications.get_certificate("v1"),
-        client.ask.history("v1"),
-        client.ask.send("v1", message="Why?"),
     ]
 
 
@@ -63,6 +61,4 @@ async def every_async_call(client: AsyncLenz) -> list[Result]:
         await client.verifications.list(),
         await client.verifications.get("v1"),
         await client.verifications.get_certificate("v1"),
-        await client.ask.history("v1"),
-        await client.ask.send("v1", message="Why?"),
     ]

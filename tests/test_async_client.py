@@ -43,10 +43,9 @@ from lenz_io import (
     async_client as async_module,
 )
 from lenz_io.async_client import (
-    _AsyncAskNamespace,
     _AsyncVerificationsNamespace,
 )
-from lenz_io.client import _AskNamespace, _VerificationsNamespace
+from lenz_io.client import _VerificationsNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "lenz_io"
@@ -129,7 +128,6 @@ def _blocked(event: asyncio.Event) -> Callable[[httpx.Request], Awaitable[httpx.
 PAIRS = [
     (Lenz, AsyncLenz),
     (_VerificationsNamespace, _AsyncVerificationsNamespace),
-    (_AskNamespace, _AsyncAskNamespace),
 ]
 #: Sync name -> async name, where they differ.
 RENAMED = {"close": "aclose", "__enter__": "__aenter__", "__exit__": "__aexit__"}

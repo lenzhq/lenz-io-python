@@ -847,7 +847,6 @@ _NEW_AUTO_KEY_CALLS = [
         lambda c, **kw: c.verify_batch_and_wait(claims=[{"claim": "A."}], timeout=0, **kw),
         {"batch_id": "b", "items": []},
     ),
-    ("/ask/v1", lambda c, **kw: c.ask.send("v1", message="Why?", **kw), _ASK_REPLY),
 ]
 
 
@@ -947,7 +946,6 @@ class TestBatchAndAskIdempotency:
         param = inspect.signature(getattr(Lenz, name)).parameters["idempotency"]
         assert param.default is True
         assert param.kind is inspect.Parameter.KEYWORD_ONLY
-        assert inspect.signature(Lenz(api_key="k").ask.send).parameters["idempotency"].default is True
 
 
 class TestWaitDefaults:
@@ -1533,100 +1531,6 @@ class TestVerifications:
         """1.1.0: API claims are always private. The set_visibility
         method was removed; accessing it raises AttributeError."""
         assert not hasattr(client.verifications, "set_visibility")
-
-
-class TestAsk:
-    """Renamed from TestFollowup after the /verifications/{id}/follow-up ->
-    /ask/{id} server-side rename and the followup -> ask client namespace
-    rename."""
-
-    def test_history(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.get("/ask/vid_1").respond(
-                200,
-                json={
-                    "messages": [
-                        {"role": "user", "content": "why?", "created_at": "2026-05-22T12:00:00Z"},
-                        {"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
-                    ],
-                    "exchanges_used": 1,
-                    "exchange_limit": 10,
-                    "can_send": True,
-                },
-            )
-            h = client.ask.history("vid_1")
-        assert h.can_send is True
-        # Typed AskMessage in the messages list (no more bare dicts)
-        assert h.messages[0].role == "user"
-        assert h.messages[1].role == "expert"
-        assert h.messages[1].content == "because…"
-
-    def test_send(self, client):
-        # Server returns {role, content, created_at} — confirmed against
-        # lenz/api/public_authed.py:1804. Pre-1.0.2 the mock used
-        # `{"reply": "..."}` and the SDK declared `.reply: str`; both were
-        # documentation drift away from the wire format, but the test
-        # passed because the mock matched the (wrong) model.
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.post("/ask/vid_1").respond(
-                200,
-                json={
-                    "role": "expert",
-                    "content": "because the photoelectric effect…",
-                    "created_at": "2026-05-22T12:00:05Z",
-                },
-            )
-            f = client.ask.send("vid_1", message="why?")
-        assert f.role == "expert"
-        assert f.content == "because the photoelectric effect…"
-        assert f.created_at == "2026-05-22T12:00:05Z"
-
-    def test_send_with_idempotency_key_sets_header(self, client):
-        assert "idempotency_key" in inspect.signature(client.ask.send).parameters, (
-            "ask.send must take an idempotency_key so a client retry replays the first reply"
-        )
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/ask/vid_1").respond(
-                200,
-                json={"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
-            )
-            client.ask.send("vid_1", message="why?", idempotency_key="ask-key-1")
-        assert route.calls.last.request.headers["Idempotency-Key"] == "ask-key-1"
-
-    def test_send_sends_a_new_random_key_per_call(self, client):
-        # 3.0: one key per call, so the SDK's own retry replays the first
-        # reply. Never derived from the message: asking the same question
-        # again is a new call with a new key, so it is asked again.
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/ask/vid_1").respond(
-                200,
-                json={"role": "expert", "content": "because…", "created_at": "2026-05-22T12:00:05Z"},
-            )
-            client.ask.send("vid_1", message="why?")
-            client.ask.send("vid_1", message="why?")
-        keys = [c.request.headers["Idempotency-Key"] for c in route.calls]
-        assert all(re.match(r"^[0-9a-f]{32}$", k) for k in keys), keys
-        assert keys[0] != keys[1]
-
-    def test_send_legacy_reply_attr_gone(self):
-        # REGRESSION: pre-1.0.2 `AskReply.reply` always returned `""`
-        # because the server never sends a `reply` key. Renamed to
-        # `content` in 1.0.2; the old name is no longer in the typed
-        # surface. This test pins the rename so a careless revert
-        # silently re-introducing `.reply` fails CI.
-        from lenz_io import AskReply
-
-        fields = set(AskReply.model_fields.keys())
-        assert "content" in fields, "AskReply.content must be the declared field"
-        assert "reply" not in fields, (
-            "AskReply.reply was removed in 1.0.2 — it was always empty "
-            "because the server returns `content`, not `reply`."
-        )
-
-    def test_reset(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            r.delete("/ask/vid_1").respond(200, json={"ok": True})
-            assert client.ask.reset("vid_1") is True
 
 
 # ─────────────────────────────────────────────────── Auto-retry ──

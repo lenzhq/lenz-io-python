@@ -125,6 +125,35 @@ def _empty_debate_render_gap(path: str, old: Any, new: Any) -> bool:
     return False
 
 
+def _strip_ask_hint(text: str) -> str:
+    return "\n".join(ln for ln in text.splitlines() if not ln.strip().startswith("ask follow-ups: lenz ask "))
+
+
+def _ask_hint_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a `render` text differs only by the `lenz ask` hint line the CLI
+    no longer prints after retiring the `ask` command."""
+    if (
+        path not in ("render", "render_concise", "render_verification")
+        or not isinstance(old, str)
+        or not isinstance(new, str)
+    ):
+        return False
+    stripped_old = _strip_ask_hint(old)
+    if stripped_old.splitlines() == new.splitlines():
+        return True
+    return _empty_debate_render_gap(path, stripped_old, new)
+
+
+def _usage_costs_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a usage `render` text differs only by the `ask` price tail dropped from `costs`."""
+    if path != "render" or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    import re
+
+    cleaned_old = re.sub(r"(Ask:\s+\d+ left\s+\([^)]+?)\s+·\s+1 credit each(\))", r"\1\2", old)
+    return cleaned_old == new
+
+
 _STAGE_RENAMES = {"Assessment failed:": "Quick check failed:", "Verification failed:": "Deep check failed:"}
 
 
@@ -197,6 +226,8 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
         return "review/citecheck webhooks drop `task_id` (never pollable); it reads the review or check id"
     if path == "event.result.completed_at" and name.startswith("webhook__verification_completed"):
         return "`result` also carries the newer `completed_at` beside `modified_at`"
+    if path == "dump.costs.ask" and "ask" in lb.get("costs", {}) and "ask" not in cb.get("costs", {}):
+        return "`ask` is no longer in `costs` in the current shape"
     return KNOWN_GAPS.get((name, path))
 
 
@@ -341,6 +372,8 @@ def test_newer_shape_reads_the_same(name: str) -> None:
         and not (canonical["body"].get("status") == "cancelled" and _cancelled_render_gap(path, old, new))
         and not _empty_debate_render_gap(path, old, new)
         and not _failure_words_render_gap(path, old, new, canonical["body"].get("status") == "cancelled")
+        and not _ask_hint_render_gap(path, old, new)
+        and not _usage_costs_render_gap(path, old, new)
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
@@ -390,7 +423,7 @@ def test_model_schemas_match_the_previous_release() -> None:
     # they appear in a schema's ``$defs`` only through those fields.
     models_since_frozen = {"SearchedPage"}
     retired_since_frozen = {"similar_claims"}
-    retired_models = {"RelatedVerifications", "SimilarVerification"}
+    retired_models = {"RelatedVerifications", "SimilarVerification", "AskHistory", "AskMessage", "AskReply"}
 
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the

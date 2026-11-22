@@ -69,7 +69,6 @@ def _bodies(route: respx.Route) -> list[bytes]:
 _CALLS = [
     ("/verify", _ACCEPTED, lambda c, **kw: c.verify("A.", **kw)),
     ("/verify/batch", _BATCH, lambda c, **kw: c.verify_batch(claims=[{"claim": "A."}], **kw)),
-    ("/ask/v1", {"reply": "Yes."}, lambda c, **kw: c.ask.send("v1", message="Why?", **kw)),
     ("/assess", {"claims": []}, lambda c, **kw: c.assess("A.", **kw)),
     ("/extract", {"claims": []}, lambda c, **kw: c.extract(text="A.", **kw)),
     ("/verify/t0/select", _BATCH, lambda c, **kw: c.select("t0", claims=["A."], **kw)),
@@ -345,7 +344,6 @@ class TestTheWaitHelpersGoThroughTheSameMethodsAs2x:
 
 
 _UNREADABLE = [
-    ("/ask/v1", {"content": None, "message_id": 5}, lambda c: c.ask.send("v1", message="Why?", idempotency_key="k")),
     ("/verify", {"task_id": ["x"]}, lambda c: c.verify("A.", idempotency_key="k")),
     ("/verify/batch", {"items": "x"}, lambda c: c.verify_batch(claims=[{"claim": "A."}], idempotency_key="k")),
     ("/assess", {"claims": "x"}, lambda c: c.assess("A.", idempotency_key="k")),

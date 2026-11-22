@@ -74,9 +74,6 @@ CALLS: list[tuple[str, Callable[[Lenz, str], Any], str, str]] = [
         "/verifications/{}/certificate",
     ),
     ("verifications.delete", lambda c, i: c.verifications.delete(i), "DELETE", "/verifications/{}"),
-    ("ask.history", lambda c, i: c.ask.history(i), "GET", "/ask/{}"),
-    ("ask.send", lambda c, i: c.ask.send(i, message="Why?", idempotency=False), "POST", "/ask/{}"),
-    ("ask.reset", lambda c, i: c.ask.reset(i), "DELETE", "/ask/{}"),
 ]
 IDS = [c[0] for c in CALLS]
 

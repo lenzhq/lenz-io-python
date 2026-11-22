@@ -264,7 +264,7 @@ class LenzQuotaExceededError(LenzError):
         ``remaining`` with a DIFFERENT meaning (see below). The raw key is
         always available as ``exc.body["credits_remaining"]``.
       * ``cost``         — credits the rejected call would have taken (a
-        ``/verify`` is 10, ``/assess`` and ``/ask`` are 1), or ``None``.
+        ``/verify`` is 10, ``/assess`` is 1), or ``None``.
 
     ``remaining`` and ``requested`` are in the **capability's** unit —
     verifications, assessments, follow-ups. ``credit_balance`` and ``cost``
@@ -1100,11 +1100,8 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
             if key not in ("detail", "code", "errors"):
                 original["doc_url" if key == "docs_url" else key] = value
         return original
-    # /assess sent ``too_many_items``; /ask sent no code for an unfinished
-    # verification (``GET /verifications/{id}`` still sends ``verification_not_ready``).
-    codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
-        code == "verification_not_ready" and path.startswith("/ask/")
-    )
+    # /assess sent ``too_many_items``.
+    codeless = code in _CODELESS and not (code == "too_many_items" and path == "/assess")
     if codeless:
         del out["code"]
     out.pop("errors", None)

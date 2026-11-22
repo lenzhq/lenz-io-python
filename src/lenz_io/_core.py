@@ -1176,7 +1176,6 @@ def _with_options_layer(
 #: required.``, a blank ``assess`` item ``claims[i] is blank.``).
 #: ``"claims": []`` is read as no input at all: neither ``claim`` nor ``text``.
 _API_ASSESS_NO_INPUT = "claim: Field required"
-_API_ASK_BLANK = "Message cannot be empty."
 _API_REVIEW_BLANK = "text: send the draft, or one public http(s) URL."
 _API_CITECHECK_BLANK = "payload: Value error, send exactly one of text and pairs"
 
@@ -1362,16 +1361,6 @@ def _select_texts(claims: list[str] | None, texts: list[str] | None) -> list[str
     if not chosen or (items is not None and all(_blank(item) for item in items)):
         raise LenzUsageError("claims is required.", code="empty_list", param=name)
     return chosen
-
-
-def _ask_payload(message: str, language: str) -> dict[str, Any]:
-    # ``None`` too: the API reads a ``null`` message as an empty one.
-    if message is None or _blank(message):
-        raise LenzUsageError(_API_ASK_BLANK, code="blank_input", param="message")
-    payload: dict[str, Any] = {"message": message}
-    if language:
-        payload["language"] = language
-    return payload
 
 
 def _review_payload(

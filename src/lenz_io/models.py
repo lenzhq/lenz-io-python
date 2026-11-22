@@ -2071,48 +2071,6 @@ class Usage(Result):
         return out
 
 
-class AskMessage(_Lax):
-    """One message in an ``/ask`` conversation thread."""
-
-    role: str = ""  # "user" | "expert"
-    content: str = ""
-    created_at: str = ""
-
-
-class AskHistory(Result):
-    """Returned by ``GET /ask/{verification_id}``."""
-
-    messages: list[AskMessage] = Field(default_factory=list)
-    exchanges_used: int = 0
-    exchange_limit: int = 0
-    can_send: bool = False
-
-
-class AskReply(Result):
-    """Returned by ``POST /ask/{verification_id}``.
-
-    ``content`` is the assistant's reply text in a small markdown
-    subset:
-
-    - ``**bold**`` and ``*italic*``
-    - ``- `` or ``* `` bullet lists
-    - Blank-line paragraph breaks; single newlines inside a paragraph
-      mean line break
-
-    The model only produces these — no headings, no tables, no code
-    blocks. Pass it through any markdown library or display it
-    verbatim. See https://lenz.io/docs/quickstart#ask-reply-format.
-
-    Pre-1.0.2 the SDK declared a single ``reply`` field that never
-    matched the wire — the server has always returned
-    ``{role, content, created_at}``. 1.0.2 aligned the typed surface.
-    """
-
-    role: str = ""  # 'expert' on every reply (the assistant turn)
-    content: str = ""  # markdown-subset prose (see class docstring)
-    created_at: str = ""
-
-
 # ── /review ──────────────────────────────────────────────────────────────
 #
 # ``POST /review`` reads a draft, gives every claim a quick verdict, sends the
@@ -2984,9 +2942,6 @@ class ReviewList(Result):
 
 __all__ = [
     "NO_CHECKABLE_CLAIM",
-    "AskHistory",
-    "AskMessage",
-    "AskReply",
     "AssessClaim",
     "AssessResponse",
     "AssessStatus",

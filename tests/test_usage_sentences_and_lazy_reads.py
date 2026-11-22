@@ -110,9 +110,6 @@ _REFUSED: list[tuple[str, Callable[[Any], Any], str, str, str]] = [
         "text",
         "payload: Value error, send exactly one of text and pairs",
     ),
-    ("ask_send", lambda c: c.ask.send("v1", message=""), "blank_input", "message", "Message cannot be empty."),
-    ("ask_send_ws", lambda c: c.ask.send("v1", message=" \t"), "blank_input", "message", "Message cannot be empty."),
-    ("ask_send_none", lambda c: c.ask.send("v1", message=None), "blank_input", "message", "Message cannot be empty."),
 ]
 
 
@@ -148,10 +145,8 @@ def test_citecheck_and_wait_refuses_a_blank_text(client: Any) -> None:
 def test_a_bom_is_content_not_blank(client: Any) -> None:
     with respx.mock(base_url=BASE) as r:
         sel = r.post("/verify/t1/select").respond(200, json={"items": []})
-        ask = r.post("/ask/v1").respond(200, json={"role": "expert", "content": "Because."})
         client.select("t1", claims=["\ufeff"])
-        client.ask.send("v1", message="\ufeff")
-    assert sel.call_count == 1 and ask.call_count == 1
+    assert sel.call_count == 1
 
 
 def test_select_claims_that_are_not_a_list_are_sent_as_before(client: Any) -> None:
@@ -184,13 +179,6 @@ def test_select_with_every_item_filled_is_sent_unchanged(client: Any) -> None:
         route = r.post("/verify/t1/select").respond(200, json={"items": []})
         client.select("t1", claims=["A.", "B."])
     assert route.calls[0].request.content == b'{"texts":["A.","B."]}'
-
-
-def test_ask_send_with_a_message_is_sent_unchanged(client: Any) -> None:
-    with respx.mock(base_url=BASE) as r:
-        route = r.post("/ask/v1").respond(200, json={"role": "expert", "content": "Because."})
-        client.ask.send("v1", message=" Why? ")
-    assert route.calls[0].request.content == b'{"message":" Why? "}'
 
 
 # ── 3. lazy reads of the wrong type ───────────────────────────────────────

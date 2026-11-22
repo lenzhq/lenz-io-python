@@ -15,7 +15,6 @@ from datetime import datetime, timezone
 from typing import Any, NamedTuple, NoReturn
 
 from rich.console import Console
-from rich.markdown import Markdown
 from rich.markup import escape
 
 from lenz_io.models import (
@@ -77,7 +76,7 @@ class Output:
 
         No-op (a null context) under ``--json`` or when stderr isn't a TTY, so
         machine output and piped/CI runs stay clean. Used by every command that
-        makes a blocking API call (extract/assess/ask) so the terminal never
+        makes a blocking API call (extract/assess) so the terminal never
         looks frozen; ``verify`` keeps its own step-aware spinner.
         """
         if self.json_mode or not sys.stderr.isatty():
@@ -101,11 +100,6 @@ class Output:
 
 
 # ── per-result renderers ──
-def _verification_id_from_url(url: str | None) -> str:
-    """Pull the 8-char verification_id off an assess ``verification_url``."""
-    return url.rstrip("/").rsplit("/", 1)[-1] if url else ""
-
-
 def render_extract(out: Output, result: ExtractedClaims) -> None:
     if out.json_mode:
         out.emit_json(_model_json(result))
@@ -185,8 +179,6 @@ def render_assess(out: Output, result: AssessResponse) -> None:
                 out.console.print(f"      • {other}")
         if c.hint:
             out.console.print(f"    [dim]{c.hint}[/dim]")
-        vid = _verification_id_from_url(getattr(c, "verification_url", ""))
-        _ask_hint(out, vid, indent="    ")
     # A long text: the claims found past the ones checked. Model-written
     # text, so printed without markup.
     more = result.more_claims or []
@@ -204,14 +196,6 @@ def _verdict_header(out: Output, v: Verification) -> None:
     color = _VERDICT_COLOR.get(v.verdict, "white")
     score = "" if v.lenz_score is None else f"  [dim]score {v.lenz_score}/10[/dim]"
     out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
-
-
-def _ask_hint(out: Output, vid: str, *, indent: str = "") -> None:
-    """The 'ask follow-ups' nudge — shared by the verification + assess views.
-    No-op without an id. ``indent`` matches the surrounding block (assess nests
-    it under each claim)."""
-    if vid:
-        out.console.print(f'{indent}[dim]ask follow-ups:[/dim] lenz ask {vid} "<your question>"')
 
 
 def _verification_missing(out: Output) -> NoReturn:
@@ -250,7 +234,6 @@ def render_verification(out: Output, v: Verification | None) -> None:
             title = s.title or s.source_name or s.url
             out.console.print(f"  • {title}\n    [blue]{s.url}[/blue]")
     out.console.print(f"\n[dim]verification_id: {v.verification_id}[/dim]")
-    _ask_hint(out, v.verification_id)
 
 
 def _parse_iso(iso: str | None) -> datetime | None:
@@ -373,7 +356,6 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
     checked = _fmt_dt(v.created_at)
     if checked:
         out.console.print(f"[dim]checked {checked}[/dim]")
-    _ask_hint(out, v.verification_id)
 
 
 def render_task_status(out: Output, st: TaskStatus, *, task_id: str = "") -> None:
@@ -505,20 +487,6 @@ def render_batch_details(out: Output, picks: list[tuple[str, str]], statuses: di
         else:
             label = "timed out" if st is None else (st.status or "unknown")
             out.console.print(f"[yellow]{label}[/yellow] — resume: lenz verify --resume {tid}")
-
-
-def render_ask(out: Output, reply: Any) -> None:
-    if out.json_mode:
-        out.emit_json(_model_json(reply))
-        return
-    content = (getattr(reply, "content", "") or "").strip()
-    if not content:
-        out.console.print("[dim](empty reply)[/dim]")
-        return
-    # Ask replies are markdown (the chat subset: bold/italic/lists/paragraphs).
-    # Render it instead of dumping raw, so '**600 Nm**' shows bold, not literal
-    # asterisks, and paragraph spacing is normalized.
-    out.console.print(Markdown(content))
 
 
 def _capacity_row(

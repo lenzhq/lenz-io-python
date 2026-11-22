@@ -50,8 +50,6 @@ PAGE_2 = (200, {"items": [_ITEM], "total": 2, "page": 2, "page_size": 1})
 DETAIL = (200, _load("verifications_detail.json"))
 CERT = (200, _load("certificate.json"))
 USAGE = (200, _load("usage.json"))
-ASK_REPLY = (200, {"role": "expert", "content": "Because."})
-ASK_HISTORY = (200, {"messages": []})
 DRAFT = "Draft text."
 
 S503 = (503, {"detail": "busy"})
@@ -199,14 +197,6 @@ CASES: list[Case] = [
         lambda c: c.verifications.delete("v1"),
         {("DELETE", "/verifications/v1"): [NOT_FOUND]},
     ),
-    ("ask_history", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [ASK_HISTORY]}),
-    (
-        "ask_send",
-        "default",
-        lambda c: c.ask.send("v1", message="Why?", language="auto"),
-        {("POST", "/ask/v1"): [ASK_REPLY]},
-    ),
-    ("ask_reset", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [(200, {"ok": True})]}),
     # ── waits ──
     (
         "verify_and_wait",
@@ -285,7 +275,12 @@ CASES: list[Case] = [
     ),
     ("retry_transport", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [_drop(), DONE]}),
     ("retries_exhausted_503", "default", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
-    ("retries_exhausted_transport", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [_drop()]}),
+    (
+        "retries_exhausted_transport",
+        "default",
+        lambda c: c.verifications.get("v1"),
+        {("GET", "/verifications/v1"): [_drop()]},
+    ),
     ("max_retries_0_503", "max_retries_0", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
     ("max_retries_1_503", "max_retries_1", lambda c: c.assess("A."), {("POST", "/assess"): [S503]}),
     ("error_404", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [NOT_FOUND]}),
@@ -621,8 +616,8 @@ CASES += [
     (
         "retry_409_long_wait",
         "default",
-        lambda c: c.ask.send("v1", message="Why?"),
-        {("POST", "/ask/v1"): [(409, {"code": "idempotency_conflict"}, {"Retry-After": "90"}), ASK_REPLY]},
+        lambda c: c.assess("A.", idempotency_key=PINNED),
+        {("POST", "/assess"): [(409, {"code": "idempotency_conflict"}, {"Retry-After": "90"}), ASSESSED]},
     ),
     ("review_409_names_the_job", "default", lambda c: c.review(DRAFT), {("POST", "/review"): [REVIEW_CONFLICT]}),
     (
@@ -663,7 +658,12 @@ CASES += [
     ),
     ("unreadable_200", "default", lambda c: c.assess("A."), {("POST", "/assess"): [Raw(200, b"<html>")]}),
     ("unreadable_200_no_key", "default", lambda c: c.usage(), {("GET", "/me/usage"): [Raw(200, b"<html>")]}),
-    ("empty_200", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [Raw(200, b"")]}),
+    (
+        "empty_200",
+        "default",
+        lambda c: c.verifications.delete("v1"),
+        {("DELETE", "/verifications/v1"): [Raw(200, b"")]},
+    ),
     (
         "cancel_unexpected_body",
         "default",

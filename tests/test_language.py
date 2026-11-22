@@ -1,16 +1,16 @@
 """Multi-language SDK behavior — request-body wire format, response
 parsing, error surfacing, and the byte-identical English regression.
 
-Six endpoint methods gain an optional ``language`` kwarg:
-``verify``, ``verify_and_wait``, ``verify_batch``, ``assess``, ``extract``,
-``ask.send``. The convention (see ``lenz_io.client`` module docstring):
+Five endpoint methods gain an optional ``language`` kwarg:
+``verify``, ``verify_and_wait``, ``verify_batch``, ``assess``, ``extract``.
+The convention (see ``lenz_io.client`` module docstring):
 
 * ``language=''`` (default) MUST omit the field from the request body.
   This is the CRITICAL regression invariant: every existing English
   caller's wire format must stay byte-identical after this change.
 * ``language='es' | 'de' | …`` (any of 39 supported codes) MUST send
   ``"language": "<code>"`` in the JSON body.
-* ``language='auto'`` (``assess``, ``verify``, ``ask.send``) is sent as
+* ``language='auto'`` (``assess``, ``verify``) is sent as
   ``"language": "auto"``, unchanged. The SDK does no validation of its own.
 * Response models populate ``.language`` from the server's echoed
   field, defaulting to ``'en'`` for legacy payloads that omit it.
@@ -147,12 +147,6 @@ class TestOmitLanguageWireFormatRegression:
         body = self._body(route)
         assert body["language"] == "es"
         assert body["focus"] == "competidores"
-
-    def test_ask_send_no_language_key_when_omitted(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/ask/v1").respond(200, json={"reply": "ok"})
-            client.ask.send("v1", message="why?")
-        assert "language" not in self._body(route)
 
 
 # ─────────────────────────────────────────────────── HAPPY PATH ──
@@ -293,18 +287,6 @@ class TestExplicitLanguageWireFormat:
             v = client.verify_and_wait(claim="Die Erde ist flach.", language="auto", timeout=5.0)
         assert self._body(submit)["language"] == "auto"
         assert v.language == "de"
-
-    def test_ask_send_sends_auto_unchanged(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/ask/v1").respond(200, json={"reply": "ok"})
-            client.ask.send("v1", message="Warum?", language="auto")
-        assert self._body(route)["language"] == "auto"
-
-    def test_ask_send_sends_language(self, client):
-        with respx.mock(base_url=DEFAULT_BASE) as r:
-            route = r.post("/ask/v1").respond(200, json={"reply": "ok"})
-            client.ask.send("v1", message="why?", language="en")
-        assert self._body(route)["language"] == "en"
 
 
 # ─────────────────────────────────────────────────── ERROR PATH ──
