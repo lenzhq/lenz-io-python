@@ -1,19 +1,22 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "needs_input",
+    "task_id": "<task_id#1:hex32>",
+    "reason": "multi_claim",
     "claims": [
       {
-        "domain": "Science",
         "text": "The Earth is round."
       },
       {
-        "domain": "Science",
         "text": "Water boils at 100C at sea level."
       }
     ],
-    "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select.",
-    "reason": "multi_claim",
-    "status": "needs_input",
-    "task_id": "<task_id#1:hex32>"
-  },
-  "status": 200
+    "hint": "The text holds several distinct claims. Send the ones to check to POST /verify/{task_id}/select."
+  }
 }

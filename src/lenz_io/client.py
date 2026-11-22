@@ -12,7 +12,7 @@ Multi-language SDK convention:
   ``extract`` reports the language it chose in ``language`` on its result. The
   other methods take the codes only.
 * Response models (``Verification``, ``AssessClaim``, ``VerificationListItem``)
-  expose ``language`` populated by the server. Verdict / domain / status
+  expose ``language`` populated by the server. Verdict / status
   enum values stay English regardless of language; only free-form prose
   (atomic_claim, executive_summary, audit text) follows the request.
 * Mixing the two (e.g. ``language='en'`` on a request) would send an

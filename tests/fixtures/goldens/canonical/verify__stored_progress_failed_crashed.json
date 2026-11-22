@@ -1,15 +1,20 @@
 {
-  "body": {
-    "failure": {
-      "code": "task_error",
-      "detail": "The check stopped on an error on our side.",
-      "docs_url": "https://lenz.io/docs/errors#internal",
-      "failure_class": "internal",
-      "hint": null,
-      "retryable": false
-    },
-    "status": "failed",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>",
+    "failure": {
+      "code": "internal",
+      "detail": "The check stopped on an error on our side.",
+      "hint": null,
+      "failure_class": "internal",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#internal"
+    }
+  }
 }

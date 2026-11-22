@@ -1,20 +1,25 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
-    "can_send": true,
-    "exchange_limit": 100,
-    "exchanges_used": 0,
     "messages": [
       {
+        "role": "user",
         "content": "Hello",
-        "created_at": "<created_at#1:ts:+00:00:us>",
-        "role": "user"
+        "created_at": "<created_at#1:ts:+00:00:us>"
       },
       {
+        "role": "expert",
         "content": "Hi there!",
-        "created_at": "<created_at#2:ts:+00:00:us>",
-        "role": "expert"
+        "created_at": "<created_at#2:ts:+00:00:us>"
       }
-    ]
-  },
-  "status": 200
+    ],
+    "exchanges_used": 0,
+    "exchange_limit": 100,
+    "can_send": true
+  }
 }

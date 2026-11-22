@@ -350,7 +350,6 @@ class TestModels:
         v = deep.verification
         assert (v.status, v.content_status, v.depth, v.visibility) == ("completed", "available", "low", "private")
         assert v.lenz_score == 2 and isinstance(v.lenz_score, int)
-        assert v.entities[0].name == "EU AI Act"
         assert v.warnings
 
     def test_every_in_flight_state_parses(self):
@@ -405,12 +404,6 @@ class TestModels:
         assert len(lines) == 4
         assert capped == [{"claim": review.claims[2].claim}]
         assert deep is not None and deep.verification_id == "c9b769e1"
-
-    def test_an_entity_with_no_name_parses(self):
-        body = _load("review_completed.json")
-        body["claims"][3]["verification"]["entities"].append({"name": None, "qid": None})
-        review = ReviewFull.model_validate(body)
-        assert review.claims[3].verification.entities[-1].name is None
 
     def test_unknown_values_pass_through(self):
         # Every enum-shaped field is a plain string: a disposition, status or
@@ -786,7 +779,6 @@ def test_review_names_are_public():
         "ReviewResult",
         "ReviewAssessment",
         "ReviewVerification",
-        "ReviewEntity",
         "ReviewSummary",
         "ReviewCredits",
         "ReviewAssessmentCounts",

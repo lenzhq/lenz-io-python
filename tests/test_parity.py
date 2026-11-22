@@ -154,6 +154,25 @@ def _usage_costs_render_gap(path: str, old: Any, new: Any) -> bool:
     return cleaned_old == new
 
 
+def _domain_entities_render_gap(path: str, old: Any, new: Any) -> bool:
+    """Whether a `render` or `render_verification` text differs only by the
+    domain / entities line the CLI no longer prints under the claim."""
+    if path not in ("render", "render_verification") or not isinstance(old, str) or not isinstance(new, str):
+        return False
+    old_lines_raw = _strip_ask_hint(old).splitlines()
+    for i in range(len(old_lines_raw) - len(_EMPTY_DEBATE_RENDER) + 1):
+        if old_lines_raw[i : i + len(_EMPTY_DEBATE_RENDER)] == _EMPTY_DEBATE_RENDER:
+            old_lines_raw = old_lines_raw[:i] + old_lines_raw[i + len(_EMPTY_DEBATE_RENDER) :]
+            break
+    old_lines = [line for line in old_lines_raw if line]
+    new_lines = [line for line in new.splitlines() if line]
+    if len(old_lines) == len(new_lines) + 1:
+        dropped = [line for line in old_lines if line not in new_lines]
+        if len(dropped) == 1:
+            return [line for line in old_lines if line != dropped[0]] == new_lines
+    return False
+
+
 _STAGE_RENAMES = {"Assessment failed:": "Quick check failed:", "Verification failed:": "Deep check failed:"}
 
 
@@ -228,6 +247,10 @@ def _allowed(name: str, path: str, legacy: dict[str, Any], canonical: dict[str, 
         return "`result` also carries the newer `completed_at` beside `modified_at`"
     if path == "dump.costs.ask" and "ask" in lb.get("costs", {}) and "ask" not in cb.get("costs", {}):
         return "`ask` is no longer in `costs` in the current shape"
+    if path in ("event.result.domain", "event.result.entities") or (
+        path.startswith("event.needs_input.claims[") and path.endswith("].domain")
+    ):
+        return "`domain` and `entities` are retired from the newer shape"
     return KNOWN_GAPS.get((name, path))
 
 
@@ -374,6 +397,7 @@ def test_newer_shape_reads_the_same(name: str) -> None:
         and not _failure_words_render_gap(path, old, new, canonical["body"].get("status") == "cancelled")
         and not _ask_hint_render_gap(path, old, new)
         and not _usage_costs_render_gap(path, old, new)
+        and not _domain_entities_render_gap(path, old, new)
     ]
     assert not gaps, "\n".join(f"{path}: {old!r} -> {new!r}" for path, old, new in gaps)
 
@@ -422,8 +446,17 @@ def test_model_schemas_match_the_previous_release() -> None:
     # Models added since the frozen release, which the new fields reference:
     # they appear in a schema's ``$defs`` only through those fields.
     models_since_frozen = {"SearchedPage"}
-    retired_since_frozen = {"similar_claims"}
-    retired_models = {"RelatedVerifications", "SimilarVerification", "AskHistory", "AskMessage", "AskReply"}
+    retired_since_frozen = {"similar_claims", "domain", "entities", "key_entities"}
+    retired_models = {
+        "RelatedVerifications",
+        "SimilarVerification",
+        "AskHistory",
+        "AskMessage",
+        "AskReply",
+        "EntityRef",
+        "ExtractedEntity",
+        "ReviewEntity",
+    }
 
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the
@@ -456,10 +489,26 @@ def test_model_schemas_match_the_previous_release() -> None:
 
 def test_objects_pickled_by_the_previous_release_still_dump() -> None:
     import base64
+    import io
     import pickle
+
+    class _Unpickler(pickle.Unpickler):
+        def find_class(self, module: str, name: str) -> Any:
+            if module == "lenz_io.models" and name in ("EntityRef", "ExtractedEntity", "ReviewEntity"):
+                return type(name, (), {})
+            return super().find_class(module, name)
+
+    retired = {"domain", "entities", "key_entities", "similar_claims"}
+
+    def _drop_retired(val: Any) -> Any:
+        if isinstance(val, dict):
+            return {k: _drop_retired(v) for k, v in val.items() if k not in retired}
+        if isinstance(val, list):
+            return [_drop_retired(v) for v in val]
+        return val
 
     frozen = json.loads((FIXTURES / "pickles.json").read_text())
     assert frozen
     for name, blob in frozen.items():
-        model = pickle.loads(base64.b64decode(blob))
-        assert model.model_dump(mode="json") == _expected(name)["dump"], name
+        model = _Unpickler(io.BytesIO(base64.b64decode(blob))).load()
+        assert _drop_retired(model.model_dump(mode="json")) == _drop_retired(_expected(name)["dump"]), name

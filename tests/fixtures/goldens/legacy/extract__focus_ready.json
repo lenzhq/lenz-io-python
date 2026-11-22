@@ -1,23 +1,18 @@
 {
-  "body": {
-    "candidate_claims": [],
-    "claim": "Beta fell 3% last year.",
-    "domain": "Economics",
-    "identified_claims": [],
-    "key_entities": [
-      {
-        "name": "Alpha",
-        "type": "organization"
-      },
-      {
-        "name": "Beta",
-        "type": "organization"
-      }
-    ],
-    "locations": null,
-    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
-    "presumed_intent": "Verify reported figures",
-    "status": "ready"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "ready",
+    "claim": "Beta fell 3% last year.",
+    "identified_claims": [],
+    "candidate_claims": [],
+    "presumed_intent": "Verify reported figures",
+    "original_input": "Alpha rose 5% in 2024. Beta fell 3% last year.",
+    "language": "en",
+    "locations": null
+  }
 }

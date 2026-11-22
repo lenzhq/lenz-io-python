@@ -311,7 +311,7 @@ class VerificationNeedsInput(WebhookEvent):
 
     @property
     def claims(self) -> list[CandidateClaim]:
-        """The options to pick from, each with ``claim`` and ``domain``. An
+        """The options to pick from, each with ``claim``. An
         option that cannot be read is left out, never raised on."""
         options = self.needs_input.get("claims") if isinstance(self.needs_input, dict) else None
         out = []
@@ -396,8 +396,6 @@ _RESULT_DEFAULTS: tuple[tuple[str, Any], ...] = (
     ("claim", ""),
     ("visibility", "private"),
     ("depth", "standard"),
-    ("domain", ""),
-    ("entities", []),
     ("presumed_intent", ""),
     ("verdict", ""),
     ("confidence", "low"),
@@ -463,11 +461,7 @@ def _original_view(payload: dict[str, Any]) -> dict[str, Any]:
         view.setdefault("failure_class", failure.get("failure_class"))
         view.setdefault("retryable", failure.get("retryable"))
     if body.get("status") == "needs_input":
-        options = [
-            {"text": o.get("claim", o.get("text")), "domain": o.get("domain", "")}
-            for o in body.get("claims") or []
-            if isinstance(o, dict)
-        ]
+        options = [{"text": o.get("claim", o.get("text"))} for o in body.get("claims") or [] if isinstance(o, dict)]
         view.setdefault(
             "needs_input", {"reason": body.get("reason", ""), "claims": options, "hint": body.get("hint", "")}
         )

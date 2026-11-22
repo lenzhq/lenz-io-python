@@ -774,7 +774,6 @@ class CandidateClaim(_Lax):
 
     #: **Deprecated**, use :attr:`claim` (the same string).
     text: str = Field(default="", json_schema_extra={"deprecated": True})
-    domain: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -790,19 +789,6 @@ class CandidateClaim(_Lax):
         """The option's claim. Replaces ``text``, which is deprecated and kept."""
         sent = _sent_as(self, "claim", _STR)
         return sent if sent is not None else self.text
-
-
-class EntityRef(_Lax):
-    """An entity referenced in the claim.
-
-    ``qid`` is the Wikidata Q identifier (e.g. ``Q42``) when the entity
-    was resolved against Lenz's internal catalog; ``None`` otherwise.
-    """
-
-    _null_ok = field_validator("name", mode="wrap")(classmethod(_null_reads_unsent))
-
-    name: str = ""
-    qid: str | None = None
 
 
 #: Closed set of ``coverage.status`` values. Exported for exhaustive matching;
@@ -918,8 +904,6 @@ class Verification(_Lax):
     # produced with — a 'low' request served from cache reads 'standard'.
     # "" on servers that predate the field (``_Lax`` tolerates its absence).
     depth: str = ""
-    domain: str = ""
-    entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
     # Verdict block (flat)
     #: One of :data:`VerificationVerdict` (the five labels, or
@@ -1029,8 +1013,6 @@ class VerificationListItem(_Lax):
 
     verification_id: str = ""
     claim: str = ""
-    domain: str = ""
-    entities: list[EntityRef] = Field(default_factory=list)
     #: See ``Verification.verdict`` (:data:`VerificationVerdict`).
     verdict: str = ""
     confidence: str = "low"
@@ -1079,14 +1061,6 @@ class VerificationList(Result):
     total: int = 0
     page: int = 1
     page_size: int = 20
-
-
-class ExtractedEntity(_Lax):
-    """An entity surfaced by ``/extract``. ``type`` is the framing category
-    (``person`` | ``org`` | ``place`` | ``topic``)."""
-
-    name: str = ""
-    type: str = ""
 
 
 class Position(_Lax):
@@ -1179,8 +1153,6 @@ class ExtractedClaims(Result):
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    domain: str = ""
-    key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
     # The language the claims are written in (ISO 639-1, e.g. ``de``): the
@@ -2403,14 +2375,6 @@ class ReviewAssessment(_Lax):
         return sent if sent is not None else list(self.identified_claims)
 
 
-class ReviewEntity(_Lax):
-    """An entity the deep check found in the claim. ``qid`` is its Wikidata
-    id when resolved. Either may be ``None``."""
-
-    name: str | None = None
-    qid: str | None = None
-
-
 class ReviewVerification(_Lax):
     """A claim's deep check. ``status``: ``processing`` | ``completed`` |
     ``failed``; while ``processing`` only ``status``, ``content_status`` and
@@ -2432,8 +2396,6 @@ class ReviewVerification(_Lax):
     language: str | None = None
     visibility: str | None = None
     depth: str | None = None
-    domain: str | None = None
-    entities: list[ReviewEntity] = Field(default_factory=list)
     #: A :data:`VerificationVerdict` once completed (``"No Public Record"``
     #: included, with ``lenz_score`` ``None``).
     verdict: str | None = None
@@ -2955,14 +2917,12 @@ __all__ = [
     "CitecheckSummary",
     "ClaimLocation",
     "DebateSide",
-    "EntityRef",
     "Escalation",
     "EscalationPolicy",
     "Evidence",
     "ExtractStatus",
     "ExtractedClaim",
     "ExtractedClaims",
-    "ExtractedEntity",
     "FailureBlock",
     "FailureClass",
     "FileInput",
@@ -2980,7 +2940,6 @@ __all__ = [
     "ReviewCitationResult",
     "ReviewClaim",
     "ReviewCredits",
-    "ReviewEntity",
     "ReviewEnvelope",
     "ReviewEscalateInput",
     "ReviewExport",

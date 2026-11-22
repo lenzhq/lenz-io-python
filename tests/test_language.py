@@ -105,7 +105,7 @@ class TestOmitLanguageWireFormatRegression:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="The earth is flat")
         assert "language" not in self._body(route)
@@ -114,7 +114,7 @@ class TestOmitLanguageWireFormatRegression:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="The earth is flat")
         assert "focus" not in self._body(route)
@@ -123,7 +123,7 @@ class TestOmitLanguageWireFormatRegression:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="x", focus="")
         assert "focus" not in self._body(route)
@@ -132,7 +132,7 @@ class TestOmitLanguageWireFormatRegression:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="x", focus="market size and competitors")
         assert self._body(route)["focus"] == "market size and competitors"
@@ -141,7 +141,7 @@ class TestOmitLanguageWireFormatRegression:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="x", language="es", focus="competidores")
         body = self._body(route)
@@ -226,7 +226,7 @@ class TestExplicitLanguageWireFormat:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             client.extract(text="x", language="es")
         assert self._body(route)["language"] == "es"
@@ -235,7 +235,7 @@ class TestExplicitLanguageWireFormat:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             route = r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": [], "domain": "Science", "language": "de"},
+                json={"status": "ready", "claim": "x", "identified_claims": [], "language": "de"},
             )
             out = client.extract(text="Die Erde ist flach.", language="auto")
         assert self._body(route) == {"text": "Die Erde ist flach.", "language": "auto"}
@@ -245,7 +245,7 @@ class TestExplicitLanguageWireFormat:
         with respx.mock(base_url=DEFAULT_BASE) as r:
             r.post("/extract").respond(
                 200,
-                json={"status": "ready", "claim": "x", "identified_claims": ["x"], "domain": "Science"},
+                json={"status": "ready", "claim": "x", "identified_claims": ["x"]},
             )
             out = client.extract(text="x")
         assert out.language is None

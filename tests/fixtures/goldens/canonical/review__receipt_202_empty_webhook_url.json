@@ -1,7 +1,14 @@
 {
+  "status": 202,
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "20",
+    "Location": "/api/v1/reviews/<review_id#1:hex8>",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
     "review_id": "<review_id#1:hex8>",
     "status": "queued"
-  },
-  "status": 202
+  }
 }

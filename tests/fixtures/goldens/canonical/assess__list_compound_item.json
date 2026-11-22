@@ -1,41 +1,46 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "ok",
     "claims": [
       {
         "claim": "Primary claim.",
-        "confidence": "high",
-        "dissent": null,
-        "failure": null,
         "language": "en",
+        "status": "completed",
+        "verdict": "Mostly False",
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
         "more_claims": [
           "Second claim.",
           "Third claim."
         ],
-        "rationale": null,
-        "searched_pages": [],
-        "status": "completed",
-        "suggested_rewrite": null,
-        "verdict": "Mostly False",
-        "verification_url": null
+        "failure": null
       },
       {
         "claim": "A plain claim.",
-        "confidence": "high",
-        "dissent": null,
-        "failure": null,
         "language": "en",
-        "more_claims": [],
-        "rationale": null,
-        "searched_pages": [],
         "status": "completed",
-        "suggested_rewrite": null,
         "verdict": "Mostly False",
-        "verification_url": null
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "failure": null
       }
     ],
     "failure": null,
-    "more_claims": [],
-    "status": "ok"
-  },
-  "status": 200
+    "more_claims": []
+  }
 }

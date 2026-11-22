@@ -7,8 +7,6 @@
   "result": {
     "verification_id": "a1b2c3d4",
     "claim": "Sample claim text.",
-    "domain": "Science",
-    "entities": [],
     "presumed_intent": "Verify a factual claim",
     "verdict": "True",
     "confidence": "high",
