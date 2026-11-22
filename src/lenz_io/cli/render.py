@@ -448,9 +448,9 @@ def render_batch_table(picks: list[tuple[str, str]], statuses: dict[str, Any]) -
 def _batch_verdict_block(out: Output, v: Verification) -> None:
     """Compact per-claim verdict for a batch: verdict line, summary, and a
     single dim footer (source count + verification_id). Deliberately omits the
-    full source list and the ``ask`` hint that single-claim ``verify`` shows —
-    in a batch of N those repeat into a wall. Full sources live on the web page
-    behind the ``verification_id`` (or a single ``lenz verify`` of that claim)."""
+    full source list that single-claim ``verify`` shows — in a batch of N
+    those repeat into a wall. Full sources live on the web page behind the
+    ``verification_id`` (or a single ``lenz verify`` of that claim)."""
     color = _VERDICT_COLOR.get(v.verdict, "white")
     score = "" if v.lenz_score is None else f"  [dim]score {v.lenz_score}/10[/dim]"
     out.console.print(f"[bold {color}]{v.verdict or '?'}[/bold {color}]  ({v.confidence}){score}")
@@ -577,7 +577,6 @@ def render_usage(out: Output, u: Usage) -> None:
         equivalents = f"≈ {verifications} · {assessments}"
         out.console.print(f"  [bold]{u.credits.remaining} credits left[/bold]  [dim]({equivalents})[/dim]")
         _capacity_row(out, "Verify", _projection(u, "verify"), u.costs.get("verify"), price_note=_low_depth_note(u))
-        _capacity_row(out, "Ask", _projection(u, "ask"), u.costs.get("ask"))
         _capacity_row(out, "Assess", _projection(u, "assess"), u.costs.get("assess"))
     ex = u.extract
     label = f"{'Extract:':<9}"
@@ -623,7 +622,7 @@ class _Projection(NamedTuple):
 
 
 #: The price each capability's row is projected at when the price list leaves it out.
-_DEFAULT_COSTS = {"verify": 10, "ask": 1, "assess": 1}
+_DEFAULT_COSTS = {"verify": 10, "assess": 1}
 
 
 def _projection(u: Usage, capability: str) -> _Projection:

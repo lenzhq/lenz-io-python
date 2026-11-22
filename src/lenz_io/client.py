@@ -1,13 +1,13 @@
 """Public Lenz client — the ergonomic top-level surface.
 
 Multi-language SDK convention:
-* Request methods (verify, assess, extract, ask, …) take ``language=''``
+* Request methods (verify, assess, extract, …) take ``language=''``
   as their default. Sending an empty string means "do NOT include the
   field in the request body" — preserves byte-identical behavior for
   existing English callers. Set ``language='es'`` (or any of the 39
   supported codes) to receive prose fields in that language. ``assess``,
   ``verify`` (and ``verify_and_wait``), ``review`` (and ``review_and_wait``),
-  ``extract`` and ``ask.send`` also take ``language='auto'``: the answer comes
+  and ``extract`` also take ``language='auto'``: the answer comes
   back in the language of the submitted text (one language for a whole review).
   ``extract`` reports the language it chose in ``language`` on its result. The
   other methods take the codes only.
@@ -20,18 +20,17 @@ Multi-language SDK convention:
   byte-identical English path. The empty-default-then-omit convention
   exists precisely to avoid that.
 
-Shape (six calls: the four-call ladder, ``review`` and ``citecheck``, plus
+Shape (five calls: the three-call ladder, ``review`` and ``citecheck``, plus
 the supporting reads):
 
     from lenz_io import Lenz
     client = Lenz(api_key="lenz_...")
 
-    # Marquee verbs — top-level (the four-call ladder)
+    # Marquee verbs — top-level (the three-call ladder)
     out = client.extract(text="...")                       # find claims in a document
     r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
     r = client.assess(claim="...")                         # ...or a single claim, ~15s
     v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
-    reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
     review = client.review_and_wait(text=draft)            # the whole ladder on a draft, 2-4 min
 
     # Review without waiting
@@ -65,11 +64,11 @@ Design decisions:
   by default. ``Retry-After`` honored on 429s.
 * ``Idempotency-Key`` auto-generated per call for ``verify``,
   ``verify_and_wait``, ``verify_batch``, ``verify_batch_and_wait``,
-  ``select``, ``assess``, ``extract`` and ``ask.send`` (random, reused
+  ``select``, ``assess`` and ``extract`` (random, reused
   across that call's own retries) so a network drop doesn't run the request
   twice. Customer can override with explicit ``idempotency_key=...`` or opt
-  out with ``idempotency=False``. (2.x sent a key on ``verify_batch``,
-  ``verify_batch_and_wait`` and ``ask.send`` only when you passed one.)
+  out with ``idempotency=False``. (2.x sent a key on ``verify_batch`` and
+  ``verify_batch_and_wait`` only when you passed one.)
 * ``X-Lenz-API-Version`` header pinned per SDK release (``API_VERSION``), so
   the server answers every release in the response shape it was built for.
 * ``X-Request-ID`` is captured from every response onto the typed error

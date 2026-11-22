@@ -1805,7 +1805,7 @@ class UsageCredits(_Lax):
 
     Every billable call debits this pool at the weight in :attr:`Usage.costs`
     (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
-    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` is 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
     resets at ``resets_at``, and non-expiring ``extra`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
@@ -1866,9 +1866,8 @@ class UsageCapacity(_Lax):
         total     = u.credits.total     // u.costs[capability]
         used      = total - remaining
 
-    Two capabilities at the same price emit identical objects — ``ask`` and
-    ``assess`` are both 1 credit — because there is one balance behind all of
-    them, not a per-capability allowance.
+    Two capabilities at the same price emit identical objects because there is
+    one balance behind all of them, not a per-capability allowance.
 
     These are **projections, not allowances**. Every billable capability draws
     on the single balance in :attr:`Usage.credits`, at the weight in
@@ -1976,7 +1975,7 @@ class Usage(Result):
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
     #: Credits per call, keyed by CAPABILITY, at its default price:
-    #: ``{"verify": 10, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: ``{"verify": 10, "assess": 1, "extract": 0}``. Empty on older
     #: servers. Read the weight from here rather than hard-coding it — new
     #: keys appear without an SDK release, and the SDK never rewrites the
     #: server's own key names.

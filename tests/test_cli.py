@@ -1059,11 +1059,12 @@ def test_usage_pretty_leads_with_the_credit_balance():
     assert "507 left" in text
     assert '13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low"' in text
     assert "5070 left" in text
-    assert "1 credit each" in text  # assess/ask are the unit — singular
+    assert "1 credit each" in text  # assess is the unit — singular
     assert text.index("credits left") < text.index("Verify:")
-    assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
+    assert text.index("Verify:") < text.index("Assess:") < text.index("Extract:")
+    assert "Ask:" not in text
     # The extra credits show on every row, in that capability's unit.
-    assert "+ 200 extra" in text.split("Ask:")[1].split("Assess:")[0]
+    assert "+ 200 extra" in text.split("Assess:")[1].split("Extract:")[0]
     assert "4 / 1000 today" in text
     # Humanized: absolute date always present; the relative prefix ("in N days")
     # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
@@ -1090,15 +1091,15 @@ def test_usage_pretty_notes_the_low_depth_price_on_the_verify_row():
     the server, so rendering it as its own capacity row would invent a second
     balance that does not exist."""
     text = _render_usage_text(_pool_usage())
-    verify_row = text.split("Verify:")[1].split("Ask:")[0]
+    verify_row = text.split("Verify:")[1].split("Assess:")[0]
     assert '10 credits each · 5 at depth "low"' in verify_row
     # Not a row, and not an extra headline equivalent.
     assert "Verify low" not in text
     assert "verify_low" not in text
-    # Exactly three capacity rows — Verify / Ask / Assess. A fourth would mean
+    # Exactly two capacity rows — Verify / Assess. A third would mean
     # someone gave the price its own projection block.
     rows = [ln.strip().split(":")[0] for ln in text.splitlines() if " quota" in ln]
-    assert rows == ["Verify", "Ask", "Assess"]
+    assert rows == ["Verify", "Assess"]
 
 
 def test_usage_pretty_omits_the_low_depth_note_on_a_server_without_it():

@@ -267,7 +267,7 @@ class LenzQuotaExceededError(LenzError):
         ``/verify`` is 10, ``/assess`` is 1), or ``None``.
 
     ``remaining`` and ``requested`` are in the **capability's** unit —
-    verifications, assessments, follow-ups. ``credit_balance`` and ``cost``
+    verifications, assessments. ``credit_balance`` and ``cost``
     are in **credits**, so together they separate "you have 4 credits and this
     verify costs 10" from "you have nothing".
 
@@ -636,10 +636,9 @@ class LenzGoneError(LenzError):
     back. A certificate issued for it stays available from
     ``verifications.get_certificate``.
 
-    Raised by ``verifications.get``, ``get_status`` on a completed task,
-    ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
-    of polling to the deadline. A 404 is :class:`LenzNotFoundError`: only an
-    id you could read before answers 410.
+    Raised by ``verifications.get`` and ``get_status`` on a completed task.
+    ``wait`` raises it at once instead of polling to the deadline. A 404 is
+    :class:`LenzNotFoundError`: only an id you could read before answers 410.
     """
 
     purged_at: str | None = None

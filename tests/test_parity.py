@@ -145,12 +145,12 @@ def _ask_hint_render_gap(path: str, old: Any, new: Any) -> bool:
 
 
 def _usage_costs_render_gap(path: str, old: Any, new: Any) -> bool:
-    """Whether a usage `render` text differs only by the `ask` price tail dropped from `costs`."""
+    """Whether a usage `render` text differs only by the retired `Ask:` row."""
     if path != "render" or not isinstance(old, str) or not isinstance(new, str):
         return False
     import re
 
-    cleaned_old = re.sub(r"(Ask:\s+\d+ left\s+\([^)]+?)\s+·\s+1 credit each(\))", r"\1\2", old)
+    cleaned_old = re.sub(r"^\s*Ask:.*?\n", "", old, flags=re.MULTILINE)
     return cleaned_old == new
 
 
