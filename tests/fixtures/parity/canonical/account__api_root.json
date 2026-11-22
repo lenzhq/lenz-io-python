@@ -11,7 +11,6 @@
       "extract": "https://lenz.io/api/v1/extract",
       "assess": "https://lenz.io/api/v1/assess",
       "verify": "https://lenz.io/api/v1/verify",
-      "ask": "https://lenz.io/api/v1/ask/{verification_id}",
       "verify_status": "https://lenz.io/api/v1/verify/status/{task_id}",
       "verifications": "https://lenz.io/api/v1/verifications/{verification_id}",
       "library": "https://lenz.io/api/v1/library",

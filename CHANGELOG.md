@@ -8,6 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
+- `list_reviews` and `iter_reviews` (on `Lenz` and `AsyncLenz`): list the account's API reviews (`GET /api/v1/reviews`, newest first, `page_size` 1 to 100) as a paginated `ReviewList` or a lazy `ReviewListItem` iterator (`ReviewList` and `ReviewListItem` exported from `lenz_io`).
 - Support for audio file uploads (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`) and direct audio URLs across `extract_file`, `review_file`, `review_file_and_wait`, and CLI commands (`lenz extract`, `lenz review`).
 
 ### Changed
@@ -18,6 +19,11 @@ All notable changes to this SDK are documented here. Format follows
 ### Fixed
 
 - `lenz review`: a "Reference details differ" finding with no listed differences (the page at the reference's address is another work) now prints the page's title under "The page at this address is titled:", instead of the finding with nothing under it.
+
+### Removed
+
+- `client.ask` (`ask.send`, `ask.history`, `ask.reset`) and the CLI `lenz ask` command (plus `AskHistory`, `AskMessage`, and `AskReply`), following the retirement of `POST`/`GET`/`DELETE` `/api/v1/ask/{verification_id}`.
+- `client.library` (`library.list`, `library.iter`) and `client.verifications.related` (plus `LibraryItem`, `LibraryList`, `SimilarVerification`, and `RelatedVerifications`), following the retirement of `GET /api/v1/library` and `GET /api/v1/verifications/{id}/related`.
 
 ## [3.6.0] - 2026-10-31
 

@@ -3,15 +3,15 @@
   "claim": "The Eiffel Tower is in Paris.",
   "visibility": "private",
   "depth": "standard",
-  "domain": "General",
-  "entities": [],
   "presumed_intent": "verify",
   "verdict": "True",
   "confidence": "high",
   "lenz_score": 10,
   "key_finding": "The Eiffel Tower stands on the Champ de Mars in Paris.",
   "executive_summary": "Every source places it in the 7th arrondissement.",
-  "warnings": ["Measured at the base."],
+  "warnings": [
+    "Measured at the base."
+  ],
   "suggested_rewrite": null,
   "sources": [
     {

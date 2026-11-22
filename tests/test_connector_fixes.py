@@ -64,7 +64,7 @@ _CODES = [
     ("POST", "/extract", 400, "invalid_request", lambda c: c.extract(text="A.")),
     ("GET", "/me/usage", 500, "internal_error", lambda c: c.usage()),
     ("GET", "/me/usage", 401, "not_authenticated", lambda c: c.usage()),
-    ("POST", "/ask/v1", 409, "verification_not_ready", lambda c: c.ask.send("v1", message="Why?")),
+    ("GET", "/verifications/v1", 409, "verification_not_ready", lambda c: c.verifications.get("v1")),
     ("POST", "/review", 401, "not_authenticated", lambda c: c.review("Draft.")),
 ]
 

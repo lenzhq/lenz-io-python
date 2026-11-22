@@ -3,8 +3,6 @@
     {
       "verification_id": "a1b2c3d4",
       "claim": "Albert Einstein won the 1921 Nobel Prize in Physics for his theory of general relativity.",
-      "domain": "Science",
-      "entities": [{ "name": "Albert Einstein", "qid": "Q937" }],
       "verdict": "False",
       "confidence": "high",
       "lenz_score": 1,
@@ -18,8 +16,6 @@
     {
       "verification_id": "e5f6a7b8",
       "claim": "Water boils at 100°C at sea level.",
-      "domain": "Science",
-      "entities": [{ "name": "Water", "qid": "Q283" }],
       "verdict": "True",
       "confidence": "high",
       "lenz_score": 10,

@@ -161,17 +161,6 @@
         "language": "en",
         "visibility": "private",
         "depth": "low",
-        "domain": "Legal",
-        "entities": [
-          {
-            "name": "EU AI Act",
-            "qid": "Q108456694"
-          },
-          {
-            "name": "European Union",
-            "qid": "Q458"
-          }
-        ],
         "verdict": "False",
         "confidence": "high",
         "lenz_score": 1,
@@ -281,17 +270,6 @@
         "language": "en",
         "visibility": "private",
         "depth": "low",
-        "domain": "Legal",
-        "entities": [
-          {
-            "name": "EU AI Act",
-            "qid": "Q108456694"
-          },
-          {
-            "name": "European Companies",
-            "qid": null
-          }
-        ],
         "verdict": "False",
         "confidence": "medium",
         "lenz_score": 2,

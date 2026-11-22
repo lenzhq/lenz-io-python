@@ -186,7 +186,7 @@ class TestVerifyBatch:
         ]
 
 
-# ── assess / extract / select / ask.send ───────────────────────────────────
+# ── assess / extract / select ──────────────────────────────────────────────
 
 
 class TestSyncCalls:
@@ -268,21 +268,6 @@ class TestSyncCalls:
             route = r.post("/verify/t/select").respond(200, json={"items": []})
             client.select("t", idempotency_key=KEY, **kwargs)
         assert _ordered(route.calls.last.request.content) == [("texts", sent)]
-        assert route.calls.last.request.headers["Idempotency-Key"] == KEY
-
-    @pytest.mark.parametrize(
-        ("kwargs", "expected"),
-        [
-            ({}, [("message", "Why?")]),
-            ({"language": ""}, [("message", "Why?")]),
-            ({"language": "auto"}, [("message", "Why?"), ("language", "auto")]),
-        ],
-    )
-    def test_ask_send(self, client: Lenz, kwargs: dict[str, Any], expected: list[Any]) -> None:
-        with respx.mock(base_url=BASE) as r:
-            route = r.post("/ask/v1").respond(200, json={"role": "expert", "content": "Because."})
-            client.ask.send("v1", message="Why?", idempotency_key=KEY, **kwargs)
-        assert _ordered(route.calls.last.request.content) == expected
         assert route.calls.last.request.headers["Idempotency-Key"] == KEY
 
 

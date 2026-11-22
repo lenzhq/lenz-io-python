@@ -76,12 +76,9 @@ class TestWithOptionsApiKey:
         copy = client.with_options(api_key=key)
         with respx.mock(base_url=BASE, assert_all_called=False) as r:
             usage = r.get("/me/usage").respond(200, json=_USAGE)
-            library = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
             with pytest.raises(LenzAuthError):
                 copy.usage()
-            copy.library.list()
         assert usage.call_count == 0
-        assert "Authorization" not in library.calls.last.request.headers
 
     def test_a_keyless_parent_never_reads_the_environment_through_a_copy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         with make_client(api_key="") as parent:
@@ -205,7 +202,7 @@ _NEEDS_INPUT = {
     "task_id": "t1",
     "reason": "multi_claim",
     "hint": "Pick one.",
-    "claims": [{"claim": "One.", "domain": "x"}, {"claim": "Two.", "domain": "y"}],
+    "claims": [{"claim": "One."}, {"claim": "Two."}],
 }
 _FAILED_STATUS = {
     "status": "failed",
@@ -351,11 +348,11 @@ class TestLoneSurrogates:
     def test_nested_values_keys_and_query_params(self, client: Any) -> None:
         with respx.mock(base_url=BASE) as r:
             route = r.post("/assess").respond(200, json={"status": "ok", "claims": [], "more_claims": []})
-            lib = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
+            q = r.get("/test").respond(200, json={})
             client.assess(claims=["ok", "bad\udc00"])
-            client.library.list(search="q\ud800")
+            client._request("GET", "/test", params={"search": "q\ud800"})
         assert json.loads(route.calls.last.request.content)["claims"] == ["ok", "bad�"]
-        assert lib.calls.last.request.url.params["search"] == "q�"
+        assert q.calls.last.request.url.params["search"] == "q�"
 
     def test_a_clean_body_is_unchanged(self, client: Any) -> None:
         with respx.mock(base_url=BASE) as r:

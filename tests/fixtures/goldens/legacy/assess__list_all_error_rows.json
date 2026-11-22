@@ -1,37 +1,45 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "not_a_claim",
     "claims": [
       {
-        "candidate_claims": [],
         "claim": "hi",
-        "confidence": "low",
-        "dissent": null,
-        "error_code": "no_claim",
-        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
-        "identified_claims": [],
         "language": "en",
-        "rationale": null,
-        "suggested_rewrite": null,
         "verdict": "Error",
-        "verification_url": null
+        "confidence": "low",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "error_code": "no_claim",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims."
       },
       {
-        "candidate_claims": [],
         "claim": "hello",
-        "confidence": "low",
-        "dissent": null,
-        "error_code": "no_claim",
-        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
-        "identified_claims": [],
         "language": "en",
-        "rationale": null,
-        "suggested_rewrite": null,
         "verdict": "Error",
-        "verification_url": null
+        "confidence": "low",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "error_code": "no_claim",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims."
       }
     ],
     "error": null,
     "more_claims": []
-  },
-  "status": 200
+  }
 }

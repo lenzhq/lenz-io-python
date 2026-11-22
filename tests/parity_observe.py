@@ -147,8 +147,6 @@ def endpoint_for(name: str) -> tuple[str, str]:
         return ("POST", "/assess")
     if area == "extract":
         return ("POST", "/extract")
-    if area == "errors" and case.startswith("ask_"):
-        return ("POST", "/ask/v1")
     return ("POST", "/verify")
 
 
@@ -161,8 +159,6 @@ def _model_for(name: str) -> Any:
         return models.AssessResponse
     if area == "account" and case.startswith("me_usage"):
         return models.Usage
-    if area == "account" and case.startswith("library"):
-        return models.LibraryList
     if area == "review":
         return (
             models.ReviewStarted

@@ -1,13 +1,6 @@
 {
   "verification_id": "a1b2c3d5",
   "claim": "Water boils at 100°C at sea level.",
-  "domain": "Science",
-  "entities": [
-    {
-      "name": "Water",
-      "qid": "Q283"
-    }
-  ],
   "presumed_intent": "Verify a factual claim",
   "verdict": "True",
   "confidence": "high",

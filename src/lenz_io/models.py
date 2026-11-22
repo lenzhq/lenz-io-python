@@ -774,7 +774,6 @@ class CandidateClaim(_Lax):
 
     #: **Deprecated**, use :attr:`claim` (the same string).
     text: str = Field(default="", json_schema_extra={"deprecated": True})
-    domain: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -790,35 +789,6 @@ class CandidateClaim(_Lax):
         """The option's claim. Replaces ``text``, which is deprecated and kept."""
         sent = _sent_as(self, "claim", _STR)
         return sent if sent is not None else self.text
-
-
-class EntityRef(_Lax):
-    """An entity referenced in the claim.
-
-    ``qid`` is the Wikidata Q identifier (e.g. ``Q42``) when the entity
-    was resolved against Lenz's internal catalog; ``None`` otherwise.
-    """
-
-    _null_ok = field_validator("name", mode="wrap")(classmethod(_null_reads_unsent))
-
-    name: str = ""
-    qid: str | None = None
-
-
-class SimilarVerification(_Lax):
-    """An existing public verification that semantically resembles the submitted text.
-
-    Same vocabulary as ``Verification`` — flat ``verdict`` / ``confidence`` /
-    ``lenz_score`` at top level, no nested ``Verdict`` object.
-    """
-
-    verification_id: str = ""
-    claim: str = ""
-    verdict: str = ""
-    confidence: str = "low"
-    lenz_score: int | None = None
-    url: str = ""
-    distance: float = 0.0
 
 
 #: Closed set of ``coverage.status`` values. Exported for exhaustive matching;
@@ -934,8 +904,6 @@ class Verification(_Lax):
     # produced with — a 'low' request served from cache reads 'standard'.
     # "" on servers that predate the field (``_Lax`` tolerates its absence).
     depth: str = ""
-    domain: str = ""
-    entities: list[EntityRef] = Field(default_factory=list)
     presumed_intent: str = ""
     # Verdict block (flat)
     #: One of :data:`VerificationVerdict` (the five labels, or
@@ -1039,15 +1007,12 @@ class VerificationResult(Verification, Result):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint and the public
-    library list. Slim shape — no ``url`` (reference by
-    ``verification_id``), no ``visibility`` (1.1.0).
+    """Compact item for the verifications list endpoint. Slim shape — no ``url``
+    (reference by ``verification_id``), no ``visibility`` (1.1.0).
     """
 
     verification_id: str = ""
     claim: str = ""
-    domain: str = ""
-    entities: list[EntityRef] = Field(default_factory=list)
     #: See ``Verification.verdict`` (:data:`VerificationVerdict`).
     verdict: str = ""
     confidence: str = "low"
@@ -1096,31 +1061,6 @@ class VerificationList(Result):
     total: int = 0
     page: int = 1
     page_size: int = 20
-
-
-class RelatedVerifications(Result):
-    """Wrapper for ``GET /verifications/{id}/related``."""
-
-    items: list[SimilarVerification] = Field(default_factory=list)
-
-
-class LibraryItem(VerificationListItem):
-    """Same shape as VerificationListItem on the public Library list."""
-
-
-class LibraryList(Result):
-    items: list[LibraryItem] = Field(default_factory=list)
-    total: int = 0
-    page: int = 1
-    page_size: int = 20
-
-
-class ExtractedEntity(_Lax):
-    """An entity surfaced by ``/extract``. ``type`` is the framing category
-    (``person`` | ``org`` | ``place`` | ``topic``)."""
-
-    name: str = ""
-    type: str = ""
 
 
 class Position(_Lax):
@@ -1213,8 +1153,6 @@ class ExtractedClaims(Result):
     # Deprecated: always empty since 2026-09-12. Kept because the server
     # still sends the key.
     candidate_claims: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    domain: str = ""
-    key_entities: list[ExtractedEntity] = Field(default_factory=list)
     presumed_intent: str = ""
     original_input: str = ""
     # The language the claims are written in (ISO 639-1, e.g. ``de``): the
@@ -1701,7 +1639,7 @@ class TaskStatus(Result):
     # keeps working; they are deprecated and kept. Marked deprecated in
     # the JSON schema only, so reading them does not warn.
     candidates: list[str] = Field(default_factory=list, json_schema_extra={"deprecated": True})
-    similar_claims: list[SimilarVerification] = Field(default_factory=list, json_schema_extra={"deprecated": True})
+    similar_claims: list[dict[str, Any]] = Field(default_factory=list, json_schema_extra={"deprecated": True})
     # failure branches. Deprecated: ``error``, ``failure_reason``,
     # ``failure_detail``, ``failure_class``, ``retryable`` and ``docs_url``
     # below are the 2.x flat fields of a failed run; read ``failure`` instead
@@ -1839,7 +1777,7 @@ class UsageCredits(_Lax):
 
     Every billable call debits this pool at the weight in :attr:`Usage.costs`
     (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
-    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` is 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
     resets at ``resets_at``, and non-expiring ``extra`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
@@ -1900,9 +1838,8 @@ class UsageCapacity(_Lax):
         total     = u.credits.total     // u.costs[capability]
         used      = total - remaining
 
-    Two capabilities at the same price emit identical objects — ``ask`` and
-    ``assess`` are both 1 credit — because there is one balance behind all of
-    them, not a per-capability allowance.
+    Two capabilities at the same price emit identical objects because there is
+    one balance behind all of them, not a per-capability allowance.
 
     These are **projections, not allowances**. Every billable capability draws
     on the single balance in :attr:`Usage.credits`, at the weight in
@@ -2010,7 +1947,7 @@ class Usage(Result):
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
     #: Credits per call, keyed by CAPABILITY, at its default price:
-    #: ``{"verify": 10, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: ``{"verify": 10, "assess": 1, "extract": 0}``. Empty on older
     #: servers. Read the weight from here rather than hard-coding it — new
     #: keys appear without an SDK release, and the SDK never rewrites the
     #: server's own key names.
@@ -2103,48 +2040,6 @@ class Usage(Result):
                 "remaining": left,
             }
         return out
-
-
-class AskMessage(_Lax):
-    """One message in an ``/ask`` conversation thread."""
-
-    role: str = ""  # "user" | "expert"
-    content: str = ""
-    created_at: str = ""
-
-
-class AskHistory(Result):
-    """Returned by ``GET /ask/{verification_id}``."""
-
-    messages: list[AskMessage] = Field(default_factory=list)
-    exchanges_used: int = 0
-    exchange_limit: int = 0
-    can_send: bool = False
-
-
-class AskReply(Result):
-    """Returned by ``POST /ask/{verification_id}``.
-
-    ``content`` is the assistant's reply text in a small markdown
-    subset:
-
-    - ``**bold**`` and ``*italic*``
-    - ``- `` or ``* `` bullet lists
-    - Blank-line paragraph breaks; single newlines inside a paragraph
-      mean line break
-
-    The model only produces these — no headings, no tables, no code
-    blocks. Pass it through any markdown library or display it
-    verbatim. See https://lenz.io/docs/quickstart#ask-reply-format.
-
-    Pre-1.0.2 the SDK declared a single ``reply`` field that never
-    matched the wire — the server has always returned
-    ``{role, content, created_at}``. 1.0.2 aligned the typed surface.
-    """
-
-    role: str = ""  # 'expert' on every reply (the assistant turn)
-    content: str = ""  # markdown-subset prose (see class docstring)
-    created_at: str = ""
 
 
 # ── /review ──────────────────────────────────────────────────────────────
@@ -2481,14 +2376,6 @@ class ReviewAssessment(_Lax):
         return sent if sent is not None else list(self.identified_claims)
 
 
-class ReviewEntity(_Lax):
-    """An entity the deep check found in the claim. ``qid`` is its Wikidata
-    id when resolved. Either may be ``None``."""
-
-    name: str | None = None
-    qid: str | None = None
-
-
 class ReviewVerification(_Lax):
     """A claim's deep check. ``status``: ``processing`` | ``completed`` |
     ``failed``; while ``processing`` only ``status``, ``content_status`` and
@@ -2510,8 +2397,6 @@ class ReviewVerification(_Lax):
     language: str | None = None
     visibility: str | None = None
     depth: str | None = None
-    domain: str | None = None
-    entities: list[ReviewEntity] = Field(default_factory=list)
     #: A :data:`VerificationVerdict` once completed (``"No Public Record"``
     #: included, with ``lenz_score`` ``None``).
     verdict: str | None = None
@@ -2940,7 +2825,19 @@ class Citecheck(Result):
     failure: FailureBlock | None = None
 
 
-class ReviewEnvelope(_Lax):
+class _ReviewHeader(_Lax):
+    review_id: str = ""
+    status: str = ""
+    outcome: str | None = None
+    created_at: str = ""
+    completed_at: str | None = None
+    language: str = "en"
+    policy: EscalationPolicy = Field(default_factory=EscalationPolicy)
+    summary: ReviewSummary = Field(default_factory=ReviewSummary)
+    credits: ReviewCredits = Field(default_factory=ReviewCredits)
+
+
+class ReviewEnvelope(_ReviewHeader):
     """What both views of ``GET /reviews/{review_id}`` carry.
 
     ``status`` is the lifecycle: ``queued`` → ``assessing`` → ``verifying``
@@ -2962,16 +2859,7 @@ class ReviewEnvelope(_Lax):
     once the review has ended.
     """
 
-    review_id: str = ""
     view: str = ""
-    status: str = ""
-    outcome: str | None = None
-    created_at: str = ""
-    completed_at: str | None = None
-    language: str = "en"
-    policy: EscalationPolicy = Field(default_factory=EscalationPolicy)
-    summary: ReviewSummary = Field(default_factory=ReviewSummary)
-    credits: ReviewCredits = Field(default_factory=ReviewCredits)
     poll_after_seconds: int | None = None
     issues: list[ReviewIssue] = Field(default_factory=list)
     failures: list[ReviewFailure] = Field(default_factory=list)
@@ -2989,6 +2877,15 @@ class ReviewEnvelope(_Lax):
     more_citations: list[ReviewMoreCitation] | None = None
     failure: FailureBlock | None = None
 
+    def __repr_args__(self) -> list[tuple[str | None, Any]]:
+        args = list(super().__repr_args__())
+        view_item = next((item for item in args if item[0] == "view"), None)
+        if view_item is not None:
+            args.remove(view_item)
+            rid_idx = next((idx for idx, item in enumerate(args) if item[0] == "review_id"), -1)
+            args.insert(rid_idx + 1, view_item)
+        return args
+
 
 class ReviewFull(ReviewEnvelope, Result):
     """``GET /reviews/{review_id}``: the envelope plus every claim."""
@@ -3004,11 +2901,23 @@ class ReviewIssues(ReviewEnvelope, Result):
     view: str = "issues"
 
 
+class ReviewListItem(_ReviewHeader):
+    """Compact item for the reviews list endpoint (``GET /reviews``)."""
+
+    failure: FailureBlock | None = None
+
+
+class ReviewList(Result):
+    """One page of reviews from ``GET /reviews``."""
+
+    items: list[ReviewListItem] = Field(default_factory=list)
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+
+
 __all__ = [
     "NO_CHECKABLE_CLAIM",
-    "AskHistory",
-    "AskMessage",
-    "AskReply",
     "AssessClaim",
     "AssessResponse",
     "AssessStatus",
@@ -3023,21 +2932,16 @@ __all__ = [
     "CitecheckSummary",
     "ClaimLocation",
     "DebateSide",
-    "EntityRef",
     "Escalation",
     "EscalationPolicy",
     "Evidence",
     "ExtractStatus",
     "ExtractedClaim",
     "ExtractedClaims",
-    "ExtractedEntity",
     "FailureBlock",
     "FailureClass",
     "FileInput",
-    "LibraryItem",
-    "LibraryList",
     "Position",
-    "RelatedVerifications",
     "Result",
     "ReviewAssessment",
     "ReviewAssessmentCounts",
@@ -3051,7 +2955,6 @@ __all__ = [
     "ReviewCitationResult",
     "ReviewClaim",
     "ReviewCredits",
-    "ReviewEntity",
     "ReviewEnvelope",
     "ReviewEscalateInput",
     "ReviewExport",
@@ -3060,13 +2963,14 @@ __all__ = [
     "ReviewFull",
     "ReviewIssue",
     "ReviewIssues",
+    "ReviewList",
+    "ReviewListItem",
     "ReviewMoreCitation",
     "ReviewResult",
     "ReviewStarted",
     "ReviewSummary",
     "ReviewVerification",
     "ReviewVerificationCounts",
-    "SimilarVerification",
     "Source",
     "SuppliedSource",
     "TaskAccepted",

@@ -325,7 +325,11 @@ def test_failed_webhook_from_both_shapes(name):
 def test_needs_input_webhook_from_both_shapes():
     legacy, canonical = (parse_webhook(b) for b in _both("webhook__verification_needs_input_multi_claim.json"))
     assert isinstance(canonical, VerificationNeedsInput)
-    assert legacy.needs_input == canonical.needs_input
+    clean_legacy = {
+        **legacy.needs_input,
+        "claims": [{k: v for k, v in c.items() if k != "domain"} for c in legacy.needs_input.get("claims", [])],
+    }
+    assert clean_legacy == canonical.needs_input
     assert [c.claim for c in legacy.claims] == [c.claim for c in canonical.claims]
     assert legacy.reason == canonical.reason == "multi_claim"
 

@@ -1,55 +1,60 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "ok",
     "claims": [
       {
-        "candidate_claims": [],
         "claim": "The EU AI Act took effect in March 2024.",
-        "confidence": "high",
-        "dissent": null,
-        "error_code": null,
-        "hint": null,
-        "identified_claims": [],
         "language": "en",
-        "rationale": null,
-        "searched_pages": [],
-        "suggested_rewrite": null,
         "verdict": "True",
-        "verification_url": null
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": null,
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "error_code": null,
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": null
       },
       {
-        "candidate_claims": [],
         "claim": "Water boils at 100 C at sea level.",
-        "confidence": "low",
-        "dissent": null,
-        "error_code": "timeout",
-        "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call.",
-        "identified_claims": [],
         "language": "en",
+        "verdict": "Error",
+        "confidence": "low",
+        "verification_url": null,
         "rationale": null,
+        "dissent": null,
         "searched_pages": [],
         "suggested_rewrite": null,
-        "verdict": "Error",
-        "verification_url": null
+        "error_code": "timeout",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "This item was not processed inside the call's time budget; nothing was charged. Send fewer items in one call, or send it again in a new call."
       },
       {
-        "candidate_claims": [],
         "claim": "cannot frame",
-        "confidence": "low",
-        "dissent": null,
-        "error_code": "framing_failed",
-        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged.",
-        "identified_claims": [],
         "language": "en",
+        "verdict": "Error",
+        "confidence": "low",
+        "verification_url": null,
         "rationale": null,
+        "dissent": null,
         "searched_pages": [],
         "suggested_rewrite": null,
-        "verdict": "Error",
-        "verification_url": null
+        "error_code": "framing_failed",
+        "candidate_claims": [],
+        "identified_claims": [],
+        "hint": "This item could not be processed; retrying it as-is will not help. Send it rephrased as one factual statement; nothing was charged."
       }
     ],
     "error": null,
-    "more_claims": [],
-    "status": "ok"
-  },
-  "status": 200
+    "more_claims": []
+  }
 }

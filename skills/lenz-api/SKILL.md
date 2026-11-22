@@ -1,21 +1,20 @@
 ---
 name: lenz-api
 description: >-
-  Verify factual claims, quotes, and citations in text, documents, or URLs using the Lenz Accuracy Verification API (/extract, /assess, /verify, /citecheck, /review, /ask) and the official lenz-io Python and TypeScript/Node.js SDKs. Use when an agent needs to verify statements, evaluate draft accuracy, check source citations (URLs, DOIs, legal citations), or integrate automated verification into research, due-diligence, or document-generation workflows.
+  Verify factual claims, quotes, and citations in text, documents, or URLs using the Lenz Accuracy Verification API (/extract, /assess, /verify, /citecheck, /review) and the official lenz-io Python and TypeScript/Node.js SDKs. Use when an agent needs to verify statements, evaluate draft accuracy, check source citations (URLs, DOIs, legal citations), or integrate automated verification into research, due-diligence, or document-generation workflows.
 ---
 
 # Lenz Accuracy Verification API (`lenz-api`)
 
 Lenz checks the facts, figures, and citations in your work so you can sign off or publish with confidence: a quick verdict, or a deep check with sources and reasoning.
 
-## Six API Calls
+## Five API Calls
 
 1. **`extract`** (`POST /api/v1/extract`, `POST /api/v1/extract/file`): Pull verifiable factual claims from text, public URLs (web pages, Google Docs, YouTube, direct PDFs/images/audio), or uploaded files (`.docx`, `.pdf`, `.png`, `.jpg`, `.webp`, `.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`). Free (1,000 calls/account/day).
 2. **`assess`** (`POST /api/v1/assess`): Fast 3-model panel verdict on 1 to 20 claims in about 15 seconds (1 credit/claim). Returns `verdict`, `confidence`, `rationale`, `searched_pages`, and `suggested_rewrite` (when `suggest_rewrite=True`).
 3. **`verify`** (`POST /api/v1/verify`, `POST /api/v1/verify/batch`): Full multi-model verification pipeline with independent web research and citations in about a minute or two (10 credits standard / 5 credits at `depth="low"`). Returns `verdict`, `lenz_score` (1–10 or `null`), `confidence`, `key_finding`, `executive_summary`, and `sources`.
 4. **`citecheck`** (`POST /api/v1/citecheck`): Standalone citation verification. Checks whether cited sources (`url`, `doi`, or legal `cite`) exist and support what the draft says (1 credit/checked citation).
 5. **`review`** (`POST /api/v1/review`, `POST /api/v1/review/file`): Full document review in one async call (2–4 minutes). Extracts claims, runs quick `assess` verdicts, escalates doubtful claims to deep `verify`, and optionally checks citations (`max_citations`). Supports annotated `.docx` export (`GET /api/v1/reviews/{review_id}/export?format=docx`).
-6. **`ask`** (`POST /api/v1/ask/{verification_id}`): Grounded follow-up questions on a completed verification (1 credit).
 
 ## Authentication & Installation
 
@@ -236,7 +235,7 @@ for (const c of check.citation_issues) {
 
 ---
 
-### 5. Extract Claims (`/extract`, `/extract/file`) & Ask Follow-Ups (`/ask`)
+### 5. Extract Claims (`/extract`, `/extract/file`)
 
 #### Python
 ```python
@@ -248,10 +247,6 @@ draft = "Acme Corp announced Q3 earnings of $12M, beating expectations."
 extracted = client.extract(text=draft, focus="financial figures", locate=True)
 for item in extracted.claims:
     print(item.claim, item.positions)
-
-v = client.verify_and_wait(claim="Voyager 1 was launched in 1977.")
-reply = client.ask.send(v.verification_id, message="Which source is strongest?")
-print(reply.content)
 ```
 
 #### TypeScript / Node.js
@@ -264,14 +259,6 @@ const draft = "Acme Corp announced Q3 earnings of $12M, beating expectations.";
 const extracted = await client.extract({ text: draft, focus: "financial figures", locate: true });
 for (const item of extracted.claims ?? []) {
   console.log(item.claim, item.positions);
-}
-
-const v = await client.verifyAndWait({ claim: "Voyager 1 was launched in 1977." });
-if (v.verification_id) {
-  const reply = await client.ask.send(v.verification_id, {
-    message: "Which source is strongest?",
-  });
-  console.log(reply.content);
 }
 ```
 

@@ -49,7 +49,6 @@ get the same job back.
 from __future__ import annotations
 
 import asyncio
-import builtins
 import copy
 import inspect
 import logging
@@ -75,7 +74,6 @@ from ._core import (
     _after_response,
     _after_transport_error,
     _already_deleted,
-    _ask_payload,
     _assess_payload,
     _async_user_agent,
     _batch_payload,
@@ -87,7 +85,6 @@ from ._core import (
     _carrying_key,
     _check_assess_forms,
     _check_legacy_aliases,
-    _check_library_iter_sort,
     _check_page_size,
     _check_served_version,
     _check_user_agent,
@@ -109,7 +106,6 @@ from ._core import (
     _is_full_review_body,
     _job_key,
     _key_header,
-    _library_params,
     _names_the_job,
     _no_key,
     _not_sendable,
@@ -149,8 +145,6 @@ from ._shared import (
 )
 from .errors import LenzError, LenzUsageError
 from .models import (
-    AskHistory,
-    AskReply,
     AssessResponse,
     BatchAccepted,
     BatchItemResult,
@@ -159,14 +153,13 @@ from .models import (
     Citecheck,
     CitecheckStarted,
     ExtractedClaims,
-    LibraryItem,
-    LibraryList,
     Progress,
-    RelatedVerifications,
     ReviewExport,
     ReviewExportFormat,
     ReviewFull,
     ReviewIssues,
+    ReviewList,
+    ReviewListItem,
     ReviewStarted,
     SuppliedSource,
     TaskAccepted,
@@ -205,7 +198,7 @@ async def _invoke(callback: Callable[..., Any], *args: Any) -> None:
         await result
 
 
-async def _awalk(fetch: Callable[[int], Awaitable[VerificationList | LibraryList]], page: int) -> AsyncIterator[Any]:
+async def _awalk(fetch: Callable[[int], Awaitable[VerificationList | ReviewList]], page: int) -> AsyncIterator[Any]:
     """The items of ``await fetch(page)``, ``await fetch(page + 1)``, ...
     (``_page_step`` decides where to stop). An async generator: no page is
     fetched before its first item is asked for."""
@@ -218,7 +211,7 @@ async def _awalk(fetch: Callable[[int], Awaitable[VerificationList | LibraryList
 
 
 class _AsyncVerificationsNamespace:
-    """``client.verifications.{list,get,delete,related}``."""
+    """``client.verifications.{list,get,delete}``."""
 
     def __init__(self, parent: AsyncLenz) -> None:
         self._p = parent
@@ -370,265 +363,11 @@ class _AsyncVerificationsNamespace:
         await self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
         return True
 
-    async def related(
-        self,
-        verification_id: str,
-        *,
-        limit: int = 5,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> RelatedVerifications:
-        """Return public verifications semantically related to this one.
-
-        Server caps ``limit`` to 10. Empty list when the verification has
-        no embedding yet or no claim is close enough. Excludes the
-        verification itself and editorially-hidden claims. Keyless like the
-        library/detail reads; a key additionally unlocks the caller's own
-        verifications. Accessible for
-        any verification the caller owns (any visibility) or any public
-        library item.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
-        vid = _segment(verification_id, "verifications.related() needs a verification_id.", "verification_id")
-        body = await self._p._request(
-            "GET",
-            f"/verifications/{vid}/related",
-            params={"limit": limit},
-            auth_required=False,
-            auth_optional=True,  # send the key if we have one → owner sees own rows
-            options=options,
-        )
-        return RelatedVerifications.model_validate(body, context=self._p._results)
-
-
-class _AsyncAskNamespace:
-    """``client.ask.{history,send,reset}``.
-
-    The endpoint moved from ``/verifications/{id}/follow-up`` to a flat
-    ``/ask/{id}`` server-side; this namespace tracks the new URL shape.
-    """
-
-    def __init__(self, parent: AsyncLenz) -> None:
-        self._p = parent
-
-    async def history(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskHistory:
-        """The follow-up conversation on a verification.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
-        vid = _segment(verification_id, "ask.history() needs a verification_id.", "verification_id")
-        body = await self._p._request("GET", f"/ask/{vid}", options=options)
-        return AskHistory.model_validate(body, context=self._p._results)
-
-    async def send(
-        self,
-        verification_id: str,
-        *,
-        message: str,
-        language: str = "",
-        idempotency_key: str | None = None,
-        idempotency: bool = True,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskReply:
-        """Send a follow-up question on an existing verification.
-
-        A blank ``message`` raises ``LenzUsageError`` (``blank_input``)
-        before sending (since 3.2).
-
-        ``language`` (optional) overrides the claim's stored language for
-        this single reply. Omit to let the server use the claim's
-        ``language`` as default — that's the typical case. ``'auto'`` also
-        answers in the language of the claim being discussed.
-
-        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
-        SDK's own retry after a timeout or network drop replays the first
-        reply instead of asking, and paying for, the question twice, and
-        without appending the question and a second answer to the
-        conversation. The key is random per CALL and reused across that
-        call's own retries only: it protects those, while calling ``send``
-        again (a re-ask, even with the same message) is a new turn with a new
-        key, asked and charged again. Pin your own with ``idempotency_key=`` (it wins) to
-        make a retry from another process replay too, or pass
-        ``idempotency=False`` to send none. A retry that arrives while the
-        first call is still running is answered 409 ``idempotency_conflict``:
-        the SDK sends the same key again within the call's retries, and if it
-        still conflicts raises it with ``retryable=True``. Every error of the
-        call carries the key (``exc.idempotency_key``): resend with it, never
-        as a plain new call, which would ask (and charge) again. (Since 3.0;
-        2.x sent a key only when you passed one.)
-
-        Never derived from the message: asking the same thing again is a
-        normal thing to do here, and each turn also reads the history the
-        previous one wrote, so a key derived from the text would replay a
-        stale answer. A new call is a new key, so it is asked again.
-
-        Paid — see ``await client.usage()``.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
-        vid = _segment(verification_id, "ask.send() needs a verification_id.", "verification_id")
-        payload = _ask_payload(message, language)
-        key = _call_key(idempotency_key, idempotency)
-        headers = _key_header(key)
-        with _carrying_key(key, unreadable=True):
-            body = await self._p._request(
-                "POST",
-                f"/ask/{vid}",
-                json=payload,
-                headers=headers,
-                options=options,
-            )
-            return AskReply.model_validate(body, context=self._p._results)
-
-    async def reset(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> bool:
-        """Clear the follow-up conversation on a verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
-        vid = _segment(verification_id, "ask.reset() needs a verification_id.", "verification_id")
-        await self._p._request("DELETE", f"/ask/{vid}", options=options)
-        return True
-
-
-class _AsyncLibraryNamespace:
-    """``await client.library.list()``. Works without an API key.
-
-    The single-item ``library.get()`` was removed when the server merged
-    ``GET /api/v1/library/{id}`` into ``GET /api/v1/verifications/{id}``.
-    Use ``await client.verifications.get(id)`` for single-item lookups — it
-    works on a key-less client too (the server accepts an optional
-    Bearer; anon callers see public + non-hidden claims).
-    """
-
-    def __init__(self, parent: AsyncLenz) -> None:
-        self._p = parent
-
-    async def list(
-        self,
-        *,
-        page: int = 1,
-        sort: str = "recent",
-        search: str = "",
-        domain: str = "",
-        entity: str = "",
-        curated: list[str] | None = None,
-        verdict: str = "",
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> LibraryList:
-        """List the public verification catalog. Works without an API key.
-
-        ``curated`` restricts to one or more named curated collections, e.g.
-        ``["trivia"]`` (the pool behind the open-source quiz demo). ``verdict``
-        filters by comma-separated labels, e.g. ``"True,False"``. ``sort`` also
-        accepts ``"random"`` alongside ``recent`` / ``most_true`` /
-        ``most_untrue`` / ``relevance``.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "library.list()")
-        params = _library_params(
-            page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
-        )
-        body = await self._p._request(
-            "GET",
-            "/library",
-            params=params,
-            auth_required=False,
-            options=options,
-        )
-        return LibraryList.model_validate(body, context=self._p._results)
-
-    def iter(
-        self,
-        *,
-        page: int = 1,
-        sort: str = "recent",
-        search: str = "",
-        domain: str = "",
-        entity: str = "",
-        # ``builtins.list``: in this class body ``list`` is the method above.
-        curated: builtins.list[str] | None = None,
-        verdict: str = "",
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AsyncIterator[LibraryItem]:
-        """Every item of the public catalog that matches the filters (the
-        ones ``list`` takes), page after page from ``page``. Works without an
-        API key.
-
-        Fetches a page only when the items before it have been consumed, reads
-        the page size from each response, and stops after a short or empty
-        page, once the pages read reach the response's ``total``, or when the
-        server answers another page than the one asked for. ``page`` must be
-        1 or more, and ``sort="random"`` raises ``ValueError``: a random order is drawn
-        anew for every page, so walking it neither reaches every item nor
-        avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``)
-        apply to every page request, and a bad one raises here, before the
-        first page: see :meth:`AsyncLenz.with_options`.
-        """
-        # Checked and snapshotted now: every page is read with these.
-        options = _call_options(timeout, max_retries, extra_headers, "library.iter()")
-        _check_library_iter_sort(sort)
-        page = _first_page(page)
-        return _awalk(
-            lambda n: self.list(
-                page=n,
-                sort=sort,
-                search=search,
-                domain=domain,
-                entity=entity,
-                curated=curated,
-                verdict=verdict,
-                **_given(options),
-            ),
-            page,
-        )
-
 
 class AsyncLenz:
     """Top-level client.
 
-    The constructor accepts ``api_key=None`` so library endpoints work
-    without authentication (sandbox path for developers exploring before
-    sign-up). Auth-required methods on an un-keyed client raise
+    The constructor accepts ``api_key=None``. Auth-required methods on an un-keyed client raise
     ``LenzMissingKeyError`` (a ``LenzAuthError``, since 3.2) with a link to
     ``/api-credentials``, before sending.
 
@@ -722,11 +461,8 @@ class AsyncLenz:
             timeout=httpx.Timeout(timeout), headers=_default_headers(self._sdk_user_agent)
         )
 
-        # Resource namespaces (Stripe pattern for CRUD on past verifications,
-        # follow-up conversations, and the public library)
+        # Resource namespaces (Stripe pattern for CRUD on past verifications)
         self.verifications = _AsyncVerificationsNamespace(self)
-        self.ask = _AsyncAskNamespace(self)
-        self.library = _AsyncLibraryNamespace(self)
 
     # ── lifecycle ──
 
@@ -807,8 +543,6 @@ class AsyncLenz:
         clone._owns_client = False
         clone._options = layer
         clone.verifications = _AsyncVerificationsNamespace(clone)
-        clone.ask = _AsyncAskNamespace(clone)
-        clone.library = _AsyncLibraryNamespace(clone)
         return clone
 
     async def __aenter__(self) -> Self:
@@ -1784,6 +1518,65 @@ class AsyncLenz:
             )
         return ReviewFull.model_validate(
             await self._request("GET", f"/reviews/{rid}", options=options), context=self._results
+        )
+
+    async def list_reviews(
+        self,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> ReviewList:
+        """One page of your document reviews, newest first.
+
+        ``page_size`` (optional): items per page, a whole number from 1 to 100
+        (``ValueError`` otherwise, before any request). Omitted, the server's
+        default (20) applies. The page size served is echoed as
+        ``page_size`` on the result.
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``):
+        see :meth:`AsyncLenz.with_options`.
+        """
+        options = _call_options(timeout, max_retries, extra_headers, "list_reviews()")
+        params = _verifications_params(page, _check_page_size(page_size))
+        body = await self._request("GET", "/reviews", params=params, options=options)
+        return ReviewList.model_validate(body, context=self._results)
+
+    def iter_reviews(
+        self,
+        *,
+        page: int = 1,
+        page_size: int | None = None,
+        timeout: float | httpx.Timeout | None = None,
+        max_retries: int | None = None,
+        extra_headers: Mapping[str, str | None] | None = None,
+    ) -> AsyncIterator[ReviewListItem]:
+        """Every document review on your account, newest first, page after page
+        from ``page`` (default 1).
+
+        Fetches a page only when the items before it have been consumed, reads
+        the page size from each response, and stops after a short or empty
+        page, once the pages read reach the response's ``total``, or when the
+        server answers another page than the one asked for. ``page`` must be
+        1 or more (``ValueError``). ``page_size`` (1 to 100, ``ValueError``
+        otherwise) is sent on every page request; omitted, the
+        server's default (20) applies::
+
+            async for item in client.iter_reviews(page_size=100):
+                print(item.review_id, item.status)
+
+        Request options (``timeout``, ``max_retries``, ``extra_headers``)
+        apply to every page request, and a bad one raises here, before the
+        first page: see :meth:`AsyncLenz.with_options`.
+        """
+        # Checked and snapshotted now: every page is read with these.
+        options = _call_options(timeout, max_retries, extra_headers, "iter_reviews()")
+        _check_page_size(page_size)
+        return _awalk(
+            lambda n: self.list_reviews(page=n, **_page_size_kw(page_size), **_given(options)),
+            _first_page(page),
         )
 
     async def cancel_review(

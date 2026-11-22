@@ -47,15 +47,9 @@ CANCEL_CHECK = _load("cancel_citecheck_cancelled.json")
 _ITEM = _load("verifications_list.json")["items"][0]
 PAGE_1 = (200, {"items": [_ITEM], "total": 2, "page": 1, "page_size": 1})
 PAGE_2 = (200, {"items": [_ITEM], "total": 2, "page": 2, "page_size": 1})
-LIB_ITEM = {"verification_id": "lib1", "claim": "A."}
-LIB_1 = (200, {"items": [LIB_ITEM], "total": 2, "page": 1, "page_size": 1})
-LIB_2 = (200, {"items": [LIB_ITEM], "total": 2, "page": 2, "page_size": 1})
 DETAIL = (200, _load("verifications_detail.json"))
 CERT = (200, _load("certificate.json"))
 USAGE = (200, _load("usage.json"))
-ASK_REPLY = (200, {"role": "expert", "content": "Because."})
-ASK_HISTORY = (200, {"messages": []})
-RELATED = (200, {"items": []})
 DRAFT = "Draft text."
 
 S503 = (503, {"detail": "busy"})
@@ -203,28 +197,6 @@ CASES: list[Case] = [
         lambda c: c.verifications.delete("v1"),
         {("DELETE", "/verifications/v1"): [NOT_FOUND]},
     ),
-    (
-        "verifications_related",
-        "default",
-        lambda c: c.verifications.related("v1", limit=3),
-        {("GET", "/verifications/v1/related"): [RELATED]},
-    ),
-    ("ask_history", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [ASK_HISTORY]}),
-    (
-        "ask_send",
-        "default",
-        lambda c: c.ask.send("v1", message="Why?", language="auto"),
-        {("POST", "/ask/v1"): [ASK_REPLY]},
-    ),
-    ("ask_reset", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [(200, {"ok": True})]}),
-    ("library_list", "default", lambda c: c.library.list(), {("GET", "/library"): [LIB_1]}),
-    (
-        "library_list_filters",
-        "keyless",
-        lambda c: c.library.list(page=2, sort="most_true", search="x", curated=["trivia"], verdict="True"),
-        {("GET", "/library"): [LIB_2]},
-    ),
-    ("library_iter", "default", lambda c: c.library.iter(search="x"), {("GET", "/library"): [LIB_1, LIB_2]}),
     # ── waits ──
     (
         "verify_and_wait",
@@ -303,7 +275,12 @@ CASES: list[Case] = [
     ),
     ("retry_transport", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [_drop(), DONE]}),
     ("retries_exhausted_503", "default", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
-    ("retries_exhausted_transport", "default", lambda c: c.ask.history("v1"), {("GET", "/ask/v1"): [_drop()]}),
+    (
+        "retries_exhausted_transport",
+        "default",
+        lambda c: c.verifications.get("v1"),
+        {("GET", "/verifications/v1"): [_drop()]},
+    ),
     ("max_retries_0_503", "max_retries_0", lambda c: c.usage(), {("GET", "/me/usage"): [S503]}),
     ("max_retries_1_503", "max_retries_1", lambda c: c.assess("A."), {("POST", "/assess"): [S503]}),
     ("error_404", "default", lambda c: c.get_status(TASK), {("GET", f"/verify/status/{TASK}"): [NOT_FOUND]}),
@@ -639,8 +616,8 @@ CASES += [
     (
         "retry_409_long_wait",
         "default",
-        lambda c: c.ask.send("v1", message="Why?"),
-        {("POST", "/ask/v1"): [(409, {"code": "idempotency_conflict"}, {"Retry-After": "90"}), ASK_REPLY]},
+        lambda c: c.assess("A.", idempotency_key=PINNED),
+        {("POST", "/assess"): [(409, {"code": "idempotency_conflict"}, {"Retry-After": "90"}), ASSESSED]},
     ),
     ("review_409_names_the_job", "default", lambda c: c.review(DRAFT), {("POST", "/review"): [REVIEW_CONFLICT]}),
     (
@@ -681,7 +658,12 @@ CASES += [
     ),
     ("unreadable_200", "default", lambda c: c.assess("A."), {("POST", "/assess"): [Raw(200, b"<html>")]}),
     ("unreadable_200_no_key", "default", lambda c: c.usage(), {("GET", "/me/usage"): [Raw(200, b"<html>")]}),
-    ("empty_200", "default", lambda c: c.ask.reset("v1"), {("DELETE", "/ask/v1"): [Raw(200, b"")]}),
+    (
+        "empty_200",
+        "default",
+        lambda c: c.verifications.delete("v1"),
+        {("DELETE", "/verifications/v1"): [Raw(200, b"")]},
+    ),
     (
         "cancel_unexpected_body",
         "default",
@@ -714,19 +696,12 @@ CASES += [
     ("citecheck_pairs_max", "default", lambda c: c.citecheck(pairs=[], max_citations=2), {}),
     ("assess_both_forms", "default", lambda c: c.assess("A.", claims=["B."]), {}),
     ("select_empty", "default", lambda c: c.select(TASK, claims=[]), {}),
-    ("library_iter_random", "default", lambda c: c.library.iter(sort="random"), {}),
     ("verifications_iter_page_0", "default", lambda c: c.verifications.iter(page=0), {}),
     (
         "verifications_iter_clamped",
         "default",
         lambda c: c.verifications.iter(page=2),
         {("GET", "/verifications"): [(200, {"items": [_ITEM], "total": 9, "page": 1, "page_size": 1})]},
-    ),
-    (
-        "library_iter_short_page",
-        "keyless",
-        lambda c: c.library.iter(curated=["trivia"]),
-        {("GET", "/library"): [(200, {"items": [LIB_ITEM], "total": 5, "page": 1, "page_size": 2})]},
     ),
     ("bad_timeout_option", "default", lambda c: c.usage(timeout=0), {}),
     ("bad_header_option", "default", lambda c: c.usage(extra_headers={"Authorization": "x"}), {}),
@@ -750,10 +725,10 @@ CASES += [
     (
         "options_on_iter",
         "default",
-        lambda c: c.with_options(timeout=httpx.Timeout(3, read=9)).library.iter(
+        lambda c: c.with_options(timeout=httpx.Timeout(3, read=9)).verifications.iter(
             max_retries=0, extra_headers={"X-P": "1"}
         ),
-        {("GET", "/library"): [LIB_1, LIB_2]},
+        {("GET", "/verifications"): [PAGE_1, PAGE_2]},
     ),
     (
         "option_ua_override",

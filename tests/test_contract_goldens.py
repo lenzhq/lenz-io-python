@@ -27,9 +27,6 @@ GOLDENS = Path(__file__).parent / "fixtures" / "goldens"
 
 #: (name prefix, how the client reads that endpoint's body). First match wins.
 _PARSERS: list[tuple[str, Callable[[Any, Any], Any]]] = [
-    ("account__ask_history", lambda b, c: models.AskHistory.model_validate(b, context=c)),
-    ("account__ask_send", lambda b, c: models.AskReply.model_validate(b, context=c)),
-    ("account__library", lambda b, c: models.LibraryList.model_validate(b, context=c)),
     ("account__me_usage", lambda b, c: models.Usage.model_validate(b, context=c)),
     ("assess__", lambda b, c: models.AssessResponse.model_validate(b, context=c)),
     ("citecheck__get_", lambda b, c: models.Citecheck.model_validate(b, context=c)),
@@ -55,7 +52,7 @@ _PARSERS: list[tuple[str, Callable[[Any, Any], Any]]] = [
     ("verify__", lambda b, c: models.TaskAccepted.model_validate(b, context=c)),
 ]
 #: 2xx bodies the SDK reads no model from (a root document, ``{"ok": true}``).
-_NO_MODEL = ("account__api_", "account__ask_reset", "verify__delete_")
+_NO_MODEL = ("account__api_", "verify__delete_")
 
 _CASES = sorted((d.name, f.name) for d in GOLDENS.iterdir() if d.is_dir() for f in d.glob("*.json"))
 
@@ -111,7 +108,6 @@ def test_every_golden_body_reads(version: str, name: str, legacy_aliases: bool) 
 
 _NULLS = [
     ("CandidateClaim", {"claim": "A.", "text": None}, "text", ""),
-    ("EntityRef", {"name": None}, "name", ""),
     ("AssessClaim", {"claim": "A.", "verdict": None, "confidence": None}, "confidence", "low"),
     ("AssessResponse", {"claims": [], "error": None, "error_code": None}, "error_code", ""),
     ("TaskStatus", {"status": "processing", "task_id": "t", "reason": None, "hint": None}, "hint", ""),
@@ -130,4 +126,4 @@ def test_a_null_in_a_required_answer_is_still_refused() -> None:
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
-        models.AskReply.model_validate({"content": None, "message_id": 5})
+        models.Verification.model_validate({"claim": None})

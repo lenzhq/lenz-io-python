@@ -1,38 +1,43 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "ok",
     "claims": [
       {
         "claim": "Venus is the closest planet to the Sun.",
-        "confidence": "high",
-        "dissent": null,
-        "failure": null,
         "language": "en",
-        "more_claims": [],
-        "rationale": "Mercury, not Venus, is the closest planet to the Sun.",
-        "searched_pages": [],
         "status": "completed",
-        "suggested_rewrite": "Mercury is the closest planet to the Sun.",
         "verdict": "False",
-        "verification_url": null
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "Mercury, not Venus, is the closest planet to the Sun.",
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": "Mercury is the closest planet to the Sun.",
+        "more_claims": [],
+        "failure": null
       },
       {
         "claim": "Mercury is the closest planet to the Sun.",
-        "confidence": "high",
-        "dissent": null,
-        "failure": null,
         "language": "en",
-        "more_claims": [],
-        "rationale": "Mercury is the innermost planet.",
-        "searched_pages": [],
         "status": "completed",
-        "suggested_rewrite": null,
         "verdict": "True",
-        "verification_url": null
+        "confidence": "high",
+        "verification_url": null,
+        "rationale": "Mercury is the innermost planet.",
+        "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
+        "failure": null
       }
     ],
     "failure": null,
-    "more_claims": [],
-    "status": "ok"
-  },
-  "status": 200
+    "more_claims": []
+  }
 }

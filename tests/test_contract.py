@@ -40,13 +40,11 @@ from lenz_io.models import (
     Citecheck,
     CitecheckStarted,
     ExtractedClaims,
-    LibraryList,
     Position,
     ReviewAssessment,
     ReviewFull,
     ReviewIssues,
     ReviewStarted,
-    SimilarVerification,
     TaskStatus,
     Usage,
     Verification,
@@ -182,7 +180,6 @@ def _load(name: str) -> dict:
         # `GET /verifications` and `GET /library` share one row shape, so one
         # fixture checks both list models.
         ("verifications_list.json", VerificationList),
-        ("verifications_list.json", LibraryList),
         ("certificate.json", Certificate),
         ("usage.json", Usage),
         # /review: the 202 receipt, then every state of the review as the
@@ -476,26 +473,6 @@ def test_deprecated_status_lists_default_empty_when_absent():
     parsed = TaskStatus.model_validate({"status": "needs_input", "reason": "multi_claim", "claims": [{"text": "A"}]})
     assert parsed.candidates == []
     assert parsed.similar_claims == []
-
-
-def test_status_from_an_older_server_with_similar_claims_still_parses():
-    """A body from an older server that still carries populated lists parses
-    into typed objects, so code reading them keeps working until removal."""
-    body = {
-        "status": "needs_input",
-        "task_id": "t-1",
-        "reason": "duplicate_found",
-        "claims": [],
-        "candidates": ["a reading"],
-        "similar_claims": [{"verification_id": "abc12345", "verdict": "False", "lenz_score": 2}],
-    }
-    parsed = TaskStatus.model_validate(body)
-    assert parsed.reason == "duplicate_found"
-    assert parsed.candidates == ["a reading"]
-    assert len(parsed.similar_claims) == 1
-    sim = parsed.similar_claims[0]
-    assert isinstance(sim, SimilarVerification)
-    assert (sim.verification_id, sim.verdict, sim.lenz_score) == ("abc12345", "False", 2)
 
 
 # ── Error envelopes ─────────────────────────────────────────────────────────

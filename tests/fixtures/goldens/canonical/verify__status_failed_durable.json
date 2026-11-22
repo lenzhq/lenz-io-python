@@ -1,15 +1,20 @@
 {
-  "body": {
-    "failure": {
-      "code": "conclusion_failed",
-      "detail": "The check stopped while writing the conclusion.",
-      "docs_url": "https://lenz.io/docs/errors#internal",
-      "failure_class": "internal",
-      "hint": null,
-      "retryable": false
-    },
-    "status": "failed",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>",
+    "failure": {
+      "code": "internal",
+      "detail": "The check stopped while writing the conclusion.",
+      "hint": null,
+      "failure_class": "internal",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#internal"
+    }
+  }
 }

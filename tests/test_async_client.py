@@ -43,11 +43,9 @@ from lenz_io import (
     async_client as async_module,
 )
 from lenz_io.async_client import (
-    _AsyncAskNamespace,
-    _AsyncLibraryNamespace,
     _AsyncVerificationsNamespace,
 )
-from lenz_io.client import _AskNamespace, _LibraryNamespace, _VerificationsNamespace
+from lenz_io.client import _VerificationsNamespace
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "src" / "lenz_io"
@@ -130,13 +128,11 @@ def _blocked(event: asyncio.Event) -> Callable[[httpx.Request], Awaitable[httpx.
 PAIRS = [
     (Lenz, AsyncLenz),
     (_VerificationsNamespace, _AsyncVerificationsNamespace),
-    (_AskNamespace, _AsyncAskNamespace),
-    (_LibraryNamespace, _AsyncLibraryNamespace),
 ]
 #: Sync name -> async name, where they differ.
 RENAMED = {"close": "aclose", "__enter__": "__aenter__", "__exit__": "__aexit__"}
 #: Plain methods on both clients (not coroutines on the async one).
-PLAIN = {"iter", "with_options", "__init__"}
+PLAIN = {"iter", "iter_reviews", "with_options", "__init__"}
 #: The deliberate additions (README "Differences from Lenz").
 ASYNC_ONLY_PARAMS = {
     "verify_and_wait": {"cancel_on_abort"},
@@ -847,8 +843,6 @@ async def test_iter_checks_its_arguments_at_the_call_and_fetches_lazily() -> Non
     async with server.client() as client:
         with pytest.raises(ValueError):
             client.verifications.iter(page=0)
-        with pytest.raises(ValueError):
-            client.library.iter(sort="random")
         pages = client.verifications.iter()
         assert isinstance(pages, AsyncIterator)
         assert server.requests == []
@@ -871,12 +865,12 @@ def test_the_async_client_never_blocks_the_loop(caplog: pytest.LogCaptureFixture
             {
                 ("POST", "/verify"): [httpx.Response(503, json={"detail": "x"}), {"task_id": "t1"}],
                 ("GET", "/verify/status/t1"): [RUNNING, DONE],
-                ("GET", "/library"): [{"items": [], "total": 0, "page": 1, "page_size": 20}],
+                ("GET", "/verifications"): [{"items": [], "total": 0, "page": 1, "page_size": 20}],
             }
         )
         async with server.client() as client:
             await client.verify_and_wait("A.")
-            async for _ in client.library.iter():
+            async for _ in client.verifications.iter():
                 pass
 
     async def fast_sleep(seconds: float) -> None:

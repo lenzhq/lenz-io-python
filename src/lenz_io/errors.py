@@ -236,7 +236,6 @@ class LenzMissingKeyError(LenzAuthError):
     ``with_options`` copy) was given no key (``api_key=None`` with no
     ``LENZ_API_KEY``, or an empty or whitespace-only key). Raised before
     anything is sent, so ``status_code`` is 0 and ``retryable`` is ``None``.
-    The public library (``library.list`` / ``library.iter``) needs no key.
 
     A subclass of :class:`LenzAuthError`, so an ``except LenzAuthError``
     catches it too. A key that cannot be sent is :class:`LenzInvalidKeyError`;
@@ -265,10 +264,10 @@ class LenzQuotaExceededError(LenzError):
         ``remaining`` with a DIFFERENT meaning (see below). The raw key is
         always available as ``exc.body["credits_remaining"]``.
       * ``cost``         — credits the rejected call would have taken (a
-        ``/verify`` is 10, ``/assess`` and ``/ask`` are 1), or ``None``.
+        ``/verify`` is 10, ``/assess`` is 1), or ``None``.
 
     ``remaining`` and ``requested`` are in the **capability's** unit —
-    verifications, assessments, follow-ups. ``credit_balance`` and ``cost``
+    verifications, assessments. ``credit_balance`` and ``cost``
     are in **credits**, so together they separate "you have 4 credits and this
     verify costs 10" from "you have nothing".
 
@@ -637,10 +636,9 @@ class LenzGoneError(LenzError):
     back. A certificate issued for it stays available from
     ``verifications.get_certificate``.
 
-    Raised by ``verifications.get``, ``get_status`` on a completed task,
-    ``verifications.related``, ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
-    of polling to the deadline. A 404 is :class:`LenzNotFoundError`: only an
-    id you could read before answers 410.
+    Raised by ``verifications.get`` and ``get_status`` on a completed task.
+    ``wait`` raises it at once instead of polling to the deadline. A 404 is
+    :class:`LenzNotFoundError`: only an id you could read before answers 410.
     """
 
     purged_at: str | None = None
@@ -1101,11 +1099,8 @@ def _original_error(status: int, parsed: dict[str, Any], method: str, path: str)
             if key not in ("detail", "code", "errors"):
                 original["doc_url" if key == "docs_url" else key] = value
         return original
-    # /assess sent ``too_many_items``; /ask sent no code for an unfinished
-    # verification (``GET /verifications/{id}`` still sends ``verification_not_ready``).
-    codeless = (code in _CODELESS and not (code == "too_many_items" and path == "/assess")) or (
-        code == "verification_not_ready" and path.startswith("/ask/")
-    )
+    # /assess sent ``too_many_items``.
+    codeless = code in _CODELESS and not (code == "too_many_items" and path == "/assess")
     if codeless:
         del out["code"]
     out.pop("errors", None)

@@ -590,8 +590,6 @@ class TestRetryable:
         ("endpoint", "code"),
         [
             (("POST", "/verify"), "idempotency_conflict"),
-            (("POST", "/ask/v1"), "idempotency_conflict"),
-            (("POST", "/ask/v1"), "verification_not_ready"),
             (("GET", "/verifications/v1"), "verification_not_ready"),
         ],
     )

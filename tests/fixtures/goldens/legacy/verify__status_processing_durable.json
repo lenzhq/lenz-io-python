@@ -1,14 +1,19 @@
 {
-  "body": {
-    "progress": {
-      "elapsed_seconds": "<elapsed_seconds#2:int>",
-      "index": 4,
-      "poll_after_seconds": 5,
-      "step": "adjudication",
-      "total": 5
-    },
-    "status": "processing",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "processing",
+    "task_id": "<task_id#1:hex32>",
+    "progress": {
+      "step": "adjudication",
+      "index": 4,
+      "total": 5,
+      "elapsed_seconds": "<elapsed_seconds#2:int>",
+      "poll_after_seconds": 5
+    }
+  }
 }
