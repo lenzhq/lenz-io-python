@@ -1,9 +1,6 @@
 {
  "lenz_io": {
   "API_VERSION": "str",
-  "AskHistory": "class",
-  "AskMessage": "class",
-  "AskReply": "class",
   "AssessClaim": "class",
   "AssessResponse": "class",
   "AssessStatus": "typing:Literal['ok', 'no_checkable_claim', 'error']",
@@ -103,9 +100,6 @@
  },
  "lenz_io.__all__": {
   "API_VERSION": "listed",
-  "AskHistory": "listed",
-  "AskMessage": "listed",
-  "AskReply": "listed",
   "AssessClaim": "listed",
   "AssessResponse": "listed",
   "AssessStatus": "listed",
@@ -209,8 +203,6 @@
   "ASSESS_LIST_TIMEOUT": "float",
   "ASSESS_TIMEOUT": "float",
   "Any": "typing:Any",
-  "AskHistory": "class",
-  "AskReply": "class",
   "AssessResponse": "class",
   "BatchAccepted": "class",
   "BatchItemResult": "class",
@@ -276,7 +268,6 @@
   "VerificationListItem": "class",
   "VerifyBatchItem": "class",
   "WAIT_TIMEOUT": "float",
-  "_AskNamespace": "class",
   "_CANCELLED_FAILURE": "dict",
   "_CallOptions": "class",
   "_Client": "typing:~_Client",

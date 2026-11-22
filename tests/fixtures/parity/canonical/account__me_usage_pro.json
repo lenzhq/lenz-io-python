@@ -13,7 +13,6 @@
     "costs": {
       "verify": 10,
       "assess": 1,
-      "ask": 1,
       "citation": 1,
       "extract": 0
     },

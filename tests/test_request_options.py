@@ -26,8 +26,6 @@ import pytest
 from async_adapter import SyncView
 from freeze_cases import (
     ACCEPTED,
-    ASK_HISTORY,
-    ASK_REPLY,
     ASSESSED,
     BATCH,
     CANCEL_CHECK,
@@ -168,9 +166,6 @@ PARITY: dict[str, tuple[str, str]] = {
     "verifications.get": ("verifications.get", "call"),
     "verifications.get_certificate": ("verifications.getCertificate", "call"),
     "verifications.delete": ("verifications.delete", "call"),
-    "ask.history": ("ask.history", "call"),
-    "ask.send": ("ask.send", "call"),
-    "ask.reset": ("ask.reset", "call"),
     "with_options": ("withOptions", "with_options"),
     "close": ("(none)", "lifecycle"),
 }
@@ -182,7 +177,7 @@ def _public_methods() -> dict[str, Callable[..., Any]]:
     for name, value in inspect.getmembers(client):
         if name.startswith("_"):
             continue
-        if name in ("verifications", "ask"):
+        if name == "verifications":
             for sub, method in inspect.getmembers(value):
                 if not sub.startswith("_") and callable(method):
                     out[f"{name}.{sub}"] = method
@@ -388,12 +383,6 @@ CALLS: dict[str, tuple[Run, Answers]] = {
         lambda c, o: c.verifications.delete("v1", **o),
         {("DELETE", "/verifications/v1"): [S503, (200, {"ok": True})]},
     ),
-    "ask.history": (lambda c, o: c.ask.history("v1", **o), {("GET", "/ask/v1"): [S503, ASK_HISTORY]}),
-    "ask.send": (
-        lambda c, o: c.ask.send("v1", message="Why?", idempotency_key=PINNED, **o),
-        {("POST", "/ask/v1"): [S503, ASK_REPLY]},
-    ),
-    "ask.reset": (lambda c, o: c.ask.reset("v1", **o), {("DELETE", "/ask/v1"): [S503, (200, {"ok": True})]}),
 }
 
 
@@ -820,7 +809,7 @@ class TestOwnership:
         root = MyLenz(api_key=API_KEY)
         copy = root.with_options(timeout=5)
         assert isinstance(copy, MyLenz) and copy.hello() == "hi"
-        assert copy.verifications._p is copy and copy.ask._p is copy
+        assert copy.verifications._p is copy
         assert root.verifications._p is root
 
 
@@ -846,7 +835,6 @@ def _per_call_entry_points(client: Lenz) -> list[Callable[..., Any]]:
         lambda **o: client.extract(text="Doc.", **o),
         lambda **o: client.review(DRAFT, **o),
         lambda **o: client.citecheck(DRAFT, **o),
-        lambda **o: client.ask.send("v1", message="Why?", **o),
         lambda **o: client.usage(**o),
         lambda **o: client.verifications.iter(**o),
     ]

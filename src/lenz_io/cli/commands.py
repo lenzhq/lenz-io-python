@@ -13,14 +13,13 @@ from urllib.parse import urlsplit, urlunsplit
 import typer
 
 from lenz_io import Lenz
-from lenz_io.errors import LenzApiVersionError, LenzError, LenzVerificationNotReadyError
+from lenz_io.errors import LenzError, LenzVerificationNotReadyError
 
 from ._run import execute, read_text_arg
 from .config import ENV_API_KEY, clear_api_key, config_path, mask_key, save_api_key
 from .context import CLIState
 from .errors import CLIError
 from .render import (
-    render_ask,
     render_assess,
     render_config,
     render_extract,
@@ -133,35 +132,6 @@ def assess(
             with out.working("Assessing… (~15s)"):
                 result = client.assess(claim=payload)
         render_assess(out, result)
-
-    execute(state, needs_key=True, work=work)
-
-
-def ask(
-    ctx: typer.Context,
-    verification_id: str = typer.Argument(..., help="The 8-char verification_id (from verify/assess output)."),
-    question: str = typer.Argument(None, help="Your question ('-' or pipe = stdin)."),
-) -> None:
-    """Ask a single grounded question about a past verification. Needs a key."""
-    state: CLIState = ctx.obj
-    out = state.output
-
-    def work(client: Lenz) -> None:
-        message = read_text_arg(question)
-        try:
-            with out.working("Thinking…"):
-                reply = client.ask.send(verification_id, message=message)
-        except LenzError as exc:
-            if exc.status_code == 404 and not isinstance(exc, LenzApiVersionError):
-                raise CLIError(
-                    f"No verification found for id {verification_id!r}. "
-                    "A verification_id is the 8-character id printed by `lenz verify` "
-                    "(or in an `assess` verification_url) — not a task_id.",
-                    code="not_found",
-                    status=404,
-                ) from None
-            raise
-        render_ask(out, reply)
 
     execute(state, needs_key=True, work=work)
 

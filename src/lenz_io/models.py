@@ -1805,7 +1805,7 @@ class UsageCredits(_Lax):
 
     Every billable call debits this pool at the weight in :attr:`Usage.costs`
     (``/verify`` is 10 credits — 5 at ``depth="low"``, published as
-    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` and ``/ask`` are 1, ``/extract`` is
+    ``cost_options["verify"]["depth"]["low"]`` — ``/assess`` is 1, ``/extract`` is
     free). Two buckets: the monthly allowance for the current plan, which
     resets at ``resets_at``, and non-expiring ``extra`` credits from grants and
     top-ups, spent only once the allowance is gone. ``remaining`` covers both
@@ -1866,9 +1866,8 @@ class UsageCapacity(_Lax):
         total     = u.credits.total     // u.costs[capability]
         used      = total - remaining
 
-    Two capabilities at the same price emit identical objects — ``ask`` and
-    ``assess`` are both 1 credit — because there is one balance behind all of
-    them, not a per-capability allowance.
+    Two capabilities at the same price emit identical objects because there is
+    one balance behind all of them, not a per-capability allowance.
 
     These are **projections, not allowances**. Every billable capability draws
     on the single balance in :attr:`Usage.credits`, at the weight in
@@ -1976,7 +1975,7 @@ class Usage(Result):
     #: The credit balance — the authoritative number. Empty on older servers.
     credits: UsageCredits = Field(default_factory=UsageCredits)
     #: Credits per call, keyed by CAPABILITY, at its default price:
-    #: ``{"verify": 10, "assess": 1, "ask": 1, "extract": 0}``. Empty on older
+    #: ``{"verify": 10, "assess": 1, "extract": 0}``. Empty on older
     #: servers. Read the weight from here rather than hard-coding it — new
     #: keys appear without an SDK release, and the SDK never rewrites the
     #: server's own key names.
@@ -2069,48 +2068,6 @@ class Usage(Result):
                 "remaining": left,
             }
         return out
-
-
-class AskMessage(_Lax):
-    """One message in an ``/ask`` conversation thread."""
-
-    role: str = ""  # "user" | "expert"
-    content: str = ""
-    created_at: str = ""
-
-
-class AskHistory(Result):
-    """Returned by ``GET /ask/{verification_id}``."""
-
-    messages: list[AskMessage] = Field(default_factory=list)
-    exchanges_used: int = 0
-    exchange_limit: int = 0
-    can_send: bool = False
-
-
-class AskReply(Result):
-    """Returned by ``POST /ask/{verification_id}``.
-
-    ``content`` is the assistant's reply text in a small markdown
-    subset:
-
-    - ``**bold**`` and ``*italic*``
-    - ``- `` or ``* `` bullet lists
-    - Blank-line paragraph breaks; single newlines inside a paragraph
-      mean line break
-
-    The model only produces these — no headings, no tables, no code
-    blocks. Pass it through any markdown library or display it
-    verbatim. See https://lenz.io/docs/quickstart#ask-reply-format.
-
-    Pre-1.0.2 the SDK declared a single ``reply`` field that never
-    matched the wire — the server has always returned
-    ``{role, content, created_at}``. 1.0.2 aligned the typed surface.
-    """
-
-    role: str = ""  # 'expert' on every reply (the assistant turn)
-    content: str = ""  # markdown-subset prose (see class docstring)
-    created_at: str = ""
 
 
 # ── /review ──────────────────────────────────────────────────────────────
@@ -2984,9 +2941,6 @@ class ReviewList(Result):
 
 __all__ = [
     "NO_CHECKABLE_CLAIM",
-    "AskHistory",
-    "AskMessage",
-    "AskReply",
     "AssessClaim",
     "AssessResponse",
     "AssessStatus",

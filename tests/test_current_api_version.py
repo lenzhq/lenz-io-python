@@ -254,7 +254,6 @@ def test_a_blank_verify_webhook_url_is_left_out(client: Lenz, blank: Any) -> Non
         ("verify__status_unknown_404.json", "GET", "/verify/status/t1", ""),
         ("verify__unauthenticated_401.json", "POST", "/verify", ""),
         ("review__401_no_credentials.json", "POST", "/review", ""),
-        ("errors__ask_not_completed.json", "POST", "/ask/v1", ""),
         ("verify__idempotency_conflict_409.json", "POST", "/verify", ""),
         ("verify__verification_not_ready_409.json", "GET", "/verifications/t1", "verification_not_ready"),
         ("review__get_404_not_found.json", "GET", "/reviews/r1", "not_found"),

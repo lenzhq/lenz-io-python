@@ -4,9 +4,8 @@ Run:
     export LENZ_API_KEY=lenz_...
     python examples/core/assess_auto_language.py
 
-Pass ``language='auto'`` on ``assess``, ``verify`` / ``verify_and_wait`` or
-``ask.send`` and the answer comes back in the language of the text you
-submitted (on ``ask.send``, the language of the claim being discussed). A
+Pass ``language='auto'`` on ``assess`` or ``verify`` / ``verify_and_wait`` and
+the answer comes back in the language of the text you submitted. A
 concrete code such as ``'es'`` always wins; leaving ``language`` out still
 means English. ``extract``, ``verify_batch``, ``citecheck`` and ``review`` take
 the codes only, not ``'auto'``. Verdict labels stay English.

@@ -8,7 +8,6 @@ Official Python SDK for the [Lenz Accuracy Verification API](https://lenz.io/dev
 - `assess` — fast 3-model panel verdict in ~15s. Sync, paid.
 - `verify` — full multi-model pipeline with citations in ~90s. Async, paid.
 - `citecheck` — the citation check on its own: does each source a draft cites say what the draft says? Async.
-- `ask` — follow-up questions grounded on a verification. Sync, paid.
 - `review` — the ladder on a draft in one call, its citations too if asked: issues and rewrites in 2-4 min. Async, paid.
 
 Built for teams whose AI output is async or document-shaped: legal-memo
@@ -309,7 +308,6 @@ lenz verify  "<claim>" --depth low                          # shallower, faster,
 lenz verify  "<claim>" --json | jq .verdict                 # machine-readable
 lenz status  <task_id>           # non-blocking: poll a verify task's progress
 lenz show    <verification_id>   # full report — sources, warnings, panel + debate (-c for concise)
-lenz ask <verification_id> "Which source is strongest?"
 lenz review draft.md             # the whole draft: quick verdicts, deep checks, and up to 20 of its sources
 lenz review report.docx          # review Word document, PDF, or image (.png, .jpg, .webp) directly
 lenz review report.docx --export annotated.docx  # save annotated Word document with comments
@@ -332,7 +330,6 @@ exit (an out-of-credits run reports `"code": "no_credits"` and adds
 Lenz usage  (Pro plan)
   5070 credits left  (≈ 507 verifications · 5070 assessments)
   Verify:   507 left  (13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low")
-  Ask:      5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
   Assess:   5070 left  (130 / 5200 quota + 200 extra · 1 credit each)
   Extract:  4 / 1000 today  (free — no credit charge)
   Credits reset in 3 days (Sep 1, 2026)
@@ -388,12 +385,6 @@ results = client.verify_batch_and_wait(claims=doubtful) if doubtful else []
 for r in results:
     if r.verification:
         print(r.verification.verdict, r.verification.lenz_score, r.verification.executive_summary)
-
-# 4. ask — follow-up grounded on a verification (when a claim was escalated)
-deep = next((r.verification for r in results if r.verification is not None), None)
-if deep is not None:
-    reply = client.ask.send(deep.verification_id, message="Which source is strongest?")
-    print(reply.content)
 ```
 
 `assess(claims=[...])` takes up to 20 claims per call and always answers
@@ -475,9 +466,8 @@ your own claims. Use webhooks for production async flows.
 - **`client.wait(task)`** → `Verification`. Block on a `task_id` (or a `TaskAccepted`) until it terminates. The polling counterpart to a webhook.
 - **`client.verify_batch(claims=[...])`** → `BatchAccepted`. Fan-out for multi-claim LLM outputs.
 - **`client.verify_batch_and_wait(claims=[...])`** → `list[BatchItemResult]`. Fan out a batch and poll every item to completion; one result per claim, in input order, never raises on a per-item failure.
-- **`client.ask.{history,send,reset}(verification_id, ...)`** → Q&A on a verification. `reply.content` uses a small markdown subset (`**bold**`, `*italic*`, `- ` or `* ` bullets, blank-line paragraphs) — render with a minimal markdown library or display verbatim. See [docs/quickstart#ask-reply-format](https://lenz.io/docs/quickstart#ask-reply-format).
 - **`client.verifications.{list,iter,get,delete}(...)`** → manage past verifications. `iter()` walks every page lazily (`for item in client.verifications.iter(): ...`). Both take `page_size=` (1-100, default 20 on the server; anything else raises `ValueError` before the request): `client.verifications.iter(page_size=100)` reads 100 a page. All API claims are private; reference them by `verification_id`. Cache-hit on another customer's claim is transparent — you always see your own `verification_id`, never another customer's.
-- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `ask` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
+- **`client.usage()`** → the account's credit balance (`usage.credits`), the price list (`usage.costs` — `verify` 10, `assess` 1, `extract` 0 — plus `usage.cost_options` for parameter-dependent prices such as `depth`), and per-capability projections of that one pool (`usage.verify.remaining` is how many verifications the balance still buys), plus the daily `extract` rate limit. Also reports `has_webhook_secret` — whether this key can receive signed webhook callbacks (`verify` with a `webhook_url` needs one); the secret value itself is never exposed.
 
 ## Polling without webhooks
 
@@ -711,8 +701,7 @@ log_answer(client.verify("The Eiffel Tower is in Paris."))
 The calls are annotated with these subclasses: `AssessResponse`,
 `ExtractedClaims`, `TaskStatus`, `BatchAccepted`, `CancelResult`,
 `ReviewStarted`, `ReviewFull`, `ReviewIssues`, `CitecheckStarted`,
-`Citecheck`, `Usage`, `VerificationList`, `Certificate`,
-`AskHistory` and `AskReply`. Two
+`Citecheck`, `Usage`, `VerificationList`, and `Certificate`. Two
 models are also nested in other results, so the calls returning them at the
 top level return a subclass of their own: `verify` returns a
 `TaskAcceptedResult` (a `TaskAccepted`) and `verifications.get` a
@@ -899,7 +888,6 @@ One pool per account funds every billable call, at a fixed weight:
 | `verify` (and `verify_batch`, `select`) | **10** per claim |
 | `verify` with `depth="low"` | **5** per claim |
 | `assess` | 1 per claim; `"Error"` rows are free |
-| `ask` | 1 |
 | `extract` | 0 — free at the pool, bounded by the daily fair-use cap instead |
 
 ```python
@@ -1110,7 +1098,7 @@ string:
 
 | `code` | When | `param`, e.g. |
 |---|---|---|
-| `blank_input` | a blank claim, text or message (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs, `ask.send`) | `"claim"`, `"text"`, `"message"` |
+| `blank_input` | a blank claim or text (`verify`, `assess`, `review`, `citecheck` with neither text nor pairs) | `"claim"`, `"text"` |
 | `blank_item` | a blank item in an `assess(claims=[...])` list | `"claims[2]"` |
 | `empty_list` | an empty list (`assess(claims=[])`), or a `select` list that is empty or all blank | `"claims"`, `"texts"` |
 | `invalid_page_size` | `page_size` outside 1 to 100 | `"page_size"` |
@@ -1136,7 +1124,6 @@ non-empty.`), so the two can differ there:
 | `select(task_id, claims=[])`, or every item blank (a list or a tuple) | `empty_list` | `claims is required.` |
 | `review("")`, `review_and_wait("")` | `blank_input` | `text: send the draft, or one public http(s) URL.` |
 | `citecheck("")` (no pairs) | `blank_input` | `payload: Value error, send exactly one of text and pairs` |
-| `ask.send(id, message="")` | `blank_input` | `Message cannot be empty.` |
 
 The other codes carry the SDK's own message. The rule: the SDK refuses locally
 only what the API would refuse, in the API's words. So `select` sends a list
@@ -1420,7 +1407,7 @@ print(check.status, check.credits.charged)
 
 Every call that charges or starts work sends an auto-generated
 `Idempotency-Key` by default: `verify`, `verify_and_wait`, `verify_batch`,
-`verify_batch_and_wait`, `select`, `assess`, `extract` and `ask.send` (one
+`verify_batch_and_wait`, `select`, `assess`, and `extract` (one
 random key per call, reused across that call's own retries), so a network
 drop after submit doesn't spawn a duplicate or charge a second time. Override
 with `idempotency_key="..."` to pin a specific key (it also makes a retry
@@ -1428,21 +1415,19 @@ from another process replay), or `idempotency=False` to opt out. `review`,
 `citecheck` and their `*_and_wait` helpers send one the same way, and take
 `idempotency=False` since 3.2 (they always sent one before). On every call an
 empty `idempotency_key=""` sends no key (since 3.2 on `review` / `citecheck`
-too, which generated one). The batch and
-`ask.send` keys are new in 3.0; 2.x sent one there only when you passed it.
+too, which generated one). The batch
+keys are new in 3.0; 2.x sent one there only when you passed it.
 
 The key is never derived from the request, and is random per call: it
-protects that call's own retries. Asking the same question again on
-`ask.send` is a new call, with a new key, so a new turn of the conversation,
-asked and charged again. Pin a key when
-your retry means "the same question, once" — the reply, the credit and the
-conversation history are then all the first call's:
+protects that call's own retries. Sending the same text again in a new
+call is a new request, with a new key, submitted and charged again. Pin
+a key when your retry means "the same verification, once" — the result
+and the credit are then all the first call's:
 
 ```python
-reply = client.ask.send(
-    v.verification_id,
-    message="Which source is strongest?",
-    idempotency_key="deal-42-followup-1",
+res = client.verify(
+    claim="Sharks don't get cancer",
+    idempotency_key="doc-42-claim-1",
 )
 ```
 
@@ -1558,7 +1543,7 @@ lenz extract interview.mp3 --focus "key announcements"
 
 The Lenz API returns prose fields (atomic claim, executive summary, debate, panel
 reasoning) in any of 39 languages. Pass `language=` on `verify`, `verify_and_wait`,
-`verify_batch`, `assess`, `extract`, or `ask.send`. Verdict labels stay English
+`verify_batch`, `assess`, or `extract`. Verdict labels stay English
 regardless of language. Serbian (`sr`) is answered in the Latin script. On `extract`, `language` and `focus` are independent —
 a focus written in any language selects claims emitted in `language`.
 
@@ -1578,14 +1563,14 @@ https://lenz.io/contact.
 ### Answer in the language of the text
 
 `language="auto"` on `assess`, `verify` / `verify_and_wait`, `review` /
-`review_and_wait`, `extract` and `ask.send` answers in the language of the text you
-submitted (on `ask.send`, the language of the claim being discussed; on a review, one
-language for the whole draft; on `extract`, for a `text` that is a single URL, the
-language of the fetched page). A concrete code always wins, and leaving `language`
-out still means English. A short or undetectable text gives English. The other
-methods (`verify_batch`, `citecheck`) take the codes above, not `auto`. A review of
-a draft that is only a link decides its language once the page is read: until then
-its `language` reads `"auto"`, and a page that cannot be read leaves English.
+`review_and_wait`, and `extract` answers in the language of the text you
+submitted (on a review, one language for the whole draft; on `extract`, for a
+`text` that is a single URL, the language of the fetched page). A concrete code
+always wins, and leaving `language` out still means English. A short or
+undetectable text gives English. The other methods (`verify_batch`, `citecheck`)
+take the codes above, not `auto`. A review of a draft that is only a link
+decides its language once the page is read: until then its `language` reads
+`"auto"`, and a page that cannot be read leaves English.
 
 ```python
 r = client.assess(claim="Die Erde ist flach.", language="auto")
@@ -1895,7 +1880,7 @@ What each option reaches:
 
 | Methods | `timeout` | `max_retries` | `extra_headers` |
 |---|---|---|---|
-| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, `ask.*`, ...) | the attempt | the call's retries | every request |
+| Plain calls (`verify`, `review`, `list_reviews`, `get_status`, `cancel`, `usage`, `verifications.*`, ...) | the attempt | the call's retries | every request |
 | `extract`, `assess` | the attempt, used as given (so is a copy's; only the client's own is raised to 150 s / 100 s) | the call's retries | every request |
 | Waits (`wait`, `verify_and_wait`, `verify_batch_and_wait`, `review_and_wait`, `citecheck_and_wait`) | **how long to wait** (unchanged) | the submit's retries (`wait` has none: each poll is one request) | the submit and every poll |
 | `iter_reviews`, `verifications.iter` | each page's attempt | each page's retries | every page |

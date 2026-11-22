@@ -1,25 +1,4 @@
 {
- "ask_history": {
-  "repr": "AskHistory(messages=[], exchanges_used=0, exchange_limit=0, can_send=False)",
-  "result": {
-   "can_send": false,
-   "exchange_limit": 0,
-   "exchanges_used": 0,
-   "messages": []
-  }
- },
- "ask_reset": {
-  "repr": "True",
-  "result": true
- },
- "ask_send": {
-  "repr": "AskReply(role='expert', content='Because.', created_at='')",
-  "result": {
-   "content": "Because.",
-   "created_at": "",
-   "role": "expert"
-  }
- },
  "assess_both_forms": {
   "cause": null,
   "error": "LenzUsageError",
@@ -2235,7 +2214,7 @@
    "fix": "Check base_url and any proxy between you and the API; quote the request id to support.",
    "headers": "<ResponseHeaders>",
    "lineno": 1,
-   "message": "DELETE /ask/v1 answered HTTP 200 with an empty body.",
+   "message": "DELETE /verifications/v1 answered HTTP 200 with an empty body.",
    "msg": "Expecting value",
    "pos": 0,
    "request_id": "",
@@ -2246,7 +2225,7 @@
   "cause": null,
   "context": null,
   "error": "LenzInvalidResponseError",
-  "str": "DELETE /ask/v1 answered HTTP 200 with an empty body.\n  Cause:  Every Lenz API answer has a JSON body: something else answered in its place.\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
+  "str": "DELETE /verifications/v1 answered HTTP 200 with an empty body.\n  Cause:  Every Lenz API answer has a JSON body: something else answered in its place.\n  Fix:    Check base_url and any proxy between you and the API; quote the request id to support.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": false
  },
  "error_404": {
@@ -3716,7 +3695,7 @@
    "code": "",
    "doc_url": "https://lenz.io/docs/errors",
    "fix": "Check your network connection; verify base_url is reachable.",
-   "message": "GET /ask/v1 failed after 4 attempts: connection refused",
+   "message": "GET /verifications/v1 failed after 4 attempts: connection refused",
    "request_id": "",
    "retryable": true,
    "status_code": 0
@@ -3724,7 +3703,7 @@
   "cause": "ConnectError",
   "context": "ConnectError",
   "error": "LenzConnectionError",
-  "str": "GET /ask/v1 failed after 4 attempts: connection refused\n  Cause:  connection refused\n  Fix:    Check your network connection; verify base_url is reachable.\n  Docs:   https://lenz.io/docs/errors",
+  "str": "GET /verifications/v1 failed after 4 attempts: connection refused\n  Cause:  connection refused\n  Fix:    Check your network connection; verify base_url is reachable.\n  Docs:   https://lenz.io/docs/errors",
   "suppress_context": true
  },
  "retry_409_conflict": {
@@ -3759,11 +3738,13 @@
   "suppress_context": false
  },
  "retry_409_long_wait": {
-  "repr": "AskReply(role='expert', content='Because.', created_at='')",
+  "repr": "AssessResponse(claims=[], error=None, error_code='', candidate_claims=[], more_claims=[])",
   "result": {
-   "content": "Because.",
-   "created_at": "",
-   "role": "expert"
+   "candidate_claims": [],
+   "claims": [],
+   "error": null,
+   "error_code": "",
+   "more_claims": []
   }
  },
  "retry_409_no_key": {

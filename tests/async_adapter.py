@@ -17,11 +17,10 @@ from typing import Any
 
 from lenz_io.async_client import (
     AsyncLenz,
-    _AsyncAskNamespace,
     _AsyncVerificationsNamespace,
 )
 
-_WRAPPED = (AsyncLenz, _AsyncAskNamespace, _AsyncVerificationsNamespace)
+_WRAPPED = (AsyncLenz, _AsyncVerificationsNamespace)
 
 
 class SyncIter(Iterator[Any]):

@@ -16,13 +16,12 @@ from typing import Any
 
 import pytest
 
-from lenz_io.client import Lenz, _AskNamespace, _VerificationsNamespace
+from lenz_io.client import Lenz, _VerificationsNamespace
 
 GOLDEN = Path(__file__).parent / "fixtures" / "freeze" / "signatures.json"
 _CLASSES = {
     "Lenz": Lenz,
     "verifications": _VerificationsNamespace,
-    "ask": _AskNamespace,
 }
 
 

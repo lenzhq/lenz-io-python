@@ -6,9 +6,8 @@ Run:
 
 The pattern: ``extract`` pulls claims out of any text, ONE ``assess`` call
 over those claims returns a fast 3-model verdict per claim (up to 20, one
-row per claim, same order), ``verify`` escalates the low-confidence rows
-to the full multi-model panel with citations, and ``ask`` lets you follow up
-on a verification.
+row per claim, same order), and ``verify`` escalates the low-confidence rows
+to the full multi-model panel with citations.
 
 The demo claim is cached for an hour after anyone verifies it, so the
 verify call can come back in seconds; otherwise it runs the full pipeline
@@ -64,12 +63,6 @@ def main() -> None:
     for source in v.sources[:3]:
         print(f"  - {source.title}")
         print(f"    {source.url}")
-
-    # 4. ask — follow-up question on the verification
-    reply = client.ask.send(v.verification_id, message="Which source is strongest?")
-    print()
-    print("Q: Which source is strongest?")
-    print(f"A: {reply.content}")
 
 
 if __name__ == "__main__":

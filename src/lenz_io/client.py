@@ -1,13 +1,13 @@
 """Public Lenz client — the ergonomic top-level surface.
 
 Multi-language SDK convention:
-* Request methods (verify, assess, extract, ask, …) take ``language=''``
+* Request methods (verify, assess, extract, …) take ``language=''``
   as their default. Sending an empty string means "do NOT include the
   field in the request body" — preserves byte-identical behavior for
   existing English callers. Set ``language='es'`` (or any of the 39
   supported codes) to receive prose fields in that language. ``assess``,
   ``verify`` (and ``verify_and_wait``), ``review`` (and ``review_and_wait``),
-  ``extract`` and ``ask.send`` also take ``language='auto'``: the answer comes
+  and ``extract`` also take ``language='auto'``: the answer comes
   back in the language of the submitted text (one language for a whole review).
   ``extract`` reports the language it chose in ``language`` on its result. The
   other methods take the codes only.
@@ -20,18 +20,17 @@ Multi-language SDK convention:
   byte-identical English path. The empty-default-then-omit convention
   exists precisely to avoid that.
 
-Shape (six calls: the four-call ladder, ``review`` and ``citecheck``, plus
+Shape (five calls: the three-call ladder, ``review`` and ``citecheck``, plus
 the supporting reads):
 
     from lenz_io import Lenz
     client = Lenz(api_key="lenz_...")
 
-    # Marquee verbs — top-level (the four-call ladder)
+    # Marquee verbs — top-level (the three-call ladder)
     out = client.extract(text="...")                       # find claims in a document
     r = client.assess(claims=[...])                        # one fast verdict per claim, up to 20
     r = client.assess(claim="...")                         # ...or a single claim, ~15s
     v = client.verify_and_wait(claim="...")                # full multi-model pipeline, ~90s
-    reply = client.ask.send(id, message="follow-up?")      # Q&A on a verification
     review = client.review_and_wait(text=draft)            # the whole ladder on a draft, 2-4 min
 
     # Review without waiting
@@ -49,7 +48,6 @@ the supporting reads):
     # Resource namespaces
     client.verifications.list()
     client.verifications.get(id) / delete(id)
-    client.ask.history(id) / send(id, message=...) / reset(id)
     client.usage()
 
 Naming: ``text`` is a document, ``claim`` is a claim. ``extract`` takes
@@ -66,11 +64,11 @@ Design decisions:
   by default. ``Retry-After`` honored on 429s.
 * ``Idempotency-Key`` auto-generated per call for ``verify``,
   ``verify_and_wait``, ``verify_batch``, ``verify_batch_and_wait``,
-  ``select``, ``assess``, ``extract`` and ``ask.send`` (random, reused
+  ``select``, ``assess`` and ``extract`` (random, reused
   across that call's own retries) so a network drop doesn't run the request
   twice. Customer can override with explicit ``idempotency_key=...`` or opt
-  out with ``idempotency=False``. (2.x sent a key on ``verify_batch``,
-  ``verify_batch_and_wait`` and ``ask.send`` only when you passed one.)
+  out with ``idempotency=False``. (2.x sent a key on ``verify_batch`` and
+  ``verify_batch_and_wait`` only when you passed one.)
 * ``X-Lenz-API-Version`` header pinned per SDK release (``API_VERSION``), so
   the server answers every release in the response shape it was built for.
 * ``X-Request-ID`` is captured from every response onto the typed error
@@ -128,7 +126,6 @@ from ._core import (
     _after_response as _after_response,
     _after_transport_error as _after_transport_error,
     _already_deleted as _already_deleted,
-    _ask_payload as _ask_payload,
     _assess_payload as _assess_payload,
     _batch_item_body as _batch_item_body,
     _batch_payload as _batch_payload,
@@ -237,8 +234,6 @@ from .errors import (
     map_response_to_error as map_response_to_error,
 )
 from .models import (
-    AskHistory as AskHistory,
-    AskReply as AskReply,
     AssessResponse as AssessResponse,
     BatchAccepted as BatchAccepted,
     BatchItemResult as BatchItemResult,
@@ -434,121 +429,6 @@ class _VerificationsNamespace:
         return True
 
 
-class _AskNamespace:
-    """``client.ask.{history,send,reset}``.
-
-    The endpoint moved from ``/verifications/{id}/follow-up`` to a flat
-    ``/ask/{id}`` server-side; this namespace tracks the new URL shape.
-    """
-
-    def __init__(self, parent: Lenz) -> None:
-        self._p = parent
-
-    def history(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskHistory:
-        """The follow-up conversation on a verification.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
-        vid = _segment(verification_id, "ask.history() needs a verification_id.", "verification_id")
-        body = self._p._request("GET", f"/ask/{vid}", options=options)
-        return AskHistory.model_validate(body, context=self._p._results)
-
-    def send(
-        self,
-        verification_id: str,
-        *,
-        message: str,
-        language: str = "",
-        idempotency_key: str | None = None,
-        idempotency: bool = True,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskReply:
-        """Send a follow-up question on an existing verification.
-
-        A blank ``message`` raises ``LenzUsageError`` (``blank_input``)
-        before sending (since 3.2).
-
-        ``language`` (optional) overrides the claim's stored language for
-        this single reply. Omit to let the server use the claim's
-        ``language`` as default — that's the typical case. ``'auto'`` also
-        answers in the language of the claim being discussed.
-
-        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
-        SDK's own retry after a timeout or network drop replays the first
-        reply instead of asking, and paying for, the question twice, and
-        without appending the question and a second answer to the
-        conversation. The key is random per CALL and reused across that
-        call's own retries only: it protects those, while calling ``send``
-        again (a re-ask, even with the same message) is a new turn with a new
-        key, asked and charged again. Pin your own with ``idempotency_key=`` (it wins) to
-        make a retry from another process replay too, or pass
-        ``idempotency=False`` to send none. A retry that arrives while the
-        first call is still running is answered 409 ``idempotency_conflict``:
-        the SDK sends the same key again within the call's retries, and if it
-        still conflicts raises it with ``retryable=True``. Every error of the
-        call carries the key (``exc.idempotency_key``): resend with it, never
-        as a plain new call, which would ask (and charge) again. (Since 3.0;
-        2.x sent a key only when you passed one.)
-
-        Never derived from the message: asking the same thing again is a
-        normal thing to do here, and each turn also reads the history the
-        previous one wrote, so a key derived from the text would replay a
-        stale answer. A new call is a new key, so it is asked again.
-
-        Paid — see ``client.usage()``.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
-        vid = _segment(verification_id, "ask.send() needs a verification_id.", "verification_id")
-        payload = _ask_payload(message, language)
-        key = _call_key(idempotency_key, idempotency)
-        headers = _key_header(key)
-        with _carrying_key(key, unreadable=True):
-            body = self._p._request(
-                "POST",
-                f"/ask/{vid}",
-                json=payload,
-                headers=headers,
-                options=options,
-            )
-            return AskReply.model_validate(body, context=self._p._results)
-
-    def reset(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> bool:
-        """Clear the follow-up conversation on a verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
-        vid = _segment(verification_id, "ask.reset() needs a verification_id.", "verification_id")
-        self._p._request("DELETE", f"/ask/{vid}", options=options)
-        return True
-
-
 class Lenz:
     """Top-level client.
 
@@ -635,10 +515,8 @@ class Lenz:
             timeout=httpx.Timeout(timeout), headers=_default_headers(self._sdk_user_agent)
         )
 
-        # Resource namespaces (Stripe pattern for CRUD on past verifications
-        # and follow-up conversations)
+        # Resource namespaces (Stripe pattern for CRUD on past verifications)
         self.verifications = _VerificationsNamespace(self)
-        self.ask = _AskNamespace(self)
 
     # ── lifecycle ──
 
@@ -723,7 +601,6 @@ class Lenz:
         clone._owns_client = False
         clone._options = layer
         clone.verifications = _VerificationsNamespace(clone)
-        clone.ask = _AskNamespace(clone)
         return clone
 
     def __enter__(self) -> Self:

@@ -49,16 +49,6 @@ runner = CliRunner()
 
 
 # ── fakes ───────────────────────────────────────────────────────────────────
-class _FakeAsk:
-    def __init__(self, reply):
-        self._reply = reply
-        self.sent: list[tuple] = []
-
-    def send(self, vid, *, message, language=""):
-        self.sent.append((vid, message))
-        return self._reply
-
-
 class _FakeVerifications:
     def __init__(self, mapping=None, error=None):
         self._mapping = mapping or {}
@@ -81,7 +71,6 @@ class FakeClient:
         verify_task=None,
         statuses=None,
         select_task=None,
-        ask_reply=None,
         verifications=None,
         usage_result=None,
         raises=None,
@@ -93,7 +82,6 @@ class FakeClient:
         # None → select() builds one task per selected text (realistic batch
         # fan-out); pass select_task to override with a fixed BatchAccepted.
         self._select_task = select_task
-        self.ask = _FakeAsk(ask_reply)
         self.verifications = verifications or _FakeVerifications()
         self._usage = usage_result
         self._raises = raises or {}
@@ -771,7 +759,7 @@ def _render_renderable(renderable, width=100):
     return buf.getvalue()
 
 
-def test_render_assess_shows_verdict_and_ask_hint():
+def test_render_assess_shows_verdict():
     from lenz_io.cli.render import render_assess
 
     resp = AssessResponse(
@@ -786,7 +774,6 @@ def test_render_assess_shows_verdict_and_ask_hint():
     )
     text = _render(render_assess, resp)
     assert "False" in text and "The sky is green" in text
-    assert "lenz ask abcd1234" in text  # follow-up hint with the parsed id
 
 
 def test_render_assess_prints_the_reviewers_notes():
@@ -929,7 +916,6 @@ def test_render_verification_full():
     hosts = {urlparse(u).hostname for u in re.findall(r"https://\S+", text)}
     assert "a.test" in hosts  # a source url
     assert "verification_id: v-1" in text
-    assert "lenz ask v-1" in text  # follow-up hint
 
 
 def test_render_verification_none_errors():
@@ -937,24 +923,6 @@ def test_render_verification_none_errors():
 
     with pytest.raises(SystemExit):
         _render(render_verification, None)
-
-
-def test_render_ask_renders_markdown_not_literal():
-    from types import SimpleNamespace
-
-    from lenz_io.cli.render import render_ask
-
-    text = _render(render_ask, SimpleNamespace(content="The **600 Nm** at *6,500 rpm*."))
-    assert "600 Nm" in text
-    assert "**" not in text  # markdown rendered, not dumped literally
-
-
-def test_render_ask_empty_reply():
-    from types import SimpleNamespace
-
-    from lenz_io.cli.render import render_ask
-
-    assert "empty reply" in _render(render_ask, SimpleNamespace(content=""))
 
 
 def test_render_config_shows_source_and_masked_key():
@@ -1091,11 +1059,12 @@ def test_usage_pretty_leads_with_the_credit_balance():
     assert "507 left" in text
     assert '13 / 520 quota + 20 extra · 10 credits each · 5 at depth "low"' in text
     assert "5070 left" in text
-    assert "1 credit each" in text  # assess/ask are the unit — singular
+    assert "1 credit each" in text  # assess is the unit — singular
     assert text.index("credits left") < text.index("Verify:")
-    assert text.index("Verify:") < text.index("Ask:") < text.index("Assess:") < text.index("Extract:")
+    assert text.index("Verify:") < text.index("Assess:") < text.index("Extract:")
+    assert "Ask:" not in text
     # The extra credits show on every row, in that capability's unit.
-    assert "+ 200 extra" in text.split("Ask:")[1].split("Assess:")[0]
+    assert "+ 200 extra" in text.split("Assess:")[1].split("Extract:")[0]
     assert "4 / 1000 today" in text
     # Humanized: absolute date always present; the relative prefix ("in N days")
     # is wall-clock-dependent so isn't asserted here (see _humanize_reset unit test).
@@ -1122,15 +1091,15 @@ def test_usage_pretty_notes_the_low_depth_price_on_the_verify_row():
     the server, so rendering it as its own capacity row would invent a second
     balance that does not exist."""
     text = _render_usage_text(_pool_usage())
-    verify_row = text.split("Verify:")[1].split("Ask:")[0]
+    verify_row = text.split("Verify:")[1].split("Assess:")[0]
     assert '10 credits each · 5 at depth "low"' in verify_row
     # Not a row, and not an extra headline equivalent.
     assert "Verify low" not in text
     assert "verify_low" not in text
-    # Exactly three capacity rows — Verify / Ask / Assess. A fourth would mean
+    # Exactly two capacity rows — Verify / Assess. A third would mean
     # someone gave the price its own projection block.
     rows = [ln.strip().split(":")[0] for ln in text.splitlines() if " quota" in ln]
-    assert rows == ["Verify", "Ask", "Assess"]
+    assert rows == ["Verify", "Assess"]
 
 
 def test_usage_pretty_omits_the_low_depth_note_on_a_server_without_it():
@@ -1242,26 +1211,6 @@ def test_error_mapping_json(monkeypatch, exc, code, status):
     err = json.loads(result.stdout)["error"]
     assert err["code"] == code
     assert err["status"] == status
-
-
-def test_ask_bad_id_is_friendly_not_retry(monkeypatch):
-    """A 404 from ask means a wrong/expired id — say so, don't tell the user to
-    'retry and file an issue' (the generic LenzError fix)."""
-    monkeypatch.setenv("LENZ_API_KEY", "k")
-    fake = FakeClient()
-    fake.ask = _FakeAsk(None)
-
-    def _raise(vid, *, message, language=""):
-        raise LenzAuthError(message="Verification not found.", status_code=404)
-
-    fake.ask.send = _raise
-    _patch_client(monkeypatch, fake)
-    result = runner.invoke(app, ["--json", "ask", "435100acc5464911", "what else?"])
-    assert result.exit_code == 1
-    err = json.loads(result.stdout)["error"]
-    assert err["code"] == "not_found"
-    assert "verification_id" in err["message"]
-    assert "task_id" in err["message"]
 
 
 # ── verify lifecycle ────────────────────────────────────────────────────────

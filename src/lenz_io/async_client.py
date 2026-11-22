@@ -74,7 +74,6 @@ from ._core import (
     _after_response,
     _after_transport_error,
     _already_deleted,
-    _ask_payload,
     _assess_payload,
     _async_user_agent,
     _batch_payload,
@@ -146,8 +145,6 @@ from ._shared import (
 )
 from .errors import LenzError, LenzUsageError
 from .models import (
-    AskHistory,
-    AskReply,
     AssessResponse,
     BatchAccepted,
     BatchItemResult,
@@ -367,121 +364,6 @@ class _AsyncVerificationsNamespace:
         return True
 
 
-class _AsyncAskNamespace:
-    """``client.ask.{history,send,reset}``.
-
-    The endpoint moved from ``/verifications/{id}/follow-up`` to a flat
-    ``/ask/{id}`` server-side; this namespace tracks the new URL shape.
-    """
-
-    def __init__(self, parent: AsyncLenz) -> None:
-        self._p = parent
-
-    async def history(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskHistory:
-        """The follow-up conversation on a verification.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.history()")
-        vid = _segment(verification_id, "ask.history() needs a verification_id.", "verification_id")
-        body = await self._p._request("GET", f"/ask/{vid}", options=options)
-        return AskHistory.model_validate(body, context=self._p._results)
-
-    async def send(
-        self,
-        verification_id: str,
-        *,
-        message: str,
-        language: str = "",
-        idempotency_key: str | None = None,
-        idempotency: bool = True,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> AskReply:
-        """Send a follow-up question on an existing verification.
-
-        A blank ``message`` raises ``LenzUsageError`` (``blank_input``)
-        before sending (since 3.2).
-
-        ``language`` (optional) overrides the claim's stored language for
-        this single reply. Omit to let the server use the claim's
-        ``language`` as default — that's the typical case. ``'auto'`` also
-        answers in the language of the claim being discussed.
-
-        ``idempotency`` (default ``True``): send an ``Idempotency-Key`` so the
-        SDK's own retry after a timeout or network drop replays the first
-        reply instead of asking, and paying for, the question twice, and
-        without appending the question and a second answer to the
-        conversation. The key is random per CALL and reused across that
-        call's own retries only: it protects those, while calling ``send``
-        again (a re-ask, even with the same message) is a new turn with a new
-        key, asked and charged again. Pin your own with ``idempotency_key=`` (it wins) to
-        make a retry from another process replay too, or pass
-        ``idempotency=False`` to send none. A retry that arrives while the
-        first call is still running is answered 409 ``idempotency_conflict``:
-        the SDK sends the same key again within the call's retries, and if it
-        still conflicts raises it with ``retryable=True``. Every error of the
-        call carries the key (``exc.idempotency_key``): resend with it, never
-        as a plain new call, which would ask (and charge) again. (Since 3.0;
-        2.x sent a key only when you passed one.)
-
-        Never derived from the message: asking the same thing again is a
-        normal thing to do here, and each turn also reads the history the
-        previous one wrote, so a key derived from the text would replay a
-        stale answer. A new call is a new key, so it is asked again.
-
-        Paid — see ``await client.usage()``.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.send()")
-        vid = _segment(verification_id, "ask.send() needs a verification_id.", "verification_id")
-        payload = _ask_payload(message, language)
-        key = _call_key(idempotency_key, idempotency)
-        headers = _key_header(key)
-        with _carrying_key(key, unreadable=True):
-            body = await self._p._request(
-                "POST",
-                f"/ask/{vid}",
-                json=payload,
-                headers=headers,
-                options=options,
-            )
-            return AskReply.model_validate(body, context=self._p._results)
-
-    async def reset(
-        self,
-        verification_id: str,
-        *,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> bool:
-        """Clear the follow-up conversation on a verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`AsyncLenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "ask.reset()")
-        vid = _segment(verification_id, "ask.reset() needs a verification_id.", "verification_id")
-        await self._p._request("DELETE", f"/ask/{vid}", options=options)
-        return True
-
-
 class AsyncLenz:
     """Top-level client.
 
@@ -579,10 +461,8 @@ class AsyncLenz:
             timeout=httpx.Timeout(timeout), headers=_default_headers(self._sdk_user_agent)
         )
 
-        # Resource namespaces (Stripe pattern for CRUD on past verifications
-        # and follow-up conversations)
+        # Resource namespaces (Stripe pattern for CRUD on past verifications)
         self.verifications = _AsyncVerificationsNamespace(self)
-        self.ask = _AsyncAskNamespace(self)
 
     # ── lifecycle ──
 
@@ -663,7 +543,6 @@ class AsyncLenz:
         clone._owns_client = False
         clone._options = layer
         clone.verifications = _AsyncVerificationsNamespace(clone)
-        clone.ask = _AsyncAskNamespace(clone)
         return clone
 
     async def __aenter__(self) -> Self:

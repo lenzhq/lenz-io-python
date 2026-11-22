@@ -147,8 +147,6 @@ def endpoint_for(name: str) -> tuple[str, str]:
         return ("POST", "/assess")
     if area == "extract":
         return ("POST", "/extract")
-    if area == "errors" and case.startswith("ask_"):
-        return ("POST", "/ask/v1")
     return ("POST", "/verify")
 
 
