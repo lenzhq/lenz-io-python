@@ -14,6 +14,11 @@ All notable changes to this SDK are documented here. Format follows
 ### Changed
 
 - Docs: `sr` (Serbian, answered in the Latin script) is listed among the supported `language` codes; the API now accepts it. No code change: the SDK sends `language` as given.
+- Citation checks now cover a reference no sentence of the draft cites and a reference with no URL or DOI, so `metadata`, `registered` and `doi_registered` are no longer "set for a DOI only". The docstrings of `ReviewCitationCheck`, `ReviewCitationRecord`, `ReviewCitation`, `ReviewCitationIssue`, `ReviewMoreCitation` and `ReviewSummary.citations_found` say what such a row carries (`cited_url` and `doi` can both be `None`). No model field changed.
+
+### Fixed
+
+- `lenz review`: a "Reference details differ" finding with no listed differences (the page at the reference's address is another work) now prints the page's title under "The page at this address is titled:", instead of the finding with nothing under it.
 
 ### Removed
 

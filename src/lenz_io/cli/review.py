@@ -821,6 +821,12 @@ def _render_citation_issue(out: Output, i: ReviewCitationIssue, total: int) -> N
     elif i.source == "metadata":
         for d in i.metadata_differences:
             _print_text(out, f"Your reference says {d.cited or '(none)'}; the record says {d.registered or '(none)'}.")
+        # No differences listed: the reference was compared with the page at
+        # its own address, not with a registry record, and the page is
+        # another work.
+        if not i.metadata_differences and i.page_title:
+            out.console.print("  [dim]The page at this address is titled:[/dim]")
+            _print_text(out, f"“{i.page_title}”")
     if i.failure is not None:
         hint = i.failure.hint or i.failure.code or "failed"
         out.console.print(f"  [yellow]Part of the check failed:[/yellow] {escape(hint)}")
