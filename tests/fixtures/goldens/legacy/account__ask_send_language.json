@@ -1,8 +1,13 @@
 {
-  "body": {
-    "content": "Porque.",
-    "created_at": "<created_at#1:ts:+00:00:us>",
-    "role": "expert"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "role": "expert",
+    "content": "Porque.",
+    "created_at": "<created_at#1:ts:+00:00:us>"
+  }
 }

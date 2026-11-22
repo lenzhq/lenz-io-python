@@ -254,8 +254,6 @@ class TestVerify:
                     "claim": "",
                     "identified_claims": [],
                     "candidate_claims": [],
-                    "domain": "",
-                    "key_entities": [],
                     "presumed_intent": "Raise a Series A round from investors.",
                     "original_input": "...",
                 },
@@ -273,7 +271,6 @@ class TestVerify:
                     "status": "multi_claim",
                     "claim": "The earth is flat.",
                     "identified_claims": ["The earth is flat.", "Coffee causes cancer."],
-                    "domain": "Science",
                     "original_input": "...",
                 },
             )
@@ -1094,7 +1091,7 @@ class TestVerifyAndWait:
                     "status": "needs_input",
                     "reason": "multi_claim",
                     "hint": "The input holds two distinct claims. Pick the one to verify via /select.",
-                    "claims": [{"text": "A", "domain": "X"}, {"text": "B", "domain": "Y"}],
+                    "claims": [{"text": "A"}, {"text": "B"}],
                 },
             )
             with pytest.raises(LenzNeedsInputError) as ei:
@@ -1863,7 +1860,7 @@ class TestSuggestedRewriteOnListItems:
         return {"items": list(items), "total": len(items), "page": 1, "page_size": 20}
 
     def _row(self, vid, **extra):
-        return {"verification_id": vid, "claim": "x", "domain": "", "language": "en", **extra}
+        return {"verification_id": vid, "claim": "x", "language": "en", **extra}
 
     def test_verifications_list_rows_parse_present_null_and_absent(self, client):
         with respx.mock(base_url=DEFAULT_BASE) as r:

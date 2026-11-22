@@ -1817,7 +1817,7 @@ With `legacy_aliases=False`:
 **A field sent as `null`** (since 3.2). A few optional fields keep a 3.x
 type without `None` (`AssessClaim.verdict` / `confidence` / `error_code` /
 `hint`, `AssessResponse.error` / `error_code`, `CandidateClaim.text`,
-`EntityRef.name`, `TaskStatus.reason` / `hint` / `progress` / `claims` /
+`TaskStatus.reason` / `hint` / `progress` / `claims` /
 `docs_url` / `error` / `failure_class` / `failure_reason`, `Usage.verify` /
 `ask` / `assess`), and the API may send them as `null` (a stored replay, a
 value it has none of). That is read as if the field were not sent: its 3.x
@@ -1829,7 +1829,7 @@ These keep their 3.x annotations (`str`, `int`, `UsageCapacity`, `Progress`,
 `Usage` aliases, and every field the API can send as `null`
 (`AssessClaim.verdict` / `confidence` / `error_code` / `hint`,
 `AssessResponse.error` / `error_code`, `CandidateClaim.text`,
-`EntityRef.name`, `TaskStatus.reason` / `hint` / `progress` / `claims` /
+`TaskStatus.reason` / `hint` / `progress` / `claims` /
 `docs_url` / `error` / `failure_class` / `failure_reason`, `Usage.verify` /
 `ask` / `assess`). With the default `legacy_aliases=True` a failed `assess`
 row with a `null` verdict reads `verdict == "Error"` and `confidence == "low"`,

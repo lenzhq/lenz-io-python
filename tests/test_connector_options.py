@@ -202,7 +202,7 @@ _NEEDS_INPUT = {
     "task_id": "t1",
     "reason": "multi_claim",
     "hint": "Pick one.",
-    "claims": [{"claim": "One.", "domain": "x"}, {"claim": "Two.", "domain": "y"}],
+    "claims": [{"claim": "One."}, {"claim": "Two."}],
 }
 _FAILED_STATUS = {
     "status": "failed",

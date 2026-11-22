@@ -3,8 +3,6 @@
   "claim": "The company opened a second office in Lisbon last spring.",
   "visibility": "private",
   "depth": "standard",
-  "domain": "General",
-  "entities": [],
   "presumed_intent": "verify",
   "verdict": "No Public Record",
   "confidence": "low",

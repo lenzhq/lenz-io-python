@@ -1,8 +1,13 @@
 {
-  "body": {
-    "cancelled": false,
-    "status": "completed",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "task_id": "<task_id#1:hex32>",
+    "cancelled": false,
+    "status": "completed"
+  }
 }

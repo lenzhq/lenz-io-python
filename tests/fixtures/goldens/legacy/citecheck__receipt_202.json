@@ -1,7 +1,14 @@
 {
+  "status": 202,
+  "headers": {
+    "Content-Type": "application/json",
+    "Retry-After": "20",
+    "Location": "/api/v1/citechecks/<review_id#1:hex8>",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
     "citecheck_id": "<citecheck_id#1:hex8>",
     "status": "queued"
-  },
-  "status": 202
+  }
 }

@@ -1,15 +1,20 @@
 {
-  "body": {
-    "failure": {
-      "code": "research_empty",
-      "detail": "No sources about the claim were found.",
-      "docs_url": "https://lenz.io/docs/errors#insufficient-evidence",
-      "failure_class": "insufficient_evidence",
-      "hint": null,
-      "retryable": false
-    },
-    "status": "failed",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>",
+    "failure": {
+      "code": "internal",
+      "detail": "No sources about the claim were found.",
+      "hint": null,
+      "failure_class": "internal",
+      "retryable": false,
+      "docs_url": "https://lenz.io/docs/errors#internal"
+    }
+  }
 }

@@ -1,9 +1,14 @@
 {
-  "body": {
-    "can_send": true,
-    "exchange_limit": 100,
-    "exchanges_used": 0,
-    "messages": []
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "messages": [],
+    "exchanges_used": 0,
+    "exchange_limit": 100,
+    "can_send": true
+  }
 }

@@ -330,14 +330,6 @@ def render_verification_full(out: Output, v: Verification | None, *, concise: bo
     _verdict_header(out, v)
     if v.claim:
         out.console.print(f"\n[bold]Claim[/bold]  {v.claim}")
-    meta = []
-    if v.domain:
-        meta.append(v.domain)
-    names = [e.name for e in v.entities if e.name]
-    if names:
-        meta.append(", ".join(names))
-    if meta:
-        out.console.print(f"[dim]{'  •  '.join(meta)}[/dim]")
     if v.key_finding:
         out.console.print(f"\n[bold]{v.key_finding}[/bold]")
     _suggested_rewrite_line(out, v, gap=not v.key_finding)

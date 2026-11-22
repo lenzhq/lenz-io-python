@@ -108,7 +108,6 @@ def test_every_golden_body_reads(version: str, name: str, legacy_aliases: bool) 
 
 _NULLS = [
     ("CandidateClaim", {"claim": "A.", "text": None}, "text", ""),
-    ("EntityRef", {"name": None}, "name", ""),
     ("AssessClaim", {"claim": "A.", "verdict": None, "confidence": None}, "confidence", "low"),
     ("AssessResponse", {"claims": [], "error": None, "error_code": None}, "error_code", ""),
     ("TaskStatus", {"status": "processing", "task_id": "t", "reason": None, "hint": None}, "hint", ""),

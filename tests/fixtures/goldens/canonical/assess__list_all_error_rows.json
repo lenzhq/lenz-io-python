@@ -1,52 +1,57 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
+    "status": "no_checkable_claim",
     "claims": [
       {
         "claim": "hi",
+        "language": "en",
+        "status": "failed",
+        "verdict": null,
         "confidence": null,
+        "verification_url": null,
+        "rationale": null,
         "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
         "failure": {
           "code": "no_checkable_claim",
           "detail": "No claim in the input could be checked against public evidence.",
-          "docs_url": "https://lenz.io/docs/errors#invalid-input",
-          "failure_class": "invalid_input",
           "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
-          "retryable": false
-        },
-        "language": "en",
-        "more_claims": [],
-        "rationale": null,
-        "searched_pages": [],
-        "status": "failed",
-        "suggested_rewrite": null,
-        "verdict": null,
-        "verification_url": null
+          "failure_class": "invalid_input",
+          "retryable": false,
+          "docs_url": "https://lenz.io/docs/errors#invalid-input"
+        }
       },
       {
         "claim": "hello",
+        "language": "en",
+        "status": "failed",
+        "verdict": null,
         "confidence": null,
+        "verification_url": null,
+        "rationale": null,
         "dissent": null,
+        "searched_pages": [],
+        "suggested_rewrite": null,
+        "more_claims": [],
         "failure": {
           "code": "no_checkable_claim",
           "detail": "No claim in the input could be checked against public evidence.",
-          "docs_url": "https://lenz.io/docs/errors#invalid-input",
-          "failure_class": "invalid_input",
           "hint": "The input is a greeting. Send one factual claim, or run the text through /extract to enumerate its claims.",
-          "retryable": false
-        },
-        "language": "en",
-        "more_claims": [],
-        "rationale": null,
-        "searched_pages": [],
-        "status": "failed",
-        "suggested_rewrite": null,
-        "verdict": null,
-        "verification_url": null
+          "failure_class": "invalid_input",
+          "retryable": false,
+          "docs_url": "https://lenz.io/docs/errors#invalid-input"
+        }
       }
     ],
     "failure": null,
-    "more_claims": [],
-    "status": "no_checkable_claim"
-  },
-  "status": 200
+    "more_claims": []
+  }
 }

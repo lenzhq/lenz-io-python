@@ -1,61 +1,66 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
-    "ask": {
+    "plan": "pro",
+    "plan_label": "Pro",
+    "quota_resets_at": "<quota_resets_at#1:ts:+00:00:us>",
+    "credits": {
+      "total": 6000,
+      "used": 0,
+      "remaining": 6000,
+      "extra": 1000,
       "bonus": 1000,
-      "credits": 1000,
-      "quota_remaining": 6000,
-      "quota_total": 6000,
-      "quota_used": 0,
-      "remaining": 6000
+      "resets_at": "<resets_at#1:ts:+00:00:us>"
     },
-    "assess": {
-      "bonus": 1000,
-      "credits": 1000,
-      "quota_remaining": 6000,
-      "quota_total": 6000,
-      "quota_used": 0,
-      "remaining": 6000
+    "costs": {
+      "verify": 10,
+      "assess": 1,
+      "ask": 1,
+      "citation": 1,
+      "extract": 0
     },
     "cost_options": {
       "verify": {
         "depth": {
-          "low": 5,
-          "standard": 10
+          "standard": 10,
+          "low": 5
         }
       }
     },
-    "costs": {
-      "ask": 1,
-      "assess": 1,
-      "citation": 1,
-      "extract": 0,
-      "verify": 10
+    "verify": {
+      "quota_used": 0,
+      "quota_total": 600,
+      "quota_remaining": 600,
+      "bonus": 100,
+      "credits": 100,
+      "remaining": 600
     },
-    "credits": {
+    "ask": {
+      "quota_used": 0,
+      "quota_total": 6000,
+      "quota_remaining": 6000,
       "bonus": 1000,
-      "extra": 1000,
-      "remaining": 6000,
-      "resets_at": "<resets_at#1:ts:+00:00:us>",
-      "total": 6000,
-      "used": 0
+      "credits": 1000,
+      "remaining": 6000
+    },
+    "assess": {
+      "quota_used": 0,
+      "quota_total": 6000,
+      "quota_remaining": 6000,
+      "bonus": 1000,
+      "credits": 1000,
+      "remaining": 6000
     },
     "extract": {
       "calls_today": 0,
       "daily_limit": 1000,
       "unlimited": false
     },
-    "has_webhook_secret": false,
-    "plan": "pro",
-    "plan_label": "Pro",
-    "quota_resets_at": "<quota_resets_at#1:ts:+00:00:us>",
-    "verify": {
-      "bonus": 100,
-      "credits": 100,
-      "quota_remaining": 600,
-      "quota_total": 600,
-      "quota_used": 0,
-      "remaining": 600
-    }
-  },
-  "status": 200
+    "has_webhook_secret": false
+  }
 }

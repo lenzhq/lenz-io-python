@@ -1,13 +1,18 @@
 {
-  "body": {
-    "docs_url": "https://lenz.io/docs/errors#invalid-input",
-    "error": "Not a verifiable claim.",
-    "failure_class": "invalid_input",
-    "failure_reason": "not_a_claim",
-    "hint": "The input is a greeting, not a statement that can be checked. Send one factual claim, or run the text through /extract to enumerate its claims.",
-    "retryable": false,
-    "status": "failed",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "status": "failed",
+    "task_id": "<task_id#1:hex32>",
+    "error": "Not a verifiable claim.",
+    "failure_reason": "not_a_claim",
+    "failure_class": "invalid_input",
+    "retryable": false,
+    "docs_url": "https://lenz.io/docs/errors#invalid-input",
+    "hint": "The input is a greeting, not a statement that can be checked. Send one factual claim, or run the text through /extract to enumerate its claims."
+  }
 }

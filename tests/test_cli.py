@@ -33,7 +33,6 @@ from lenz_io.models import (
     BatchAccepted,
     CandidateClaim,
     DebateSide,
-    EntityRef,
     ExtractedClaims,
     Source,
     TaskAccepted,
@@ -675,9 +674,7 @@ def test_extract_pretty_renders_atomic_claim():
 
     extracted = ExtractedClaims.model_validate(
         {
-            "domain": "History",
             "claims": [{"claim": "Einstein won the 1921 Nobel Prize in Physics."}],
-            "key_entities": [{"name": "Albert Einstein", "type": "person"}],
         }
     )
     buf = io.StringIO()
@@ -702,7 +699,6 @@ def test_extract_pretty_multi_claim_includes_primary():
 
     extracted = ExtractedClaims.model_validate(
         {
-            "domain": "Science",
             "claims": [{"claim": "The Earth is flat."}, {"claim": "Ruby is harder than diamond."}],
         }
     )
@@ -1486,8 +1482,6 @@ def _full_verification():
     return Verification(
         verification_id="ab12cd34",
         claim="The Earth is flat.",
-        domain="Science",
-        entities=[EntityRef(name="Earth")],
         verdict="False",
         confidence="high",
         lenz_score=1,

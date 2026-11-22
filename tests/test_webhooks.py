@@ -105,7 +105,7 @@ class TestLenzWebhooks:
     def test_parse_needs_input_event(self):
         body = _payload(
             "verification.needs_input",
-            needs_input={"reason": "multi_claim", "claims": [{"text": "A", "domain": "x"}]},
+            needs_input={"reason": "multi_claim", "claims": [{"text": "A"}]},
         )
         wh = LenzWebhooks(secret=SECRET)
         event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})
@@ -117,7 +117,7 @@ class TestLenzWebhooks:
         hint = "The input holds two distinct claims. Pick the one to verify via /select."
         body = _payload(
             "verification.needs_input",
-            needs_input={"reason": "multi_claim", "claims": [{"text": "A", "domain": "x"}], "hint": hint},
+            needs_input={"reason": "multi_claim", "claims": [{"text": "A"}], "hint": hint},
         )
         wh = LenzWebhooks(secret=SECRET)
         event = wh.parse(body, {"X-Lenz-Signature": _sign(body)})

@@ -131,8 +131,6 @@
         "language": "en",
         "visibility": "private",
         "depth": "standard",
-        "domain": "",
-        "entities": [],
         "verdict": "False",
         "confidence": "high",
         "lenz_score": 2,

@@ -1,19 +1,12 @@
 {
   "verification_id": "a1b2c3d4",
-  "claim": "Water boils at 100\u00b0C at sea level.",
-  "domain": "Science",
-  "entities": [
-    {
-      "name": "Water",
-      "qid": "Q283"
-    }
-  ],
+  "claim": "Water boils at 100°C at sea level.",
   "presumed_intent": "Verify a factual claim",
   "verdict": "True",
   "confidence": "high",
   "lenz_score": 10,
-  "key_finding": "Water boils at 100\u00b0C at standard atmospheric pressure.",
-  "executive_summary": "At standard atmospheric pressure, water boils at exactly 100\u00b0C.",
+  "key_finding": "Water boils at 100°C at standard atmospheric pressure.",
+  "executive_summary": "At standard atmospheric pressure, water boils at exactly 100°C.",
   "warnings": [],
   "suggested_rewrite": null,
   "sources": [
@@ -21,7 +14,7 @@
       "source_name": "NIST",
       "title": "Phase Transitions of Water",
       "url": "https://www.nist.gov/water-boiling",
-      "snippet": "At 1 atm pressure water boils at 100.00\u00b0C (373.15 K).",
+      "snippet": "At 1 atm pressure water boils at 100.00°C (373.15 K).",
       "date": "2024-01-15"
     }
   ],

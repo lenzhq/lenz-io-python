@@ -1,7 +1,12 @@
 {
-  "body": {
-    "status": "queued",
-    "task_id": "<task_id#1:hex32>"
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
   },
-  "status": 200
+  "body": {
+    "task_id": "<task_id#1:hex32>",
+    "status": "queued"
+  }
 }

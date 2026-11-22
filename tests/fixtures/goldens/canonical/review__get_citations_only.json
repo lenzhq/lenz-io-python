@@ -1,156 +1,161 @@
 {
+  "status": 200,
+  "headers": {
+    "Content-Type": "application/json",
+    "Cache-Control": "no-store",
+    "Vary": "origin"
+  },
   "body": {
-    "citation_failures": [],
-    "citation_issues": [],
-    "citations": [
-      {
-        "check": {
-          "doi_registered": null,
-          "failure": null,
-          "hint": null,
-          "metadata": null,
-          "metadata_differences": [],
-          "missing_quote": null,
-          "page_language": "en",
-          "page_published_date": null,
-          "page_read": "full",
-          "page_title": "Page at https://example.gov/report-2024",
-          "quote": null,
-          "rationale": "The page states it.",
-          "registered": null,
-          "snippet": "The source says so.",
-          "source_url": "https://example.gov/report-2024",
-          "source_version": null,
-          "status": "completed",
-          "support": "supported",
-          "unchecked_reason": null
-        },
-        "cited_url": "https://example.gov/report-2024",
-        "doi": null,
-        "index": 0,
-        "position": {
-          "end": 110,
-          "start": 0,
-          "text": null
-        },
-        "quotes": [],
-        "reference": "a report from the ministry",
-        "result": {
-          "finding": "supported",
-          "is_issue": false,
-          "source": "support"
-        },
-        "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry."
-      },
-      {
-        "check": {
-          "doi_registered": null,
-          "failure": null,
-          "hint": null,
-          "metadata": null,
-          "metadata_differences": [],
-          "missing_quote": null,
-          "page_language": "en",
-          "page_published_date": null,
-          "page_read": "full",
-          "page_title": "Page at https://example.org/statement",
-          "quote": null,
-          "rationale": "The page states it.",
-          "registered": null,
-          "snippet": "The source says so.",
-          "source_url": "https://example.org/statement",
-          "source_version": null,
-          "status": "completed",
-          "support": "supported",
-          "unchecked_reason": null
-        },
-        "cited_url": "https://example.org/statement",
-        "doi": null,
-        "index": 1,
-        "position": {
-          "end": 178,
-          "start": 111,
-          "text": null
-        },
-        "quotes": [],
-        "reference": "a statement",
-        "result": {
-          "finding": "supported",
-          "is_issue": false,
-          "source": "support"
-        },
-        "statement": "The agency said so in a statement."
-      }
-    ],
-    "claims": [],
-    "completed_at": "<completed_at#3:ts:Z:us>",
+    "review_id": "<review_id#1:hex8>",
+    "view": "full",
+    "status": "completed",
+    "outcome": "clean",
     "created_at": "<created_at#2:ts:Z:us>",
+    "completed_at": "<completed_at#3:ts:Z:us>",
+    "language": "en",
+    "policy": {
+      "verdicts": [
+        "False",
+        "Mostly False",
+        "Mixed",
+        "No Public Record"
+      ],
+      "confidence": [
+        "low"
+      ],
+      "max_assessments": 0,
+      "max_verifications": 5,
+      "depth": "standard",
+      "max_citations": 20,
+      "suggest_edits": false
+    },
+    "summary": {
+      "claims_found": 1,
+      "claims_selected": 0,
+      "claim_limit": 0,
+      "claim_limit_exceeded": true,
+      "input_truncated": false,
+      "assessments": {
+        "completed": 0,
+        "failed": 0
+      },
+      "verifications": {
+        "planned": 0,
+        "completed": 0,
+        "failed": 0
+      },
+      "issues": 0,
+      "citations_found": 2,
+      "citations_selected": 2,
+      "citation_limit": 20,
+      "citation_limit_exceeded": false,
+      "citation_checks": {
+        "checked": 2,
+        "unchecked": 0,
+        "failed": 0
+      },
+      "citation_issues": 0,
+      "citations_skipped": null
+    },
     "credits": {
       "charged": 2
     },
-    "failure": null,
-    "failures": [],
+    "poll_after_seconds": null,
     "issues": [],
-    "language": "en",
-    "more_citations": [],
+    "failures": [],
+    "citation_issues": [],
+    "citation_failures": [],
+    "claims": [],
+    "citations": [
+      {
+        "index": 0,
+        "reference": "a report from the ministry",
+        "cited_url": "https://example.gov/report-2024",
+        "doi": null,
+        "statement": "Unemployment fell to 4.1% in 2024, according to a report from the ministry.",
+        "quotes": [],
+        "position": {
+          "start": 0,
+          "end": 110,
+          "text": null
+        },
+        "result": {
+          "finding": "supported",
+          "source": "support",
+          "is_issue": false
+        },
+        "check": {
+          "status": "completed",
+          "page_read": "full",
+          "page_title": "Page at https://example.gov/report-2024",
+          "page_published_date": null,
+          "page_language": "en",
+          "source_url": "https://example.gov/report-2024",
+          "source_version": null,
+          "support": "supported",
+          "snippet": "The source says so.",
+          "rationale": "The page states it.",
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      },
+      {
+        "index": 1,
+        "reference": "a statement",
+        "cited_url": "https://example.org/statement",
+        "doi": null,
+        "statement": "The agency said so in a statement.",
+        "quotes": [],
+        "position": {
+          "start": 111,
+          "end": 178,
+          "text": null
+        },
+        "result": {
+          "finding": "supported",
+          "source": "support",
+          "is_issue": false
+        },
+        "check": {
+          "status": "completed",
+          "page_read": "full",
+          "page_title": "Page at https://example.org/statement",
+          "page_published_date": null,
+          "page_language": "en",
+          "source_url": "https://example.org/statement",
+          "source_version": null,
+          "support": "supported",
+          "snippet": "The source says so.",
+          "rationale": "The page states it.",
+          "quote": null,
+          "doi_registered": null,
+          "metadata": null,
+          "metadata_differences": [],
+          "registered": null,
+          "unchecked_reason": null,
+          "hint": null,
+          "failure": null,
+          "missing_quote": null
+        }
+      }
+    ],
+    "failure": null,
+    "more_claims": [
+      "The EU AI Act took effect in March 2024."
+    ],
     "more_claim_locations": [
       {
         "claim": "The EU AI Act took effect in March 2024.",
         "positions": null
       }
     ],
-    "more_claims": [
-      "The EU AI Act took effect in March 2024."
-    ],
-    "outcome": "clean",
-    "policy": {
-      "confidence": [
-        "low"
-      ],
-      "depth": "standard",
-      "max_assessments": 0,
-      "max_citations": 20,
-      "max_verifications": 5,
-      "suggest_edits": false,
-      "verdicts": [
-        "False",
-        "Mostly False",
-        "Mixed",
-        "No Public Record"
-      ]
-    },
-    "poll_after_seconds": null,
-    "review_id": "<review_id#1:hex8>",
-    "status": "completed",
-    "summary": {
-      "assessments": {
-        "completed": 0,
-        "failed": 0
-      },
-      "citation_checks": {
-        "checked": 2,
-        "failed": 0,
-        "unchecked": 0
-      },
-      "citation_issues": 0,
-      "citation_limit": 20,
-      "citation_limit_exceeded": false,
-      "citations_found": 2,
-      "citations_selected": 2,
-      "citations_skipped": null,
-      "claim_limit": 0,
-      "claim_limit_exceeded": true,
-      "claims_found": 1,
-      "claims_selected": 0,
-      "input_truncated": false,
-      "issues": 0,
-      "verifications": {
-        "completed": 0,
-        "failed": 0,
-        "planned": 0
-      }
-    },
-    "view": "full"
-  },
-  "status": 200
+    "more_citations": []
+  }
 }

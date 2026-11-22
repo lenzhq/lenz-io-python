@@ -18,7 +18,6 @@ BASE = "https://lenz.io/api/v1"
 
 _MOCK_EXTRACT = {
     "status": "ready",
-    "domain": "finance",
     "claims": [
         {
             "claim": "Revenue reached $10M in Q3.",
