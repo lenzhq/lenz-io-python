@@ -76,9 +76,3 @@ async def test_cancel_on_abort_stops_the_run(client: AsyncLenz) -> None:
         await asyncio.wait_for(client.wait(started.task_id, cancel_on_abort=True), timeout=2)
     status = await client.get_status(started.task_id)
     assert status.status in ("cancelled", "completed", "failed")
-
-
-async def test_library_iter_first_item(client: AsyncLenz) -> None:
-    async for item in client.library.iter():
-        assert item.verification_id
-        break

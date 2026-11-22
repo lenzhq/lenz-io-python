@@ -98,14 +98,6 @@ class TestEmptyApiKey:
                 c.usage()
         assert route.call_count == 0
 
-    def test_an_empty_key_still_reads_the_public_library_without_a_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setenv("LENZ_API_KEY", "lenz_env_key")
-        with respx.mock(base_url=BASE) as r:
-            route = r.get("/library").respond(200, json={"items": [], "total": 0, "page": 1, "page_size": 20})
-            with make_client(api_key="") as c:
-                c.library.list()
-        assert "Authorization" not in route.calls.last.request.headers
-
     def test_an_omitted_key_still_reads_the_environment(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("LENZ_API_KEY", "lenz_env_key")
         with respx.mock(base_url=BASE) as r:

@@ -3883,244 +3883,6 @@
   "requests": [],
   "sleeps": []
  },
- "library_iter": {
-  "outcome": {
-   "result": [
-    "LibraryItem",
-    "LibraryItem"
-   ]
-  },
-  "requests": [
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=x&domain=&entity="
-   },
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/library?page=2&sort=recent&search=x&domain=&entity="
-   }
-  ],
-  "sleeps": []
- },
- "library_iter_random": {
-  "outcome": {
-   "code": "invalid_argument",
-   "error": "LenzUsageError",
-   "idempotency_key": null,
-   "message": "iter cannot walk sort=\"random\" (each page is a fresh sample); call library.list instead.",
-   "status_code": null
-  },
-  "requests": [],
-  "sleeps": []
- },
- "library_iter_short_page": {
-  "outcome": {
-   "result": [
-    "LibraryItem"
-   ]
-  },
-  "requests": [
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=&domain=&entity=&curated=trivia"
-   }
-  ],
-  "sleeps": []
- },
- "library_list": {
-  "outcome": {
-   "result": "LibraryList"
-  },
-  "requests": [
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=&domain=&entity="
-   }
-  ],
-  "sleeps": []
- },
- "library_list_filters": {
-  "outcome": {
-   "result": "LibraryList"
-  },
-  "requests": [
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/library?page=2&sort=most_true&search=x&domain=&entity=&curated=trivia&verdict=True"
-   }
-  ],
-  "sleeps": []
- },
  "max_retries_0_503": {
   "outcome": {
    "code": "",
@@ -4639,8 +4401,8 @@
  "options_on_iter": {
   "outcome": {
    "result": [
-    "LibraryItem",
-    "LibraryItem"
+    "VerificationListItem",
+    "VerificationListItem"
    ]
   },
   "requests": [
@@ -4673,6 +4435,10 @@
       "1"
      ],
      [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4684,7 +4450,7 @@
      "read": 9,
      "write": 3
     },
-    "url": "https://lenz.io/api/v1/library?page=1&sort=recent&search=&domain=&entity="
+    "url": "https://lenz.io/api/v1/verifications?page=1"
    },
    {
     "at": 0.0,
@@ -4715,6 +4481,10 @@
       "1"
      ],
      [
+      "Authorization",
+      "Bearer lenz_00000000000000000000000000000000"
+     ],
+     [
       "X-Lenz-API-Version",
       "2026-10-11"
      ]
@@ -4726,7 +4496,7 @@
      "read": 9,
      "write": 3
     },
-    "url": "https://lenz.io/api/v1/library?page=2&sort=recent&search=&domain=&entity="
+    "url": "https://lenz.io/api/v1/verifications?page=2"
    }
   ],
   "sleeps": []
@@ -11974,56 +11744,6 @@
      "write": 30.0
     },
     "url": "https://lenz.io/api/v1/verifications?page=2"
-   }
-  ],
-  "sleeps": []
- },
- "verifications_related": {
-  "outcome": {
-   "result": "RelatedVerifications"
-  },
-  "requests": [
-   {
-    "at": 0.0,
-    "body": "",
-    "headers": [
-     [
-      "Host",
-      "lenz.io"
-     ],
-     [
-      "Accept-Encoding",
-      "<httpx default>"
-     ],
-     [
-      "Connection",
-      "keep-alive"
-     ],
-     [
-      "User-Agent",
-      "<sdk user agent>"
-     ],
-     [
-      "Accept",
-      "application/json"
-     ],
-     [
-      "Authorization",
-      "Bearer lenz_00000000000000000000000000000000"
-     ],
-     [
-      "X-Lenz-API-Version",
-      "2026-10-11"
-     ]
-    ],
-    "method": "GET",
-    "timeout": {
-     "connect": 30.0,
-     "pool": 30.0,
-     "read": 30.0,
-     "write": 30.0
-    },
-    "url": "https://lenz.io/api/v1/verifications/v1/related?limit=3"
    }
   ],
   "sleeps": []

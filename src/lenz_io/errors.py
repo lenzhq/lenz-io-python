@@ -236,7 +236,6 @@ class LenzMissingKeyError(LenzAuthError):
     ``with_options`` copy) was given no key (``api_key=None`` with no
     ``LENZ_API_KEY``, or an empty or whitespace-only key). Raised before
     anything is sent, so ``status_code`` is 0 and ``retryable`` is ``None``.
-    The public library (``library.list`` / ``library.iter``) needs no key.
 
     A subclass of :class:`LenzAuthError`, so an ``except LenzAuthError``
     catches it too. A key that cannot be sent is :class:`LenzInvalidKeyError`;
@@ -638,7 +637,7 @@ class LenzGoneError(LenzError):
     ``verifications.get_certificate``.
 
     Raised by ``verifications.get``, ``get_status`` on a completed task,
-    ``verifications.related``, ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
+    ``ask.send`` and ``ask.history``. ``wait`` raises it at once instead
     of polling to the deadline. A 404 is :class:`LenzNotFoundError`: only an
     id you could read before answers 410.
     """

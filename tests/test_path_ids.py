@@ -74,7 +74,6 @@ CALLS: list[tuple[str, Callable[[Lenz, str], Any], str, str]] = [
         "/verifications/{}/certificate",
     ),
     ("verifications.delete", lambda c, i: c.verifications.delete(i), "DELETE", "/verifications/{}"),
-    ("verifications.related", lambda c, i: c.verifications.related(i), "GET", "/verifications/{}/related"),
     ("ask.history", lambda c, i: c.ask.history(i), "GET", "/ask/{}"),
     ("ask.send", lambda c, i: c.ask.send(i, message="Why?", idempotency=False), "POST", "/ask/{}"),
     ("ask.reset", lambda c, i: c.ask.reset(i), "DELETE", "/ask/{}"),

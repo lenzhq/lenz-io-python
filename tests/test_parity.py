@@ -389,6 +389,8 @@ def test_model_schemas_match_the_previous_release() -> None:
     # Models added since the frozen release, which the new fields reference:
     # they appear in a schema's ``$defs`` only through those fields.
     models_since_frozen = {"SearchedPage"}
+    retired_since_frozen = {"similar_claims"}
+    retired_models = {"RelatedVerifications", "SimilarVerification"}
 
     def _shape(schema: Any) -> Any:
         # Doc text (class docstrings) and deprecation markers may change; the
@@ -396,20 +398,22 @@ def test_model_schemas_match_the_previous_release() -> None:
         if isinstance(schema, dict):
             return {
                 k: _shape(
-                    {n: p for n, p in v.items() if n not in added_since_frozen}
+                    {n: p for n, p in v.items() if n not in added_since_frozen and n not in retired_since_frozen}
                     if k == "properties"
-                    else {n: d for n, d in v.items() if n not in models_since_frozen}
+                    else {n: d for n, d in v.items() if n not in models_since_frozen and n not in retired_models}
                     if k == "$defs"
                     else v
                 )
                 for k, v in schema.items()
-                if k not in ("description", "deprecated") and not (k == "$defs" and not set(v) - models_since_frozen)
+                if k not in ("description", "deprecated")
+                and not (k == "$defs" and not set(v) - models_since_frozen - retired_models)
             }
         if isinstance(schema, list):
             return [_shape(v) for v in schema]
         return schema
 
-    frozen = _shape(json.loads((FIXTURES / "schemas.json").read_text()))
+    raw_frozen = json.loads((FIXTURES / "schemas.json").read_text())
+    frozen = _shape({k: v for k, v in raw_frozen.items() if k.split(":")[0] not in retired_models})
     current = _shape(schemas())
     for key, schema in current.items():
         for gone in added_to_models.get(key.split(":")[0], ()):

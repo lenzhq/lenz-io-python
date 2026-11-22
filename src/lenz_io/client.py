@@ -50,7 +50,6 @@ the supporting reads):
     client.verifications.list()
     client.verifications.get(id) / delete(id)
     client.ask.history(id) / send(id, message=...) / reset(id)
-    client.library.list()
     client.usage()
 
 Naming: ``text`` is a document, ``claim`` is a claim. ``extract`` takes
@@ -80,7 +79,6 @@ Design decisions:
 
 from __future__ import annotations
 
-import builtins
 import copy
 import logging
 import time
@@ -145,7 +143,6 @@ from ._core import (
     _check_assess_forms as _check_assess_forms,
     _check_headers as _check_headers,
     _check_legacy_aliases as _check_legacy_aliases,
-    _check_library_iter_sort as _check_library_iter_sort,
     _check_page_size as _check_page_size,
     _check_retries as _check_retries,
     _check_served_version as _check_served_version,
@@ -171,7 +168,6 @@ from ._core import (
     _job_key as _job_key,
     _json_or_none as _json_or_none,
     _key_header as _key_header,
-    _library_params as _library_params,
     _merge_headers as _merge_headers,
     _names_the_job as _names_the_job,
     _no_key as _no_key,
@@ -252,10 +248,7 @@ from .models import (
     CitecheckStarted as CitecheckStarted,
     ExtractedClaims as ExtractedClaims,
     FailureBlock as FailureBlock,
-    LibraryItem as LibraryItem,
-    LibraryList as LibraryList,
     Progress as Progress,
-    RelatedVerifications as RelatedVerifications,
     Result as Result,
     ReviewExport as ReviewExport,
     ReviewExportFormat as ReviewExportFormat,
@@ -264,7 +257,6 @@ from .models import (
     ReviewList as ReviewList,
     ReviewListItem as ReviewListItem,
     ReviewStarted as ReviewStarted,
-    SimilarVerification as SimilarVerification,
     Source as Source,
     SuggestedEdit as SuggestedEdit,
     SuggestedEdits as SuggestedEdits,
@@ -289,7 +281,7 @@ _Job = TypeVar("_Job", ReviewFull, Citecheck)
 
 
 class _VerificationsNamespace:
-    """``client.verifications.{list,get,delete,related}``."""
+    """``client.verifications.{list,get,delete}``."""
 
     def __init__(self, parent: Lenz) -> None:
         self._p = parent
@@ -441,42 +433,6 @@ class _VerificationsNamespace:
         self._p._recovering(_already_deleted, "DELETE", f"/verifications/{vid}", options=options)
         return True
 
-    def related(
-        self,
-        verification_id: str,
-        *,
-        limit: int = 5,
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> RelatedVerifications:
-        """Return public verifications semantically related to this one.
-
-        Server caps ``limit`` to 10. Empty list when the verification has
-        no embedding yet or no claim is close enough. Excludes the
-        verification itself and editorially-hidden claims. Keyless like the
-        library/detail reads; a key additionally unlocks the caller's own
-        verifications. Accessible for
-        any verification the caller owns (any visibility) or any public
-        library item.
-
-        Raises :class:`LenzGoneError` (HTTP 410) when the account's retention period has removed the verification.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "verifications.related()")
-        vid = _segment(verification_id, "verifications.related() needs a verification_id.", "verification_id")
-        body = self._p._request(
-            "GET",
-            f"/verifications/{vid}/related",
-            params={"limit": limit},
-            auth_required=False,
-            auth_optional=True,  # send the key if we have one → owner sees own rows
-            options=options,
-        )
-        return RelatedVerifications.model_validate(body, context=self._p._results)
-
 
 class _AskNamespace:
     """``client.ask.{history,send,reset}``.
@@ -593,113 +549,10 @@ class _AskNamespace:
         return True
 
 
-class _LibraryNamespace:
-    """``client.library.list()``. Works without an API key.
-
-    The single-item ``library.get()`` was removed when the server merged
-    ``GET /api/v1/library/{id}`` into ``GET /api/v1/verifications/{id}``.
-    Use ``client.verifications.get(id)`` for single-item lookups — it
-    works on a key-less client too (the server accepts an optional
-    Bearer; anon callers see public + non-hidden claims).
-    """
-
-    def __init__(self, parent: Lenz) -> None:
-        self._p = parent
-
-    def list(
-        self,
-        *,
-        page: int = 1,
-        sort: str = "recent",
-        search: str = "",
-        domain: str = "",
-        entity: str = "",
-        curated: list[str] | None = None,
-        verdict: str = "",
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> LibraryList:
-        """List the public verification catalog. Works without an API key.
-
-        ``curated`` restricts to one or more named curated collections, e.g.
-        ``["trivia"]`` (the pool behind the open-source quiz demo). ``verdict``
-        filters by comma-separated labels, e.g. ``"True,False"``. ``sort`` also
-        accepts ``"random"`` alongside ``recent`` / ``most_true`` /
-        ``most_untrue`` / ``relevance``.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``):
-        see :meth:`Lenz.with_options`.
-        """
-        options = _call_options(timeout, max_retries, extra_headers, "library.list()")
-        params = _library_params(
-            page=page, sort=sort, search=search, domain=domain, entity=entity, curated=curated, verdict=verdict
-        )
-        body = self._p._request(
-            "GET",
-            "/library",
-            params=params,
-            auth_required=False,
-            options=options,
-        )
-        return LibraryList.model_validate(body, context=self._p._results)
-
-    def iter(
-        self,
-        *,
-        page: int = 1,
-        sort: str = "recent",
-        search: str = "",
-        domain: str = "",
-        entity: str = "",
-        # ``builtins.list``: in this class body ``list`` is the method above.
-        curated: builtins.list[str] | None = None,
-        verdict: str = "",
-        timeout: float | httpx.Timeout | None = None,
-        max_retries: int | None = None,
-        extra_headers: Mapping[str, str | None] | None = None,
-    ) -> Iterator[LibraryItem]:
-        """Every item of the public catalog that matches the filters (the
-        ones ``list`` takes), page after page from ``page``. Works without an
-        API key.
-
-        Fetches a page only when the items before it have been consumed, reads
-        the page size from each response, and stops after a short or empty
-        page, once the pages read reach the response's ``total``, or when the
-        server answers another page than the one asked for. ``page`` must be
-        1 or more, and ``sort="random"`` raises ``ValueError``: a random order is drawn
-        anew for every page, so walking it neither reaches every item nor
-        avoids repeats (use ``list(sort="random")`` for a sample). Since 3.0.
-
-        Request options (``timeout``, ``max_retries``, ``extra_headers``)
-        apply to every page request, and a bad one raises here, before the
-        first page: see :meth:`Lenz.with_options`.
-        """
-        # Checked and snapshotted now: every page is read with these.
-        options = _call_options(timeout, max_retries, extra_headers, "library.iter()")
-        _check_library_iter_sort(sort)
-        page = _first_page(page)
-        return _walk(
-            lambda n: self.list(
-                page=n,
-                sort=sort,
-                search=search,
-                domain=domain,
-                entity=entity,
-                curated=curated,
-                verdict=verdict,
-                **_given(options),
-            ),
-            page,
-        )
-
-
 class Lenz:
     """Top-level client.
 
-    The constructor accepts ``api_key=None`` so library endpoints work
-    without authentication (sandbox path for developers exploring before
-    sign-up). Auth-required methods on an un-keyed client raise
+    The constructor accepts ``api_key=None``. Auth-required methods on an un-keyed client raise
     ``LenzMissingKeyError`` (a ``LenzAuthError``, since 3.2) with a link to
     ``/api-credentials``, before sending.
 
@@ -782,11 +635,10 @@ class Lenz:
             timeout=httpx.Timeout(timeout), headers=_default_headers(self._sdk_user_agent)
         )
 
-        # Resource namespaces (Stripe pattern for CRUD on past verifications,
-        # follow-up conversations, and the public library)
+        # Resource namespaces (Stripe pattern for CRUD on past verifications
+        # and follow-up conversations)
         self.verifications = _VerificationsNamespace(self)
         self.ask = _AskNamespace(self)
-        self.library = _LibraryNamespace(self)
 
     # ── lifecycle ──
 
@@ -872,7 +724,6 @@ class Lenz:
         clone._options = layer
         clone.verifications = _VerificationsNamespace(clone)
         clone.ask = _AskNamespace(clone)
-        clone.library = _LibraryNamespace(clone)
         return clone
 
     def __enter__(self) -> Self:

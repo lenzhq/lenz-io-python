@@ -186,7 +186,6 @@ _USAGE: list[tuple[str, Callable[[Any], Any], str, str | None]] = [
     ("ctor legacy", lambda c: make_client(api_key=KEY, legacy_aliases=1), "invalid_option", "legacy_aliases"),
     ("view", lambda c: c.get_review("r1", view="x"), "invalid_argument", "view"),
     ("selector", lambda c: c.review("Draft.", verdicts="False"), "invalid_argument", "verdicts"),
-    ("random iter", lambda c: next(iter(c.library.iter(sort="random"))), "invalid_argument", "sort"),
 ]
 
 

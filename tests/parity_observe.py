@@ -161,8 +161,6 @@ def _model_for(name: str) -> Any:
         return models.AssessResponse
     if area == "account" and case.startswith("me_usage"):
         return models.Usage
-    if area == "account" and case.startswith("library"):
-        return models.LibraryList
     if area == "review":
         return (
             models.ReviewStarted

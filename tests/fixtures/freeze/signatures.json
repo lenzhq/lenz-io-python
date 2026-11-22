@@ -40,15 +40,11 @@
   "ask.history": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'AskHistory'",
   "ask.reset": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'bool'",
   "ask.send": "(self, verification_id: 'str', *, message: 'str', language: 'str' = '', idempotency_key: 'str | None' = None, idempotency: 'bool' = True, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'AskReply'",
-  "library.__init__": "(self, parent: 'Lenz') -> 'None'",
-  "library.iter": "(self, *, page: 'int' = 1, sort: 'str' = 'recent', search: 'str' = '', domain: 'str' = '', entity: 'str' = '', curated: 'builtins.list[str] | None' = None, verdict: 'str' = '', timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[LibraryItem]'",
-  "library.list": "(self, *, page: 'int' = 1, sort: 'str' = 'recent', search: 'str' = '', domain: 'str' = '', entity: 'str' = '', curated: 'list[str] | None' = None, verdict: 'str' = '', timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'LibraryList'",
   "verifications.__init__": "(self, parent: 'Lenz') -> 'None'",
   "verifications.delete": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'bool'",
   "verifications.get": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationResult'",
   "verifications.get_certificate": "(self, verification_id: 'str', *, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Certificate'",
   "verifications.iter": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'Iterator[VerificationListItem]'",
-  "verifications.list": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'",
-  "verifications.related": "(self, verification_id: 'str', *, limit: 'int' = 5, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'RelatedVerifications'"
+  "verifications.list": "(self, *, page: 'int' = 1, page_size: 'int | None' = None, timeout: 'float | httpx.Timeout | None' = None, max_retries: 'int | None' = None, extra_headers: 'Mapping[str, str | None] | None' = None) -> 'VerificationList'"
  }
 }
