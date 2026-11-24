@@ -488,9 +488,9 @@ def test_model_schemas_match_the_previous_release() -> None:
     for key, schema in current.items():
         for gone in added_to_models.get(key.split(":")[0], ()):
             schema["properties"].pop(gone, None)
-        for model_name, fields in added_to_models.items():
+        for model_name in ("Verification", "VerificationListItem"):
             if "$defs" in schema and model_name in schema["$defs"]:
-                for gone in fields:
+                for gone in added_to_models[model_name]:
                     schema["$defs"][model_name].get("properties", {}).pop(gone, None)
     assert {k: current.get(k) for k in frozen} == frozen
 

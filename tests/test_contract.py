@@ -697,8 +697,11 @@ def test_review_rows_carry_searched_pages():
 
 def test_verification_carries_url_and_tolerates_absence():
     """``url`` carries the address of the verification's page on lenz.io on both
-    ``Verification`` and ``VerificationListItem``, and defaults to None when
-    omitted (on older stored responses)."""
+    ``Verification`` and ``VerificationListItem``, reads ``None`` when ``null``
+    or omitted (on older stored responses), and passes through completed
+    webhook events."""
+    from lenz_io.webhooks import VerificationCompleted, _build_event
+
     detail = Verification.model_validate(_load("verifications_detail.json"))
     assert detail.url == "https://lenz.io/c/water-boils-at-100c-at-sea-level-a1b2c3d4"
 
@@ -709,6 +712,18 @@ def test_verification_carries_url_and_tolerates_absence():
     listing = VerificationList.model_validate(_load("verifications_list.json"))
     assert listing.items[0].url == "https://lenz.io/c/albert-einstein-won-the-1921-nobel-prize-in-physics-a1b2c3d4"
     assert listing.items[1].url == "https://lenz.io/c/water-boils-at-100c-at-sea-level-e5f6a7b8"
+
+    event = _build_event(_load("webhook_payload_completed.json"))
+    assert isinstance(event, VerificationCompleted)
+    assert event.result["url"] == "https://lenz.io/c/sample-claim-text-a1b2c3d4"
+
+    detail_null = _load("verifications_detail.json")
+    detail_null["url"] = None
+    assert Verification.model_validate(detail_null).url is None
+
+    item_null = _load("verifications_list.json")["items"][0]
+    item_null["url"] = None
+    assert VerificationListItem.model_validate(item_null).url is None
 
     detail_raw = _load("verifications_detail.json")
     detail_raw.pop("url", None)

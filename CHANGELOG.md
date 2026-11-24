@@ -8,7 +8,7 @@ All notable changes to this SDK are documented here. Format follows
 
 ### Added
 
-- `Verification.url` and `VerificationListItem.url` (`str | None`): the address of the verification's page on lenz.io (`https://lenz.io/c/<slug>`), or `None` when there is no page (or on a response from an API version that predates the field).
+- `Verification.url` and `VerificationListItem.url` (`str | None`): the address of the verification's page on lenz.io (`https://lenz.io/c/<slug>`), or `None` when there is no page (or on a response from a server that predates the field).
 - `list_reviews` and `iter_reviews` (on `Lenz` and `AsyncLenz`): list the account's API reviews (`GET /api/v1/reviews`, newest first, `page_size` 1 to 100) as a paginated `ReviewList` or a lazy `ReviewListItem` iterator (`ReviewList` and `ReviewListItem` exported from `lenz_io`).
 - Support for audio file uploads (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.webm`) and direct audio URLs across `extract_file`, `review_file`, `review_file_and_wait`, and CLI commands (`lenz extract`, `lenz review`).
 

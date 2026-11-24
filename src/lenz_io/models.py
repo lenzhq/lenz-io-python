@@ -893,9 +893,9 @@ class Verification(_Lax):
 
     Later: ``visibility`` returns — 'private' | 'unlisted' | 'public'. It
     echoes what you set on submit ('private'/'unlisted' are settable;
-    'public' can only be read, for listed claims). On the ``2026-10-11``
-    shape, ``url`` returns as the address of the verification's page on
-    lenz.io (``None`` when there is no page).
+    'public' can only be read, for listed claims). ``url`` returns as the
+    address of the verification's page on lenz.io (``None`` when there is no
+    page).
     """
 
     verification_id: str = ""
@@ -939,10 +939,12 @@ class Verification(_Lax):
     # Deprecated: use ``completed_at``. Set only when the verification
     # completed on a later UTC day than ``created_at``.
     modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
-    #: The address of the verification's page on lenz.io. Opens for the
-    #: account that ran the check, signed in; anyone with the link can open
-    #: it when ``visibility`` is ``"unlisted"``. ``None`` when there is no
-    #: page, or on a response from an API version that predates the field.
+    #: The address of the verification's page on lenz.io (as distinct from
+    #: ``AssessClaim.verification_url``, which is the API endpoint, and
+    #: ``Source.url``, which is a cited source). Opens for the account that ran
+    #: the check, signed in; anyone with the link can open it when
+    #: ``visibility`` is ``"unlisted"``. ``None`` when there is no page, or on
+    #: a response from a server that predates the field.
     url: str | None = None
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
@@ -1033,7 +1035,8 @@ class VerificationListItem(_Lax):
     created_at: str | None = None
     # Deprecated: use ``completed_at``. See ``Verification.modified_at``.
     modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
-    #: The address of the verification's page on lenz.io. See ``Verification.url``.
+    #: The address of the verification's page on lenz.io, or ``None`` when
+    #: there is no page. See ``Verification.url``.
     url: str | None = None
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
