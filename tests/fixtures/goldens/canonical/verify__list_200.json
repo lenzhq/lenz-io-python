@@ -18,6 +18,7 @@
         "suggested_rewrite": null,
         "created_at": "<created_at#2:ts:+00:00:us>",
         "completed_at": "<completed_at#3:ts:+00:00:us>",
+        "url": "https://lenz.io/c/the-earth-is-round-<verification_id#1:hex8>",
         "language": "en"
       },
       {
@@ -31,6 +32,7 @@
         "suggested_rewrite": null,
         "created_at": "<created_at#5:ts:+00:00:us>",
         "completed_at": "<completed_at#3:ts:+00:00:us>",
+        "url": "https://lenz.io/c/the-earth-is-round-<verification_id#4:hex8>",
         "language": "en"
       }
     ],

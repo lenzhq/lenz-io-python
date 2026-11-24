@@ -441,7 +441,11 @@ def test_model_schemas_match_the_previous_release() -> None:
     added_since_frozen = {"snippet_language", "searched_pages", "origin", "kept"}
     # ``language`` is a field of other models too, so it is dropped from
     # ``ExtractedClaims`` alone; ``test_extract_result_exposes_language`` pins it.
-    added_to_models = {"ExtractedClaims": {"language"}}
+    added_to_models = {
+        "ExtractedClaims": {"language"},
+        "Verification": {"url"},
+        "VerificationListItem": {"url"},
+    }
 
     # Models added since the frozen release, which the new fields reference:
     # they appear in a schema's ``$defs`` only through those fields.
@@ -484,6 +488,10 @@ def test_model_schemas_match_the_previous_release() -> None:
     for key, schema in current.items():
         for gone in added_to_models.get(key.split(":")[0], ()):
             schema["properties"].pop(gone, None)
+        for model_name, fields in added_to_models.items():
+            if "$defs" in schema and model_name in schema["$defs"]:
+                for gone in fields:
+                    schema["$defs"][model_name].get("properties", {}).pop(gone, None)
     assert {k: current.get(k) for k in frozen} == frozen
 
 

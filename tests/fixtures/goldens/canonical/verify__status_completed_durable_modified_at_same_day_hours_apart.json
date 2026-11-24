@@ -25,6 +25,7 @@
       "suggested_rewrite": null,
       "created_at": "<created_at#3:ts:+00:00:us>",
       "completed_at": "<completed_at#4:ts:+00:00:us>",
+      "url": "https://lenz.io/c/the-earth-is-round-<verification_id#2:hex8>",
       "sources": [
         {
           "source_name": "NASA",

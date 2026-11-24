@@ -542,6 +542,7 @@ Every claim-shaped response shares these fields at top level:
 | `verdict` | `str` | `"True"` \| `"Mostly True"` \| `"Mixed"` \| `"Mostly False"` \| `"False"`; `"No Public Record"` on a check that found no public record that would show the claim (`verify`, or a quick check: `assess`, a review's quick check). (A failed `assess` row reads `"Error"` in the legacy shape; that value is deprecated, read `status == "failed"` and `failure` instead. See below.) |
 | `confidence` | `str` | Categorical: `"high"` \| `"medium"` \| `"low"`. |
 | `lenz_score` | `int \| None` | Integer 1–10 (deep verdicts and list endpoints; `assess` omits it); `None` on `"No Public Record"`. |
+| `url` | `str \| None` | The address of the verification's page on lenz.io, or None when there is no page. |
 
 The accepted values are exported as `Literal` aliases for comparisons and
 exhaustive matching: `Verdict` (the five labels, `"No Public Record"` and the deprecated

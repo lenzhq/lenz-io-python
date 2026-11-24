@@ -893,7 +893,9 @@ class Verification(_Lax):
 
     Later: ``visibility`` returns — 'private' | 'unlisted' | 'public'. It
     echoes what you set on submit ('private'/'unlisted' are settable;
-    'public' can only be read, for listed claims). ``url`` stays dropped.
+    'public' can only be read, for listed claims). On the ``2026-10-11``
+    shape, ``url`` returns as the address of the verification's page on
+    lenz.io (``None`` when there is no page).
     """
 
     verification_id: str = ""
@@ -937,6 +939,11 @@ class Verification(_Lax):
     # Deprecated: use ``completed_at``. Set only when the verification
     # completed on a later UTC day than ``created_at``.
     modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
+    #: The address of the verification's page on lenz.io. Opens for the
+    #: account that ran the check, signed in; anyone with the link can open
+    #: it when ``visibility`` is ``"unlisted"``. ``None`` when there is no
+    #: page, or on a response from an API version that predates the field.
+    url: str | None = None
     # Output language (ISO 639-1). Always populated by the server when
     # the SDK is fresh; defaulted to ``'en'`` for resilience against
     # older cached payloads that lack the field.
@@ -1007,8 +1014,8 @@ class VerificationResult(Verification, Result):
 
 
 class VerificationListItem(_Lax):
-    """Compact item for the verifications list endpoint. Slim shape — no ``url``
-    (reference by ``verification_id``), no ``visibility`` (1.1.0).
+    """Compact item for the verifications list endpoint. Slim shape — no
+    ``visibility`` (the detail has it).
     """
 
     verification_id: str = ""
@@ -1026,6 +1033,8 @@ class VerificationListItem(_Lax):
     created_at: str | None = None
     # Deprecated: use ``completed_at``. See ``Verification.modified_at``.
     modified_at: str | None = Field(default=None, json_schema_extra={"deprecated": True})
+    #: The address of the verification's page on lenz.io. See ``Verification.url``.
+    url: str | None = None
     # Output language (ISO 639-1). See ``Verification.language``.
     language: str = "en"
 
