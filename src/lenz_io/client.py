@@ -1368,12 +1368,14 @@ class Lenz:
         audio URL).
 
         Every claim in the draft gets a quick verdict (up to
-        ``max_assessments``, default 20, most check-worthy first). The ones
+        ``max_assessments``, 0-50, default 30, most check-worthy first). The ones
         whose quick verdict is in ``verdicts`` (default ``["False",
         "Mostly False", "Mixed", "No Public Record"]``) OR whose confidence is in ``confidence``
         (default ``["low"]``) get a deep check, up to ``max_verifications``
         (default 5; ``0`` makes a quick-only review) at ``depth``
-        (``"standard"``, the default, or ``"low"``). ``None`` leaves a knob at
+        (``"standard"``, the default, or ``"low"``). When ``supplied_sources``
+        are provided, claims contradicted by a supplied source are also
+        deep-checked. ``None`` leaves a knob at
         the server default; an empty list switches that rule off.
         ``max_assessments=0`` checks no claim (with ``max_citations``:
         a review of the draft's citations only).

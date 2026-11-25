@@ -579,14 +579,19 @@ def test_links_only_review_sends_max_assessments_zero(draft):
     assert body["escalate"] == {"max_assessments": 0, "max_citations": 20}
 
 
-def test_max_assessments_is_sent(draft):
+@pytest.mark.parametrize("value", ["5", "50"])
+def test_max_assessments_is_sent(draft, value):
     with respx.mock(base_url=BASE) as r:
         post, _ = _serve(r, "review_completed.json")
-        _invoke("review", draft, "--max-assessments", "5", "--json")
-    assert json.loads(post.calls.last.request.content)["escalate"] == {"max_assessments": 5, "max_citations": 20}
+        result = _invoke("review", draft, "--max-assessments", value, "--json")
+    assert result.exit_code == 1, result.output  # the fixture's outcome is issues_found
+    assert json.loads(post.calls.last.request.content)["escalate"] == {
+        "max_assessments": int(value),
+        "max_citations": 20,
+    }
 
 
-@pytest.mark.parametrize("value", ["-1", "21"])
+@pytest.mark.parametrize("value", ["-1", "51"])
 def test_max_assessments_out_of_range_is_refused(draft, value):
     with respx.mock(base_url=BASE, assert_all_called=False) as r:
         post, _ = _serve(r, "review_completed.json")
