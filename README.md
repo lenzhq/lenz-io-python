@@ -86,7 +86,7 @@ client.review_and_wait(
     verdicts=["False", "Mostly False"],  # quick verdicts that get a deep check ([] = none)
     confidence=["low", "medium"],  # confidence bands that get one ([] = none)
     max_verifications=10,  # the deep-check cap (0 = quick checks only)
-    max_assessments=20,  # how many of the draft's claims get a quick verdict
+    max_assessments=30,  # how many of the draft's claims get a quick verdict (0-50)
     depth="low",  # every deep check at half the credits
 )
 ```

@@ -2187,8 +2187,10 @@ class EscalationPolicy(_Lax):
     A claim is deep-checked when its quick verdict is in ``verdicts`` (by
     default ``False``, ``Mostly False``, ``Mixed`` and ``No Public Record``) OR
     its confidence band is in ``confidence``, up to ``max_verifications`` of them,
-    at ``depth``. ``max_assessments`` is how many of the draft's claims, most
-    check-worthy first, got a quick verdict.
+    at ``depth``. When ``supplied_sources`` are provided, claims contradicted by
+    a supplied source are also escalated (``matched_rules`` includes ``"verdict"``).
+    ``max_assessments`` is how many of the draft's claims, most check-worthy
+    first, got a quick verdict.
     """
 
     verdicts: list[str] = Field(default_factory=list)
@@ -2208,7 +2210,9 @@ class Escalation(_Lax):
     """Why a claim was, or was not, deep-checked.
 
     ``matched_rules`` lists the rules the quick check matched (``verdict``,
-    ``confidence``, both, or neither). ``disposition`` says what happened:
+    ``confidence``, both, or neither); when ``supplied_sources`` are provided,
+    claims contradicted by a supplied source also include ``"verdict"``.
+    ``disposition`` says what happened:
     ``planned`` (deep-checked), ``not_selected`` (no rule matched), ``cap``
     (matched, but ``max_verifications`` was reached), ``credits`` (matched,
     but the balance ran out) or ``account_cap`` (matched, but the account's

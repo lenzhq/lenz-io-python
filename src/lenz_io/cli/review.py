@@ -85,8 +85,8 @@ def review(
         "--max-assessments",
         metavar="N",
         min=0,
-        max=20,
-        help="Quick-check at most N claims (0-20, default 20; 0 = no claim, e.g. with --max-citations).",
+        max=50,
+        help="Quick-check at most N claims (0-50, default 30; 0 = no claim, e.g. with --max-citations).",
     ),
     max_verifications: int = typer.Option(
         None, "--max-verifications", metavar="N", help="Deep-check at most N claims (default 5; 0 = quick checks only)."
