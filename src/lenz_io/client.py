@@ -830,6 +830,8 @@ class Lenz:
         language: str = "",
         focus: str = "",
         locate: bool | None = None,
+        start_page: int | None = None,
+        end_page: int | None = None,
         timeout: float | httpx.Timeout | None = None,
         idempotency: bool = True,
         idempotency_key: str | None = None,
@@ -868,6 +870,12 @@ class Lenz:
         ``end`` are ``None``, as with URL extraction). Leave ``None`` for
         server default.
 
+        ``start_page`` / ``end_page`` (optional, PDF only): 1-indexed inclusive
+        page bounds (1 to 300, ``start_page <= end_page``) restricting claim
+        extraction to a specific page range of a PDF. Opening prose from the
+        start of the PDF is retained as background context when ``start_page > 1``.
+        Passing either parameter for a non-PDF file raises :class:`LenzUsageError`.
+
         ``timeout`` (optional): per-call HTTP timeout in seconds (or an
         ``httpx.Timeout``), overriding the client default for this one
         request. Uses ``EXTRACT_TIMEOUT`` (150s) floor by default.
@@ -886,6 +894,8 @@ class Lenz:
             language=language,
             focus=focus,
             locate=locate,
+            start_page=start_page,
+            end_page=end_page,
             timeout=timeout,
             idempotency_key=_call_key(idempotency_key, idempotency),
             max_retries=max_retries,
@@ -1727,6 +1737,8 @@ class Lenz:
         confidence: list[str] | None = None,
         max_verifications: int | None = None,
         depth: str | None = None,
+        start_page: int | None = None,
+        end_page: int | None = None,
         idempotency_key: str | None = None,
         timeout: float | httpx.Timeout | None = None,
         max_retries: int | None = None,
@@ -1735,6 +1747,11 @@ class Lenz:
     ) -> ReviewStarted:
         """Submit a Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), or audio (.mp3, .m4a, .wav, .ogg, .webm) file
         for review via multipart/form-data.
+
+        ``start_page`` / ``end_page`` (optional, PDF only): 1-indexed inclusive
+        page bounds (1 to 300, ``start_page <= end_page``) restricting the review
+        to a specific page range of a PDF while retaining opening context and
+        cited trailing bibliography entries within the 50,000-character limit.
 
         Returns a ``ReviewStarted`` receipt with a ``review_id``.
         """
@@ -1755,6 +1772,8 @@ class Lenz:
             confidence=confidence,
             max_verifications=max_verifications,
             depth=depth,
+            start_page=start_page,
+            end_page=end_page,
         )
         job_key = _job_key(idempotency_key, idempotency)
         headers = _key_header(job_key)
@@ -1799,6 +1818,8 @@ class Lenz:
         confidence: list[str] | None = None,
         max_verifications: int | None = None,
         depth: str | None = None,
+        start_page: int | None = None,
+        end_page: int | None = None,
         idempotency_key: str | None = None,
         max_retries: int | None = None,
         extra_headers: Mapping[str, str | None] | None = None,
@@ -1829,6 +1850,8 @@ class Lenz:
                 confidence=confidence,
                 max_verifications=max_verifications,
                 depth=depth,
+                start_page=start_page,
+                end_page=end_page,
                 idempotency_key=key,
                 **_given(options),
                 **_no_key(key is not None),
@@ -2371,6 +2394,8 @@ class Lenz:
         language: str = "",
         focus: str = "",
         locate: bool | None = None,
+        start_page: int | None = None,
+        end_page: int | None = None,
         timeout: float | httpx.Timeout | None = None,
         idempotency_key: str | None = None,
         max_retries: int | None = None,
@@ -2384,6 +2409,8 @@ class Lenz:
             language=language,
             focus=focus,
             locate=locate,
+            start_page=start_page,
+            end_page=end_page,
         )
         headers = _key_header(idempotency_key)
         resolved_mime = str(files["file"][2])

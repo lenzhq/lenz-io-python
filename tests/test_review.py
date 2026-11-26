@@ -1147,17 +1147,45 @@ class TestReviewFileAndExport:
 
         data = b"%PDF-1.4 fake pdf"
         with respx.mock(base_url="https://lenz.io/api/v1") as respx_mock:
-            respx_mock.post("/review/file").respond(
+            route = respx_mock.post("/review/file").respond(
                 202,
                 json={"status": "queued", "review_id": "rev_pdf_456"},
             )
-            started = client.review_file(data, filename="test.pdf")
+            started = client.review_file(data, filename="test.pdf", start_page=2, end_page=8)
             assert started.review_id == "rev_pdf_456"
+            content = route.calls.last.request.content
+            assert b'name="start_page"\r\n\r\n2' in content
+            assert b'name="end_page"\r\n\r\n8' in content
 
             stream = io.BytesIO(data)
             stream.name = "test_stream.pdf"
             started2 = client.review_file(stream)
             assert started2.review_id == "rev_pdf_456"
+
+    def test_review_file_page_range_validation_errors(self, client, tmp_path: Path):
+        from lenz_io.errors import LenzUsageError
+
+        pdf_path = tmp_path / "paper.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 fake pdf")
+        docx_path = tmp_path / "paper.docx"
+        docx_path.write_bytes(b"PK\x03\x04fake docx")
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(pdf_path, start_page=0)
+        assert exc_info.value.param == "start_page"
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(pdf_path, end_page=301)
+        assert exc_info.value.param == "end_page"
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(pdf_path, start_page=5, end_page=2)
+        assert exc_info.value.param == "start_page"
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.review_file(docx_path, start_page=1, end_page=3)
+        assert exc_info.value.param == "start_page"
+        assert "only supported for PDF (.pdf) files" in str(exc_info.value)
 
     def test_review_file_image_formats_and_mime_types(self, client):
         test_cases = [
@@ -1235,12 +1263,12 @@ class TestReviewFileAndExport:
         assert "No such file" in str(exc_info.value)
 
     def test_review_file_and_wait(self, client, no_sleep, tmp_path: Path):
-        file_path = tmp_path / "report.docx"
-        file_path.write_bytes(b"PK\x03\x04fake docx")
+        file_path = tmp_path / "report.pdf"
+        file_path.write_bytes(b"%PDF-1.4 fake pdf")
 
         completed = dict(_load("review_completed.json"), review_id="rev_wait_789")
         with respx.mock(base_url=BASE) as respx_mock:
-            respx_mock.post("/review/file").respond(
+            route = respx_mock.post("/review/file").respond(
                 202,
                 json={"status": "queued", "review_id": "rev_wait_789"},
             )
@@ -1248,9 +1276,12 @@ class TestReviewFileAndExport:
                 200,
                 json=completed,
             )
-            res = client.review_file_and_wait(file_path)
+            res = client.review_file_and_wait(file_path, start_page=2, end_page=4)
             assert isinstance(res, ReviewFull)
             assert res.outcome == "issues_found"
+            content = route.calls.last.request.content
+            assert b'name="start_page"\r\n\r\n2' in content
+            assert b'name="end_page"\r\n\r\n4' in content
 
     def test_wait_for_review(self, client, no_sleep):
         completed = dict(_load("review_completed.json"), review_id="rev_existing_111")

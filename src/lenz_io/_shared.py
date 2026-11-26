@@ -166,6 +166,50 @@ def _read_upload_file(
     return resolved_filename, file_bytes, resolved_content_type
 
 
+def _validate_page_range_numbers(
+    start_page: int | None,
+    end_page: int | None,
+) -> None:
+    if start_page is not None and (
+        isinstance(start_page, bool) or not isinstance(start_page, int) or start_page < 1 or start_page > 300
+    ):
+        raise LenzUsageError(
+            "start_page must be an integer between 1 and 300.",
+            code="invalid_argument",
+            param="start_page",
+        )
+    if end_page is not None and (
+        isinstance(end_page, bool) or not isinstance(end_page, int) or end_page < 1 or end_page > 300
+    ):
+        raise LenzUsageError(
+            "end_page must be an integer between 1 and 300.",
+            code="invalid_argument",
+            param="end_page",
+        )
+    if start_page is not None and end_page is not None and start_page > end_page:
+        raise LenzUsageError(
+            "start_page must be less than or equal to end_page.",
+            code="invalid_argument",
+            param="start_page",
+        )
+
+
+def _validate_page_range_pdf(
+    start_page: int | None,
+    end_page: int | None,
+    *,
+    filename: str,
+    content_type: str,
+) -> None:
+    is_pdf = content_type == "application/pdf" or filename.lower().endswith(".pdf")
+    if (start_page is not None or end_page is not None) and not is_pdf:
+        raise LenzUsageError(
+            "start_page and end_page are only supported for PDF (.pdf) files.",
+            code="invalid_argument",
+            param="start_page" if start_page is not None else "end_page",
+        )
+
+
 def _prepare_extract_file_multipart(
     file: FileInput,
     *,
@@ -174,13 +218,17 @@ def _prepare_extract_file_multipart(
     language: str = "",
     focus: str = "",
     locate: bool | None = None,
+    start_page: int | None = None,
+    end_page: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Validate file input and construct httpx files and data dictionaries for POST /extract/file."""
+    _validate_page_range_numbers(start_page, end_page)
     resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
         file, filename=filename, content_type=content_type, action="extraction"
     )
     if len(file_bytes) == 0:
         raise LenzUsageError("file payload is empty (0 bytes).", code="invalid_argument", param="file")
+    _validate_page_range_pdf(start_page, end_page, filename=resolved_filename, content_type=resolved_content_type)
     files = {
         "file": (resolved_filename, file_bytes, resolved_content_type),
     }
@@ -191,6 +239,10 @@ def _prepare_extract_file_multipart(
         data["focus"] = focus
     if locate is not None:
         data["locate"] = "true" if locate else "false"
+    if start_page is not None:
+        data["start_page"] = str(start_page)
+    if end_page is not None:
+        data["end_page"] = str(end_page)
 
     return files, data
 
@@ -212,20 +264,24 @@ def _prepare_review_file_multipart(
     confidence: list[str] | None = None,
     max_verifications: int | None = None,
     depth: str | None = None,
+    start_page: int | None = None,
+    end_page: int | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Validate file input and construct httpx files and data dictionaries.
 
     Accepts Word (.docx), PDF (.pdf), image (.png, .jpg, .webp), and audio (.mp3, .m4a, .wav, .ogg, .webm) files.
     """
+    _validate_page_range_numbers(start_page, end_page)
     resolved_filename, file_bytes, resolved_content_type = _read_upload_file(
         file, filename=filename, content_type=content_type, action="review"
     )
+    _validate_page_range_pdf(start_page, end_page, filename=resolved_filename, content_type=resolved_content_type)
     files = {
         "file": (resolved_filename, file_bytes, resolved_content_type),
     }
 
-    # Allowed top-level form fields on the server: language, visibility, webhook_url, escalate, supplied_sources.
-    # max_assessments, max_citations, and suggest_edits belong inside the escalate JSON object.
+    # Allowed top-level form fields on the server: language, visibility, webhook_url, escalate, supplied_sources,
+    # start_page, end_page. max_assessments, max_citations, and suggest_edits belong inside the escalate JSON object.
     data: dict[str, str] = {}
     if language:
         data["language"] = language
@@ -233,6 +289,10 @@ def _prepare_review_file_multipart(
         data["webhook_url"] = webhook_url
     if visibility:
         data["visibility"] = visibility
+    if start_page is not None:
+        data["start_page"] = str(start_page)
+    if end_page is not None:
+        data["end_page"] = str(end_page)
 
     escalate_json = _serialize_escalate(
         escalate,

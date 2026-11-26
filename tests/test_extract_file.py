@@ -145,11 +145,44 @@ class TestExtractFileSuccess:
 
         with respx.mock(base_url=BASE) as respx_mock:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
-            client.extract_file(file_path, language="de", focus="market share", locate=True)
+            client.extract_file(
+                file_path,
+                language="de",
+                focus="market share",
+                locate=True,
+                start_page=2,
+                end_page=5,
+            )
             content = route.calls.last.request.content
             assert b'name="language"\r\n\r\nde' in content
             assert b'name="focus"\r\n\r\nmarket share' in content
             assert b'name="locate"\r\n\r\ntrue' in content
+            assert b'name="start_page"\r\n\r\n2' in content
+            assert b'name="end_page"\r\n\r\n5' in content
+
+    def test_extract_file_page_range_validation_errors(self, client, tmp_path: Path):
+        pdf_path = tmp_path / "doc.pdf"
+        pdf_path.write_bytes(b"%PDF-1.4 test")
+        docx_path = tmp_path / "doc.docx"
+        docx_path.write_bytes(b"PK\x03\x04fake docx")
+
+        for bad_val in (0, 301, -1, True):
+            with pytest.raises(LenzUsageError) as exc_info:
+                client.extract_file(pdf_path, start_page=bad_val)
+            assert exc_info.value.param == "start_page"
+            with pytest.raises(LenzUsageError) as exc_info:
+                client.extract_file(pdf_path, end_page=bad_val)
+            assert exc_info.value.param == "end_page"
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.extract_file(pdf_path, start_page=10, end_page=3)
+        assert exc_info.value.param == "start_page"
+        assert "start_page must be less than or equal to end_page." in str(exc_info.value)
+
+        with pytest.raises(LenzUsageError) as exc_info:
+            client.extract_file(docx_path, start_page=1, end_page=3)
+        assert exc_info.value.param == "start_page"
+        assert "only supported for PDF (.pdf) files" in str(exc_info.value)
 
     def test_extract_file_locate_false_and_none(self, client, tmp_path: Path):
         file_path = tmp_path / "doc.pdf"
@@ -346,10 +379,13 @@ class TestAsyncExtractFile:
     async def test_async_extract_file_bytes(self, async_client):
         with respx.mock(base_url=BASE) as respx_mock:
             route = respx_mock.post("/extract/file").respond(200, json=_MOCK_EXTRACT)
-            res = await async_client.extract_file(b"\x89PNG fake image", filename="img.png")
+            res = await async_client.extract_file(b"%PDF-1.4 fake", filename="paper.pdf", start_page=3, end_page=6)
             assert isinstance(res, ExtractedClaims)
             assert route.called
-            assert b'filename="img.png"' in route.calls.last.request.content
+            content = route.calls.last.request.content
+            assert b'filename="paper.pdf"' in content
+            assert b'name="start_page"\r\n\r\n3' in content
+            assert b'name="end_page"\r\n\r\n6' in content
 
     @pytest.mark.asyncio
     async def test_async_extract_file_validation_error(self, async_client, tmp_path: Path):
