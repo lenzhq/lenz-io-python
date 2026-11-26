@@ -123,6 +123,22 @@ def review(
         metavar="PATH",
         help="Export the annotated document to PATH once the review completes (format inferred from extension: .docx).",
     ),
+    start_page: int | None = typer.Option(
+        None,
+        "--start-page",
+        metavar="PAGE",
+        min=1,
+        max=300,
+        help="First PDF page to review (1-indexed, inclusive; PDF files only).",
+    ),
+    end_page: int | None = typer.Option(
+        None,
+        "--end-page",
+        metavar="PAGE",
+        min=1,
+        max=300,
+        help="Last PDF page to review (1-indexed, inclusive; PDF files only).",
+    ),
 ) -> None:
     """Review a draft and its sources. Exit codes: 0 clean, 1 issues, 2 anything else.
 
@@ -156,12 +172,28 @@ def review(
                 raise CLIError("--export is not supported for URL drafts.", code="invalid_usage", exit_code=2)
 
         if resume:
+            if start_page is not None or end_page is not None:
+                raise CLIError(
+                    "Cannot combine --start-page or --end-page with --resume.", code="invalid_usage", exit_code=2
+                )
             if draft or source_file:
                 raise CLIError("Pass either a draft or --resume, not both.", code="invalid_usage", exit_code=2)
             review_id = resume
         else:
+            if start_page is not None and end_page is not None and start_page > end_page:
+                raise CLIError(
+                    "--start-page must be less than or equal to --end-page.", code="invalid_usage", exit_code=2
+                )
             chosen_depth = _parse_depth(depth)
             text, file_path = _resolve_draft_input(draft)
+            if (start_page is not None or end_page is not None) and (
+                file_path is None or file_path.suffix.lower() != ".pdf"
+            ):
+                raise CLIError(
+                    "--start-page and --end-page are only supported for local PDF (.pdf) files.",
+                    code="invalid_usage",
+                    exit_code=2,
+                )
             if export_path:
                 if file_path is not None and Path(export_path).resolve() == file_path.resolve():
                     raise CLIError(
@@ -195,6 +227,8 @@ def review(
                     suggest_edits=suggest_edits,
                     language=(language or "").strip().lower(),
                     supplied_sources=sources,
+                    start_page=start_page,
+                    end_page=end_page,
                 )
             else:
                 assert text is not None

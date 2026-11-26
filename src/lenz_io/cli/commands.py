@@ -75,15 +75,39 @@ def extract(
         "--locate/--no-locate",
         help="Keep only the claims traced back to the input, with where it makes each. Default: server decides (off).",
     ),
+    start_page: Optional[int] = typer.Option(  # noqa: UP045
+        None,
+        "--start-page",
+        metavar="PAGE",
+        min=1,
+        max=300,
+        help="First PDF page to extract claims from (1-indexed, inclusive; PDF files only).",
+    ),
+    end_page: Optional[int] = typer.Option(  # noqa: UP045
+        None,
+        "--end-page",
+        metavar="PAGE",
+        min=1,
+        max=300,
+        help="Last PDF page to extract claims from (1-indexed, inclusive; PDF files only).",
+    ),
 ) -> None:
     """Pull verifiable claims out of text or document files. No credit charge (1000/day) — but needs a key."""
     state: CLIState = ctx.obj
     out = state.output
 
     def work(client: Lenz) -> None:
+        if start_page is not None and end_page is not None and start_page > end_page:
+            raise CLIError("--start-page must be less than or equal to --end-page.", code="invalid_usage", exit_code=2)
         if _is_existing_binary_file(text):
             assert text is not None
             path = Path(text)
+            if (start_page is not None or end_page is not None) and path.suffix.lower() != ".pdf":
+                raise CLIError(
+                    "--start-page and --end-page are only supported for local PDF (.pdf) files.",
+                    code="invalid_usage",
+                    exit_code=2,
+                )
             if path.stat().st_size == 0:
                 raise CLIError(
                     f"File is empty: {text}",
@@ -97,9 +121,20 @@ def extract(
                     language=(language or "").strip().lower(),
                     focus=focus or "",
                     locate=locate,
+                    start_page=start_page,
+                    end_page=end_page,
                 )
             render_extract(out, result)
             return
+
+        if start_page is not None or end_page is not None:
+            if text and _is_binary_document(text) and text.lower().endswith(".pdf"):
+                raise CLIError(f"No such file: {text}", code="no_input", exit_code=2)
+            raise CLIError(
+                "--start-page and --end-page are only supported for local PDF (.pdf) files.",
+                code="invalid_usage",
+                exit_code=2,
+            )
 
         payload = read_text_arg(text)
         with out.working("Extracting claims…"):

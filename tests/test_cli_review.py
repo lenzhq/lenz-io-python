@@ -974,11 +974,31 @@ def test_review_binary_pdf_file(tmp_path):
         )
         r.get(f"{BASE}/reviews/442b6aa9").respond(200, json=_load("review_completed.json"))
 
-        res = _invoke("review", str(pdf_file))
+        res = _invoke("review", str(pdf_file), "--start-page", "2", "--end-page", "5")
         assert res.exit_code == 1
         assert post.called
         content = post.calls.last.request.content
         assert b'filename="memo.pdf"' in content
+        assert b'name="start_page"\r\n\r\n2' in content
+        assert b'name="end_page"\r\n\r\n5' in content
+
+
+def test_review_page_range_rejected_for_non_pdf(tmp_path):
+    docx_file = tmp_path / "report.docx"
+    docx_file.write_bytes(b"PK\x03\x04fake docx content")
+
+    res = _invoke("review", str(docx_file), "--start-page", "1", "--end-page", "3", "--json")
+    assert res.exit_code == 2
+    assert json.loads(res.stdout)["error"]["code"] == "invalid_usage"
+
+
+def test_review_page_range_invalid_order_rejected(tmp_path):
+    pdf_file = tmp_path / "memo.pdf"
+    pdf_file.write_bytes(b"%PDF-1.4 fake pdf content")
+
+    res = _invoke("review", str(pdf_file), "--start-page", "6", "--end-page", "2", "--json")
+    assert res.exit_code == 2
+    assert json.loads(res.stdout)["error"]["code"] == "invalid_usage"
 
 
 @pytest.mark.parametrize(

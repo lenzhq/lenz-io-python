@@ -100,7 +100,18 @@ class FakeClient:
         self.extract_calls.append({"text": text, "language": language, "focus": focus, "locate": locate})
         return self._extract
 
-    def extract_file(self, file, *, filename=None, content_type=None, language="", focus="", locate=None):
+    def extract_file(
+        self,
+        file,
+        *,
+        filename=None,
+        content_type=None,
+        language="",
+        focus="",
+        locate=None,
+        start_page=None,
+        end_page=None,
+    ):
         self._maybe_raise("extract_file")
         self.extract_file_calls.append(
             {
@@ -110,6 +121,8 @@ class FakeClient:
                 "language": language,
                 "focus": focus,
                 "locate": locate,
+                "start_page": start_page,
+                "end_page": end_page,
             }
         )
         return self._extract
@@ -495,6 +508,34 @@ def test_extract_binary_file_routes_to_extract_file(monkeypatch, tmp_path):
     assert len(fake.extract_file_calls) == 1
     assert fake.extract_file_calls[0]["file"] == doc
     assert fake.extract_calls == []
+
+
+def test_extract_pdf_page_range_flags(monkeypatch, tmp_path):
+    doc = tmp_path / "report.pdf"
+    doc.write_bytes(b"%PDF-1.4 fake")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c1"]))
+    _patch_client(monkeypatch, fake)
+    result = runner.invoke(app, ["--json", "extract", str(doc), "--start-page", "2", "--end-page", "7"])
+    assert result.exit_code == 0
+    assert len(fake.extract_file_calls) == 1
+    assert fake.extract_file_calls[0]["start_page"] == 2
+    assert fake.extract_file_calls[0]["end_page"] == 7
+
+
+def test_extract_page_range_rejected_for_non_pdf_or_missing_pdf(monkeypatch, tmp_path):
+    docx = tmp_path / "report.docx"
+    docx.write_bytes(b"PK\x03\x04fake")
+    monkeypatch.setenv("LENZ_API_KEY", "k")
+    fake = FakeClient(extract_result=ExtractedClaims(identified_claims=["c1"]))
+    _patch_client(monkeypatch, fake)
+    res_docx = runner.invoke(app, ["--json", "extract", str(docx), "--start-page", "1"])
+    assert res_docx.exit_code == 2
+    assert json.loads(res_docx.stdout)["error"]["code"] == "invalid_usage"
+
+    res_missing = runner.invoke(app, ["--json", "extract", str(tmp_path / "missing.pdf"), "--start-page", "1"])
+    assert res_missing.exit_code == 2
+    assert json.loads(res_missing.stdout)["error"]["code"] == "no_input"
 
 
 def test_extract_binary_file_passes_flags(monkeypatch, tmp_path):
